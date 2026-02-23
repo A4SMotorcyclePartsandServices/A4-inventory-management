@@ -191,6 +191,8 @@
         .fin-row .value { font-weight: 600; }
         .fin-row.mech .label { color: #c1121f; }
         .fin-row.mech .value { color: #c1121f; font-weight: 700; }
+        .fin-row.shop .label { color: #2d6a4f; }
+        .fin-row.shop .value { color: #2d6a4f; font-weight: 700; }
         .fin-row.topup .label { color: #b45309; }
         .fin-row.topup .value { color: #b45309; font-weight: 700; }
         .fin-row.net {
@@ -359,6 +361,10 @@
                         <span>₱ {{ "%.2f"|format(item.total) }}</span>
                     </div>
                     {% endfor %}
+                    <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #111; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; border-top: none; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                        <span>TOTAL</span>
+                        <span>₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
+                    </div>
                 {% else %}
                     <div style="color: #aaa; font-size: 12px;">No items sold.</div>
                 {% endif %}
@@ -377,20 +383,24 @@
                             <span>Services rendered</span>
                             <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
                         </div>
+                        <div class="mechanic-block-cut">
+                            <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
+                            <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
+                        </div>
+                        <div class="mechanic-block-row">
+                            <span style="color: #2d6a4f;">Shop's share</span>
+                            <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.shop_commission_share) }}</span>
+                        </div>
                         {% if mech.shop_topup > 0 %}
                         <div class="mechanic-block-row">
                             <span style="color: #b45309;">Quota top-up (shop expense)</span>
                             <span style="color: #b45309;">+₱ {{ "%.2f"|format(mech.shop_topup) }}</span>
                         </div>
-                        <div class="mechanic-block-row">
-                            <span>Effective base</span>
-                            <span>₱ {{ "%.2f"|format(mech.effective_base) }}</span>
+                        <div class="mechanic-block-cut">
+                            <span>Total Payout</span>
+                            <span>₱ {{ "%.2f"|format(mech.total_payout) }}</span>
                         </div>
                         {% endif %}
-                        <div class="mechanic-block-cut">
-                            <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
-                            <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
-                        </div>
                     </div>
                     {% endfor %}
                 {% else %}
@@ -405,17 +415,42 @@
             <div class="summary-box-body fin-body">
                 <div class="fin-rows">
                     <div class="fin-row">
-                        <span class="label">Total Gross Sales</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_gross) }}</span>
+                        <span class="label">Product Revenue</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</span>
                     </div>
-                    <div class="fin-row mech">
-                        <span class="label">Total Mechanic Payout</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
+                    <div class="fin-row">
+                        <span class="label">Service Revenue</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_service_revenue) }}</span>
+                    </div>
+                    {% if data.total_unresolved_service_revenue > 0 %}
+                    <div class="fin-row" style="font-size: 11px; padding-left: 24px; color: #b45309;">
+                        <span class="label">↳ + ₱ {{ "%.2f"|format(data.total_unresolved_service_revenue) }} from unresolved (mechanic still paid)</span>
+                        <span class="value"></span>
+                    </div>
+                    {% endif %}
+                    <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
+                        <span class="label">↳ Shop's Share</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_commission) }}</span>
+                    </div>
+                    <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
+                        <span class="label">↳ Mechanic Payout</span>
+                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
                     </div>
                     {% if data.total_shop_topup > 0 %}
                     <div class="fin-row topup">
                         <span class="label">Quota Top-up (Expense)</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+                        <span class="value">− ₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if data.unresolved %}
+                    <div class="fin-row" style="background: #fff8f0; border-left: 3px solid #b45309; font-size: 11px; padding: 8px 12px;">
+                        <span class="label" style="color: #b45309;">
+                            ⚠ {{ data.unresolved | length }} unresolved transaction{{ 's' if data.unresolved | length > 1 else '' }} excluded.
+                            See Receivables.
+                        </span>
+                        <span style="color: #b45309; font-weight: 700;">
+                            ₱ {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}
+                        </span>
                     </div>
                     {% endif %}
                     <div class="fin-row net">

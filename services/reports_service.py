@@ -229,6 +229,8 @@ def get_sales_report_by_date(report_date):
     # --- Build paid transaction rows (revenue display only) ---
     paid_sales  = []
     total_gross = 0.0
+    total_service_revenue = 0.0
+    total_unresolved_service_revenue = 0.0
     mechanic_map = {}
 
     for sale in sales_rows:
@@ -243,6 +245,7 @@ def get_sales_report_by_date(report_date):
         # Revenue rows: Paid only
         if sale["status"] == "Paid":
             total_amount = sale["total_amount"] or 0.0
+            total_service_revenue += services_total
             paid_sales.append({
                 "sales_number":   sale["sales_number"] or f"#{sale_id}",
                 "customer_name":  sale["customer_name"] or "Walk-in",
@@ -257,6 +260,8 @@ def get_sales_report_by_date(report_date):
                 "services":       services_by_sale.get(sale_id, []),
             })
             total_gross += total_amount
+        else:
+            total_unresolved_service_revenue += services_total
 
         # Mechanic map: ALL statuses — mechanic did the work regardless
         if mechanic_id and services_total > 0:
@@ -272,30 +277,34 @@ def get_sales_report_by_date(report_date):
     mechanic_summary = []
     total_mech_cut   = 0.0
     total_shop_topup = 0.0
+    total_shop_commission = 0.0
 
     for mech_id, mech in mechanic_map.items():
         services_total  = round(mech["services_total"], 2)
         commission_rate = mech["commission_rate"]
 
-        if services_total > 0 and services_total < MECHANIC_QUOTA:
-            shop_topup     = round(MECHANIC_QUOTA - services_total, 2)
-            effective_base = MECHANIC_QUOTA
-        else:
-            shop_topup     = 0.0
-            effective_base = services_total
+        mech_cut = round(services_total * commission_rate, 2)
+        shop_commission_share = round(services_total - mech_cut, 2)
 
-        mech_cut = round(effective_base * commission_rate, 2)
+        if services_total > 0 and services_total < MECHANIC_QUOTA:
+            shop_topup = max(0.0, round(MECHANIC_QUOTA - mech_cut, 2))
+        else:
+            shop_topup = 0.0
+
+        total_payout = round(mech_cut + shop_topup, 2)
 
         total_mech_cut   += mech_cut
         total_shop_topup += shop_topup
+        total_shop_commission += shop_commission_share
 
         mechanic_summary.append({
             "mechanic_name":   mech["mechanic_name"],
             "commission_rate": commission_rate,
             "services_total":  services_total,
-            "effective_base":  round(effective_base, 2),
-            "shop_topup":      shop_topup,
             "mechanic_cut":    mech_cut,
+            "shop_topup":      shop_topup,
+            "total_payout":    total_payout,
+            "shop_commission_share": shop_commission_share,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -324,6 +333,10 @@ def get_sales_report_by_date(report_date):
         "total_mech_cut":   total_mech_cut,
         "total_shop_topup": total_shop_topup,
         "net_revenue":      round(total_gross - total_mech_cut - total_shop_topup, 2),
+        "total_shop_commission": round(total_shop_commission, 2),
+        "total_service_revenue":  round(total_service_revenue, 2),
+        "total_product_revenue":  round(total_gross - total_service_revenue, 2),
+        "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
     }
 
 def get_sales_report_by_range(start_date, end_date):
@@ -412,6 +425,8 @@ def get_sales_report_by_range(start_date, end_date):
 
     paid_sales   = []
     total_gross  = 0.0
+    total_service_revenue = 0.0
+    total_unresolved_service_revenue = 0.0
     mechanic_map = {}
 
     for sale in sales_rows:
@@ -423,6 +438,7 @@ def get_sales_report_by_range(start_date, end_date):
 
         if sale["status"] == "Paid":
             total_amount = sale["total_amount"] or 0.0
+            total_service_revenue += services_total
             paid_sales.append({
                 "sales_number":   sale["sales_number"] or f"#{sale_id}",
                 "customer_name":  sale["customer_name"] or "Walk-in",
@@ -437,6 +453,8 @@ def get_sales_report_by_range(start_date, end_date):
                 "services":       services_by_sale.get(sale_id, []),
             })
             total_gross += total_amount
+        else:
+            total_unresolved_service_revenue += services_total
 
         if mechanic_id and services_total > 0:
             if mechanic_id not in mechanic_map:
@@ -450,29 +468,33 @@ def get_sales_report_by_range(start_date, end_date):
     mechanic_summary = []
     total_mech_cut   = 0.0
     total_shop_topup = 0.0
+    total_shop_commission = 0.0
 
     for mech_id, mech in mechanic_map.items():
         services_total  = round(mech["services_total"], 2)
         commission_rate = mech["commission_rate"]
 
-        if services_total > 0 and services_total < MECHANIC_QUOTA:
-            shop_topup     = round(MECHANIC_QUOTA - services_total, 2)
-            effective_base = MECHANIC_QUOTA
-        else:
-            shop_topup     = 0.0
-            effective_base = services_total
+        mech_cut = round(services_total * commission_rate, 2)
+        shop_commission_share = round(services_total - mech_cut, 2)
 
-        mech_cut = round(effective_base * commission_rate, 2)
+        if services_total > 0 and services_total < MECHANIC_QUOTA:
+            shop_topup = max(0.0, round(MECHANIC_QUOTA - mech_cut, 2))
+        else:
+            shop_topup = 0.0
+
+        total_payout = round(mech_cut + shop_topup, 2)
         total_mech_cut   += mech_cut
         total_shop_topup += shop_topup
+        total_shop_commission += shop_commission_share
 
         mechanic_summary.append({
             "mechanic_name":   mech["mechanic_name"],
             "commission_rate": commission_rate,
             "services_total":  services_total,
-            "effective_base":  round(effective_base, 2),
-            "shop_topup":      shop_topup,
             "mechanic_cut":    mech_cut,
+            "shop_topup":      shop_topup,
+            "total_payout":    total_payout,
+            "shop_commission_share": shop_commission_share,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -499,4 +521,8 @@ def get_sales_report_by_range(start_date, end_date):
         "total_mech_cut":   total_mech_cut,
         "total_shop_topup": total_shop_topup,
         "net_revenue":      round(total_gross - total_mech_cut - total_shop_topup, 2),
+        "total_shop_commission": round(total_shop_commission, 2),
+        "total_service_revenue":  round(total_service_revenue, 2),
+        "total_product_revenue":  round(total_gross - total_service_revenue, 2),
+        "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
     }
