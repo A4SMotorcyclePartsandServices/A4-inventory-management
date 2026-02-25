@@ -381,8 +381,18 @@
                         <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
                         <div class="mechanic-block-row">
                             <span>Services rendered</span>
+                            <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
+                        </div>
+                        {% if mech.unresolved_services_total > 0 %}
+                        <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #b45309;">
+                            <span>↳ + ₱ {{ "%.2f"|format(mech.unresolved_services_total) }} unresolved (payout still applied)</span>
+                            <span></span>
+                        </div>
+                        <div class="mechanic-block-row" style="font-weight: 700;">
+                            <span>Total for payout</span>
                             <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
                         </div>
+                        {% endif %}
                         <div class="mechanic-block-cut">
                             <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
                             <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
@@ -442,6 +452,12 @@
                         <span class="value">− ₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
                     </div>
                     {% endif %}
+                    {% if data.total_debt_collected > 0 %}
+                    <div class="fin-row" style="color: #155724;">
+                        <span class="label" style="color: #155724;">Debt Collected (Cash In)</span>
+                        <span class="value" style="color: #155724; font-weight: 700;">+ ₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+                    </div>
+                    {% endif %}
                     {% if data.unresolved %}
                     <div class="fin-row" style="background: #fff8f0; border-left: 3px solid #b45309; font-size: 11px; padding: 8px 12px;">
                         <span class="label" style="color: #b45309;">
@@ -462,6 +478,35 @@
         </div>
 
     </div>
+
+    {% if data.debt_collected %}
+    <div style="margin-top: 14px; border: 1px solid #a3cfbb; border-radius: 6px; overflow: hidden;">
+        <div class="summary-box-title" style="background: #d4edda; color: #155724; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            Debt Payments Collected
+        </div>
+        <div style="padding: 10px 12px;">
+            {% for p in data.debt_collected %}
+            <div class="summary-item-row">
+                <span>
+                    {{ p.customer_name }}
+                    <span style="font-size: 11px; color: #666;">(OR: {{ p.sales_number }})</span>
+                    {% if p.payment_method %}
+                    <span style="font-size: 11px; color: #888;"> · {{ p.payment_method }}</span>
+                    {% endif %}
+                    {% if p.paid_at %}
+                    <span style="font-size: 11px; color: #aaa;"> · {{ p.paid_at }}</span>
+                    {% endif %}
+                </span>
+                <span style="color: #155724; font-weight: 700;">₱ {{ "%.2f"|format(p.amount_paid) }}</span>
+            </div>
+            {% endfor %}
+            <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #155724; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <span>TOTAL COLLECTED</span>
+                <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     {% else %}
     <div class="empty-state">

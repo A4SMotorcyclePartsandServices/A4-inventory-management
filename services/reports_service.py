@@ -33,7 +33,7 @@ def get_sales_by_range(start_date, end_date):
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE transaction_type = 'OUT'
-          AND DATE(transaction_date) BETWEEN ? AND ?
+        AND DATE(transaction_date) BETWEEN ? AND ?
     """, (start_date, end_date)).fetchall()
 
     conn.close()
@@ -172,6 +172,26 @@ def get_sales_report_by_date(report_date):
     # --- All unresolved across ALL dates (not filtered by report_date) ---
     all_unresolved = get_all_unresolved_sales(conn)
 
+    # --- Debt payments collected on this date ---
+    debt_collected_rows = conn.execute("""
+        SELECT
+            dp.sale_id,
+            dp.amount_paid,
+            dp.paid_at,
+            dp.reference_no,
+            dp.notes,
+            s.sales_number,
+            s.customer_name,
+            s.total_amount,
+            pm.name AS payment_method
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        WHERE DATE(dp.paid_at) = ?
+        ORDER BY dp.paid_at ASC
+    """, (report_date,)).fetchall()
+
+    # --- Early return ONLY if truly nothing to show ---
     if not sales_rows and not all_unresolved:
         conn.close()
         return []
@@ -226,6 +246,22 @@ def get_sales_report_by_date(report_date):
 
     conn.close()
 
+    # --- Format debt payments collected ---
+    debt_collected = [
+        {
+            "sales_number":   row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name":  row["customer_name"] or "Walk-in",
+            "total_amount":   row["total_amount"],
+            "amount_paid":    round(row["amount_paid"], 2),
+            "payment_method": row["payment_method"] or "—",
+            "reference_no":   row["reference_no"] or "",
+            "notes":          row["notes"] or "",
+            "paid_at":        format_date(row["paid_at"], show_time=True),
+        }
+        for row in debt_collected_rows
+    ]
+    total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
+
     # --- Build paid transaction rows (revenue display only) ---
     paid_sales  = []
     total_gross = 0.0
@@ -267,11 +303,15 @@ def get_sales_report_by_date(report_date):
         if mechanic_id and services_total > 0:
             if mechanic_id not in mechanic_map:
                 mechanic_map[mechanic_id] = {
-                    "mechanic_name":   mechanic_name,
-                    "commission_rate": commission_rate,
-                    "services_total":  0.0,
+                    "mechanic_name":             mechanic_name,
+                    "commission_rate":           commission_rate,
+                    "paid_services_total":       0.0,
+                    "unresolved_services_total": 0.0,
                 }
-            mechanic_map[mechanic_id]["services_total"] += services_total
+            if sale["status"] == "Paid":
+                mechanic_map[mechanic_id]["paid_services_total"]       += services_total
+            else:
+                mechanic_map[mechanic_id]["unresolved_services_total"] += services_total
 
     # --- Per-mechanic quota + commission ---
     mechanic_summary = []
@@ -280,10 +320,12 @@ def get_sales_report_by_date(report_date):
     total_shop_commission = 0.0
 
     for mech_id, mech in mechanic_map.items():
-        services_total  = round(mech["services_total"], 2)
-        commission_rate = mech["commission_rate"]
+        paid_services       = round(mech["paid_services_total"], 2)
+        unresolved_services = round(mech["unresolved_services_total"], 2)
+        services_total      = round(paid_services + unresolved_services, 2)
+        commission_rate     = mech["commission_rate"]
 
-        mech_cut = round(services_total * commission_rate, 2)
+        mech_cut              = round(services_total * commission_rate, 2)
         shop_commission_share = round(services_total - mech_cut, 2)
 
         if services_total > 0 and services_total < MECHANIC_QUOTA:
@@ -305,6 +347,9 @@ def get_sales_report_by_date(report_date):
             "shop_topup":      shop_topup,
             "total_payout":    total_payout,
             "shop_commission_share": shop_commission_share,
+            "services_total":            services_total,
+            "paid_services_total":       paid_services,
+            "unresolved_services_total": unresolved_services,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -332,12 +377,15 @@ def get_sales_report_by_date(report_date):
         "total_gross":      round(total_gross, 2),
         "total_mech_cut":   total_mech_cut,
         "total_shop_topup": total_shop_topup,
-        "net_revenue":      round(total_gross - total_mech_cut - total_shop_topup, 2),
+        "net_revenue": round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
         "total_shop_commission": round(total_shop_commission, 2),
         "total_service_revenue":  round(total_service_revenue, 2),
         "total_product_revenue":  round(total_gross - total_service_revenue, 2),
         "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
+        "debt_collected":       debt_collected,
+        "total_debt_collected": total_debt_collected,
     }
+
 
 def get_sales_report_by_range(start_date, end_date):
     """
@@ -376,6 +424,26 @@ def get_sales_report_by_range(start_date, end_date):
 
     all_unresolved = get_all_unresolved_sales(conn)
 
+    # --- Debt payments collected within this date range ---
+    debt_collected_rows = conn.execute("""
+        SELECT
+            dp.sale_id,
+            dp.amount_paid,
+            dp.paid_at,
+            dp.reference_no,
+            dp.notes,
+            s.sales_number,
+            s.customer_name,
+            s.total_amount,
+            pm.name AS payment_method
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        WHERE DATE(dp.paid_at) BETWEEN ? AND ?
+        ORDER BY dp.paid_at ASC
+    """, (start_date, end_date)).fetchall()
+
+    # --- Early return ONLY if truly nothing to show ---
     if not sales_rows and not all_unresolved:
         conn.close()
         return []
@@ -423,6 +491,23 @@ def get_sales_report_by_range(start_date, end_date):
 
     conn.close()
 
+    # --- Format debt payments collected ---
+    debt_collected = [
+        {
+            "sales_number":   row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name":  row["customer_name"] or "Walk-in",
+            "total_amount":   row["total_amount"],
+            "amount_paid":    round(row["amount_paid"], 2),
+            "payment_method": row["payment_method"] or "—",
+            "reference_no":   row["reference_no"] or "",
+            "notes":          row["notes"] or "",
+            "paid_at":        format_date(row["paid_at"], show_time=True),
+        }
+        for row in debt_collected_rows
+    ]
+    total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
+
+    # --- Build paid transaction rows (revenue display only) ---
     paid_sales   = []
     total_gross  = 0.0
     total_service_revenue = 0.0
@@ -456,14 +541,19 @@ def get_sales_report_by_range(start_date, end_date):
         else:
             total_unresolved_service_revenue += services_total
 
+        # Mechanic map: ALL statuses — mechanic did the work regardless
         if mechanic_id and services_total > 0:
             if mechanic_id not in mechanic_map:
                 mechanic_map[mechanic_id] = {
-                    "mechanic_name":   mechanic_name,
-                    "commission_rate": commission_rate,
-                    "services_total":  0.0,
+                    "mechanic_name":             mechanic_name,
+                    "commission_rate":           commission_rate,
+                    "paid_services_total":       0.0,
+                    "unresolved_services_total": 0.0,
                 }
-            mechanic_map[mechanic_id]["services_total"] += services_total
+            if sale["status"] == "Paid":
+                mechanic_map[mechanic_id]["paid_services_total"]       += services_total
+            else:
+                mechanic_map[mechanic_id]["unresolved_services_total"] += services_total
 
     mechanic_summary = []
     total_mech_cut   = 0.0
@@ -471,10 +561,12 @@ def get_sales_report_by_range(start_date, end_date):
     total_shop_commission = 0.0
 
     for mech_id, mech in mechanic_map.items():
-        services_total  = round(mech["services_total"], 2)
-        commission_rate = mech["commission_rate"]
+        paid_services       = round(mech["paid_services_total"], 2)
+        unresolved_services = round(mech["unresolved_services_total"], 2)
+        services_total      = round(paid_services + unresolved_services, 2)
+        commission_rate     = mech["commission_rate"]
 
-        mech_cut = round(services_total * commission_rate, 2)
+        mech_cut              = round(services_total * commission_rate, 2)
         shop_commission_share = round(services_total - mech_cut, 2)
 
         if services_total > 0 and services_total < MECHANIC_QUOTA:
@@ -495,6 +587,9 @@ def get_sales_report_by_range(start_date, end_date):
             "shop_topup":      shop_topup,
             "total_payout":    total_payout,
             "shop_commission_share": shop_commission_share,
+            "services_total":            services_total,
+            "paid_services_total":       paid_services,
+            "unresolved_services_total": unresolved_services,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -520,9 +615,11 @@ def get_sales_report_by_range(start_date, end_date):
         "total_gross":      round(total_gross, 2),
         "total_mech_cut":   total_mech_cut,
         "total_shop_topup": total_shop_topup,
-        "net_revenue":      round(total_gross - total_mech_cut - total_shop_topup, 2),
+        "net_revenue": round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
         "total_shop_commission": round(total_shop_commission, 2),
         "total_service_revenue":  round(total_service_revenue, 2),
         "total_product_revenue":  round(total_gross - total_service_revenue, 2),
         "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
+        "debt_collected":       debt_collected,
+        "total_debt_collected": total_debt_collected,
     }
