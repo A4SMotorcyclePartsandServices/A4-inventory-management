@@ -311,6 +311,34 @@ def record_sale(data, user_id, username):
 
         new_sale_id = cursor.lastrowid
 
+        # 5a) Stock validation — enforced at service level, cannot be bypassed via API
+        # NOTE (future branches): filter stock calc by branch_id when ready.
+        for item in raw_items:
+            item_id = item['item_id']
+            qty_requested = int(item['quantity'])
+
+            stock_row = conn.execute("""
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN transaction_type = 'IN' THEN quantity
+                        WHEN transaction_type = 'OUT' THEN -quantity
+                        ELSE 0
+                    END
+                ), 0) AS current_stock
+                FROM inventory_transactions
+                WHERE item_id = ?
+            """, (item_id,)).fetchone()
+
+            current_stock = int(stock_row['current_stock']) if stock_row else 0
+
+            if qty_requested > current_stock:
+                name_row = conn.execute("SELECT name FROM items WHERE id = ?", (item_id,)).fetchone()
+                item_name = name_row['name'] if name_row else f"Item ID {item_id}"
+                raise ValueError(
+                    f"Insufficient stock for '{item_name}'. "
+                    f"Requested: {qty_requested}, Available: {current_stock}."
+                )
+
         # 5) Items OUT
         for item in raw_items:
             original_price = float(item.get('original_price', 0))

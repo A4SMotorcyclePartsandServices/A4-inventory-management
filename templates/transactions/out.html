@@ -298,6 +298,15 @@
         opacity: 0.45;
         cursor: not-allowed;
     }
+
+    /* =====================
+       FIELD ERROR STYLES
+    ===================== */
+    .field-error-msg {
+        color: #f87171;
+        font-size: 0.72rem;
+        margin-top: 4px;
+    }
 </style>
 {% endblock %}
 
@@ -504,7 +513,8 @@
             <div class="total-area">
                 <div class="total-label">Total Due</div>
                 <div id="grand-total">₱0.00</div>
-                <button id="submit-btn" class="btn btn-danger" disabled>
+                <!-- Button is NOT disabled by default — validation runs on click -->
+                <button id="submit-btn" class="btn btn-danger">
                     SUBMIT TRANSACTION
                 </button>
             </div>
@@ -528,6 +538,62 @@ function debounce(func, delay) {
     };
 }
 
+function showAlert(message, type = 'danger') {
+    const icons = {
+        warning: 'bi-exclamation-triangle-fill',
+        danger:  'bi-x-circle-fill',
+        success: 'bi-check-circle-fill',
+        info:    'bi-info-circle-fill'
+    };
+
+    const container = document.getElementById('flash-container');
+    const alertEl = document.createElement('div');
+    alertEl.className = `alert alert-${type} shadow-lg flash-alert`;
+    alertEl.innerHTML = `
+        <div class="flash-content">
+            <div class="flash-icon flash-icon-${type}">
+                <i class="bi ${icons[type] || icons.danger}"></i>
+            </div>
+            <div class="flash-text">${message}</div>
+        </div>
+        <div class="flash-progress"></div>
+    `;
+
+    container.appendChild(alertEl);
+    requestAnimationFrame(() => alertEl.classList.add('show'));
+    setTimeout(() => {
+        alertEl.classList.remove('show');
+        alertEl.classList.add('hide');
+        setTimeout(() => alertEl.remove(), 350);
+    }, 4000);
+}
+
+/* =========================================================
+   FIELD ERROR HELPERS
+========================================================= */
+function clearFieldErrors() {
+    document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+    ['sales-number', 'customer-name', 'payment-method', 'ref-no'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('border-danger');
+            el.style.boxShadow = '';
+        }
+    });
+}
+
+function flagError(el, message) {
+    el.classList.add('border-danger');
+    el.style.boxShadow = '0 0 0 2px rgba(193,18,31,0.3)';
+    const existing = el.parentElement.querySelector('.field-error-msg');
+    if (!existing) {
+        const err = document.createElement('div');
+        err.className = 'field-error-msg';
+        err.textContent = message;
+        el.parentElement.appendChild(err);
+    }
+}
+
 /* =========================================================
    INITIALIZATION
 ========================================================= */
@@ -535,11 +601,17 @@ let dateWasManuallyChanged = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     setDefaultTransactionDate();
-    validateForm();
 
     document.getElementById('trans-date').addEventListener('change', () => {
         dateWasManuallyChanged = true;
     });
+
+    // Clear errors as user fixes fields
+    ['sales-number', 'customer-name', 'ref-no'].forEach(id => {
+        document.getElementById(id).addEventListener('input', clearFieldErrors);
+    });
+    document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
+    document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
 });
 
 function setDefaultTransactionDate() {
@@ -547,45 +619,6 @@ function setDefaultTransactionDate() {
     const now = new Date();
     const offset = now.getTimezoneOffset() * 60000;
     dateInput.value = new Date(now - offset).toISOString().slice(0, 16);
-}
-
-/* =========================================================
-   FORM VALIDATION
-========================================================= */
-function validateForm() {
-    const submitBtn = document.getElementById('submit-btn');
-    const salesNum = document.getElementById('sales-number').value.trim();
-    const customer = document.getElementById('customer-name').value.trim();
-    const paymentCat = document.getElementById('payment-category').value;
-    const refNo = document.getElementById('ref-no').value.trim();
-
-    let hasValidItem = false;
-    let hasInputError = false;
-
-    document.querySelectorAll('.item-row').forEach(row => {
-        const id = row.querySelector('.item-id-input').value;
-        const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
-        const stockValue = row.querySelector('.stock-input').value;
-        const stock = parseFloat(stockValue) || 0;
-
-        if (id) {
-            hasValidItem = true;
-            if ((stockValue !== '--' && qty > stock) || qty <= 0) {
-                hasInputError = true;
-            }
-        }
-    });
-
-    const headerValid = salesNum !== "" && customer !== "";
-    const providerRequired = (paymentCat === 'Online' || paymentCat === 'Bank');
-    const selectedProvider = document.getElementById('payment-method').value;
-
-    const refRequired = (paymentCat === 'Online' || paymentCat === 'Bank');
-    const paymentValid = providerRequired
-        ? (selectedProvider !== "" && (refRequired ? refNo !== "" : true))
-        : true;
-
-    submitBtn.disabled = !(headerValid && paymentValid && hasValidItem && !hasInputError);
 }
 
 /* =========================================================
@@ -667,7 +700,6 @@ function calculateGrandTotal() {
     });
     document.getElementById('grand-total').innerText =
         `₱${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-    validateForm();
 }
 
 /* =========================================================
@@ -696,49 +728,46 @@ const handleTableSearch = async (input) => {
         if (!data.items?.length) { suggestions.style.display = 'none'; return; }
 
         data.items.slice(0, 5).forEach(item => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'list-group-item list-group-item-action';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action';
 
-        const itemIdStr = String(item.id);
-        const currentRowSelectedId = String(idInput.value || '');
-        const alreadySelectedElsewhere =
-            selectedItemIds.has(itemIdStr) && itemIdStr !== currentRowSelectedId;
+            const itemIdStr = String(item.id);
+            const currentRowSelectedId = String(idInput.value || '');
+            const alreadySelectedElsewhere =
+                selectedItemIds.has(itemIdStr) && itemIdStr !== currentRowSelectedId;
 
-        btn.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center">
-            <strong>${item.name}</strong>
-            <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
-            </div>
-            <div class="suggestion-stock">
-            <i class="bi bi-box me-1"></i>Stock: ${item.current_stock}
-            ${alreadySelectedElsewhere ? `<span style="margin-left:8px; color:#f4c430;">(already in cart)</span>` : ``}
-            </div>
-        `;
+            btn.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>${item.name}</strong>
+                    <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
+                </div>
+                <div class="suggestion-stock">
+                    <i class="bi bi-box me-1"></i>Stock: ${item.current_stock}
+                    ${alreadySelectedElsewhere ? `<span style="margin-left:8px; color:#f4c430;">(already in cart)</span>` : ``}
+                </div>
+            `;
 
-        if (alreadySelectedElsewhere) {
-            btn.disabled = true;
-            btn.style.opacity = "0.5";
-            btn.style.cursor = "not-allowed";
-        } else {
-            btn.onclick = () => {
-            // If this row previously had an item, remove it from the set first
-            rebuildSelectedItemIds(); // easy + safe
+            if (alreadySelectedElsewhere) {
+                btn.disabled = true;
+                btn.style.opacity = "0.5";
+                btn.style.cursor = "not-allowed";
+            } else {
+                btn.onclick = () => {
+                    rebuildSelectedItemIds();
+                    input.value = item.name;
+                    input.dataset.confirmedName = item.name;
+                    row.querySelector('.item-id-input').value = item.id;
+                    row.querySelector('.price-input').value = item.a4s_selling_price;
+                    row.dataset.basePrice = item.a4s_selling_price;
+                    row.querySelector('.stock-input').value = item.current_stock;
+                    rebuildSelectedItemIds();
+                    suggestions.style.display = 'none';
+                    calculateRow(row);
+                };
+            }
 
-            input.value = item.name;
-            input.dataset.confirmedName = item.name;
-            row.querySelector('.item-id-input').value = item.id;
-            row.querySelector('.price-input').value = item.a4s_selling_price;
-            row.dataset.basePrice = item.a4s_selling_price;
-            row.querySelector('.stock-input').value = item.current_stock;
-
-            rebuildSelectedItemIds();
-            suggestions.style.display = 'none';
-            calculateRow(row);
-            };
-        }
-
-        suggestions.appendChild(btn);
+            suggestions.appendChild(btn);
         });
 
         suggestions.style.display = 'block';
@@ -792,13 +821,8 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
-EVENT LISTENERS
+   EVENT LISTENERS
 ========================================================= */
-['sales-number', 'customer-name', 'ref-no'].forEach(id => {
-    document.getElementById(id).addEventListener('input', validateForm);
-});
-document.getElementById('payment-category').addEventListener('change', validateForm);
-
 // Payment category UI
 document.getElementById('payment-category').addEventListener('change', function () {
     const methodDiv = document.getElementById('method-options');
@@ -806,26 +830,18 @@ document.getElementById('payment-category').addEventListener('change', function 
     const providerLabel = document.getElementById('provider-label');
     const submitBtn = document.getElementById('submit-btn');
 
-    const selectedCat = this.value; // can be 'Online'/'Bank'/'Others' OR numeric ID for Cash/Debt
-
-    // Helper: show/hide provider select based on category string
+    const selectedCat = this.value;
     const needsProvider = (selectedCat === 'Online' || selectedCat === 'Bank');
 
-    // Filter options (only relevant for provider categories)
     if (needsProvider) {
-        let visibleCount = 0;
-
         Array.from(methodSelect.options).forEach((opt, idx) => {
-            // keep placeholder always visible
             if (idx === 0) {
                 opt.style.display = 'block';
                 opt.selected = true;
                 return;
             }
-
             const isCategoryMatch = opt.getAttribute('data-category') === selectedCat;
             opt.style.display = isCategoryMatch ? 'block' : 'none';
-            if (isCategoryMatch) visibleCount++;
         });
 
         methodDiv.style.display = 'block';
@@ -834,10 +850,9 @@ document.getElementById('payment-category').addEventListener('change', function 
         else if (selectedCat === 'Online') providerLabel.innerText = 'Select Online Provider';
         else providerLabel.innerText = 'Select Provider';
 
-        submitBtn.className = (selectedCat === 'Online' || selectedCat === 'Bank') ? 'btn btn-info' : 'btn btn-danger';
+        submitBtn.className = 'btn btn-info';
         submitBtn.style.minWidth = '220px';
     } else {
-        // Cash or Debt (numeric IDs)
         methodDiv.style.display = 'none';
 
         if (document.querySelector(`#payment-category option[value="${selectedCat}"]`)?.textContent.includes('Utang')) {
@@ -847,44 +862,40 @@ document.getElementById('payment-category').addEventListener('change', function 
         }
         submitBtn.style.minWidth = '220px';
     }
-
-    validateForm();
 });
 
 // Tracks all item_ids currently selected in the table
 const selectedItemIds = new Set();
 
 function rebuildSelectedItemIds() {
-  selectedItemIds.clear();
-  document.querySelectorAll('.item-row').forEach(row => {
-    const id = row.querySelector('.item-id-input')?.value;
-    if (id) selectedItemIds.add(String(id));
-  });
+    selectedItemIds.clear();
+    document.querySelectorAll('.item-row').forEach(row => {
+        const id = row.querySelector('.item-id-input')?.value;
+        if (id) selectedItemIds.add(String(id));
+    });
 }
 
-// Clears a row safely (used when removing/overwriting)
 function clearItemRow(row) {
-  row.querySelector('.item-id-input').value = '';
-  row.querySelector('.item-input').value = '';
-  row.querySelector('.item-input').dataset.confirmedName = '';
-  row.querySelector('.price-input').value = '';
-  row.querySelector('.stock-input').value = '--';
-  row.querySelector('.discount-input').value = 0;
-  delete row.dataset.basePrice;
+    row.querySelector('.item-id-input').value = '';
+    row.querySelector('.item-input').value = '';
+    row.querySelector('.item-input').dataset.confirmedName = '';
+    row.querySelector('.price-input').value = '';
+    row.querySelector('.stock-input').value = '--';
+    row.querySelector('.discount-input').value = 0;
+    delete row.dataset.basePrice;
 
-  const originalPriceEl = row.querySelector('.original-price');
-  if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
+    const originalPriceEl = row.querySelector('.original-price');
+    if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
 
-  row.querySelector('.subtotal-display').innerText = '₱0.00';
-  const qtyInp = row.querySelector('.qty-input');
-  qtyInp.value = 1;
-  qtyInp.classList.remove('border-danger');
-  qtyInp.style.color = '';
-  qtyInp.style.boxShadow = "none";
-  row.querySelector('.stock-warning-text').style.display = 'none';
+    row.querySelector('.subtotal-display').innerText = '₱0.00';
+    const qtyInp = row.querySelector('.qty-input');
+    qtyInp.value = 1;
+    qtyInp.classList.remove('border-danger');
+    qtyInp.style.color = '';
+    qtyInp.style.boxShadow = "none";
+    row.querySelector('.stock-warning-text').style.display = 'none';
 
-  calculateGrandTotal();
-  validateForm();
+    calculateGrandTotal();
 }
 
 // Mechanic toggle
@@ -949,27 +960,9 @@ document.addEventListener('click', (e) => {
         rebuildSelectedItemIds();
         calculateGrandTotal();
     } else {
-        row.querySelector('.item-id-input').value = '';
-        row.querySelector('.item-input').value = '';
-        row.querySelector('.item-input').dataset.confirmedName = '';
-        row.querySelector('.price-input').value = '';
-        row.querySelector('.stock-input').value = '--';
-        row.querySelector('.discount-input').value = 0;
-        delete row.dataset.basePrice;
-        const originalPriceEl = row.querySelector('.original-price');
-        originalPriceEl.style.display = 'none';
-        originalPriceEl.innerText = '₱0.00';
-        row.querySelector('.subtotal-display').innerText = '₱0.00';
-        const qtyInp = row.querySelector('.qty-input');
-        qtyInp.value = 1;
-        qtyInp.classList.remove('border-danger');
-        qtyInp.style.color = '';
-        qtyInp.style.boxShadow = "none";
-        row.querySelector('.stock-warning-text').style.display = 'none';
         clearItemRow(row);
         rebuildSelectedItemIds();
         calculateGrandTotal();
-        validateForm();
     }
 });
 
@@ -1051,7 +1044,6 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
 
     tbody.appendChild(newRow);
     rebuildSelectedItemIds();
-    validateForm();
 });
 
 // Add service row
@@ -1074,20 +1066,48 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
 ========================================================= */
 document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
-    const btn = e.target;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
 
-    const rows = document.querySelectorAll('.item-row');
+    // ── Step 1: Clear previous errors ────────────────────────────
+    clearFieldErrors();
+
+    // ── Step 2: Header field validation ─────────────────────────
+    const salesNum = document.getElementById('sales-number').value.trim();
+    const customer = document.getElementById('customer-name').value.trim();
+    const paymentCat = document.getElementById('payment-category').value;
+    const selectedProvider = document.getElementById('payment-method').value;
+    const refNo = document.getElementById('ref-no').value.trim();
+    const needsProvider = (paymentCat === 'Online' || paymentCat === 'Bank');
+
+    let firstErrorEl = null;
+
+    function markError(el, message) {
+        flagError(el, message);
+        if (!firstErrorEl) firstErrorEl = el;
+    }
+
+    if (!salesNum)                          markError(document.getElementById('sales-number'), 'OR No. is required.');
+    if (!customer)                          markError(document.getElementById('customer-name'), 'Customer name is required.');
+    if (needsProvider && !selectedProvider) markError(document.getElementById('payment-method'), 'Please select a provider.');
+    if (needsProvider && !refNo)            markError(document.getElementById('ref-no'), 'Reference number is required.');
+
+    if (firstErrorEl) {
+        firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstErrorEl.focus();
+        return;
+    }
+
+    // ── Step 3: Must have at least one valid item OR one valid service ──
     const validItems = [];
-    let isClean = true;
+    let hasUnconfirmedItem = false;
 
-    rows.forEach(row => {
+    document.querySelectorAll('.item-row').forEach(row => {
         const id = row.querySelector('.item-id-input').value;
         const qty = parseFloat(row.querySelector('.qty-input').value);
-        const name = row.querySelector('.item-input').value;
+        const name = row.querySelector('.item-input').value.trim();
 
-        if (name.trim() && !id) isClean = false;
+        // User typed something but never selected from dropdown
+        if (name && !id) hasUnconfirmedItem = true;
+
         if (id && qty > 0) {
             const discountPercent = parseFloat(row.querySelector('.discount-input').value) || 0;
             const originalPrice = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
@@ -1096,28 +1116,56 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         }
     });
 
-    if (!isClean || !validItems.length) {
-        alert('Invalid items detected or cart is empty.');
-        btn.disabled = false;
-        btn.innerHTML = 'SUBMIT TRANSACTION';
+    const validServices = [];
+    document.querySelectorAll('.service-row').forEach(row => {
+        const sId = row.querySelector('.service-id-input').value;
+        const sPrice = parseFloat(row.querySelector('.service-price-input').value) || 0;
+        if (sId) validServices.push({ service_id: sId, price: sPrice });
+    });
+
+    // Block submission if any row has a stock or qty error
+    let hasStockError = false;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const warning = row.querySelector('.stock-warning-text');
+        if (warning && warning.style.display !== 'none') {
+            hasStockError = true;
+        }
+    });
+
+    if (hasStockError) {
+        const firstBadRow = [...document.querySelectorAll('.item-row')].find(row => {
+            const w = row.querySelector('.stock-warning-text');
+            return w && w.style.display !== 'none';
+        });
+        if (firstBadRow) firstBadRow.querySelector('.qty-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showAlert('One or more items have insufficient stock or invalid quantities. Please fix them before submitting.');
         return;
     }
 
-    await saveTransaction(validItems);
+    if (hasUnconfirmedItem) {
+        showAlert('One or more items were typed but not selected from the search. Please select an item from the dropdown.', 'warning');
+        return;
+    }
+
+    // Must have at least one item OR at least one service
+    if (validItems.length === 0 && validServices.length === 0) {
+        showAlert('Please add at least one item or service before submitting.', 'warning');
+        return;
+    }
+
+    // ── Step 4: All clear — submit ───────────────────────────────
+    const btn = e.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
+
+    await saveTransaction(validItems, validServices);
 });
 
-async function saveTransaction(items) {
+async function saveTransaction(items, services) {
     let paymentId = document.getElementById('payment-category').value;
     let refNo = null;
 
     let finalDate;
-    const services = [];
-    document.querySelectorAll('.service-row').forEach(row => {
-        const sId = row.querySelector('.service-id-input').value;
-        const sPrice = parseFloat(row.querySelector('.service-price-input').value) || 0;
-        if (sId) services.push({ service_id: sId, price: sPrice });
-    });
-
     if (dateWasManuallyChanged) {
         finalDate = document.getElementById('trans-date').value;
     } else {
@@ -1128,9 +1176,7 @@ async function saveTransaction(items) {
 
     if (paymentId === 'Online' || paymentId === 'Bank') {
         paymentId = document.getElementById('payment-method').value;
-        refNo = (paymentId === 'Online' || paymentId === 'Bank')
-            ? document.getElementById('ref-no').value
-            : (document.getElementById('ref-no').value || null);
+        refNo = document.getElementById('ref-no').value || null;
     }
 
     const payload = {
@@ -1157,7 +1203,7 @@ async function saveTransaction(items) {
             window.location.href = '/transaction/out';
         } else {
             const result = await res.json();
-            alert(result.message);
+            showAlert(result.message);
             document.getElementById('submit-btn').disabled = false;
             document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
         }

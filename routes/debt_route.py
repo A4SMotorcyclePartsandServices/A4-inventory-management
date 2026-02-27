@@ -200,3 +200,11 @@ def debt_payments_for_sale(sale_id):
             for r in rows
         ]
     })
+
+@debt_bp.route("/debt/statement/<int:sale_id>")
+def customer_debt_statement(sale_id):
+    from services.debt_service import get_debt_detail
+    data = get_debt_detail(sale_id)
+    if not data:
+        return "Statement not found.", 404
+    return render_template("debt/statement.html", data=data)

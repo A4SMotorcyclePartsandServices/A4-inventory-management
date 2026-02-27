@@ -1462,7 +1462,17 @@ function renderDebtTable() {
                 <td class="text-end ${sale.remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">
                     ₱${sale.remaining.toLocaleString(undefined, {minimumFractionDigits:2})}
                 </td>
-                <td class="text-center">${statusBadge}</td>
+                <td class="text-center">
+                    <div class="d-flex align-items-center justify-content-center gap-2">
+                        ${statusBadge}
+                        <a href="/debt/statement/${sale.sale_id}" target="_blank"
+                        class="btn btn-sm btn-outline-secondary border-0"
+                        title="Print customer statement"
+                        onclick="event.stopPropagation()">
+                            <i class="bi bi-printer"></i>
+                        </a>
+                    </div>
+                </td>
             </tr>
             <tr id="${collapseId}" style="display:none;">
                 <td colspan="8" class="p-0 border-0">

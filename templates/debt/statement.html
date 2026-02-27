@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Statement — {{ data.sale.sales_number }}</title>
+    <style>
+        /* ── RESET ── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 13px;
+            color: #111;
+            background: #fff;
+            padding: 36px 40px;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        /* ── HEADER ── */
+        .stmt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            border-bottom: 2px solid #c1121f;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+        }
+        .shop-brand {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .shop-logo {
+            height: 52px;
+            width: auto;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        .shop-copy {
+            min-width: 0;
+        }
+
+        .shop-name {
+            font-size: 1.22rem;
+            font-weight: 800;
+            color: #c1121f;
+            letter-spacing: -0.5px;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+
+        .shop-tagline {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .stmt-title {
+            text-align: right;
+            flex: 0 0 auto;
+            max-width: 210px;
+        }
+
+        .stmt-title h2 {
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #333;
+        }
+
+        .stmt-title p {
+            font-size: 0.72rem;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        /* ── CUSTOMER INFO ── */
+        .customer-block {
+            background: #f8f8f8;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 14px 18px;
+            margin-bottom: 22px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 24px;
+        }
+
+        .info-row label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #999;
+            display: block;
+        }
+
+        .info-row span {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #111;
+        }
+
+        /* ── SECTION TITLE ── */
+        .section-title {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #c1121f;
+            margin-bottom: 8px;
+            margin-top: 22px;
+        }
+
+        /* ── TABLES ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+        }
+
+        thead th {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #555;
+            border-bottom: 1px solid #ddd;
+            padding: 6px 8px;
+            text-align: left;
+        }
+
+        thead th.text-right { text-align: right; }
+        thead th.text-center { text-align: center; }
+
+        tbody td {
+            font-size: 0.85rem;
+            padding: 7px 8px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #222;
+        }
+
+        tbody td.text-right { text-align: right; }
+        tbody td.text-center { text-align: center; }
+
+        tbody tr:last-child td { border-bottom: none; }
+
+        .disc-note {
+            font-size: 0.7rem;
+            color: #2a9d2a;
+        }
+
+        /* ── TOTALS BLOCK ── */
+        .totals-block {
+            margin-top: 16px;
+            border-top: 2px solid #111;
+            padding-top: 12px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 4px 40px;
+            max-width: 320px;
+            margin-left: auto;
+        }
+
+        .totals-block .t-label {
+            font-size: 0.78rem;
+            color: #555;
+            text-align: right;
+        }
+
+        .totals-block .t-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            text-align: right;
+            min-width: 100px;
+        }
+
+        .totals-block .t-label.highlight,
+        .totals-block .t-value.highlight {
+            color: #c1121f;
+            font-weight: 800;
+            font-size: 1rem;
+        }
+
+        .totals-block .t-label.paid-lbl,
+        .totals-block .t-value.paid-val {
+            color: #2a9d2a;
+        }
+
+        /* ── STATUS STAMP ── */
+        .status-stamp {
+            display: inline-block;
+            border: 3px solid #2a9d2a;
+            color: #2a9d2a;
+            font-size: 1.1rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            padding: 4px 14px;
+            border-radius: 4px;
+            transform: rotate(-4deg);
+            margin-left: 16px;
+            vertical-align: middle;
+            opacity: 0.85;
+        }
+
+        .status-stamp.unpaid {
+            border-color: #c1121f;
+            color: #c1121f;
+        }
+
+        .status-stamp.partial {
+            border-color: #d97706;
+            color: #d97706;
+        }
+
+        /* ── NO PAYMENTS NOTE ── */
+        .no-payments {
+            font-size: 0.8rem;
+            color: #aaa;
+            font-style: italic;
+            padding: 8px 0;
+        }
+
+        /* ── FOOTER ── */
+        .stmt-footer {
+            margin-top: 36px;
+            border-top: 1px solid #e0e0e0;
+            padding-top: 12px;
+            font-size: 0.7rem;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* ── PRINT BUTTON (screen only) ── */
+        .print-bar {
+            text-align: center;
+            padding: 18px 0 10px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 28px;
+        }
+
+        .print-btn {
+            background: #c1121f;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 9px 28px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+        }
+
+        .print-btn:hover { background: #a00e19; }
+
+        @media (max-width: 760px) {
+            .stmt-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .stmt-title {
+                text-align: left;
+                max-width: none;
+            }
+        }
+
+        @media print {
+            .print-bar { display: none; }
+            body { padding: 20px 24px; }
+            .shop-name { font-size: 1.12rem; }
+            .stmt-title { max-width: 190px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Print button (hidden when printing) -->
+<div class="print-bar">
+    <button class="print-btn" onclick="window.print()">
+        &#128438; Print Statement
+    </button>
+</div>
+
+<!-- Header -->
+<div class="stmt-header">
+    <div class="shop-brand">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Motor Shop Logo" class="shop-logo">
+        <div class="shop-copy">
+            <div class="shop-name">A4s Motorcycle Shop & Services</div>
+            <div class="shop-tagline">Customer Account Statement</div>
+        </div>
+    </div>
+    <div class="stmt-title">
+        <h2>Statement of Account</h2>
+        <p>Generated: <strong>{{ data.sale.transaction_date }}</strong></p>
+    </div>
+</div>
+
+<!-- Customer Info -->
+<div class="customer-block">
+    <div class="info-row">
+        <label>Customer</label>
+        <span>{{ data.sale.customer_name }}</span>
+    </div>
+    <div class="info-row">
+        <label>OR / Receipt #</label>
+        <span>{{ data.sale.sales_number }}</span>
+    </div>
+    <div class="info-row">
+        <label>Sale Date</label>
+        <span>{{ data.sale.transaction_date }}</span>
+    </div>
+    <div class="info-row">
+        <label>Payment Method</label>
+        <span>{{ data.sale.payment_method }}</span>
+    </div>
+    {% if data.sale.mechanic_name and data.sale.mechanic_name != '—' %}
+    <div class="info-row">
+        <label>Assigned Mechanic</label>
+        <span>{{ data.sale.mechanic_name }}</span>
+    </div>
+    {% endif %}
+    {% if data.sale.notes %}
+    <div class="info-row">
+        <label>Notes</label>
+        <span>{{ data.sale.notes }}</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Items Purchased -->
+{% if data['items'] %}
+<div class="section-title">Items Purchased</div>
+<table>
+    <thead>
+        <tr>
+            <th>Item</th>
+            <th class="text-center">Qty</th>
+            <th class="text-right">Unit Price</th>
+            <th class="text-right">Subtotal</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in data['items'] %}
+        <tr>
+            <td>
+                {{ item.item_name }}
+                {% if item.discount_amount and item.discount_amount > 0 %}
+                <div class="disc-note">Disc: -₱{{ "%.2f"|format(item.discount_amount) }}</div>
+                {% endif %}
+            </td>
+            <td class="text-center">{{ item.quantity }}</td>
+            <td class="text-right">₱{{ "%.2f"|format(item.final_unit_price) }}</td>
+            <td class="text-right">₱{{ "%.2f"|format(item.line_total) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Services -->
+{% if data.services %}
+<div class="section-title">Labor & Services</div>
+<table>
+    <thead>
+        <tr>
+            <th>Service</th>
+            <th class="text-right">Price</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for svc in data.services %}
+        <tr>
+            <td>{{ svc.service_name }}</td>
+            <td class="text-right">₱{{ "%.2f"|format(svc.price) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Totals -->
+<div class="totals-block">
+    <span class="t-label">Total Amount</span>
+    <span class="t-value">₱{{ "%.2f"|format(data.sale.total_amount) }}</span>
+
+    <span class="t-label paid-lbl">Total Paid</span>
+    <span class="t-value paid-val">₱{{ "%.2f"|format(data.sale.total_paid) }}</span>
+
+    <span class="t-label highlight">Remaining Balance</span>
+    <span class="t-value highlight">₱{{ "%.2f"|format(data.sale.remaining) }}</span>
+</div>
+
+<!-- Payment History -->
+<div class="section-title" style="margin-top: 28px;">
+    Payment History
+    {% if data.sale.remaining <= 0 %}
+        <span class="status-stamp">Settled</span>
+    {% elif data.sale.total_paid > 0 %}
+        <span class="status-stamp partial">Partial</span>
+    {% else %}
+        <span class="status-stamp unpaid">Unpaid</span>
+    {% endif %}
+</div>
+
+{% if data.payments %}
+<table>
+    <thead>
+        <tr>
+            <th>Date Paid</th>
+            <th class="text-right">Amount</th>
+            <th>Method</th>
+            <th>Reference #</th>
+            <th>Staff</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in data.payments %}
+        <tr>
+            <td>{{ p.paid_at }}</td>
+            <td class="text-right">₱{{ "%.2f"|format(p.amount_paid) }}</td>
+            <td>{{ p.payment_method or '—' }}</td>
+            <td>{{ p.reference_no or '—' }}</td>
+            <td>{{ p.paid_by or 'Staff' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="no-payments">No payments recorded yet.</p>
+{% endif %}
+
+<!-- Footer -->
+<div class="stmt-footer">
+    <span>A4S Motor Shop — Internal Record</span>
+    <span>This is a system-generated statement. Not a formal invoice.</span>
+</div>
+
+</body>
+</html>
