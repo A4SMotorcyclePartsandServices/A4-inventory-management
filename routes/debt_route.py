@@ -10,7 +10,8 @@ def utang_list():
 
     conn = get_db()
     # Only ACTIVE, and exclude Debt-category methods (you don't "pay" debt using Utang)
-    # NOTE (future branches): add branch_id filter here later.
+    #(future branches): add branch_id filter here later.
+
     payment_methods = conn.execute("""
         SELECT id, name, category
         FROM payment_methods
@@ -18,9 +19,27 @@ def utang_list():
         AND category != 'Debt'
         ORDER BY category ASC, name ASC
     """).fetchall()
+
+    cash_pm = conn.execute("""
+        SELECT id FROM payment_methods
+        WHERE category = 'Cash' AND is_active = 1
+        ORDER BY id ASC LIMIT 1
+    """).fetchone()
+
+    others_pm = conn.execute("""
+        SELECT id FROM payment_methods
+        WHERE category = 'Others' AND is_active = 1
+        ORDER BY id ASC LIMIT 1
+    """).fetchone()
+
     conn.close()
 
-    return render_template("transactions/utang.html", debts=debts, payment_methods=payment_methods)
+    return render_template("transactions/utang.html",
+        debts=debts,
+        payment_methods=payment_methods,
+        cash_pm_id=cash_pm["id"] if cash_pm else None,
+        others_pm_id=others_pm["id"] if others_pm else None,
+    )
 
 @debt_bp.route("/api/debt/<int:sale_id>")
 def debt_detail_api(sale_id):

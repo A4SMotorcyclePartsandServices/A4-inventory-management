@@ -325,16 +325,31 @@
 
                 <div class="mb-3">
                     <label class="form-label">Payment Method <span style="color:var(--accent);">*</span></label>
-                    <select id="pay-method" class="form-select">
-                        {% for pm in payment_methods %}
-                            <option value="{{ pm.id }}">{{ pm.name }}</option>
-                        {% endfor %}
+                    <select id="pay-category" class="form-select">
+                        <option value="{{ cash_pm_id }}" data-type="Cash">Cash</option>
+                        <option value="Bank" data-type="Bank">Bank Transfer</option>
+                        <option value="Online" data-type="Online">Online Payment (Wallet)</option>
+                        <option value="{{ others_pm_id }}" data-type="Others">Others</option>
                     </select>
                 </div>
 
+                <div class="mb-3" id="pay-provider-group" style="display:none;">
+                    <label class="form-label" id="pay-provider-label">Select Provider <span style="color:var(--accent);">*</span></label>
+                    <select id="pay-method" class="form-select">
+                        <option value="">-- Select --</option>
+                        {% for pm in payment_methods %}
+                            {% if pm.category in ['Bank', 'Online'] %}
+                                <option value="{{ pm.id }}" data-category="{{ pm.category }}">{{ pm.name }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    <div id="pay-method-error" style="color:#f87171; font-size:0.75rem; margin-top:4px; display:none;">Please select a provider.</div>
+                </div>
+
                 <div class="mb-3" id="pay-ref-group" style="display:none;">
-                    <label class="form-label">Reference Number</label>
-                    <input type="text" id="pay-ref" class="form-control" placeholder="GCash / Bank ref no.">
+                    <label class="form-label" id="pay-ref-label">Reference Number <span style="color:var(--accent);">*</span></label>
+                    <input type="text" id="pay-ref" class="form-control" placeholder="Ref No. / Trace ID">
+                    <div id="pay-ref-error" style="color:#f87171; font-size:0.75rem; margin-top:4px; display:none;">Reference number is required.</div>
                 </div>
 
                 <div class="mb-3">
@@ -376,7 +391,6 @@ async function openDebtModal(saleId) {
         const res  = await fetch(`/api/debt/${saleId}`);
         const data = await res.json();
         activeDebtData = data;
-
         renderDebtModal(data);
     } catch (err) {
         document.getElementById('modal-body-content').innerHTML =
@@ -391,7 +405,7 @@ function renderDebtModal(data) {
     const payments = data.payments;
 
     const remaining = sale.remaining;
-    const pct       = sale.total_amount > 0
+    const pct = sale.total_amount > 0
         ? Math.min(100, ((sale.total_paid / sale.total_amount) * 100)).toFixed(1)
         : 0;
 
@@ -399,7 +413,6 @@ function renderDebtModal(data) {
         sale.sales_number || `#${sale.id}`;
 
     let html = `
-        <!-- Header -->
         <div class="row mb-3">
             <div class="col-6">
                 <div style="font-size:0.7rem;color:var(--text-muted);">CUSTOMER</div>
@@ -424,15 +437,12 @@ function renderDebtModal(data) {
                 <strong style="font-family:monospace; color:#f4c430;">₱${parseFloat(remaining).toLocaleString(undefined,{minimumFractionDigits:2})}</strong>
             </div>
         </div>
-
-        <!-- Progress bar -->
         <div class="progress-bar-track mb-3">
             <div class="progress-bar-fill" style="width:${pct}%;"></div>
         </div>
         <div style="font-size:0.65rem; color:var(--text-muted); margin-top:-8px; margin-bottom:12px;">${pct}% paid</div>
     `;
 
-    // Items
     if (items.length > 0) {
         html += `<div class="detail-section-title"><i class="bi bi-box"></i> Items Purchased</div>`;
         html += `<table class="table table-sm" style="background:transparent; color:var(--text-primary);">
@@ -450,7 +460,6 @@ function renderDebtModal(data) {
         html += `</tbody></table>`;
     }
 
-    // Services
     if (services.length > 0) {
         html += `<div class="detail-section-title"><i class="bi bi-wrench"></i> Services</div>`;
         services.forEach(svc => {
@@ -461,12 +470,11 @@ function renderDebtModal(data) {
         });
     }
 
-    // Payment History
     html += `<div class="detail-section-title"><i class="bi bi-clock-history"></i> Payment History</div>`;
     if (payments.length === 0) {
         html += `<div style="font-size:0.82rem; color:var(--text-muted); padding:8px 0;">No payments recorded yet.</div>`;
     } else {
-        payments.forEach((p, idx) => {
+        payments.forEach(p => {
             html += `<div class="payment-history-row">
                 <div>
                     <div class="ph-amount">₱${parseFloat(p.amount_paid).toLocaleString(undefined,{minimumFractionDigits:2})}</div>
@@ -482,13 +490,7 @@ function renderDebtModal(data) {
     }
 
     document.getElementById('modal-body-content').innerHTML = html;
-
-    // Show pay button only if still has balance
-    if (remaining > 0) {
-        document.getElementById('open-payment-btn').style.display = 'inline-block';
-    } else {
-        document.getElementById('open-payment-btn').style.display = 'none';
-    }
+    document.getElementById('open-payment-btn').style.display = remaining > 0 ? 'inline-block' : 'none';
 }
 
 /* ── PAYMENT PANEL ── */
@@ -496,17 +498,26 @@ function openPaymentPanel() {
     if (!activeDebtData) return;
     const sale = activeDebtData.sale;
 
-    // Hide detail modal, show payment modal
     bootstrap.Modal.getInstance(document.getElementById('debtModal')).hide();
 
     document.getElementById('pay-customer-name').innerText = sale.customer_name || 'Walk-in';
     document.getElementById('pay-total-amount').innerText  = `₱${parseFloat(sale.total_amount).toLocaleString(undefined,{minimumFractionDigits:2})}`;
     document.getElementById('pay-total-paid').innerText    = `₱${parseFloat(sale.total_paid).toLocaleString(undefined,{minimumFractionDigits:2})}`;
     document.getElementById('pay-remaining').innerText     = `₱${parseFloat(sale.remaining).toLocaleString(undefined,{minimumFractionDigits:2})}`;
-    document.getElementById('pay-amount').value            = '';
-    document.getElementById('pay-amount-error').style.display = 'none';
-    document.getElementById('pay-notes').value             = '';
-    document.getElementById('pay-ref').value               = '';
+
+    // Reset form to defaults
+    document.getElementById('pay-amount').value = '';
+    document.getElementById('pay-notes').value  = '';
+    document.getElementById('pay-ref').value    = '';
+    document.getElementById('pay-amount-error').style.display   = 'none';
+    document.getElementById('pay-method-error').style.display   = 'none';
+    document.getElementById('pay-ref-error').style.display      = 'none';
+    document.getElementById('pay-provider-group').style.display = 'none';
+    document.getElementById('pay-ref-group').style.display      = 'none';
+    document.getElementById('pay-method').value = '';
+
+    // Default category to Cash (first option)
+    document.getElementById('pay-category').selectedIndex = 0;
 
     new bootstrap.Modal(document.getElementById('paymentModal')).show();
 }
@@ -516,19 +527,39 @@ function backToDetail() {
     openDebtModal(activeSaleId);
 }
 
-// Show/hide reference number field based on payment method
-document.getElementById('pay-method').addEventListener('change', function () {
-    const selected = this.options[this.selectedIndex].text;
-    const needsRef = ['GCash', 'PayMaya', 'Bank Transfer', 'BPI', 'BDO', 'General / Other'].includes(selected);
-    document.getElementById('pay-ref-group').style.display = needsRef ? 'block' : 'none';
+/* ── CATEGORY CHANGE → show/hide provider + ref ── */
+document.getElementById('pay-category').addEventListener('change', function () {
+    const type          = this.options[this.selectedIndex].dataset.type;
+    const providerGroup = document.getElementById('pay-provider-group');
+    const refGroup      = document.getElementById('pay-ref-group');
+    const methodSelect  = document.getElementById('pay-method');
+    const providerLabel = document.getElementById('pay-provider-label');
+
+    // Filter provider options by category
+    [...methodSelect.options].forEach(opt => {
+        if (!opt.value) return;
+        opt.style.display = opt.dataset.category === type ? '' : 'none';
+    });
+    methodSelect.value = '';
+
+    if (type === 'Bank' || type === 'Online') {
+        providerLabel.innerHTML = (type === 'Bank' ? 'Select Bank' : 'Select Provider')
+            + ' <span style="color:var(--accent);">*</span>';
+        providerGroup.style.display = 'block';
+        refGroup.style.display      = 'block';
+    } else {
+        providerGroup.style.display = 'none';
+        refGroup.style.display      = 'none';
+    }
+
+    document.getElementById('pay-method-error').style.display = 'none';
+    document.getElementById('pay-ref-error').style.display    = 'none';
 });
 
 /* ── SUBMIT PAYMENT ── */
 async function submitPayment() {
-    const amountInput = document.getElementById('pay-amount');
-    const errorDiv    = document.getElementById('pay-amount-error');
-    const amount      = parseFloat(amountInput.value);
-
+    const errorDiv = document.getElementById('pay-amount-error');
+    const amount   = parseFloat(document.getElementById('pay-amount').value);
     errorDiv.style.display = 'none';
 
     if (!amount || amount <= 0) {
@@ -537,15 +568,36 @@ async function submitPayment() {
         return;
     }
 
+    const categoryEl   = document.getElementById('pay-category');
+    const categoryType = categoryEl.options[categoryEl.selectedIndex].dataset.type;
+    const needsProvider = (categoryType === 'Bank' || categoryType === 'Online');
+
+    let hasError = false;
+    if (needsProvider) {
+        if (!document.getElementById('pay-method').value) {
+            document.getElementById('pay-method-error').style.display = 'block';
+            hasError = true;
+        }
+        if (!document.getElementById('pay-ref').value.trim()) {
+            document.getElementById('pay-ref-error').style.display = 'block';
+            hasError = true;
+        }
+        if (hasError) return;
+    }
+
+    const payment_method_id = needsProvider
+        ? document.getElementById('pay-method').value
+        : categoryEl.value;
+
     const btn = document.getElementById('confirm-pay-btn');
-    btn.disabled = true;
+    btn.disabled  = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
 
     const payload = {
         amount_paid:       amount,
-        payment_method_id: document.getElementById('pay-method').value,
-        reference_no:      document.getElementById('pay-ref').value,
-        notes:             document.getElementById('pay-notes').value,
+        payment_method_id: payment_method_id,
+        reference_no:      document.getElementById('pay-ref').value.trim(),
+        notes:             document.getElementById('pay-notes').value.trim(),
     };
 
     try {
@@ -562,13 +614,13 @@ async function submitPayment() {
         } else {
             errorDiv.innerText = data.message || 'Something went wrong.';
             errorDiv.style.display = 'block';
-            btn.disabled = false;
+            btn.disabled  = false;
             btn.innerHTML = 'CONFIRM PAYMENT';
         }
     } catch (err) {
         errorDiv.innerText = 'Network error. Please try again.';
         errorDiv.style.display = 'block';
-        btn.disabled = false;
+        btn.disabled  = false;
         btn.innerHTML = 'CONFIRM PAYMENT';
     }
 }

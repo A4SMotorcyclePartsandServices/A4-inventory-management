@@ -192,7 +192,7 @@ def get_sales_report_by_date(report_date):
     """, (report_date,)).fetchall()
 
     # --- Early return ONLY if truly nothing to show ---
-    if not sales_rows and not all_unresolved:
+    if not sales_rows and not all_unresolved and not debt_collected_rows:
         conn.close()
         return []
 
@@ -444,7 +444,7 @@ def get_sales_report_by_range(start_date, end_date):
     """, (start_date, end_date)).fetchall()
 
     # --- Early return ONLY if truly nothing to show ---
-    if not sales_rows and not all_unresolved:
+    if not sales_rows and not all_unresolved and not debt_collected_rows:
         conn.close()
         return []
 

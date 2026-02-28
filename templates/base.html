@@ -834,13 +834,18 @@ document.addEventListener('DOMContentLoaded', function() {
             '{{ current_date }}'
         ],
         onChange: function(selectedDates) {
-            if (selectedDates.length === 2) {
-                const fmt = d => {
-                    const y   = d.getFullYear();
-                    const m   = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${day}`;
-                };
+            const fmt = d => {
+                const y   = d.getFullYear();
+                const m   = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            };
+
+            if (selectedDates.length === 1) {
+                // Single day — use same date for both start and end
+                document.getElementById('report-start-hidden').value = fmt(selectedDates[0]);
+                document.getElementById('report-end-hidden').value   = fmt(selectedDates[0]);
+            } else if (selectedDates.length === 2) {
                 document.getElementById('report-start-hidden').value = fmt(selectedDates[0]);
                 document.getElementById('report-end-hidden').value   = fmt(selectedDates[1]);
             }

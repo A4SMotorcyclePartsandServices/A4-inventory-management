@@ -659,10 +659,11 @@
                         <th class="text-end">Total Paid</th>
                         <th class="text-end">Remaining</th>
                         <th class="text-center">Status</th>
+                        <th class="text-center" style="width: 6%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="debt-audit-body">
-                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1431,7 +1432,7 @@ function renderDebtTable() {
     summaryEl.textContent = `${totalCount} total · ${openCount} open`;
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4">No records found.</td></tr>`;
         return;
     }
 
@@ -1463,19 +1464,19 @@ function renderDebtTable() {
                     ₱${sale.remaining.toLocaleString(undefined, {minimumFractionDigits:2})}
                 </td>
                 <td class="text-center">
-                    <div class="d-flex align-items-center justify-content-center gap-2">
-                        ${statusBadge}
-                        <a href="/debt/statement/${sale.sale_id}" target="_blank"
-                        class="btn btn-sm btn-outline-secondary border-0"
-                        title="Print customer statement"
-                        onclick="event.stopPropagation()">
-                            <i class="bi bi-printer"></i>
-                        </a>
-                    </div>
+                    ${statusBadge}
+                </td>
+                <td class="text-center">
+                    <a href="/debt/statement/${sale.sale_id}" target="_blank"
+                    class="btn btn-sm btn-outline-warning"
+                    title="Print customer statement"
+                    onclick="event.stopPropagation()">
+                        <i class="bi bi-printer"></i>
+                    </a>
                 </td>
             </tr>
             <tr id="${collapseId}" style="display:none;">
-                <td colspan="8" class="p-0 border-0">
+                <td colspan="9" class="p-0 border-0">
                     <div id="${collapseId}-inner" style="background:#0d0f13;">
                         <div class="text-center text-muted py-3 small">
                             <i class="bi bi-hourglass-split me-1"></i> Loading payments...

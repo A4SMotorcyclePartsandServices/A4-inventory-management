@@ -81,6 +81,8 @@ def sales_summary_report():
             "total_mech_cut":   0.0,
             "total_shop_topup": 0.0,
             "net_revenue":      0.0,
+            "debt_collected":   [],
+            "total_debt_collected": 0.0, 
         }
 
     return render_template(

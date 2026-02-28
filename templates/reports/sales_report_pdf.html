@@ -150,6 +150,41 @@
         .summary-item-row:last-child { border-bottom: none; }
         .summary-item-row .qty { color: #666; font-size: 11px; margin-left: 6px; }
 
+        /* Items box body: no padding so TOTAL can be full-bleed */
+        .summary-box-body.items-body {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        }
+
+        /* Padded content area (rows) */
+        .items-rows {
+        flex-grow: 1;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        }
+
+        /* Full-width bottom bar, snapped to bottom */
+        .items-total {
+        margin-top: auto;              /* pushes to bottom of items-body */
+        background: #111;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color: #fff;
+
+        font-size: 15px;
+        font-weight: 800;
+        padding: 10px 12px;
+
+        border-radius: 0 0 6px 6px;
+
+        display: flex;
+        justify-content: space-between;
+        }
+        .items-total .label { color: #eee; }
+        .items-total .value { color: #fff; }
+
         /* Services / mechanic box */
         .mechanic-block { margin-bottom: 12px; }
         .mechanic-block:last-child { margin-bottom: 0; }
@@ -352,23 +387,29 @@
 
         {# Box 1: Items sold #}
         <div class="summary-box">
-            <div class="summary-box-title">Items Sold</div>
-            <div class="summary-box-body">
-                {% if data.items_summary %}
-                    {% for item in data.items_summary %}
-                    <div class="summary-item-row">
-                        <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
-                        <span>₱ {{ "%.2f"|format(item.total) }}</span>
-                    </div>
-                    {% endfor %}
-                    <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #111; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; border-top: none; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                        <span>TOTAL</span>
-                        <span>₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
-                    </div>
-                {% else %}
-                    <div style="color: #aaa; font-size: 12px;">No items sold.</div>
-                {% endif %}
+        <div class="summary-box-title">Items Sold</div>
+
+        <div class="summary-box-body items-body">
+            {% if data.items_summary %}
+
+            <div class="items-rows">
+                {% for item in data.items_summary %}
+                <div class="summary-item-row">
+                <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
+                <span>₱ {{ "%.2f"|format(item.total) }}</span>
+                </div>
+                {% endfor %}
             </div>
+
+            <div class="items-total">
+                <span class="label">TOTAL</span>
+                <span class="value">₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
+            </div>
+
+            {% else %}
+            <div style="padding: 10px 12px; color: #aaa; font-size: 12px;">No items sold.</div>
+            {% endif %}
+        </div>
         </div>
 
         {# Box 2: Services & mechanic payouts (quota applied per mechanic per day) #}
@@ -479,6 +520,13 @@
 
     </div>
 
+    {% else %}
+    <div class="empty-state">
+        <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
+    </div>
+    {% endif %}
+
+    {# ── Debt Payments Collected — outside sales block so it always shows ── #}
     {% if data.debt_collected %}
     <div style="margin-top: 14px; border: 1px solid #a3cfbb; border-radius: 6px; overflow: hidden;">
         <div class="summary-box-title" style="background: #d4edda; color: #155724; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
@@ -505,12 +553,6 @@
                 <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
             </div>
         </div>
-    </div>
-    {% endif %}
-
-    {% else %}
-    <div class="empty-state">
-        <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
     </div>
     {% endif %}
 
