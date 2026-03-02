@@ -209,6 +209,10 @@ def init_db():
     try:
         conn.execute("ALTER TABLE mechanics ADD COLUMN is_active INTEGER DEFAULT 1")
     except: pass
+    try:
+        conn.execute("ALTER TABLE debt_payments ADD COLUMN service_portion REAL DEFAULT 0")
+    except:
+        pass
 
     # --- THE GOLDEN LEDGER MIGRATION ---
 

@@ -163,6 +163,22 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         total_paid   = sale['total_paid']
         remaining    = round(total_amount - total_paid, 2)
 
+        # 1b) Calculate service_portion for this payment
+        # Payments always fill service cost first before items
+        total_service_cost = conn.execute("""
+            SELECT COALESCE(SUM(price), 0)
+            FROM sales_services
+            WHERE sale_id = ?
+        """, (sale_id,)).fetchone()[0]
+
+        already_paid_to_service = conn.execute("""
+            SELECT COALESCE(SUM(service_portion), 0)
+            FROM debt_payments
+            WHERE sale_id = ?
+        """, (sale_id,)).fetchone()[0]
+
+        remaining_service = round(total_service_cost - already_paid_to_service, 2)
+
         # 2) Guard: overpayment check
         amount_paid = round(float(amount_paid), 2)
         if amount_paid <= 0:
@@ -174,12 +190,14 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # 3) Insert payment row
+        # 3) Insert payment row with service_portion
+        service_portion = round(min(amount_paid, max(remaining_service, 0.0)), 2)
+
         conn.execute("""
             INSERT INTO debt_payments
-                (sale_id, amount_paid, payment_method_id, reference_no, notes, paid_by, paid_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (sale_id, amount_paid, pm_id, reference_no, notes, paid_by, now))
+                (sale_id, amount_paid, service_portion, payment_method_id, reference_no, notes, paid_by, paid_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (sale_id, amount_paid, service_portion, pm_id, reference_no, notes, paid_by, now))
 
         # 4) Determine new status
         new_total_paid = round(total_paid + amount_paid, 2)

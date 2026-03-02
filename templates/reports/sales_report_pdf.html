@@ -424,9 +424,9 @@
                             <span>Services rendered</span>
                             <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
                         </div>
-                        {% if mech.unresolved_services_total > 0 %}
-                        <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #b45309;">
-                            <span>↳ + ₱ {{ "%.2f"|format(mech.unresolved_services_total) }} unresolved (payout still applied)</span>
+                        {% if mech.debt_service_portion > 0 %}
+                        <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
+                            <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
                             <span></span>
                         </div>
                         <div class="mechanic-block-row" style="font-weight: 700;">
@@ -473,19 +473,13 @@
                         <span class="label">Service Revenue</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_service_revenue) }}</span>
                     </div>
-                    {% if data.total_unresolved_service_revenue > 0 %}
-                    <div class="fin-row" style="font-size: 11px; padding-left: 24px; color: #b45309;">
-                        <span class="label">↳ + ₱ {{ "%.2f"|format(data.total_unresolved_service_revenue) }} from unresolved (mechanic still paid)</span>
-                        <span class="value"></span>
-                    </div>
-                    {% endif %}
                     <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Shop's Share</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_commission) }}</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Mechanic Payout</span>
-                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut) }}</span>
+                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
                     </div>
                     {% if data.total_shop_topup > 0 %}
                     <div class="fin-row topup">
@@ -498,6 +492,12 @@
                         <span class="label" style="color: #155724;">Debt Collected (Cash In)</span>
                         <span class="value" style="color: #155724; font-weight: 700;">+ ₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
                     </div>
+                    {% if data.total_mech_cut_from_debt > 0 %}
+                    <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
+                        <span class="label">↳ Mechanic cut from debt svc</span>
+                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_debt) }}</span>
+                    </div>
+                    {% endif %}
                     {% endif %}
                     {% if data.unresolved %}
                     <div class="fin-row" style="background: #fff8f0; border-left: 3px solid #b45309; font-size: 11px; padding: 8px 12px;">

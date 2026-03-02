@@ -114,18 +114,18 @@ def get_all_unresolved_sales(conn):
         remaining  = round(sale["total_amount"] - total_paid, 2)
 
         result.append({
-            "sales_number":   sale["sales_number"] or f"#{sale_id}",
-            "customer_name":  sale["customer_name"] or "Walk-in",
-            "mechanic_name":  sale["mechanic_name"] or "—",
-            "total_amount":   sale["total_amount"] or 0.0,
-            "total_paid":     total_paid,
-            "remaining":      remaining,
-            "status":         sale["status"],
-            "payment_method": sale["payment_method"] or "—",
-            "notes":          sale["notes"] or "",
+            "sales_number":     sale["sales_number"] or f"#{sale_id}",
+            "customer_name":    sale["customer_name"] or "Walk-in",
+            "mechanic_name":    sale["mechanic_name"] or "—",
+            "total_amount":     sale["total_amount"] or 0.0,
+            "total_paid":       total_paid,
+            "remaining":        remaining,
+            "status":           sale["status"],
+            "payment_method":   sale["payment_method"] or "—",
+            "notes":            sale["notes"] or "",
             "transaction_date": format_date(sale["transaction_date"]),
-            "products":       items_by_sale.get(sale_id, []),
-            "services":       services_by_sale.get(sale_id, []),
+            "products":         items_by_sale.get(sale_id, []),
+            "services":         services_by_sale.get(sale_id, []),
         })
 
     return result
@@ -135,11 +135,10 @@ def get_sales_report_by_date(report_date):
     """
     Pulls all completed sales for a given date for the End-of-Day PDF report.
 
-    Mechanic cut logic (applied per mechanic across the WHOLE day):
-    - Services from ALL sales that day (Paid, Partial, Unresolved) count toward mechanic payout
-    - This is because the mechanic did the work regardless of customer payment status
-    - Revenue numbers (gross, net) are still Paid-only
-    - If total services < MECHANIC_QUOTA, shop tops up the difference as an expense
+    Mechanic cut logic:
+    - Paid sales: mechanic payout on full service cost. Quota applies.
+    - Utang/unresolved sales: mechanic payout based ONLY on service_portion
+      collected via debt payments on this date. Quota does NOT apply to this portion.
 
     NOTE: When adding multi-branch support later, add a branch_id column to the
     sales table and filter by branch_id here.
@@ -172,20 +171,25 @@ def get_sales_report_by_date(report_date):
     # --- All unresolved across ALL dates (not filtered by report_date) ---
     all_unresolved = get_all_unresolved_sales(conn)
 
-    # --- Debt payments collected on this date ---
+    # --- Debt payments collected on this date (includes mechanic info for payout) ---
     debt_collected_rows = conn.execute("""
         SELECT
             dp.sale_id,
             dp.amount_paid,
+            dp.service_portion,
             dp.paid_at,
             dp.reference_no,
             dp.notes,
             s.sales_number,
             s.customer_name,
             s.total_amount,
-            pm.name AS payment_method
+            s.mechanic_id,
+            m.name            AS mechanic_name,
+            m.commission_rate,
+            pm.name           AS payment_method
         FROM debt_payments dp
         JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) = ?
         ORDER BY dp.paid_at ASC
@@ -198,7 +202,7 @@ def get_sales_report_by_date(report_date):
 
     # --- Split into paid vs unpaid for separate queries ---
     paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
-    all_sale_ids  = [row["id"] for row in sales_rows]  # for mechanic calc
+    all_sale_ids  = [row["id"] for row in sales_rows]
 
     items_by_sale    = {}
     services_by_sale = {}
@@ -206,7 +210,6 @@ def get_sales_report_by_date(report_date):
     # Fetch items for Paid sales only (revenue display)
     if paid_sale_ids:
         placeholders = ",".join("?" * len(paid_sale_ids))
-
         items_rows = conn.execute(f"""
             SELECT
                 si.sale_id,
@@ -222,14 +225,12 @@ def get_sales_report_by_date(report_date):
             WHERE si.sale_id IN ({placeholders})
             ORDER BY si.sale_id, i.name
         """, paid_sale_ids).fetchall()
-
         for row in items_rows:
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
-    # Fetch services for ALL sales that day (mechanic payout needs all of them)
+    # Fetch services for ALL sales that day (needed for display)
     if all_sale_ids:
         placeholders = ",".join("?" * len(all_sale_ids))
-
         services_rows = conn.execute(f"""
             SELECT
                 ss.sale_id,
@@ -240,7 +241,6 @@ def get_sales_report_by_date(report_date):
             WHERE ss.sale_id IN ({placeholders})
             ORDER BY ss.sale_id, sv.name
         """, all_sale_ids).fetchall()
-
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
@@ -249,107 +249,136 @@ def get_sales_report_by_date(report_date):
     # --- Format debt payments collected ---
     debt_collected = [
         {
-            "sales_number":   row["sales_number"] or f"#{row['sale_id']}",
-            "customer_name":  row["customer_name"] or "Walk-in",
-            "total_amount":   row["total_amount"],
-            "amount_paid":    round(row["amount_paid"], 2),
-            "payment_method": row["payment_method"] or "—",
-            "reference_no":   row["reference_no"] or "",
-            "notes":          row["notes"] or "",
-            "paid_at":        format_date(row["paid_at"], show_time=True),
+            "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name":   row["customer_name"] or "Walk-in",
+            "total_amount":    row["total_amount"],
+            "amount_paid":     round(row["amount_paid"], 2),
+            "service_portion": round(row["service_portion"] or 0.0, 2),
+            "payment_method":  row["payment_method"] or "—",
+            "reference_no":    row["reference_no"] or "",
+            "notes":           row["notes"] or "",
+            "paid_at":         format_date(row["paid_at"], show_time=True),
         }
         for row in debt_collected_rows
     ]
     total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
 
+    # --- Build debt mechanic map (service_portion collected per mechanic today) ---
+    # Quota does NOT apply to this portion
+    debt_mechanic_map = {}
+    for row in debt_collected_rows:
+        mech_id         = row["mechanic_id"]
+        service_portion = round(row["service_portion"] or 0.0, 2)
+        if mech_id and service_portion > 0:
+            if mech_id not in debt_mechanic_map:
+                debt_mechanic_map[mech_id] = {
+                    "mechanic_name":      row["mechanic_name"] or "—",
+                    "commission_rate":    row["commission_rate"] or 0.0,
+                    "debt_service_total": 0.0,
+                }
+            debt_mechanic_map[mech_id]["debt_service_total"] += service_portion
+
     # --- Build paid transaction rows (revenue display only) ---
-    paid_sales  = []
-    total_gross = 0.0
+    paid_sales            = []
+    total_gross           = 0.0
     total_service_revenue = 0.0
-    total_unresolved_service_revenue = 0.0
-    mechanic_map = {}
+    mechanic_map          = {}
 
     for sale in sales_rows:
         sale_id         = sale["id"]
         mechanic_id     = sale["mechanic_id"]
         mechanic_name   = sale["mechanic_name"] or "—"
         commission_rate = sale["commission_rate"] or 0.0
-        services_total  = sum(
-            svc["price"] for svc in services_by_sale.get(sale_id, [])
-        )
+        services_total  = sum(svc["price"] for svc in services_by_sale.get(sale_id, []))
 
-        # Revenue rows: Paid only
         if sale["status"] == "Paid":
             total_amount = sale["total_amount"] or 0.0
             total_service_revenue += services_total
             paid_sales.append({
-                "sales_number":   sale["sales_number"] or f"#{sale_id}",
-                "customer_name":  sale["customer_name"] or "Walk-in",
-                "mechanic_name":  mechanic_name,
-                "services_total": round(services_total, 2),
-                "total_amount":   total_amount,
-                "status":         sale["status"],
-                "payment_method": sale["payment_method"] or "—",
-                "notes":          sale["notes"] or "",
+                "sales_number":     sale["sales_number"] or f"#{sale_id}",
+                "customer_name":    sale["customer_name"] or "Walk-in",
+                "mechanic_name":    mechanic_name,
+                "services_total":   round(services_total, 2),
+                "total_amount":     total_amount,
+                "status":           sale["status"],
+                "payment_method":   sale["payment_method"] or "—",
+                "notes":            sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
-                "products":       items_by_sale.get(sale_id, []),
-                "services":       services_by_sale.get(sale_id, []),
+                "products":         items_by_sale.get(sale_id, []),
+                "services":         services_by_sale.get(sale_id, []),
             })
             total_gross += total_amount
-        else:
-            total_unresolved_service_revenue += services_total
 
-        # Mechanic map: ALL statuses — mechanic did the work regardless
-        if mechanic_id and services_total > 0:
-            if mechanic_id not in mechanic_map:
-                mechanic_map[mechanic_id] = {
-                    "mechanic_name":             mechanic_name,
-                    "commission_rate":           commission_rate,
-                    "paid_services_total":       0.0,
-                    "unresolved_services_total": 0.0,
-                }
-            if sale["status"] == "Paid":
-                mechanic_map[mechanic_id]["paid_services_total"]       += services_total
-            else:
-                mechanic_map[mechanic_id]["unresolved_services_total"] += services_total
+            # Only paid sales go into regular mechanic map (quota applies)
+            if mechanic_id and services_total > 0:
+                if mechanic_id not in mechanic_map:
+                    mechanic_map[mechanic_id] = {
+                        "mechanic_name":       mechanic_name,
+                        "commission_rate":     commission_rate,
+                        "paid_services_total": 0.0,
+                    }
+                mechanic_map[mechanic_id]["paid_services_total"] += services_total
 
     # --- Per-mechanic quota + commission ---
-    mechanic_summary = []
-    total_mech_cut   = 0.0
-    total_shop_topup = 0.0
+    mechanic_summary      = []
+    total_mech_cut        = 0.0
+    total_shop_topup      = 0.0
     total_shop_commission = 0.0
+    total_mech_cut_from_paid  = 0.0
+    total_shop_comm_from_paid = 0.0
+    total_mech_cut_from_debt  = 0.0
 
-    for mech_id, mech in mechanic_map.items():
-        paid_services       = round(mech["paid_services_total"], 2)
-        unresolved_services = round(mech["unresolved_services_total"], 2)
-        services_total      = round(paid_services + unresolved_services, 2)
-        commission_rate     = mech["commission_rate"]
+    all_mech_ids = set(mechanic_map.keys()) | set(debt_mechanic_map.keys())
 
-        mech_cut              = round(services_total * commission_rate, 2)
-        shop_commission_share = round(services_total - mech_cut, 2)
+    for mech_id in all_mech_ids:
+        regular = mechanic_map.get(mech_id, {})
+        debt    = debt_mechanic_map.get(mech_id, {})
 
-        if services_total > 0 and services_total < MECHANIC_QUOTA:
-            shop_topup = max(0.0, round(MECHANIC_QUOTA - mech_cut, 2))
+        mechanic_name   = regular.get("mechanic_name") or debt.get("mechanic_name") or "—"
+        commission_rate = regular.get("commission_rate") or debt.get("commission_rate") or 0.0
+
+        paid_services        = round(regular.get("paid_services_total", 0.0), 2)
+        debt_service_portion = round(debt.get("debt_service_total", 0.0), 2)
+
+        # Regular payout (paid sales)
+        regular_mech_cut   = round(paid_services * commission_rate, 2)
+        regular_shop_share = round(paid_services - regular_mech_cut, 2)
+
+        # Debt service payout — NO quota
+        debt_mech_cut   = round(debt_service_portion * commission_rate, 2)
+        debt_shop_share = round(debt_service_portion - debt_mech_cut, 2)
+
+        # Totals — quota check on COMBINED cut, not just regular
+        total_mech_cut_this = round(regular_mech_cut + debt_mech_cut, 2)
+
+        combined_services = round(paid_services + debt_service_portion, 2)
+
+        if paid_services > 0 and combined_services < MECHANIC_QUOTA:
+            shop_topup = max(0.0, round(MECHANIC_QUOTA - total_mech_cut_this, 2))
         else:
             shop_topup = 0.0
+        total_shop_share    = round(regular_shop_share + debt_shop_share, 2)
+        total_payout        = round(total_mech_cut_this + shop_topup, 2)
 
-        total_payout = round(mech_cut + shop_topup, 2)
-
-        total_mech_cut   += mech_cut
-        total_shop_topup += shop_topup
-        total_shop_commission += shop_commission_share
+        total_mech_cut        += total_mech_cut_this
+        total_shop_topup      += shop_topup
+        total_shop_commission += total_shop_share
+        total_mech_cut_from_paid  += regular_mech_cut
+        total_shop_comm_from_paid += regular_shop_share
+        total_mech_cut_from_debt  += debt_mech_cut
 
         mechanic_summary.append({
-            "mechanic_name":   mech["mechanic_name"],
-            "commission_rate": commission_rate,
-            "services_total":  services_total,
-            "mechanic_cut":    mech_cut,
-            "shop_topup":      shop_topup,
-            "total_payout":    total_payout,
-            "shop_commission_share": shop_commission_share,
-            "services_total":            services_total,
-            "paid_services_total":       paid_services,
-            "unresolved_services_total": unresolved_services,
+            "mechanic_name":         mechanic_name,
+            "commission_rate":       commission_rate,
+            "paid_services_total":   paid_services,
+            "regular_mech_cut":      regular_mech_cut,
+            "shop_topup":            shop_topup,
+            "debt_service_portion":  debt_service_portion,
+            "debt_mech_cut":         debt_mech_cut,
+            "services_total":        round(paid_services + debt_service_portion, 2),
+            "mechanic_cut":          total_mech_cut_this,
+            "shop_commission_share": total_shop_share,
+            "total_payout":          total_payout,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -370,20 +399,22 @@ def get_sales_report_by_date(report_date):
     total_shop_topup = round(total_shop_topup, 2)
 
     return {
-        "sales":            paid_sales,
-        "unresolved":       all_unresolved,
-        "mechanic_summary": mechanic_summary,
-        "items_summary":    items_summary_list,
-        "total_gross":      round(total_gross, 2),
-        "total_mech_cut":   total_mech_cut,
-        "total_shop_topup": total_shop_topup,
-        "net_revenue": round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
-        "total_shop_commission": round(total_shop_commission, 2),
+        "sales":                  paid_sales,
+        "unresolved":             all_unresolved,
+        "mechanic_summary":       mechanic_summary,
+        "items_summary":          items_summary_list,
+        "total_gross":            round(total_gross, 2),
+        "total_mech_cut":         total_mech_cut,
+        "total_shop_topup":       total_shop_topup,
+        "net_revenue":            round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
+        "total_shop_commission":  round(total_shop_commission, 2),
         "total_service_revenue":  round(total_service_revenue, 2),
         "total_product_revenue":  round(total_gross - total_service_revenue, 2),
-        "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
-        "debt_collected":       debt_collected,
-        "total_debt_collected": total_debt_collected,
+        "debt_collected":         debt_collected,
+        "total_debt_collected":   total_debt_collected,
+        "total_mech_cut_from_paid":  round(total_mech_cut_from_paid, 2),
+        "total_shop_comm_from_paid": round(total_shop_comm_from_paid, 2),
+        "total_mech_cut_from_debt":  round(total_mech_cut_from_debt, 2),
     }
 
 
@@ -424,20 +455,25 @@ def get_sales_report_by_range(start_date, end_date):
 
     all_unresolved = get_all_unresolved_sales(conn)
 
-    # --- Debt payments collected within this date range ---
+    # --- Debt payments collected within this date range (includes mechanic info for payout) ---
     debt_collected_rows = conn.execute("""
         SELECT
             dp.sale_id,
             dp.amount_paid,
+            dp.service_portion,
             dp.paid_at,
             dp.reference_no,
             dp.notes,
             s.sales_number,
             s.customer_name,
             s.total_amount,
-            pm.name AS payment_method
+            s.mechanic_id,
+            m.name            AS mechanic_name,
+            m.commission_rate,
+            pm.name           AS payment_method
         FROM debt_payments dp
         JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN ? AND ?
         ORDER BY dp.paid_at ASC
@@ -494,25 +530,39 @@ def get_sales_report_by_range(start_date, end_date):
     # --- Format debt payments collected ---
     debt_collected = [
         {
-            "sales_number":   row["sales_number"] or f"#{row['sale_id']}",
-            "customer_name":  row["customer_name"] or "Walk-in",
-            "total_amount":   row["total_amount"],
-            "amount_paid":    round(row["amount_paid"], 2),
-            "payment_method": row["payment_method"] or "—",
-            "reference_no":   row["reference_no"] or "",
-            "notes":          row["notes"] or "",
-            "paid_at":        format_date(row["paid_at"], show_time=True),
+            "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name":   row["customer_name"] or "Walk-in",
+            "total_amount":    row["total_amount"],
+            "amount_paid":     round(row["amount_paid"], 2),
+            "service_portion": round(row["service_portion"] or 0.0, 2),
+            "payment_method":  row["payment_method"] or "—",
+            "reference_no":    row["reference_no"] or "",
+            "notes":           row["notes"] or "",
+            "paid_at":         format_date(row["paid_at"], show_time=True),
         }
         for row in debt_collected_rows
     ]
     total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
 
+    # --- Build debt mechanic map (service_portion collected per mechanic in range) ---
+    debt_mechanic_map = {}
+    for row in debt_collected_rows:
+        mech_id         = row["mechanic_id"]
+        service_portion = round(row["service_portion"] or 0.0, 2)
+        if mech_id and service_portion > 0:
+            if mech_id not in debt_mechanic_map:
+                debt_mechanic_map[mech_id] = {
+                    "mechanic_name":      row["mechanic_name"] or "—",
+                    "commission_rate":    row["commission_rate"] or 0.0,
+                    "debt_service_total": 0.0,
+                }
+            debt_mechanic_map[mech_id]["debt_service_total"] += service_portion
+
     # --- Build paid transaction rows (revenue display only) ---
-    paid_sales   = []
-    total_gross  = 0.0
+    paid_sales            = []
+    total_gross           = 0.0
     total_service_revenue = 0.0
-    total_unresolved_service_revenue = 0.0
-    mechanic_map = {}
+    mechanic_map          = {}
 
     for sale in sales_rows:
         sale_id         = sale["id"]
@@ -525,71 +575,90 @@ def get_sales_report_by_range(start_date, end_date):
             total_amount = sale["total_amount"] or 0.0
             total_service_revenue += services_total
             paid_sales.append({
-                "sales_number":   sale["sales_number"] or f"#{sale_id}",
-                "customer_name":  sale["customer_name"] or "Walk-in",
-                "mechanic_name":  mechanic_name,
-                "services_total": round(services_total, 2),
-                "total_amount":   total_amount,
-                "status":         sale["status"],
-                "payment_method": sale["payment_method"] or "—",
-                "notes":          sale["notes"] or "",
+                "sales_number":     sale["sales_number"] or f"#{sale_id}",
+                "customer_name":    sale["customer_name"] or "Walk-in",
+                "mechanic_name":    mechanic_name,
+                "services_total":   round(services_total, 2),
+                "total_amount":     total_amount,
+                "status":           sale["status"],
+                "payment_method":   sale["payment_method"] or "—",
+                "notes":            sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
-                "products":       items_by_sale.get(sale_id, []),
-                "services":       services_by_sale.get(sale_id, []),
+                "products":         items_by_sale.get(sale_id, []),
+                "services":         services_by_sale.get(sale_id, []),
             })
             total_gross += total_amount
-        else:
-            total_unresolved_service_revenue += services_total
 
-        # Mechanic map: ALL statuses — mechanic did the work regardless
-        if mechanic_id and services_total > 0:
-            if mechanic_id not in mechanic_map:
-                mechanic_map[mechanic_id] = {
-                    "mechanic_name":             mechanic_name,
-                    "commission_rate":           commission_rate,
-                    "paid_services_total":       0.0,
-                    "unresolved_services_total": 0.0,
-                }
-            if sale["status"] == "Paid":
-                mechanic_map[mechanic_id]["paid_services_total"]       += services_total
-            else:
-                mechanic_map[mechanic_id]["unresolved_services_total"] += services_total
+            # Only paid sales in regular mechanic map (quota applies)
+            if mechanic_id and services_total > 0:
+                if mechanic_id not in mechanic_map:
+                    mechanic_map[mechanic_id] = {
+                        "mechanic_name":       mechanic_name,
+                        "commission_rate":     commission_rate,
+                        "paid_services_total": 0.0,
+                    }
+                mechanic_map[mechanic_id]["paid_services_total"] += services_total
 
-    mechanic_summary = []
-    total_mech_cut   = 0.0
-    total_shop_topup = 0.0
+    # --- Per-mechanic quota + commission ---
+    mechanic_summary      = []
+    total_mech_cut        = 0.0
+    total_shop_topup      = 0.0
     total_shop_commission = 0.0
+    total_mech_cut_from_paid  = 0.0
+    total_shop_comm_from_paid = 0.0
+    total_mech_cut_from_debt  = 0.0
 
-    for mech_id, mech in mechanic_map.items():
-        paid_services       = round(mech["paid_services_total"], 2)
-        unresolved_services = round(mech["unresolved_services_total"], 2)
-        services_total      = round(paid_services + unresolved_services, 2)
-        commission_rate     = mech["commission_rate"]
+    all_mech_ids = set(mechanic_map.keys()) | set(debt_mechanic_map.keys())
 
-        mech_cut              = round(services_total * commission_rate, 2)
-        shop_commission_share = round(services_total - mech_cut, 2)
+    for mech_id in all_mech_ids:
+        regular = mechanic_map.get(mech_id, {})
+        debt    = debt_mechanic_map.get(mech_id, {})
 
-        if services_total > 0 and services_total < MECHANIC_QUOTA:
-            shop_topup = max(0.0, round(MECHANIC_QUOTA - mech_cut, 2))
+        mechanic_name   = regular.get("mechanic_name") or debt.get("mechanic_name") or "—"
+        commission_rate = regular.get("commission_rate") or debt.get("commission_rate") or 0.0
+
+        paid_services        = round(regular.get("paid_services_total", 0.0), 2)
+        debt_service_portion = round(debt.get("debt_service_total", 0.0), 2)
+
+        # Regular payout (paid sales)
+        regular_mech_cut   = round(paid_services * commission_rate, 2)
+        regular_shop_share = round(paid_services - regular_mech_cut, 2)
+
+        # Debt service payout — NO quota
+        debt_mech_cut   = round(debt_service_portion * commission_rate, 2)
+        debt_shop_share = round(debt_service_portion - debt_mech_cut, 2)
+
+        # Totals — quota check on COMBINED cut, not just regular
+        total_mech_cut_this = round(regular_mech_cut + debt_mech_cut, 2)
+
+        combined_services = round(paid_services + debt_service_portion, 2)
+
+        if paid_services > 0 and combined_services < MECHANIC_QUOTA:
+            shop_topup = max(0.0, round(MECHANIC_QUOTA - total_mech_cut_this, 2))
         else:
             shop_topup = 0.0
+        total_shop_share    = round(regular_shop_share + debt_shop_share, 2)
+        total_payout        = round(total_mech_cut_this + shop_topup, 2)
 
-        total_payout = round(mech_cut + shop_topup, 2)
-        total_mech_cut   += mech_cut
-        total_shop_topup += shop_topup
-        total_shop_commission += shop_commission_share
+        total_mech_cut        += total_mech_cut_this
+        total_shop_topup      += shop_topup
+        total_shop_commission += total_shop_share
+        total_mech_cut_from_paid  += regular_mech_cut
+        total_shop_comm_from_paid += regular_shop_share
+        total_mech_cut_from_debt  += debt_mech_cut
 
         mechanic_summary.append({
-            "mechanic_name":   mech["mechanic_name"],
-            "commission_rate": commission_rate,
-            "services_total":  services_total,
-            "mechanic_cut":    mech_cut,
-            "shop_topup":      shop_topup,
-            "total_payout":    total_payout,
-            "shop_commission_share": shop_commission_share,
-            "services_total":            services_total,
-            "paid_services_total":       paid_services,
-            "unresolved_services_total": unresolved_services,
+            "mechanic_name":         mechanic_name,
+            "commission_rate":       commission_rate,
+            "paid_services_total":   paid_services,
+            "regular_mech_cut":      regular_mech_cut,
+            "shop_topup":            shop_topup,
+            "debt_service_portion":  debt_service_portion,
+            "debt_mech_cut":         debt_mech_cut,
+            "services_total":        round(paid_services + debt_service_portion, 2),
+            "mechanic_cut":          total_mech_cut_this,
+            "shop_commission_share": total_shop_share,
+            "total_payout":          total_payout,
         })
 
     mechanic_summary.sort(key=lambda x: x["mechanic_name"])
@@ -608,18 +677,20 @@ def get_sales_report_by_range(start_date, end_date):
     total_shop_topup = round(total_shop_topup, 2)
 
     return {
-        "sales":            paid_sales,
-        "unresolved":       all_unresolved,
-        "mechanic_summary": mechanic_summary,
-        "items_summary":    items_summary_list,
-        "total_gross":      round(total_gross, 2),
-        "total_mech_cut":   total_mech_cut,
-        "total_shop_topup": total_shop_topup,
-        "net_revenue": round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
-        "total_shop_commission": round(total_shop_commission, 2),
+        "sales":                  paid_sales,
+        "unresolved":             all_unresolved,
+        "mechanic_summary":       mechanic_summary,
+        "items_summary":          items_summary_list,
+        "total_gross":            round(total_gross, 2),
+        "total_mech_cut":         total_mech_cut,
+        "total_shop_topup":       total_shop_topup,
+        "net_revenue":            round(total_gross - total_mech_cut - total_shop_topup + total_debt_collected, 2),
+        "total_shop_commission":  round(total_shop_commission, 2),
         "total_service_revenue":  round(total_service_revenue, 2),
         "total_product_revenue":  round(total_gross - total_service_revenue, 2),
-        "total_unresolved_service_revenue": round(total_unresolved_service_revenue, 2),
-        "debt_collected":       debt_collected,
-        "total_debt_collected": total_debt_collected,
+        "debt_collected":         debt_collected,
+        "total_debt_collected":   total_debt_collected,
+        "total_mech_cut_from_paid":  round(total_mech_cut_from_paid, 2),
+        "total_shop_comm_from_paid": round(total_shop_comm_from_paid, 2),
+        "total_mech_cut_from_debt":  round(total_mech_cut_from_debt, 2),
     }
