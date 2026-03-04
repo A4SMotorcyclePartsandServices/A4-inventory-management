@@ -45,6 +45,7 @@ from routes.routes_api import dashboard_api
 from routes.transaction_route import transaction_bp
 from routes.reports_route import reports_bp
 from routes.debt_route import debt_bp
+from routes.cash_route import cash_bp
 
 
 # ============================================================
@@ -91,6 +92,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(transaction_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(debt_bp)
+app.register_blueprint(cash_bp)
 
 
 # ============================================================

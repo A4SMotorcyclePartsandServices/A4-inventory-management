@@ -24,6 +24,10 @@
             --border-soft: #232733;
         }
 
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-primary);
+        }
+
         body {
             margin: 0;
             background: var(--bg-main);
@@ -183,16 +187,48 @@
             border-radius: 10px;
         }
 
+        /* =====================
+        GLOBAL TABLE STYLE
+        ===================== */
+
         .table {
-            color: #fff;
+            table-layout: fixed;
+            width: 100%;
+            background: transparent;
         }
 
-        .table thead {
-            background: #181b23;
+        .table td, .table th {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: middle !important;
+            text-align: center !important;
+            border-color: var(--border-soft);
         }
 
-        .table-hover tbody tr:hover {
-            background: rgba(193,18,31,0.05);
+        .table thead th {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: unset !important;
+            line-height: 1.2;
+            padding: 0.85rem 0.5rem;
+
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 1.5px;
+
+            color: var(--accent);
+            background: #13161e;
+            font-weight: 600;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid var(--border-soft);
+            transition: background 0.15s ease;
+        }
+
+        .table tbody tr:hover {
+            background: rgba(193,18,31,0.06) !important;
         }
 
         #flash-container {
@@ -248,301 +284,300 @@
         .alert-warning i { color: #f4c430; }
         .alert-info i { color: #67c2e4; }
 
+        /* PROFILE DROPDOWN */
 
-/* PROFILE DROPDOWN */
+        .profile-trigger {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: transparent;
+            border: 1px solid var(--border-soft);
+            padding: 6px 14px;
+            border-radius: 12px;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
 
-    .profile-trigger {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        background: transparent;
-        border: 1px solid var(--border-soft);
-        padding: 6px 14px;
-        border-radius: 12px;
-        color: var(--text-primary);
-        transition: all 0.2s ease;
-    }
+        .profile-trigger:hover {
+            background: rgba(255,255,255,0.05) !important;
+        }
 
-    .profile-trigger:hover {
-        background: rgba(255,255,255,0.05) !important;
-    }
+        .profile-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
 
-    .profile-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-    }
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
 
-    .profile-info {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.1;
-    }
+        .profile-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
 
-    .profile-name {
-        font-size: 0.85rem;
+        .profile-arrow {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Dropdown Card */
+
+        .profile-card {
+            width: 260px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-soft);
+            border-radius: 16px;
+            padding: 10px 0;
+        }
+
+        .profile-card-header {
+            padding: 15px;
+        }
+
+        .profile-avatar-lg {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin: auto;
+        }
+
+        .profile-action {
+            color: var(--text-primary);
+            padding: 10px 18px;
+            transition: 0.2s ease;
+        }
+
+        .profile-action:hover {
+            background: rgba(193,18,31,0.1) !important;
+            color: #fff;
+        }
+
+        .avatar-staff {
+        background: #6c757d !important;
+        }
+
+        .profile-trigger:focus,
+        .profile-trigger:active {
+            color: var(--text-primary) !important;
+            box-shadow: none !important;
+        }
+
+        .role-badge {
+        font-size: 0.65rem;
+        padding: 5px 12px;
+        border-radius: 20px;
         font-weight: 600;
-        color: var(--text-primary);
-    }
+        letter-spacing: 0.5px;
+        }
 
-    .profile-arrow {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-    }
+        .role-admin {
+            background: var(--accent);
+            color: #fff;
+        }
 
-    /* Dropdown Card */
+        .role-staff {
+            background: #6c757d;
+            color: #fff;
+        }
 
-    .profile-card {
-        width: 260px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-soft);
-        border-radius: 16px;
-        padding: 10px 0;
-    }
+        .profile-card-header .fw-semibold {
+            color: #fff; /* Example: Gold color */
+        }
 
-    .profile-card-header {
-        padding: 15px;
-    }
+        .profile-avatar i, 
+        .profile-avatar-lg i {
+            color: #ffffff !important;
+        }
 
-    .profile-avatar-lg {
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: var(--accent);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        margin: auto;
-    }
+        .profile-trigger:active, 
+        .profile-trigger:focus {
+            color: var(--text-primary) !important;
+        }
 
-    .profile-action {
-        color: var(--text-primary);
-        padding: 10px 18px;
-        transition: 0.2s ease;
-    }
+        .profile-arrow {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.25s ease;
+        }
 
-    .profile-action:hover {
-        background: rgba(193,18,31,0.1) !important;
-        color: #fff;
-    }
+        .profile-trigger[aria-expanded="true"] .profile-arrow {
+            transform: rotate(180deg);
+        }
 
-    .avatar-staff {
-    background: #6c757d !important;
-    }
+        /* 1. The Menu Base */
+        .profile-dropdown .dropdown-menu {
+            display: block; /* Keep it in the DOM */
+            margin-top: 8px !important;
+            right: 0 !important;
+            left: auto !important;
+            
+            /* Hidden State */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px); /* Start a bit lower */
+            
+            /* Fast transition for a snappy feel */
+            transition: opacity 0.15s ease-out, transform 0.15s ease-out, visibility 0.15s;
+            pointer-events: none;
+        }
 
-    .profile-trigger:focus,
-    .profile-trigger:active {
-        color: var(--text-primary) !important;
-        box-shadow: none !important;
-    }
+        /* 2. The Active State */
+        .profile-dropdown .dropdown-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0); /* Slide up into place */
+            pointer-events: auto;
+        }
 
-    .role-badge {
-    font-size: 0.65rem;
-    padding: 5px 12px;
-    border-radius: 20px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    }
+        /* 3. The "Bridge" (Crucial for UX) */
+        /* This invisible area prevents the menu from closing if your 
+        mouse moves through the gap between the button and the card */
+        .profile-dropdown .dropdown-menu::before {
+            content: "";
+            position: absolute;
+            top: -10px;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background: transparent;
+        }
 
-    .role-admin {
-        background: var(--accent);
-        color: #fff;
-    }
+        /* ===== FLASH STACKING SYSTEM ===== */
 
-    .role-staff {
-        background: #6c757d;
-        color: #fff;
-    }
+        #flash-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            width: 350px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-    .profile-card-header .fw-semibold {
-        color: #fff; /* Example: Gold color */
-    }
+        /* Glass / Blur effect */
+        .flash-alert {
+            position: relative;
+            backdrop-filter: blur(12px);
+            background: rgba(28, 31, 38, 0.85) !important;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-left-width: 3px !important;
+            overflow: hidden;
 
-    .profile-avatar i, 
-    .profile-avatar-lg i {
-        color: #ffffff !important;
-    }
+            opacity: 0;
+            transform: translateX(30px);
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+        }
 
-    .profile-trigger:active, 
-    .profile-trigger:focus {
-        color: var(--text-primary) !important;
-    }
+        /* Slide in */
+        .flash-alert.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
 
-    .profile-arrow {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        transition: transform 0.25s ease;
-    }
+        /* Smooth collapse animation */
+        .flash-alert.hide {
+            opacity: 0;
+            transform: translateX(30px);
+            height: 0;
+            margin: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
 
-    .profile-trigger[aria-expanded="true"] .profile-arrow {
-        transform: rotate(180deg);
-    }
+        /* Progress bar */
+        .flash-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            width: 100%;
+            background: rgba(255,255,255,0.15);
+            overflow: hidden;
+        }
 
-    /* 1. The Menu Base */
-    .profile-dropdown .dropdown-menu {
-        display: block; /* Keep it in the DOM */
-        margin-top: 8px !important;
-        right: 0 !important;
-        left: auto !important;
-        
-        /* Hidden State */
-        opacity: 0;
-        visibility: hidden;
-        transform: translateY(10px); /* Start a bit lower */
-        
-        /* Fast transition for a snappy feel */
-        transition: opacity 0.15s ease-out, transform 0.15s ease-out, visibility 0.15s;
-        pointer-events: none;
-    }
+        .flash-progress::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 100%;
+            background: currentColor;
+            transform-origin: left;
+            animation: flashCountdown 4s linear forwards;
+        }
 
-    /* 2. The Active State */
-    .profile-dropdown .dropdown-menu.show {
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0); /* Slide up into place */
-        pointer-events: auto;
-    }
+        .flash-content {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
 
-    /* 3. The "Bridge" (Crucial for UX) */
-    /* This invisible area prevents the menu from closing if your 
-       mouse moves through the gap between the button and the card */
-    .profile-dropdown .dropdown-menu::before {
-        content: "";
-        position: absolute;
-        top: -10px;
-        left: 0;
-        right: 0;
-        height: 10px;
-        background: transparent;
-    }
+        .flash-content i {
+            font-size: 1.1rem;
+            line-height: 1.4;      
+            margin-top: 2px;      
+            flex-shrink: 0;
+        }
 
-    /* ===== FLASH STACKING SYSTEM ===== */
+        .flash-icon {
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+        }
 
-    #flash-container {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 1050;
-        width: 350px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
+        .flash-text {
+            line-height: 1.4;
+            padding-top: 4px;
+        }
 
-    /* Glass / Blur effect */
-    .flash-alert {
-        position: relative;
-        backdrop-filter: blur(12px);
-        background: rgba(28, 31, 38, 0.85) !important;
-        border: 1px solid rgba(255,255,255,0.05);
-        border-left-width: 3px !important;
-        overflow: hidden;
+        @keyframes flashCountdown {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(0); }
+        }
 
-        opacity: 0;
-        transform: translateX(30px);
-        transition: all 0.35s cubic-bezier(.4,0,.2,1);
-    }
+        /* ===== Color Variants ===== */
 
-    /* Slide in */
-    .flash-alert.show {
-        opacity: 1;
-        transform: translateX(0);
-    }
+        .flash-icon-success {
+            background: rgba(74, 222, 128, 0.15);
+            color: #4ade80;
+        }
 
-    /* Smooth collapse animation */
-    .flash-alert.hide {
-        opacity: 0;
-        transform: translateX(30px);
-        height: 0;
-        margin: 0;
-        padding-top: 0;
-        padding-bottom: 0;
-    }
+        .flash-icon-danger {
+            background: rgba(193, 18, 31, 0.15);
+            color: #ff6b6b;
+        }
 
-    /* Progress bar */
-    .flash-progress {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        height: 3px;
-        width: 100%;
-        background: rgba(255,255,255,0.15);
-        overflow: hidden;
-    }
+        .flash-icon-warning {
+            background: rgba(244, 196, 48, 0.15);
+            color: #f4c430;
+        }
 
-    .flash-progress::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        height: 100%;
-        width: 100%;
-        background: currentColor;
-        transform-origin: left;
-        animation: flashCountdown 4s linear forwards;
-    }
-
-    .flash-content {
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-    }
-
-    .flash-content i {
-        font-size: 1.1rem;
-        line-height: 1.4;      
-        margin-top: 2px;      
-        flex-shrink: 0;
-    }
-
-    .flash-icon {
-        width: 34px;
-        height: 34px;
-        min-width: 34px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.95rem;
-    }
-
-    .flash-text {
-        line-height: 1.4;
-        padding-top: 4px;
-    }
-
-    @keyframes flashCountdown {
-        from { transform: scaleX(1); }
-        to { transform: scaleX(0); }
-    }
-
-    /* ===== Color Variants ===== */
-
-    .flash-icon-success {
-        background: rgba(74, 222, 128, 0.15);
-        color: #4ade80;
-    }
-
-    .flash-icon-danger {
-        background: rgba(193, 18, 31, 0.15);
-        color: #ff6b6b;
-    }
-
-    .flash-icon-warning {
-        background: rgba(244, 196, 48, 0.15);
-        color: #f4c430;
-    }
-
-    .flash-icon-info {
-        background: rgba(103, 194, 228, 0.15);
-        color: #67c2e4;
-    }
+        .flash-icon-info {
+            background: rgba(103, 194, 228, 0.15);
+            color: #67c2e4;
+        }
     </style>
 
     {% block styles %}{% endblock %}
@@ -576,6 +611,11 @@
             <a href="{{ url_for('debt.utang_list') }}" 
             class="{% if 'utang' in request.path %}active-link{% endif %}">
                 <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
+            </a>
+
+            <a href="{{ url_for('cash.cash_ledger') }}"
+            class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
+                <i class="bi bi-safe2"></i> Cash Ledger
             </a>
 
             <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">

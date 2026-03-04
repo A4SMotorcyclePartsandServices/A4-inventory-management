@@ -182,6 +182,23 @@ def init_db():
     )
     """)
 
+    # 13. CASH ENTRIES (Petty Cash Ledger)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS cash_entries (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        branch_id       INTEGER NOT NULL DEFAULT 1,
+        entry_type      TEXT CHECK(entry_type IN ('CASH_IN', 'CASH_OUT')) NOT NULL,
+        amount          REAL NOT NULL,
+        category        TEXT NOT NULL,
+        description     TEXT,
+        reference_type  TEXT NOT NULL DEFAULT 'MANUAL',
+        reference_id    INTEGER,
+        user_id         INTEGER,
+        created_at      DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """)
+
     # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
     # Add mechanic_id to sales
@@ -262,6 +279,20 @@ def init_db():
         SET reference_type = 'SALE' 
         WHERE reference_id IS NOT NULL AND reference_type IS NULL
     """)
+
+    # --- CASH ENTRIES MIGRATION (for existing databases) ---
+    # CREATE TABLE IF NOT EXISTS already handles new databases.
+    # These alters guard existing DBs that were created before this table existed.
+    # Safe to run every startup — ALTER TABLE fails silently on already-existing columns.
+    try:
+        conn.execute("ALTER TABLE cash_entries ADD COLUMN branch_id INTEGER NOT NULL DEFAULT 1")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE cash_entries ADD COLUMN reference_type TEXT NOT NULL DEFAULT 'MANUAL'")
+    except: pass
+    try:
+        conn.execute("ALTER TABLE cash_entries ADD COLUMN reference_id INTEGER")
+    except: pass
 
     # --- IMPROVED SEEDING LOGIC ---
 
