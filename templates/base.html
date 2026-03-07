@@ -624,6 +624,11 @@
                 <i class="bi bi-cart-plus"></i> New Sale
             </a>
 
+            <a href="/customers" class="nav-link {% if request.path == '/customers' %}active{% endif %}">
+                <i class="bi bi-people"></i>
+                <span>Customers</span>
+            </a>
+
             <a href="{{ url_for('debt.utang_list') }}" 
             class="{% if 'utang' in request.path %}active-link{% endif %}">
                 <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)

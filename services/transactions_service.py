@@ -311,13 +311,14 @@ def record_sale(data, user_id, username):
         # 4) Insert sale
         cursor = conn.execute("""
             INSERT INTO sales (
-                sales_number, customer_name, total_amount,
+                sales_number, customer_name, customer_id, total_amount,
                 payment_method_id, reference_no, status,
                 notes, user_id, transaction_date, mechanic_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             data.get('sales_number'),
             data.get('customer_name'),
+            data.get('customer_id') or None,
             data.get('total_amount'),
             payment_method_id,
             data.get('reference_no'),

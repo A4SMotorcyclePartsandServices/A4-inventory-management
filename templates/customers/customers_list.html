@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="form-card">
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0" style="color:var(--accent);">
+            <i class="bi bi-people me-2"></i>Customers
+        </h5>
+        <div class="d-flex gap-2">
+            <input type="text" id="customer-filter" class="form-control form-control-sm"
+                placeholder="Filter by name or number..." style="width:220px;">
+        </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="row g-2 mb-3">
+        <div class="col-auto">
+            <span class="badge" style="background:#1c2a40; color:#67c2e4; font-size:0.8rem; padding:6px 12px;">
+                Total Customers: <strong>{{ customers | length }}</strong>
+            </span>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark align-middle" id="customers-table">
+            <thead>
+                <tr>
+                    <th style="width:5%;"></th>
+                    <th>Customer Name</th>
+                    <th>Mobile No.</th>
+                    <th>Total Visits</th>
+                    <th>Last Visit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in customers %}
+                <tr class="customer-row" data-id="{{ c.id }}"
+                    data-name="{{ c.customer_name | lower }}"
+                    data-no="{{ c.customer_no }}"
+                    style="cursor:pointer;">
+                    <td>
+                        <button class="btn btn-sm btn-link p-0 expand-btn"
+                            style="color:#67c2e4; font-size:1rem;" title="View transactions">
+                            <i class="bi bi-chevron-right expand-icon"></i>
+                        </button>
+                    </td>
+                    <td><strong>{{ c.customer_name }}</strong></td>
+                    <td style="color:#aaa;">{{ c.customer_no }}</td>
+                    <td>
+                        <span class="badge" style="background:#1c2a40; color:#67c2e4;">
+                            {{ c.total_visits }}
+                        </span>
+                    </td>
+                    <td style="color:#aaa; font-size:0.85rem;">
+                        {{ c.last_visit_display or '—' }}
+                    </td>
+                </tr>
+                <!-- Detail row (lazy loaded) -->
+                <tr class="detail-row" id="detail-{{ c.id }}" style="display:none;">
+                    <td colspan="5" style="padding:0;">
+                        <div class="detail-inner" style="
+                            background:#131820;
+                            border-left:3px solid #67c2e4;
+                            padding:16px 20px;
+                            margin:0;
+                        ">
+                            <div class="loading-spinner text-center py-3" style="color:#67c2e4;">
+                                <span class="spinner-border spinner-border-sm me-2"></span>Loading...
+                            </div>
+                            <div class="transaction-content" style="display:none;"></div>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center" style="color:#aaa; padding:40px;">
+                        No customers yet.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+/* ─── Filter ─────────────────────────────────────────── */
+document.getElementById('customer-filter').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('.customer-row').forEach(row => {
+        const name = row.dataset.name;
+        const no   = row.dataset.no;
+        const show = name.includes(q) || no.includes(q);
+        row.style.display = show ? '' : 'none';
+        // Also hide its detail row when parent is hidden
+        const detailRow = document.getElementById(`detail-${row.dataset.id}`);
+        if (detailRow && !show) detailRow.style.display = 'none';
+    });
+});
+
+/* ─── Expand / Collapse ──────────────────────────────── */
+document.querySelectorAll('.customer-row').forEach(row => {
+    row.addEventListener('click', async function () {
+        const id         = this.dataset.id;
+        const detailRow  = document.getElementById(`detail-${id}`);
+        const icon       = this.querySelector('.expand-icon');
+        const isOpen     = detailRow.style.display !== 'none';
+
+        // Close all open rows first
+        document.querySelectorAll('.detail-row').forEach(r => r.style.display = 'none');
+        document.querySelectorAll('.expand-icon').forEach(i => {
+            i.classList.remove('bi-chevron-down');
+            i.classList.add('bi-chevron-right');
+        });
+
+        if (isOpen) return; // clicking open row = just close it
+
+        // Open this row
+        detailRow.style.display = '';
+        icon.classList.remove('bi-chevron-right');
+        icon.classList.add('bi-chevron-down');
+
+        // Lazy load if not already loaded
+        const content = detailRow.querySelector('.transaction-content');
+        const spinner = detailRow.querySelector('.loading-spinner');
+
+        if (content.dataset.loaded) return;
+
+        try {
+            const res  = await fetch(`/api/customers/${id}/transactions`);
+            const data = await res.json();
+
+            content.innerHTML = buildTransactionHTML(data);
+            content.dataset.loaded = 'true';
+            spinner.style.display = 'none';
+            content.style.display = 'block';
+        } catch (err) {
+            spinner.innerHTML = '<span style="color:#e74c3c;">Failed to load. Try again.</span>';
+        }
+    });
+});
+
+/* ─── Build transaction detail HTML ─────────────────── */
+function buildTransactionHTML(data) {
+    const c = data.customer;
+    let html = `
+        <div class="mb-2" style="font-size:0.85rem; color:#aaa;">
+            <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${c.customer_name}</strong>
+            &nbsp;·&nbsp; ${c.customer_no}
+            &nbsp;·&nbsp; Member since ${c.created_at_display || '—'}
+        </div>
+    `;
+
+    if (!data.transactions.length) {
+        return html + `<div style="color:#aaa; font-size:0.85rem;">No transactions recorded.</div>`;
+    }
+
+    html += `<div class="table-responsive"><table class="table table-dark table-sm align-middle mb-0" style="font-size:0.82rem;">
+        <thead>
+            <tr style="color:#67c2e4;">
+                <th>OR No.</th>
+                <th>Date</th>
+                <th>Services</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>`;
+
+    data.transactions.forEach(t => {
+        const services = t.services.map(s =>
+            `${s.name} <span style="color:#aaa;">(₱${Number(s.price).toLocaleString('en-PH', {minimumFractionDigits:2})})</span>`
+        ).join(', ') || '—';
+
+        const items = t.items.map(i =>
+            `${i.name} ×${i.quantity}`
+        ).join(', ') || '—';
+
+        const statusColor = t.status === 'Paid' ? '#2ecc71' : t.status === 'Partial' ? '#f4c430' : '#e74c3c';
+
+        html += `
+            <tr>
+                <td><strong>#${t.sales_number || t.id}</strong></td>
+                <td style="color:#aaa;">${t.transaction_date || '—'}</td>
+                <td>${services}</td>
+                <td style="color:#aaa;">${items}</td>
+                <td>₱${Number(t.total_amount).toLocaleString('en-PH', {minimumFractionDigits:2})}</td>
+                <td><span style="color:${statusColor}; font-weight:600;">${t.status}</span></td>
+            </tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    return html;
+}
+
+</script>
+{% endblock %}

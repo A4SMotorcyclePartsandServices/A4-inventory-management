@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, session
 from datetime import date as date_today, timedelta
+from utils.formatters import format_date
 from services.cash_service import (
     get_cash_summary,
     get_cash_entries,
@@ -14,6 +15,8 @@ from services.reports_service import get_mechanic_payouts_for_date
 
 cash_bp = Blueprint('cash', __name__)
 LEDGER_PAGE_SIZE = 20
+REMINDER_DAYS_DEFAULT = 7
+REMINDER_DAYS_MAX = 30
 
 
 # ─────────────────────────────────────────────
@@ -84,21 +87,34 @@ def cash_ledger():
         )
     ]
 
-    # --- Missed mechanic payouts from yesterday (quick reminder) ---
-    yesterday = date_today.today() - timedelta(days=1)
-    yesterday_date = yesterday.isoformat()
-    yesterday_mechanic_payouts = get_mechanic_payouts_for_date(yesterday_date)
-    paid_yesterday       = get_already_paid_mechanic_identifiers(yesterday_date, branch_id=branch_id)
-    yesterday_paid_ids   = paid_yesterday.get("mechanic_ids", set())
-    yesterday_paid_names = paid_yesterday.get("mechanic_names", set())
+    # --- Missed mechanic payouts for the past N days (quick reminder) ---
+    reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
+    reminder_days = max(1, min(REMINDER_DAYS_MAX, reminder_days))
 
-    overdue_yesterday_payouts = [
-        m for m in yesterday_mechanic_payouts
-        if not (
-            (m.get('mechanic_id') and m['mechanic_id'] in yesterday_paid_ids)
-            or (m.get('mechanic_name') in yesterday_paid_names)
-        )
-    ]
+    overdue_payout_groups = []
+    for days_ago in range(1, reminder_days + 1):
+        payout_date = (date_today.today() - timedelta(days=days_ago)).isoformat()
+        mechanic_payouts_for_date = get_mechanic_payouts_for_date(payout_date)
+        paid_for_date       = get_already_paid_mechanic_identifiers(payout_date, branch_id=branch_id)
+        paid_ids            = paid_for_date.get("mechanic_ids", set())
+        paid_names          = paid_for_date.get("mechanic_names", set())
+
+        unpaid_for_date = [
+            m for m in mechanic_payouts_for_date
+            if not (
+                (m.get('mechanic_id') and m['mechanic_id'] in paid_ids)
+                or (m.get('mechanic_name') in paid_names)
+            )
+        ]
+
+        overdue_payout_groups.append({
+            "date": payout_date,
+            "date_display": format_date(payout_date),
+            "overdue_payouts": unpaid_for_date,
+            "count": len(unpaid_for_date),
+        })
+
+    total_overdue_payouts = sum(group["count"] for group in overdue_payout_groups)
 
     return render_template(
         "cash/cash_ledger.html",
@@ -115,9 +131,13 @@ def cash_ledger():
         cash_in_categories=CASH_IN_CATEGORIES,
         cash_out_categories=CASH_OUT_CATEGORIES,
         pending_payouts=pending_payouts,
+        today_display=format_date(today),
         today=today,
-        overdue_payouts=overdue_yesterday_payouts,
-        overdue_date=yesterday_date,
+        overdue_payout_groups=overdue_payout_groups,
+        overdue_payout_total=total_overdue_payouts,
+        reminder_days=reminder_days,
+        overdue_payouts=[],
+        overdue_date=None,
     )
 
 
@@ -158,6 +178,7 @@ def cash_add_api():
     reference_id = data.get("reference_id")
     if reference_id in ("", None):
         reference_id = None
+    payout_for_date = data.get("payout_for_date")
 
     try:
         add_cash_entry(
@@ -166,6 +187,7 @@ def cash_add_api():
             category=data.get("category"),
             description=data.get("description", ""),
             reference_id=reference_id,
+            payout_for_date=payout_for_date,
             user_id=session.get("user_id"),
             branch_id=_get_branch_id(),
         )

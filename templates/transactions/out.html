@@ -3,7 +3,7 @@
 {% block styles %}
 <style>
     /* =====================
-       PAGE HEADER
+    PAGE HEADER
     ===================== */
     .page-title {
         font-size: 1.35rem;
@@ -19,7 +19,7 @@
     }
 
     /* =====================
-       MAIN FORM CARD
+    MAIN FORM CARD
     ===================== */
     .form-card {
         background: var(--bg-card);
@@ -30,7 +30,7 @@
     }
 
     /* =====================
-       SECTION DIVIDERS
+    SECTION DIVIDERS
     ===================== */
     .form-section-divider {
         display: flex;
@@ -55,7 +55,7 @@
     .form-section-divider.info   { color: #67c2e4; }
 
     /* =====================
-       FORM LABELS
+    FORM LABELS
     ===================== */
     .form-label {
         font-size: 0.75rem;
@@ -71,7 +71,7 @@
     .form-label .req   { color: var(--accent); margin-left: 2px; }
 
     /* =====================
-       FORM CONTROLS — inherit base.html vars
+    FORM CONTROLS — inherit base.html vars
     ===================== */
     .form-control, .form-select {
         background: #141720;
@@ -111,7 +111,7 @@
     }
 
     /* =====================
-       ITEMS TABLE
+    ITEMS TABLE
     ===================== */
     .table-responsive {
         overflow: visible !important;
@@ -200,7 +200,7 @@
     }
 
     /* =====================
-       SEARCH SUGGESTIONS DROPDOWN
+    SEARCH SUGGESTIONS DROPDOWN
     ===================== */
     .search-suggestions {
         background: #1a1d26;
@@ -249,7 +249,7 @@
     }
 
     /* =====================
-       TOTAL + SUBMIT AREA
+    TOTAL + SUBMIT AREA
     ===================== */
     .total-area {
         display: flex;
@@ -299,7 +299,7 @@
     }
 
     /* =====================
-       FIELD ERROR STYLES
+    FIELD ERROR STYLES
     ===================== */
     .field-error-msg {
         color: #f87171;
@@ -341,7 +341,22 @@
         <!-- CUSTOMER -->
         <div class="col-md-4">
             <label class="form-label">Customer <span class="req">*</span></label>
-            <input type="text" id="customer-name" class="form-control" placeholder="Customer Name / Loyalty ID">
+            <div class="position-relative">
+                <input type="text" id="customer-search" class="form-control"
+                    placeholder="Search by name or mobile no." autocomplete="off">
+                <div id="customer-suggestions"
+                    class="search-suggestions list-group position-absolute w-100"
+                    style="display:none; z-index:999;"></div>
+            </div>
+            <!-- Hidden fields sent to backend -->
+            <input type="hidden" id="customer-id">
+            <input type="hidden" id="customer-name">
+            <!-- Shows after a customer is selected or new one added -->
+            <div id="customer-badge" style="display:none; margin-top:6px;">
+                <span class="badge bg-success" id="customer-badge-text"></span>
+                <button type="button" class="btn btn-link btn-sm p-0 ms-1" id="customer-clear-btn"
+                    style="font-size:0.75rem; color:#aaa;">✕ clear</button>
+            </div>
         </div>
     </div>
 
@@ -522,6 +537,35 @@
 
 </div><!-- /form-card -->
 
+<!-- NEW CUSTOMER MODAL -->
+<div class="modal fade" id="newCustomerModal" tabindex="-1" aria-labelledby="newCustomerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content" style="background:#1a2236; border:1px solid #2a3550; color:#e0e6f0;">
+            <div class="modal-header" style="border-bottom:1px solid #2a3550;">
+                <h6 class="modal-title" id="newCustomerModalLabel">
+                    <i class="bi bi-person-plus me-2" style="color:#67c2e4;"></i>New Customer
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" style="font-size:0.82rem;">Customer Name <span class="req">*</span></label>
+                    <input type="text" id="new-cust-name" class="form-control form-control-sm" placeholder="e.g. Juan dela Cruz">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" style="font-size:0.82rem;">Mobile No. <span class="req">*</span> <small style="color:#aaa;">(used as Customer No.)</small></label>
+                    <input type="text" id="new-cust-no" class="form-control form-control-sm" placeholder="e.g. 09171234567">
+                </div>
+                <div id="new-cust-error" style="color:#e74c3c; font-size:0.8rem;"></div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #2a3550;">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-sm btn-info" id="save-new-customer-btn">Save Customer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -572,7 +616,7 @@ function showAlert(message, type = 'danger') {
 ========================================================= */
 function clearFieldErrors() {
     document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-    ['sales-number', 'customer-name', 'payment-method', 'ref-no'].forEach(id => {
+    ['sales-number', 'customer-search', 'payment-method', 'ref-no'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.classList.remove('border-danger');
@@ -606,8 +650,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Clear errors as user fixes fields
-    ['sales-number', 'customer-name', 'ref-no'].forEach(id => {
-        document.getElementById(id).addEventListener('input', clearFieldErrors);
+    ['sales-number', 'customer-search', 'ref-no'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', clearFieldErrors);
     });
     document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
     document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
@@ -776,7 +821,7 @@ const handleTableSearch = async (input) => {
 };
 
 /* =========================================================
-   SERVICE SEARCH
+SERVICE SEARCH
 ========================================================= */
 const handleServiceSearch = async (input) => {
     const query = input.value.trim();
@@ -820,7 +865,137 @@ const handleServiceSearch = async (input) => {
 };
 
 /* =========================================================
-   EVENT LISTENERS
+CUSTOMER SEARCH / AUTOCOMPLETE
+========================================================= */
+(function () {
+    const searchInput  = document.getElementById('customer-search');
+    const suggestions  = document.getElementById('customer-suggestions');
+    const idField      = document.getElementById('customer-id');
+    const nameField    = document.getElementById('customer-name');
+    const badge        = document.getElementById('customer-badge');
+    const badgeText    = document.getElementById('customer-badge-text');
+    const clearBtn     = document.getElementById('customer-clear-btn');
+
+    let debounceTimer;
+
+    function setCustomer(id, no, name) {
+        idField.value   = id || '';
+        nameField.value = name;
+        // Display name shows "Name (No.)" if registered, just name if walk-in
+        badgeText.textContent = id ? `${name} — ${no}` : `Walk-in: ${name}`;
+        badge.style.display = 'block';
+        searchInput.style.display = 'none';
+        suggestions.style.display = 'none';
+    }
+
+    function clearCustomer() {
+        idField.value   = '';
+        nameField.value = '';
+        searchInput.value = '';
+        badge.style.display = 'none';
+        searchInput.style.display = 'block';
+        searchInput.focus();
+    }
+
+    clearBtn.addEventListener('click', clearCustomer);
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const q = searchInput.value.trim();
+        if (q.length < 2) { suggestions.style.display = 'none'; return; }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const res  = await fetch(`/api/search/customers?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                suggestions.innerHTML = '';
+
+                // Always show "Add new customer" option at the top
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'list-group-item list-group-item-action';
+                addBtn.style.cssText = 'color:#67c2e4; font-weight:600;';
+                addBtn.innerHTML = `<i class="bi bi-person-plus me-2"></i>Add new customer: <em>"${q}"</em>`;
+                addBtn.onclick = () => openNewCustomerModal(q);
+                suggestions.appendChild(addBtn);
+
+                data.customers.forEach(c => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'list-group-item list-group-item-action';
+                    btn.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>${c.customer_name}</strong>
+                            <span style="font-size:0.72rem; color:#aaa;">${c.customer_no}</span>
+                        </div>`;
+                    btn.onclick = () => setCustomer(c.id, c.customer_no, c.customer_name);
+                    suggestions.appendChild(btn);
+                });
+
+                suggestions.style.display = 'block';
+            } catch (err) {
+                console.error('Customer search error:', err);
+            }
+        }, 250);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#customer-search') && !e.target.closest('#customer-suggestions')) {
+            suggestions.style.display = 'none';
+        }
+    });
+
+    // ── New Customer Modal Logic ────────────────────────────
+    function openNewCustomerModal(prefill) {
+        suggestions.style.display = 'none';
+        document.getElementById('new-cust-name').value = '';
+        document.getElementById('new-cust-no').value   = '';
+        document.getElementById('new-cust-error').textContent = '';
+
+        // Pre-fill: if prefill looks like a number, put in No. field, else Name field
+        if (/^\d+$/.test(prefill)) {
+            document.getElementById('new-cust-no').value = prefill;
+        } else {
+            document.getElementById('new-cust-name').value = prefill;
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
+        modal.show();
+    }
+
+    document.getElementById('save-new-customer-btn').addEventListener('click', async () => {
+        const name  = document.getElementById('new-cust-name').value.trim();
+        const no    = document.getElementById('new-cust-no').value.trim();
+        const errEl = document.getElementById('new-cust-error');
+        errEl.textContent = '';
+
+        if (!name || !no) {
+            errEl.textContent = 'Both fields are required.';
+            return;
+        }
+
+        try {
+            const res  = await fetch('/api/customers/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customer_name: name, customer_no: no })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
+                setCustomer(data.customer.id, data.customer.customer_no, data.customer.customer_name);
+            } else {
+                errEl.textContent = data.message || 'Could not save customer.';
+            }
+        } catch (err) {
+            errEl.textContent = 'Network error. Try again.';
+        }
+    });
+})();
+
+/* =========================================================
+EVENT LISTENERS
 ========================================================= */
 // Payment category UI
 document.getElementById('payment-category').addEventListener('change', function () {
@@ -1071,7 +1246,9 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
     // ── Step 2: Header field validation ─────────────────────────
     const salesNum = document.getElementById('sales-number').value.trim();
-    const customer = document.getElementById('customer-name').value.trim();
+    const customerName = document.getElementById('customer-name').value.trim();
+    const customerId = document.getElementById('customer-id').value.trim();
+    const customer = customerName; // used for validation check below
     const paymentCat = document.getElementById('payment-category').value;
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo = document.getElementById('ref-no').value.trim();
@@ -1085,7 +1262,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     }
 
     if (!salesNum)                          markError(document.getElementById('sales-number'), 'OR No. is required.');
-    if (!customer)                          markError(document.getElementById('customer-name'), 'Customer name is required.');
+    if (!customer)                          markError(document.getElementById('customer-search'), 'Customer is required.');
     if (needsProvider && !selectedProvider) markError(document.getElementById('payment-method'), 'Please select a provider.');
     if (needsProvider && !refNo)            markError(document.getElementById('ref-no'), 'Reference number is required.');
 
@@ -1181,6 +1358,7 @@ async function saveTransaction(items, services) {
     const payload = {
         sales_number: document.getElementById('sales-number').value,
         customer_name: document.getElementById('customer-name').value,
+        customer_id: document.getElementById('customer-id').value || null,
         mechanic_id: document.getElementById('mechanic-id').value || null,
         payment_method_id: paymentId,
         reference_no: refNo,

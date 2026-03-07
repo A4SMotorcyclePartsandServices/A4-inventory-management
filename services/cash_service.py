@@ -1,5 +1,6 @@
 from db.database import get_db
 from utils.formatters import format_date
+from datetime import date as date_today
 
 # --- CATEGORIES ---
 CASH_IN_CATEGORIES  = ['Petty Cash', 'Owner Deposit', 'Other Income']
@@ -287,7 +288,7 @@ def get_already_paid_mechanic_identifiers(date, branch_id=1):
         AND entry_type = 'CASH_OUT'
         AND category = 'Mechanic Payout'
         AND reference_type = 'MECHANIC_PAYOUT'
-        AND DATE(created_at) = ?
+        AND COALESCE(payout_for_date, DATE(created_at)) = ?
         AND reference_id IS NOT NULL
     """, (branch_id, date)).fetchall()
 
@@ -298,7 +299,7 @@ def get_already_paid_mechanic_identifiers(date, branch_id=1):
         AND entry_type = 'CASH_OUT'
         AND category = 'Mechanic Payout'
         AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
-        AND DATE(created_at) = ?
+        AND COALESCE(payout_for_date, DATE(created_at)) = ?
     """, (branch_id, date)).fetchall()
     conn.close()
 
@@ -319,7 +320,7 @@ def get_already_paid_mechanic_names(date, branch_id=1):
 # WRITE
 # ─────────────────────────────────────────────
 
-def add_cash_entry(entry_type, amount, category, description, reference_id, user_id, branch_id=1):
+def add_cash_entry(entry_type, amount, category, description, reference_id, payout_for_date, user_id, branch_id=1):
     """
     Records a single manual petty cash movement only.
     Sales and debt cash is calculated live — never written here.
@@ -349,14 +350,18 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, user
     reference_type = 'MANUAL'
     if category == 'Mechanic Payout' and normalized_reference_id is not None:
         reference_type = 'MECHANIC_PAYOUT'
+        if payout_for_date in ("", None):
+            payout_for_date = date_today.today().isoformat()
+    else:
+        payout_for_date = None
 
     conn = get_db()
     try:
         conn.execute("""
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, category, description,
-                reference_type, reference_id, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                reference_type, reference_id, payout_for_date, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             branch_id,
             entry_type,
@@ -365,6 +370,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, user
             description or None,
             reference_type,
             normalized_reference_id,
+            payout_for_date,
             user_id
         ))
         conn.commit()

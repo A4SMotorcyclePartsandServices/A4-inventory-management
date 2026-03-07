@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 
 {% block styles %}
 <style>
@@ -244,6 +244,43 @@
         padding: 10px 12px 12px;
     }
 
+    .reminder-date-segment {
+        margin-bottom: 10px;
+        border: 1px solid rgba(255, 179, 71, 0.2);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .reminder-date-segment:last-child {
+        margin-bottom: 0;
+    }
+
+    .reminder-date-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: rgba(255, 179, 71, 0.08);
+        color: #ffb347;
+        font-size: 0.82rem;
+        border-bottom: 1px solid rgba(255, 179, 71, 0.2);
+    }
+
+    .reminder-date-label {
+        font-weight: 700;
+    }
+
+    .reminder-count {
+        font-size: 0.68rem;
+        background: rgba(255, 179, 71, 0.15);
+        color: #ffb347;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+    }
+
     .reminder-row {
         display: flex;
         justify-content: space-between;
@@ -251,10 +288,16 @@
         padding: 10px 12px;
         border-bottom: 1px solid var(--border-soft);
         border-radius: 10px;
+        cursor: pointer;
+        transition: background 0.15s ease;
     }
 
     .reminder-row:last-child {
         border-bottom: none;
+    }
+
+    .reminder-row:hover {
+        background: rgba(255, 179, 71, 0.07);
     }
 
     .reminder-action {
@@ -276,39 +319,61 @@
     </div>
 </div>
 
-<!-- ── Summary Cards ── -->
-{% if overdue_payouts %}
+<!-- Ã¢â€â‚¬Ã¢â€â‚¬ Summary Cards Ã¢â€â‚¬Ã¢â€â‚¬ -->
+{% if overdue_payout_total > 0 %}
 <div class="reminder-panel mb-4">
     <div class="reminder-header">
         <div>
             <i class="bi bi-exclamation-triangle-fill me-2"></i>
             <strong>Reminder:</strong>
-            <span class="ms-2">Unpaid mechanic payout{{ 's' if overdue_payouts|length > 1 }} from {{ overdue_date }}</span>
+            <span class="ms-2">Unpaid mechanic payouts in the last {{ reminder_days }} day{{ 's' if reminder_days > 1 }}</span>
         </div>
-        <a class="reminder-action" href="{{ url_for('cash.cash_ledger', start_date=overdue_date, end_date=overdue_date, type='CASH_OUT') }}">
-            Review yesterday’s entries
-        </a>
+        {% if overdue_payout_total > 0 %}
+        <span>Click any row to pre-fill the form</span>
+        {% endif %}
     </div>
     <div class="reminder-body">
-        {% for m in overdue_payouts %}
-        <div class="reminder-row">
-            <div class="payout-name">
-                <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
-                {{ m.mechanic_name }}
+        {% for day in overdue_payout_groups %}
+        {% if day.count > 0 %}
+        <div class="reminder-date-segment">
+            <div class="reminder-date-header">
+                <span class="reminder-date-label">{{ day.date_display }}</span>
+                <span>
+                    <a class="reminder-action" href="{{ url_for('cash.cash_ledger', start_date=day.date, end_date=day.date, type='CASH_OUT') }}">
+                        Review entries
+                    </a>
+                    <span class="reminder-count ms-2">{{ day.count }} unpaid</span>
+                </span>
             </div>
-            <div class="payout-amount">₱{{ "{:,.2f}".format(m.total_payout) }}</div>
+            {% if day.overdue_payouts %}
+            {% for m in day.overdue_payouts %}
+            <div class="payout-row reminder-row"
+                 data-mechanic-id="{{ m.mechanic_id }}"
+                 data-mechanic-name="{{ m.mechanic_name }}"
+                 data-total-payout="{{ m.total_payout }}"
+                 data-payout-date="{{ day.date }}">
+                <div class="payout-name">
+                    <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
+                    {{ m.mechanic_name }}
+                </div>
+            <div class="payout-amount">&#8369;{{ "{:,.2f}".format(m.total_payout) }}</div>
+            </div>
+            {% endfor %}
+            {% endif %}
         </div>
+        {% endif %}
         {% endfor %}
     </div>
 </div>
 {% endif %}
+
 <div class="row g-3 mb-4">
 
     <div class="col-md-4">
         <div class="summary-card">
             <div class="summary-label">Total Cash In</div>
             <div class="summary-value cash-in-value">
-                ₱{{ "{:,.2f}".format(summary.total_in) }}
+                &#8369;{{ "{:,.2f}".format(summary.total_in) }}
             </div>
         </div>
     </div>
@@ -317,7 +382,7 @@
         <div class="summary-card">
             <div class="summary-label">Total Cash Out</div>
             <div class="summary-value cash-out-value">
-                ₱{{ "{:,.2f}".format(summary.total_out) }}
+                &#8369;{{ "{:,.2f}".format(summary.total_out) }}
             </div>
         </div>
     </div>
@@ -328,7 +393,7 @@
                 <i class="bi bi-safe me-1"></i> Cash On Hand
             </div>
             <div class="summary-value cash-on-hand-value">
-                ₱{{ "{:,.2f}".format(summary.cash_on_hand) }}
+                &#8369;{{ "{:,.2f}".format(summary.cash_on_hand) }}
             </div>
         </div>
     </div>
@@ -336,12 +401,12 @@
 </div>
 
 {% if pending_payouts %}
-<!-- ── Pending Mechanic Payouts Panel ── -->
+<!-- Ã¢â€â‚¬Ã¢â€â‚¬ Pending Mechanic Payouts Panel Ã¢â€â‚¬Ã¢â€â‚¬ -->
 <div class="pending-payouts-panel mb-4">
     <div class="pending-payouts-header">
         <div>
             <i class="bi bi-person-check me-2"></i>
-            <strong>Pending Mechanic Payouts — Today</strong>
+            <strong>Pending Mechanic Payouts — Today ({{ today_display }})</strong>
             <span class="pending-count ms-2">{{ pending_payouts|length }} pending</span>
         </div>
         <span>Click a row to pre-fill the form below</span>
@@ -351,7 +416,8 @@
         <div class="payout-row"
              data-mechanic-id="{{ m.mechanic_id }}"
              data-mechanic-name="{{ m.mechanic_name }}"
-             data-total-payout="{{ m.total_payout }}">
+             data-total-payout="{{ m.total_payout }}"
+             data-payout-date="{{ today }}">
             <div class="payout-name">
                 <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
                 {{ m.mechanic_name }}
@@ -360,7 +426,7 @@
                 {% endif %}
             </div>
             <div class="payout-amount">
-                ₱{{ "{:,.2f}".format(m.total_payout) }}
+                &#8369;{{ "{:,.2f}".format(m.total_payout) }}
                 <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem;"></i>
             </div>
         </div>
@@ -369,7 +435,7 @@
 </div>
 {% endif %}
 
-<!-- ── Main Layout: Form + Table ── -->
+<!-- Ã¢â€â‚¬Ã¢â€â‚¬ Main Layout: Form + Table Ã¢â€â‚¬Ã¢â€â‚¬ -->
 <div class="row g-4">
 
     <!-- ADD ENTRY FORM -->
@@ -397,7 +463,7 @@
 
             <!-- Amount -->
             <div class="mb-3">
-                <label class="form-section-label">Amount (₱)</label>
+                <label class="form-section-label">Amount (&#8369;)</label>
                 <input type="number" id="entry-amount" class="form-control"
                     placeholder="0.00" min="0.01" step="0.01">
             </div>
@@ -415,6 +481,10 @@
                 <label class="form-section-label">Description <span class="text-muted">(optional)</span></label>
                 <input type="text" id="entry-description" class="form-control"
                     placeholder="e.g. Bought brake pads from supplier">
+            </div>
+            <div class="mb-4" id="payout-date-wrapper" style="display: none;">
+                <label class="form-section-label">Payout Date <span class="text-muted">(optional)</span></label>
+                <input type="date" id="entry-payout-date" class="form-control">
             </div>
             <input type="hidden" id="entry-reference-id" value="">
 
@@ -518,7 +588,7 @@
                             <td class="text-end fw-semibold
                                 {% if entry.entry_type == 'CASH_IN' %}entry-amount-in
                                 {% else %}entry-amount-out{% endif %}">
-                                ₱{{ "{:,.2f}".format(entry.amount) }}
+                                &#8369;{{ "{:,.2f}".format(entry.amount) }}
                             </td>
                             <td class="small">{{ entry.recorded_by or '—' }}</td>
                             <td class="small date-cell">{{ entry.created_at }}</td>
@@ -580,22 +650,24 @@
 {% block scripts %}
 <script>
 const CASH_LEDGER_PENDING_FLASH_KEY = 'cash-ledger-pending-flash';
+const CASH_LEDGER_TODAY = {{ today | tojson }};
+const TODAY_FOR_INPUT = CASH_LEDGER_TODAY;
 const LEDGER_SELECTED_TYPE = {{ selected_type | tojson }};
 const LEDGER_SELECTED_START_DATE = {{ selected_start_date | tojson }};
 const LEDGER_SELECTED_END_DATE = {{ selected_end_date | tojson }};
 let ledgerDateFlatpickr = null;
 let ledgerTypeFilter = LEDGER_SELECTED_TYPE || '';
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const CATEGORIES = {
     CASH_IN:  {{ cash_in_categories  | tojson }},
     CASH_OUT: {{ cash_out_categories | tojson }},
 };
 
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Populate category dropdown on type change
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function populateCategories(type) {
     const select = document.getElementById('entry-category');
     select.innerHTML = '';
@@ -611,8 +683,37 @@ document.getElementById('entry-category').addEventListener('change', () => {
     const category = document.getElementById('entry-category').value;
     if (category !== 'Mechanic Payout') {
         document.getElementById('entry-reference-id').value = '';
+        document.getElementById('entry-payout-date').value = '';
+        document.getElementById('payout-date-wrapper').style.display = 'none';
+    } else {
+        document.getElementById('payout-date-wrapper').style.display = 'block';
+        document.getElementById('entry-payout-date').value = document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT;
+        document.getElementById('entry-payout-date').max = TODAY_FOR_INPUT;
     }
 });
+
+function setPayoutDate(dateValue) {
+    const payoutDateInput = document.getElementById('entry-payout-date');
+    payoutDateInput.max = TODAY_FOR_INPUT;
+    payoutDateInput.value = dateValue || TODAY_FOR_INPUT;
+}
+
+function clearPayoutDate() {
+    const payoutDateInput = document.getElementById('entry-payout-date');
+    payoutDateInput.value = '';
+    payoutDateInput.max = TODAY_FOR_INPUT;
+    document.getElementById('payout-date-wrapper').style.display = 'none';
+}
+
+function showPayoutDateIfNeeded() {
+    const category = document.getElementById('entry-category').value;
+    if (category === 'Mechanic Payout') {
+        setPayoutDate(document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT);
+        document.getElementById('payout-date-wrapper').style.display = 'block';
+    } else {
+        document.getElementById('payout-date-wrapper').style.display = 'none';
+    }
+}
 
 document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
     radio.addEventListener('change', () => {
@@ -620,26 +721,32 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
 
         if (radio.value === 'CASH_IN') {
             document.getElementById('entry-reference-id').value = '';
+            clearPayoutDate();
         }
     });
 });
 
 // Populate on page load (default: CASH_IN)
 populateCategories('CASH_IN');
+setPayoutDate(TODAY_FOR_INPUT);
+showPayoutDateIfNeeded();
     showPendingFlashAfterReload();
     initializeLedgerFilters();
     initializePendingPayoutRows();
 
 
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Submit new entry
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 document.getElementById('submit-entry-btn').addEventListener('click', async () => {
     const entry_type  = document.querySelector('input[name="entry_type"]:checked').value;
     const amount      = parseFloat(document.getElementById('entry-amount').value);
     const category    = document.getElementById('entry-category').value;
     const description = document.getElementById('entry-description').value.trim();
     const referenceId = document.getElementById('entry-reference-id').value || null;
+    const payoutDate  = category === 'Mechanic Payout'
+        ? (document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT)
+        : null;
 
     if (!amount || amount <= 0) {
         showFlash('Please enter a valid amount.', 'danger');
@@ -654,7 +761,14 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         const res = await fetch('/api/cash/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ entry_type, amount, category, description, reference_id: referenceId }),
+            body: JSON.stringify({
+                entry_type,
+                amount,
+                category,
+                description,
+                reference_id: referenceId,
+                payout_for_date: payoutDate,
+            }),
         });
 
         const data = await res.json();
@@ -677,9 +791,9 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 });
 
 
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Delete entry (admin only)
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 async function deleteEntry(entryId, btn) {
     if (!confirm('Delete this entry? This cannot be undone.')) return;
 
@@ -700,9 +814,9 @@ async function deleteEntry(entryId, btn) {
 }
 
 
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Flash helper (uses base.html flash system)
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function showFlash(message, type) {
     const icons = {
         success: 'bi-check-circle-fill',
@@ -754,10 +868,10 @@ function showPendingFlashAfterReload() {
     }
 }
 
-// ─────────────────────────────────────────
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Pre-fill form from mechanic payout panel
-// ─────────────────────────────────────────
-function prefillPayout(mechanicName, mechanicId, amount) {
+// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+function prefillPayout(mechanicName, mechanicId, amount, payoutForDate) {
     // Switch to CASH_OUT
     document.getElementById('type_out').checked = true;
     populateCategories('CASH_OUT');
@@ -774,10 +888,12 @@ function prefillPayout(mechanicName, mechanicId, amount) {
         }
     }
 
-    // Set description to mechanic name — used for already-paid matching
+    // Set description to mechanic name Ã¢â‚¬â€ used for already-paid matching
     document.getElementById('entry-description').value = mechanicName;
     const parsedId = Number.parseInt(mechanicId || '', 10);
     document.getElementById('entry-reference-id').value = Number.isFinite(parsedId) ? String(parsedId) : '';
+    setPayoutDate(payoutForDate || TODAY_FOR_INPUT);
+    showPayoutDateIfNeeded();
 
     // Scroll to form and highlight card border
     const form = document.getElementById('submit-entry-btn').closest('.card');
@@ -788,13 +904,19 @@ function prefillPayout(mechanicName, mechanicId, amount) {
 }
 
 function initializePendingPayoutRows() {
-    document.querySelectorAll('.pending-payouts-body .payout-row').forEach((row) => {
+    document.querySelectorAll('.pending-payouts-body .payout-row, .reminder-body .payout-row').forEach((row) => {
         row.addEventListener('click', () => {
             const mechanicName = row.getAttribute('data-mechanic-name') || '';
             const amount = parseFloat(row.getAttribute('data-total-payout') || '0');
             const mechanicId = row.getAttribute('data-mechanic-id') || '';
+            const payoutForDate = row.getAttribute('data-payout-date') || CASH_LEDGER_TODAY;
             const parsedId = Number.parseInt(mechanicId, 10);
-            prefillPayout(mechanicName, Number.isFinite(parsedId) ? parsedId : '', Number.isFinite(amount) ? amount : 0);
+            prefillPayout(
+                mechanicName,
+                Number.isFinite(parsedId) ? parsedId : '',
+                Number.isFinite(amount) ? amount : 0,
+                payoutForDate
+            );
         });
     });
 }

@@ -165,7 +165,34 @@ def init_db():
     )
     """)
 
-    # 12. Debt Table
+    # 12. CUSTOMERS TABLE
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_no TEXT NOT NULL UNIQUE,
+        customer_name TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime'))
+    )
+    """)
+
+    # 13. LOYALTY PROGRAMS TABLE (Phase 2 — skeleton only, do not remove)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS loyalty_programs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        service_id INTEGER NOT NULL,
+        threshold INTEGER NOT NULL DEFAULT 10,
+        reward_description TEXT,
+        period_start DATE NOT NULL,
+        period_end DATE NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT (DATETIME('now', 'localtime')),
+        FOREIGN KEY (service_id) REFERENCES services(id)
+    )
+    """)
+
+    # 14. Debt Table
     conn.execute("""
     CREATE TABLE IF NOT EXISTS debt_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,6 +218,7 @@ def init_db():
         amount          REAL NOT NULL,
         category        TEXT NOT NULL,
         description     TEXT,
+        payout_for_date DATE,
         reference_type  TEXT NOT NULL DEFAULT 'MANUAL',
         reference_id    INTEGER,
         user_id         INTEGER,
@@ -198,6 +226,12 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
     """)
+
+    # --- CUSTOMER MIGRATIONS ---
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN customer_id INTEGER REFERENCES customers(id)")
+    except:
+        pass
 
     # --- THE SURGICAL MIGRATIONS (10% ONLY) ---
     
@@ -293,6 +327,19 @@ def init_db():
     try:
         conn.execute("ALTER TABLE cash_entries ADD COLUMN reference_id INTEGER")
     except: pass
+    try:
+        conn.execute("ALTER TABLE cash_entries ADD COLUMN payout_for_date DATE")
+    except:
+        pass
+    try:
+        conn.execute("""
+            UPDATE cash_entries
+            SET payout_for_date = DATE(created_at)
+            WHERE reference_type = 'MECHANIC_PAYOUT'
+            AND payout_for_date IS NULL
+        """)
+    except:
+        pass
 
     # --- IMPROVED SEEDING LOGIC ---
 
