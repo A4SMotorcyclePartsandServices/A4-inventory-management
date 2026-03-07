@@ -645,6 +645,52 @@ def get_sales_report_by_range(start_date, end_date):
             })
             total_gross += total_amount
 
+    # Build date-bucketed records so the range report can include daily quota misses.
+    sales_by_day = {}
+    debt_by_day = {}
+
+    for row in sales_rows:
+        sale_day = str(row["transaction_date"])[:10]
+        sales_by_day.setdefault(sale_day, []).append(row)
+
+    for row in debt_collected_rows:
+        paid_day = str(row["paid_at"])[:10]
+        debt_by_day.setdefault(paid_day, []).append(row)
+
+    all_days = set(sales_by_day.keys()) | set(debt_by_day.keys())
+    quota_failures = []
+
+    for day in sorted(all_days):
+        day_mechanic_summary, _ = _calculate_mechanic_payouts(
+            *_build_mechanic_maps(
+                sales_by_day.get(day, []),
+                debt_by_day.get(day, []),
+                services_by_sale,
+            )
+        )
+
+        for row in day_mechanic_summary:
+            if row["shop_topup"] > 0:
+                quota_failures.append({
+                    "date": day,
+                    "date_display": format_date(day),
+                    "mechanic_id": row["mechanic_id"],
+                    "mechanic_name": row["mechanic_name"],
+                    "commission_rate": row["commission_rate"],
+                    "paid_services_total": row["paid_services_total"],
+                    "debt_service_portion": row["debt_service_portion"],
+                    "services_total": row["services_total"],
+                    "mechanic_cut": row["mechanic_cut"],
+                    "shop_topup": row["shop_topup"],
+                    "total_payout": row["total_payout"],
+                })
+
+    # Keep only days in requested range (in case local DB stores timezone-shifted timestamps).
+    quota_failures = [
+        row for row in quota_failures
+        if start_date <= row["date"] <= end_date
+    ]
+
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
         sales_rows, debt_collected_rows, services_by_sale
     )
@@ -676,4 +722,8 @@ def get_sales_report_by_range(start_date, end_date):
         "total_mech_cut_from_paid":  totals["total_mech_cut_from_paid"],
         "total_shop_comm_from_paid": totals["total_shop_comm_from_paid"],
         "total_mech_cut_from_debt":  totals["total_mech_cut_from_debt"],
+        "quota_failures":            sorted(
+            quota_failures,
+            key=lambda row: (row["date"], row["mechanic_name"]),
+        ),
     }

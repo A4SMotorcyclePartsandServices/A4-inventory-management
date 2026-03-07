@@ -560,6 +560,41 @@
 
     </div>
 
+    {% if is_range and data.quota_failures %}
+    <div style="margin-top: 12px; border: 1px solid #fecaca; border-radius: 7px; overflow: hidden;">
+        <div class="summary-box-title" style="background: #fee2e2; color: #7f1d1d; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            Quota Misses by Day
+        </div>
+        <div style="padding: 10px 12px; font-size: 12px;">
+            <div style="font-size: 11px; color: #444; margin-bottom: 8px;">
+                Mechanics who did not hit their daily quota during the selected range.
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                <thead>
+                    <tr style="background: #fef2f2;">
+                        <th style="padding: 6px; text-align: left; border-bottom: 1px solid #fecaca;">Date</th>
+                        <th style="padding: 6px; text-align: left; border-bottom: 1px solid #fecaca;">Mechanic</th>
+                        <th style="padding: 6px; text-align: right; border-bottom: 1px solid #fecaca;">Services</th>
+                        <th style="padding: 6px; text-align: right; border-bottom: 1px solid #fecaca;">Mechanic Payout</th>
+                        <th style="padding: 6px; text-align: right; border-bottom: 1px solid #fecaca;">Top-up Needed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for miss in data.quota_failures %}
+                    <tr>
+                        <td style="padding: 6px; border-bottom: 1px dashed #fee2e2;">{{ miss.date_display }}</td>
+                        <td style="padding: 6px; border-bottom: 1px dashed #fee2e2;">{{ miss.mechanic_name }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">₱ {{ "%.2f"|format(miss.services_total) }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">₱ {{ "%.2f"|format(miss.mechanic_cut) }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2; color: #7f1d1d; font-weight: 700;">₱ {{ "%.2f"|format(miss.shop_topup) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
     {% else %}
     <div class="empty-state">
         <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
