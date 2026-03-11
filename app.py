@@ -345,8 +345,8 @@ def debug_integrity():
 
     totals = conn.execute("""
         SELECT
-            SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS total_in,
-            SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) AS total_out
+            COALESCE(SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END), 0) AS total_in,
+            COALESCE(SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END), 0) AS total_out
         FROM inventory_transactions
     """).fetchone()
 
@@ -364,7 +364,13 @@ def debug_integrity():
         LEFT JOIN inventory_transactions
             ON items.id = inventory_transactions.item_id
         GROUP BY items.id
-        HAVING current_stock < 0
+        HAVING COALESCE(SUM(
+            CASE 
+                WHEN inventory_transactions.transaction_type = 'IN'
+                THEN inventory_transactions.quantity
+                ELSE -inventory_transactions.quantity
+            END
+        ), 0) < 0
     """).fetchall()
 
     snapshot_date = "2026-01-18"
@@ -374,13 +380,13 @@ def debug_integrity():
             items.name,
             SUM(CASE 
                 WHEN inventory_transactions.transaction_type = 'IN'
-                     AND inventory_transactions.transaction_date = ?
+                     AND inventory_transactions.transaction_date = %s
                 THEN inventory_transactions.quantity
                 ELSE 0
             END) AS snapshot_qty,
             SUM(CASE
                 WHEN inventory_transactions.transaction_type = 'OUT'
-                     AND inventory_transactions.transaction_date >= ?
+                     AND inventory_transactions.transaction_date >= %s
                 THEN inventory_transactions.quantity
                 ELSE 0
             END) AS recent_sales
@@ -388,8 +394,13 @@ def debug_integrity():
         LEFT JOIN inventory_transactions
             ON items.id = inventory_transactions.item_id
         GROUP BY items.id
-        HAVING snapshot_qty > 0
-    """, (snapshot_date, snapshot_date)).fetchall()
+        HAVING SUM(CASE 
+            WHEN inventory_transactions.transaction_type = 'IN'
+                 AND inventory_transactions.transaction_date = %s
+            THEN inventory_transactions.quantity
+            ELSE 0
+        END) > 0
+    """, (snapshot_date, snapshot_date, snapshot_date)).fetchall()
 
     date_ranges = conn.execute("""
         SELECT
@@ -429,3 +440,4 @@ def open_browser():
 if __name__ == "__main__":
     threading.Timer(1.5, open_browser).start()
     app.run(port=5000)
+

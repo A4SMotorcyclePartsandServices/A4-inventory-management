@@ -24,14 +24,7 @@ def daily_report():
     if not report_date:
         flash("Please select a date.", "warning")
         return redirect(url_for("index"))
-
-    sales = get_sales_by_date(report_date)
-
-    return render_template(
-        "reports/daily.html",
-        report_date=report_date,
-        sales=sales
-    )
+    return redirect(url_for("reports.sales_summary_report", report_date=report_date))
 
 
 @reports_bp.route("/reports/range")
@@ -42,15 +35,7 @@ def range_report():
     if not start or not end:
         flash("Please select a date range.", "warning")
         return redirect(url_for("index"))
-
-    sales = get_sales_by_range(start, end)
-
-    return render_template(
-        "reports/range.html",
-        start=start,
-        end=end,
-        sales=sales
-    )
+    return redirect(url_for("reports.sales_summary_report", start_date=start, end_date=end))
 
 
 @reports_bp.route("/reports/sales-summary")
@@ -206,7 +191,7 @@ def export_items_sold_today():
                 COALESCE(pm.name, 'N/A') AS payment_method_name
             FROM sales s
             LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
-            WHERE DATE(s.transaction_date) = ?
+            WHERE DATE(s.transaction_date) = %s
         ) x
         WHERE
             x.status = 'Paid'
@@ -224,7 +209,7 @@ def export_items_sold_today():
     rows = []
     if sales_rows:
         sale_ids = [row["sale_id"] for row in sales_rows]
-        placeholders = ",".join("?" * len(sale_ids))
+        placeholders = ",".join(["%s"] * len(sale_ids))
         rows = conn.execute(f"""
             SELECT
                 si.sale_id,
@@ -247,12 +232,14 @@ def export_items_sold_today():
         item = row["item_name"].replace('"', '""') if row["item_name"] else ""
         sales_number = sale.get("sales_number", "") or ""
         sales_number = sales_number.replace('"', '""')
-        line_total = (row["final_unit_price"] or 0) * row["quantity"]
+        quantity = int(row["quantity"] or 0)
+        final_unit_price = float(row["final_unit_price"] or 0)
+        line_total = final_unit_price * quantity
 
         paid_amount = line_total
         if sale.get("status") == "Partial":
-            item_total = (sale.get("total_amount", 0) or 0) - (sale.get("service_total", 0) or 0)
-            item_paid = max(0.0, (sale.get("total_paid", 0) or 0) - (sale.get("service_paid", 0) or 0))
+            item_total = float(sale.get("total_amount", 0) or 0) - float(sale.get("service_total", 0) or 0)
+            item_paid = max(0.0, float(sale.get("total_paid", 0) or 0) - float(sale.get("service_paid", 0) or 0))
             if item_total > 0:
                 ratio = min(1.0, item_paid / item_total)
                 paid_amount = round(line_total * ratio, 2)
@@ -265,7 +252,7 @@ def export_items_sold_today():
 
         payment_method = (sale.get("payment_method_name", "N/A") or "N/A").replace('"', '""')
         output.append(
-            f'{row["quantity"]},"{item}","{sales_number}","{payment_method}",'
+            f'{quantity},"{item}","{sales_number}","{payment_method}",'
             f'{paid_amount:.2f}'
         )
 
@@ -319,7 +306,7 @@ def export_services_sold_today():
                 FROM debt_payments dp
                 GROUP BY dp.sale_id
             ) dp ON dp.sale_id = s.id
-            WHERE DATE(s.transaction_date) = ?
+            WHERE DATE(s.transaction_date) = %s
         ) x
         WHERE
             x.status = 'Paid'
@@ -334,7 +321,7 @@ def export_services_sold_today():
     rows = []
     if sale_rows:
         sale_ids = [row["sale_id"] for row in sale_rows]
-        placeholders = ",".join("?" * len(sale_ids))
+        placeholders = ",".join(["%s"] * len(sale_ids))
         rows = conn.execute(f"""
             SELECT
                 ss.sale_id,
@@ -368,8 +355,8 @@ def export_services_sold_today():
         mechanic_name = sale.get("mechanic_name", "N/A")
         sales_number = sale.get("sales_number", "")
 
-        total = round(row["price"] or 0, 2)
-        commission_rate = round(sale.get("commission_rate", 0.0) or 0.0, 2)
+        total = round(float(row["price"] or 0), 2)
+        commission_rate = round(float(sale.get("commission_rate", 0.0) or 0.0), 2)
         mechanic_cut = round(total * commission_rate, 2)
         shop_cut = round(total - mechanic_cut, 2)
 

@@ -13,6 +13,11 @@ CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies
 PHYSICAL_CASH_CATEGORIES = ('Cash',)
 
 
+def _money(value):
+    """Normalize DB numeric/decimal values to float for calculations and JSON."""
+    return round(float(value or 0), 2)
+
+
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS
 # ─────────────────────────────────────────────
@@ -22,7 +27,7 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     [Source 1] Direct cash sales that are fully Paid.
     Always CASH_IN — never appears when filtering for CASH_OUT.
     """
-    placeholders = ','.join('?' * len(PHYSICAL_CASH_CATEGORIES))
+    placeholders = ','.join(['%s'] * len(PHYSICAL_CASH_CATEGORIES))
     params = list(PHYSICAL_CASH_CATEGORIES)
 
     query = f"""
@@ -41,10 +46,10 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     """
 
     if date_from:
-        query += " AND DATE(s.transaction_date) >= ?"
+        query += " AND DATE(s.transaction_date) >= %s"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(s.transaction_date) <= ?"
+        query += " AND DATE(s.transaction_date) <= %s"
         params.append(date_to)
 
     return conn.execute(query, params).fetchall()
@@ -55,7 +60,7 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
     [Source 2] Cash payments that settled Utang balances.
     Always CASH_IN — never appears when filtering for CASH_OUT.
     """
-    placeholders = ','.join('?' * len(PHYSICAL_CASH_CATEGORIES))
+    placeholders = ','.join(['%s'] * len(PHYSICAL_CASH_CATEGORIES))
     params = list(PHYSICAL_CASH_CATEGORIES)
 
     query = f"""
@@ -74,10 +79,10 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
     """
 
     if date_from:
-        query += " AND DATE(dp.paid_at) >= ?"
+        query += " AND DATE(dp.paid_at) >= %s"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(dp.paid_at) <= ?"
+        query += " AND DATE(dp.paid_at) <= %s"
         params.append(date_to)
 
     return conn.execute(query, params).fetchall()
@@ -100,18 +105,18 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
             u.username AS recorded_by
         FROM cash_entries ce
         LEFT JOIN users u ON u.id = ce.user_id
-        WHERE ce.branch_id = ?
+        WHERE ce.branch_id = %s
         AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
     """
 
     if entry_type:
-        query += " AND ce.entry_type = ?"
+        query += " AND ce.entry_type = %s"
         params.append(entry_type)
     if date_from:
-        query += " AND DATE(ce.created_at) >= ?"
+        query += " AND DATE(ce.created_at) >= %s"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(ce.created_at) <= ?"
+        query += " AND DATE(ce.created_at) <= %s"
         params.append(date_to)
 
     return conn.execute(query, params).fetchall()
@@ -129,7 +134,7 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
         customer = row['customer_name'] or 'Walk-in'
         unified.append({
             'entry_type':  'CASH_IN',
-            'amount':      round(row['amount'], 2),
+            'amount':      _money(row['amount']),
             'category':    'Cash Sale',
             'description': f"{row['sales_number']} — {customer}",
             'created_at':  format_date(row['created_at'], show_time=True),
@@ -142,7 +147,7 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
         customer = row['customer_name'] or 'Walk-in'
         unified.append({
             'entry_type':  'CASH_IN',
-            'amount':      round(row['amount'], 2),
+            'amount':      _money(row['amount']),
             'category':    'Debt Payment',
             'description': f"{row['sales_number']} — {customer}",
             'created_at':  format_date(row['created_at'], show_time=True),
@@ -154,7 +159,7 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
     for row in manual_rows:
         unified.append({
             'entry_type':  row['entry_type'],
-            'amount':      round(row['amount'], 2),
+            'amount':      _money(row['amount']),
             'category':    row['category'],
             'description': row['description'] or '—',
             'created_at':  format_date(row['created_at'], show_time=True),
@@ -191,14 +196,14 @@ def get_cash_summary(branch_id=1):
     total_out = 0.0
 
     for row in sales_rows:
-        total_in += row['amount']
+        total_in += _money(row['amount'])
     for row in debt_rows:
-        total_in += row['amount']
+        total_in += _money(row['amount'])
     for row in manual_rows:
         if row['entry_type'] == 'CASH_IN':
-            total_in  += row['amount']
+            total_in  += _money(row['amount'])
         else:
-            total_out += row['amount']
+            total_out += _money(row['amount'])
 
     total_in  = round(total_in,  2)
     total_out = round(total_out, 2)
@@ -280,33 +285,72 @@ def get_already_paid_mechanic_identifiers(date, branch_id=1):
     New rows are matched by mechanic reference_id, with fallback to legacy
     description matching for existing records.
     """
-    conn = get_db()
-    mechanic_rows = conn.execute("""
-        SELECT reference_id
-        FROM cash_entries
-        WHERE branch_id = ?
-        AND entry_type = 'CASH_OUT'
-        AND category = 'Mechanic Payout'
-        AND reference_type = 'MECHANIC_PAYOUT'
-        AND COALESCE(payout_for_date, DATE(created_at)) = ?
-        AND reference_id IS NOT NULL
-    """, (branch_id, date)).fetchall()
+    return get_already_paid_mechanic_identifiers_for_dates([date], branch_id=branch_id).get(
+        date,
+        {"mechanic_ids": set(), "mechanic_names": set()},
+    )
 
-    rows = conn.execute("""
-        SELECT description
+
+def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
+    """
+    Batched paid mechanic lookup keyed by payout date.
+    Returns:
+      {
+        'YYYY-MM-DD': {
+          'mechanic_ids': set(...),
+          'mechanic_names': set(...)
+        }
+      }
+    """
+    normalized_dates = sorted({str(d) for d in (dates or []) if d})
+    if not normalized_dates:
+        return {}
+
+    result = {
+        day: {"mechanic_ids": set(), "mechanic_names": set()}
+        for day in normalized_dates
+    }
+
+    conn = get_db()
+    placeholders = ",".join(["%s"] * len(normalized_dates))
+
+    mechanic_rows = conn.execute(f"""
+        SELECT
+            COALESCE(payout_for_date, DATE(created_at)) AS payout_date,
+            reference_id
         FROM cash_entries
-        WHERE branch_id = ?
-        AND entry_type = 'CASH_OUT'
-        AND category = 'Mechanic Payout'
-        AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
-        AND COALESCE(payout_for_date, DATE(created_at)) = ?
-    """, (branch_id, date)).fetchall()
+        WHERE branch_id = %s
+          AND entry_type = 'CASH_OUT'
+          AND category = 'Mechanic Payout'
+          AND reference_type = 'MECHANIC_PAYOUT'
+          AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
+          AND reference_id IS NOT NULL
+    """, [branch_id] + normalized_dates).fetchall()
+
+    legacy_rows = conn.execute(f"""
+        SELECT
+            COALESCE(payout_for_date, DATE(created_at)) AS payout_date,
+            description
+        FROM cash_entries
+        WHERE branch_id = %s
+          AND entry_type = 'CASH_OUT'
+          AND category = 'Mechanic Payout'
+          AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+          AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
+    """, [branch_id] + normalized_dates).fetchall()
     conn.close()
 
-    return {
-        "mechanic_ids": {int(row["reference_id"]) for row in mechanic_rows if row["reference_id"] is not None},
-        "mechanic_names": {row["description"] for row in rows if row["description"]},
-    }
+    for row in mechanic_rows:
+        day = str(row["payout_date"])
+        if day in result and row["reference_id"] is not None:
+            result[day]["mechanic_ids"].add(int(row["reference_id"]))
+
+    for row in legacy_rows:
+        day = str(row["payout_date"])
+        if day in result and row["description"]:
+            result[day]["mechanic_names"].add(row["description"])
+
+    return result
 
 
 def get_already_paid_mechanic_names(date, branch_id=1):
@@ -361,7 +405,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, category, description,
                 reference_type, reference_id, payout_for_date, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             branch_id,
             entry_type,
@@ -392,7 +436,7 @@ def delete_cash_entry(entry_id, branch_id=1):
     try:
         result = conn.execute("""
             DELETE FROM cash_entries
-            WHERE id = ? AND branch_id = ? AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+            WHERE id = %s AND branch_id = %s AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
         """, (entry_id, branch_id))
 
         if result.rowcount == 0:
@@ -435,3 +479,5 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1):
         'total_out':    round(total_out, 2),
         'cash_on_hand': round(total_in - total_out, 2),
     }
+
+

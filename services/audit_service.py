@@ -24,19 +24,19 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     sale_params = []
 
     if start_date:
-        inv_conditions.append("DATE(t.transaction_date) >= ?")
+        inv_conditions.append("DATE(t.transaction_date) >= %s")
         inv_params.append(start_date)
-        sale_conditions.append("DATE(s.transaction_date) >= ?")
+        sale_conditions.append("DATE(s.transaction_date) >= %s")
         sale_params.append(start_date)
 
     if end_date:
-        inv_conditions.append("DATE(t.transaction_date) <= ?")
+        inv_conditions.append("DATE(t.transaction_date) <= %s")
         inv_params.append(end_date)
-        sale_conditions.append("DATE(s.transaction_date) <= ?")
+        sale_conditions.append("DATE(s.transaction_date) <= %s")
         sale_params.append(end_date)
 
     if movement_type:
-        inv_conditions.append("t.transaction_type = ?")
+        inv_conditions.append("t.transaction_type = %s")
         inv_params.append(movement_type)
         if movement_type != "OUT":
             sale_conditions.append("1 = 0")
@@ -106,10 +106,10 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             t.change_reason,
             t.reference_type,
             t.reference_id,
-            t.notes,
+            COALESCE(NULLIF(MAX(t.notes), ''), MAX(s.notes)) AS notes,
             s.sales_number,
             po.po_number,
-            GROUP_CONCAT(i.name, ', ') AS items_summary
+            STRING_AGG(i.name::text, ', ' ORDER BY i.name) AS items_summary
         FROM inventory_transactions t
         JOIN items i ON t.item_id = i.id
         LEFT JOIN sales s
@@ -117,7 +117,15 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         LEFT JOIN purchase_orders po
             ON t.reference_id = po.id AND t.reference_type = 'PURCHASE_ORDER'
         {inv_where_clause}
-        GROUP BY t.reference_id, t.transaction_date, t.transaction_type, t.change_reason
+        GROUP BY
+            t.reference_id,
+            t.transaction_date,
+            t.transaction_type,
+            t.change_reason,
+            t.user_name,
+            t.reference_type,
+            s.sales_number,
+            po.po_number
 
         UNION ALL
 
@@ -133,7 +141,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             s.sales_number,
             NULL AS po_number,
             COALESCE((
-                SELECT GROUP_CONCAT(sv.name, ', ')
+                SELECT STRING_AGG(sv.name::text, ', ' ORDER BY sv.name)
                 FROM sales_services ss
                 JOIN services sv ON sv.id = ss.service_id
                 WHERE ss.sale_id = s.id
@@ -149,7 +157,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         {sale_extra_clause}
 
         ORDER BY transaction_date DESC
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
     """
 
     rows = conn.execute(data_query, inv_params + sale_params + [PER_PAGE, offset]).fetchall()
@@ -167,3 +175,4 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         "per_page": PER_PAGE,
         "total_pages": total_pages,
     }
+

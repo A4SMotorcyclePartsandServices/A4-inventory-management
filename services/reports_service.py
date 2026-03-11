@@ -9,6 +9,8 @@ from utils.formatters import format_date
 MECHANIC_QUOTA = 500.0
 
 
+def _num(value):
+    return float(value or 0)
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────
@@ -28,8 +30,8 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale):
         sale_id         = sale["id"]
         mechanic_id     = sale["mechanic_id"]
         mechanic_name   = sale["mechanic_name"] or "—"
-        commission_rate = sale["commission_rate"] or 0.0
-        services_total  = sum(svc["price"] for svc in services_by_sale.get(sale_id, []))
+        commission_rate = _num(sale["commission_rate"])
+        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
 
         if sale["status"] == "Paid" and mechanic_id and services_total > 0:
             if mechanic_id not in mechanic_map:
@@ -42,12 +44,12 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale):
 
     for row in debt_collected_rows:
         mech_id         = row["mechanic_id"]
-        service_portion = round(row["service_portion"] or 0.0, 2)
+        service_portion = round(_num(row["service_portion"]), 2)
         if mech_id and service_portion > 0:
             if mech_id not in debt_mechanic_map:
                 debt_mechanic_map[mech_id] = {
                     "mechanic_name":      row["mechanic_name"] or "—",
-                    "commission_rate":    row["commission_rate"] or 0.0,
+                    "commission_rate":    _num(row["commission_rate"]),
                     "debt_service_total": 0.0,
                 }
             debt_mechanic_map[mech_id]["debt_service_total"] += service_portion
@@ -81,10 +83,10 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
         debt    = debt_mechanic_map.get(mech_id, {})
 
         mechanic_name   = regular.get("mechanic_name") or debt.get("mechanic_name") or "—"
-        commission_rate = regular.get("commission_rate") or debt.get("commission_rate") or 0.0
+        commission_rate = _num(regular.get("commission_rate") or debt.get("commission_rate"))
 
-        paid_services        = round(regular.get("paid_services_total", 0.0), 2)
-        debt_service_portion = round(debt.get("debt_service_total", 0.0), 2)
+        paid_services        = round(_num(regular.get("paid_services_total", 0.0)), 2)
+        debt_service_portion = round(_num(debt.get("debt_service_total", 0.0)), 2)
 
         regular_mech_cut   = round(paid_services * commission_rate, 2)
         regular_shop_share = round(paid_services - regular_mech_cut, 2)
@@ -141,6 +143,103 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
 # PUBLIC — Cash Ledger Panel
 # ─────────────────────────────────────────────
 
+def _format_cash_panel_payout_rows(mechanic_summary):
+    return [
+        {
+            "mechanic_id": row["mechanic_id"],
+            "mechanic_name": row["mechanic_name"],
+            "total_payout": row["total_payout"],
+            "has_topup": row["shop_topup"] > 0,
+        }
+        for row in mechanic_summary
+        if row["total_payout"] > 0
+    ]
+
+
+def get_mechanic_payouts_for_dates(report_dates):
+    """
+    Batched mechanic payout lookup for the cash ledger panel.
+    Returns { 'YYYY-MM-DD': [ { mechanic payout row }, ... ], ... }.
+    """
+    normalized_dates = sorted({str(d) for d in (report_dates or []) if d})
+    if not normalized_dates:
+        return {}
+
+    conn = get_db()
+    placeholders = ",".join(["%s"] * len(normalized_dates))
+
+    sales_rows = conn.execute(f"""
+        SELECT
+            DATE(s.transaction_date) AS payout_date,
+            s.id,
+            s.status,
+            m.id                     AS mechanic_id,
+            m.name                   AS mechanic_name,
+            m.commission_rate
+        FROM sales s
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        WHERE DATE(s.transaction_date) IN ({placeholders})
+          AND s.mechanic_id IS NOT NULL
+    """, normalized_dates).fetchall()
+
+    debt_collected_rows = conn.execute(f"""
+        SELECT
+            DATE(dp.paid_at) AS payout_date,
+            dp.service_portion,
+            s.mechanic_id,
+            m.name           AS mechanic_name,
+            m.commission_rate
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        WHERE DATE(dp.paid_at) IN ({placeholders})
+          AND s.mechanic_id IS NOT NULL
+    """, normalized_dates).fetchall()
+
+    if not sales_rows and not debt_collected_rows:
+        conn.close()
+        return {day: [] for day in normalized_dates}
+
+    sale_ids = [row["id"] for row in sales_rows]
+    services_by_sale = {}
+    if sale_ids:
+        sale_id_placeholders = ",".join(["%s"] * len(sale_ids))
+        services_rows = conn.execute(f"""
+            SELECT ss.sale_id, ss.price
+            FROM sales_services ss
+            WHERE ss.sale_id IN ({sale_id_placeholders})
+        """, sale_ids).fetchall()
+        for row in services_rows:
+            services_by_sale.setdefault(row["sale_id"], []).append({"price": row["price"]})
+
+    conn.close()
+
+    sales_by_date = {}
+    debt_by_date = {}
+    for row in sales_rows:
+        day = str(row["payout_date"])
+        sales_by_date.setdefault(day, []).append(row)
+    for row in debt_collected_rows:
+        day = str(row["payout_date"])
+        debt_by_date.setdefault(day, []).append(row)
+
+    payouts_by_date = {}
+    for day in normalized_dates:
+        mechanic_map, debt_mechanic_map = _build_mechanic_maps(
+            sales_by_date.get(day, []),
+            debt_by_date.get(day, []),
+            services_by_sale,
+        )
+        if not mechanic_map and not debt_mechanic_map:
+            payouts_by_date[day] = []
+            continue
+
+        mechanic_summary, _ = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
+        payouts_by_date[day] = _format_cash_panel_payout_rows(mechanic_summary)
+
+    return payouts_by_date
+
+
 def get_mechanic_payouts_for_date(report_date):
     """
     Returns each mechanic's calculated payout for a given date.
@@ -155,73 +254,7 @@ def get_mechanic_payouts_for_date(report_date):
 
     NOTE (future branches): add branch_id filter to sales query when ready.
     """
-    conn = get_db()
-
-    sales_rows = conn.execute("""
-        SELECT
-            s.id,
-            s.status,
-            m.id              AS mechanic_id,
-            m.name            AS mechanic_name,
-            m.commission_rate
-        FROM sales s
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        WHERE DATE(s.transaction_date) = ?
-          AND s.mechanic_id IS NOT NULL
-    """, (report_date,)).fetchall()
-
-    debt_collected_rows = conn.execute("""
-        SELECT
-            dp.service_portion,
-            s.mechanic_id,
-            m.name            AS mechanic_name,
-            m.commission_rate
-        FROM debt_payments dp
-        JOIN sales s       ON s.id  = dp.sale_id
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        WHERE DATE(dp.paid_at) = ?
-          AND s.mechanic_id IS NOT NULL
-    """, (report_date,)).fetchall()
-
-    if not sales_rows and not debt_collected_rows:
-        conn.close()
-        return []
-
-    all_sale_ids = [row["id"] for row in sales_rows]
-    services_by_sale = {}
-
-    if all_sale_ids:
-        placeholders = ",".join("?" * len(all_sale_ids))
-        services_rows = conn.execute(f"""
-            SELECT ss.sale_id, ss.price
-            FROM sales_services ss
-            WHERE ss.sale_id IN ({placeholders})
-        """, all_sale_ids).fetchall()
-        for row in services_rows:
-            services_by_sale.setdefault(row["sale_id"], []).append({"price": row["price"]})
-
-    conn.close()
-
-    mechanic_map, debt_mechanic_map = _build_mechanic_maps(
-        sales_rows, debt_collected_rows, services_by_sale
-    )
-
-    if not mechanic_map and not debt_mechanic_map:
-        return []
-
-    mechanic_summary, _ = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
-
-    # Only return mechanics who actually have a payout > 0
-    return [
-        {
-            "mechanic_id":   row["mechanic_id"],
-            "mechanic_name": row["mechanic_name"],
-            "total_payout":  row["total_payout"],
-            "has_topup":     row["shop_topup"] > 0,
-        }
-        for row in mechanic_summary
-        if row["total_payout"] > 0
-    ]
+    return get_mechanic_payouts_for_dates([report_date]).get(report_date, [])
 
 
 # ─────────────────────────────────────────────
@@ -239,7 +272,7 @@ def get_sales_by_date(report_date):
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE transaction_type = 'OUT'
-        AND DATE(transaction_date) = ?
+        AND DATE(transaction_date) = %s
     """, (report_date,)).fetchall()
     conn.close()
     return rows
@@ -256,7 +289,7 @@ def get_sales_by_range(start_date, end_date):
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE transaction_type = 'OUT'
-        AND DATE(transaction_date) BETWEEN ? AND ?
+        AND DATE(transaction_date) BETWEEN %s AND %s
     """, (start_date, end_date)).fetchall()
     conn.close()
     return rows
@@ -283,7 +316,7 @@ def get_all_unresolved_sales(conn):
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
-        GROUP BY s.id
+        GROUP BY s.id, m.name, pm.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
 
@@ -291,7 +324,7 @@ def get_all_unresolved_sales(conn):
         return []
 
     sale_ids     = [row["id"] for row in unresolved_rows]
-    placeholders = ",".join("?" * len(sale_ids))
+    placeholders = ",".join(["%s"] * len(sale_ids))
 
     items_rows = conn.execute(f"""
         SELECT
@@ -330,13 +363,14 @@ def get_all_unresolved_sales(conn):
     result = []
     for sale in unresolved_rows:
         sale_id    = sale["id"]
-        total_paid = round(sale["total_paid"], 2)
-        remaining  = round(sale["total_amount"] - total_paid, 2)
+        total_amount = _num(sale["total_amount"])
+        total_paid = round(_num(sale["total_paid"]), 2)
+        remaining  = round(total_amount - total_paid, 2)
         result.append({
             "sales_number":     sale["sales_number"] or f"#{sale_id}",
             "customer_name":    sale["customer_name"] or "Walk-in",
             "mechanic_name":    sale["mechanic_name"] or "—",
-            "total_amount":     sale["total_amount"] or 0.0,
+            "total_amount":     round(total_amount, 2),
             "total_paid":       total_paid,
             "remaining":        remaining,
             "status":           sale["status"],
@@ -372,7 +406,7 @@ def get_sales_report_by_date(report_date):
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
-        WHERE DATE(s.transaction_date) = ?
+        WHERE DATE(s.transaction_date) = %s
         ORDER BY s.transaction_date ASC
     """, (report_date,)).fetchall()
 
@@ -397,7 +431,7 @@ def get_sales_report_by_date(report_date):
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
-        WHERE DATE(dp.paid_at) = ?
+        WHERE DATE(dp.paid_at) = %s
         ORDER BY dp.paid_at ASC
     """, (report_date,)).fetchall()
 
@@ -411,7 +445,7 @@ def get_sales_report_by_date(report_date):
     services_by_sale = {}
 
     if paid_sale_ids:
-        placeholders = ",".join("?" * len(paid_sale_ids))
+        placeholders = ",".join(["%s"] * len(paid_sale_ids))
         items_rows = conn.execute(f"""
             SELECT si.sale_id, i.name AS item_name, si.quantity,
                    si.original_unit_price, si.discount_percent,
@@ -426,7 +460,7 @@ def get_sales_report_by_date(report_date):
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        placeholders = ",".join("?" * len(all_sale_ids))
+        placeholders = ",".join(["%s"] * len(all_sale_ids))
         services_rows = conn.execute(f"""
             SELECT ss.sale_id, sv.name AS service_name, ss.price
             FROM sales_services ss
@@ -443,9 +477,9 @@ def get_sales_report_by_date(report_date):
         {
             "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
             "customer_name":   row["customer_name"] or "Walk-in",
-            "total_amount":    row["total_amount"],
-            "amount_paid":     round(row["amount_paid"], 2),
-            "service_portion": round(row["service_portion"] or 0.0, 2),
+            "total_amount":    round(_num(row["total_amount"]), 2),
+            "amount_paid":     round(_num(row["amount_paid"]), 2),
+            "service_portion": round(_num(row["service_portion"]), 2),
             "payment_method":  row["payment_method"] or "—",
             "reference_no":    row["reference_no"] or "",
             "notes":           row["notes"] or "",
@@ -461,16 +495,16 @@ def get_sales_report_by_date(report_date):
 
     for sale in sales_rows:
         sale_id       = sale["id"]
-        services_total = sum(svc["price"] for svc in services_by_sale.get(sale_id, []))
+        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         if sale["status"] == "Paid":
-            total_amount = sale["total_amount"] or 0.0
+            total_amount = _num(sale["total_amount"])
             total_service_revenue += services_total
             paid_sales.append({
                 "sales_number":     sale["sales_number"] or f"#{sale_id}",
                 "customer_name":    sale["customer_name"] or "Walk-in",
                 "mechanic_name":    sale["mechanic_name"] or "—",
                 "services_total":   round(services_total, 2),
-                "total_amount":     total_amount,
+                "total_amount":     round(total_amount, 2),
                 "status":           sale["status"],
                 "payment_method":   sale["payment_method"] or "—",
                 "notes":            sale["notes"] or "",
@@ -491,8 +525,8 @@ def get_sales_report_by_date(report_date):
             key = item["item_name"]
             if key not in items_summary:
                 items_summary[key] = {"item_name": key, "quantity": 0, "total": 0.0}
-            items_summary[key]["quantity"] += item["quantity"]
-            items_summary[key]["total"]    += item["line_total"]
+            items_summary[key]["quantity"] += int(item["quantity"] or 0)
+            items_summary[key]["total"]    += _num(item["line_total"])
 
     return {
         "sales":                  paid_sales,
@@ -537,7 +571,7 @@ def get_sales_report_by_range(start_date, end_date):
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
-        WHERE DATE(s.transaction_date) BETWEEN ? AND ?
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
         ORDER BY s.transaction_date ASC
     """, (start_date, end_date)).fetchall()
 
@@ -562,7 +596,7 @@ def get_sales_report_by_range(start_date, end_date):
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
-        WHERE DATE(dp.paid_at) BETWEEN ? AND ?
+        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
         ORDER BY dp.paid_at ASC
     """, (start_date, end_date)).fetchall()
 
@@ -576,7 +610,7 @@ def get_sales_report_by_range(start_date, end_date):
     services_by_sale = {}
 
     if paid_sale_ids:
-        placeholders = ",".join("?" * len(paid_sale_ids))
+        placeholders = ",".join(["%s"] * len(paid_sale_ids))
         items_rows = conn.execute(f"""
             SELECT si.sale_id, i.name AS item_name, si.quantity,
                    si.original_unit_price, si.discount_percent,
@@ -591,7 +625,7 @@ def get_sales_report_by_range(start_date, end_date):
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        placeholders = ",".join("?" * len(all_sale_ids))
+        placeholders = ",".join(["%s"] * len(all_sale_ids))
         services_rows = conn.execute(f"""
             SELECT ss.sale_id, sv.name AS service_name, ss.price
             FROM sales_services ss
@@ -608,9 +642,9 @@ def get_sales_report_by_range(start_date, end_date):
         {
             "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
             "customer_name":   row["customer_name"] or "Walk-in",
-            "total_amount":    row["total_amount"],
-            "amount_paid":     round(row["amount_paid"], 2),
-            "service_portion": round(row["service_portion"] or 0.0, 2),
+            "total_amount":    round(_num(row["total_amount"]), 2),
+            "amount_paid":     round(_num(row["amount_paid"]), 2),
+            "service_portion": round(_num(row["service_portion"]), 2),
             "payment_method":  row["payment_method"] or "—",
             "reference_no":    row["reference_no"] or "",
             "notes":           row["notes"] or "",
@@ -626,16 +660,16 @@ def get_sales_report_by_range(start_date, end_date):
 
     for sale in sales_rows:
         sale_id        = sale["id"]
-        services_total = sum(svc["price"] for svc in services_by_sale.get(sale_id, []))
+        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         if sale["status"] == "Paid":
-            total_amount = sale["total_amount"] or 0.0
+            total_amount = _num(sale["total_amount"])
             total_service_revenue += services_total
             paid_sales.append({
                 "sales_number":     sale["sales_number"] or f"#{sale_id}",
                 "customer_name":    sale["customer_name"] or "Walk-in",
                 "mechanic_name":    sale["mechanic_name"] or "—",
                 "services_total":   round(services_total, 2),
-                "total_amount":     total_amount,
+                "total_amount":     round(total_amount, 2),
                 "status":           sale["status"],
                 "payment_method":   sale["payment_method"] or "—",
                 "notes":            sale["notes"] or "",
@@ -702,8 +736,8 @@ def get_sales_report_by_range(start_date, end_date):
             key = item["item_name"]
             if key not in items_summary:
                 items_summary[key] = {"item_name": key, "quantity": 0, "total": 0.0}
-            items_summary[key]["quantity"] += item["quantity"]
-            items_summary[key]["total"]    += item["line_total"]
+            items_summary[key]["quantity"] += int(item["quantity"] or 0)
+            items_summary[key]["total"]    += _num(item["line_total"])
 
     return {
         "sales":                  paid_sales,
@@ -727,3 +761,6 @@ def get_sales_report_by_range(start_date, end_date):
             key=lambda row: (row["date"], row["mechanic_name"]),
         ),
     }
+
+
+

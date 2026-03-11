@@ -38,7 +38,7 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
         INSERT INTO inventory_transactions 
         (item_id, quantity, transaction_type, transaction_date, user_id, user_name, 
         reference_id, reference_type, change_reason, unit_price, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         item_id, quantity, transaction_type, final_time, user_id, user_name,
         reference_id, reference_type, change_reason, unit_price, notes
@@ -58,19 +58,20 @@ def add_item_to_db(data, user_id=None, username=None):
     conn = get_db()
     try:
         conn.execute("BEGIN")
-        cursor = conn.execute("""
+        row = conn.execute("""
             INSERT INTO items (
                 name, category, description, pack_size, 
                 vendor_price, cost_per_piece, a4s_selling_price, 
                 markup, reorder_level, vendor, mechanic
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
         """, (
             data['name'], data['category'], data['description'], data['pack_size'],
             data['vendor_price'], data['cost_per_piece'], data['selling_price'],
             data['markup'], data['reorder_level'], data['vendor'], data['mechanic']
-        ))
+        )).fetchone()
 
-        new_id = cursor.lastrowid
+        new_id = row["id"]
 
         add_transaction(
             item_id=new_id,
@@ -105,7 +106,7 @@ def normalize_item_category(existing_cat, new_cat):
     if existing_cat == "__OTHER__" and new_cat:
         conn = get_db()
         match = conn.execute(
-            "SELECT category FROM items WHERE LOWER(TRIM(category)) = ? LIMIT 1",
+            "SELECT category FROM items WHERE LOWER(TRIM(category)) = %s LIMIT 1",
             (new_cat.lower(),)
         ).fetchone()
         conn.close()
@@ -205,14 +206,14 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
 
         # 2) Cost self-correction + audit
         item_row = conn.execute(
-            "SELECT cost_per_piece FROM items WHERE id = ?", (item_id,)
+            "SELECT cost_per_piece FROM items WHERE id = %s", (item_id,)
         ).fetchone()
 
         current_master_cost = float(item_row["cost_per_piece"] or 0) if item_row else 0.0
 
         if unit_price != current_master_cost:
             conn.execute(
-                "UPDATE items SET cost_per_piece = ? WHERE id = ?",
+                "UPDATE items SET cost_per_piece = %s WHERE id = %s",
                 (unit_price, item_id)
             )
             add_transaction(
@@ -259,7 +260,7 @@ def record_sale(data, user_id, username):
     try:
         pm = conn.execute("""
             SELECT id, category, is_active
-            FROM payment_methods WHERE id = ?
+            FROM payment_methods WHERE id = %s
         """, (payment_method_id,)).fetchone()
 
         if not pm or pm["is_active"] != 1:
@@ -299,7 +300,7 @@ def record_sale(data, user_id, username):
             seen.add(iid)
 
         if dupes:
-            placeholders = ",".join(["?"] * len(dupes))
+            placeholders = ",".join(["%s"] * len(dupes))
             items_data = conn.execute(
                 f"SELECT id, name FROM items WHERE id IN ({placeholders})",
                 tuple(dupes)
@@ -321,18 +322,19 @@ def record_sale(data, user_id, username):
 
         if vehicle_id is not None and data.get("customer_id"):
             valid_vehicle = conn.execute(
-                "SELECT id FROM vehicles WHERE id = ? AND customer_id = ? AND is_active = 1",
+                "SELECT id FROM vehicles WHERE id = %s AND customer_id = %s AND is_active = 1",
                 (vehicle_id, data.get("customer_id"))
             ).fetchone()
             if not valid_vehicle:
                 raise ValueError("Invalid vehicle selected for this customer.")
 
-        cursor = conn.execute("""
+        sale_row = conn.execute("""
             INSERT INTO sales (
                 sales_number, customer_name, customer_id, vehicle_id, total_amount,
                 payment_method_id, reference_no, status,
                 notes, user_id, transaction_date, mechanic_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             data.get('sales_number'),
             data.get('customer_name'),
@@ -346,9 +348,9 @@ def record_sale(data, user_id, username):
             user_id,
             clean_time,
             data.get('mechanic_id') or None
-        ))
+        )).fetchone()
 
-        new_sale_id = cursor.lastrowid
+        new_sale_id = sale_row["id"]
 
         # 5a) Stock validation — enforced at service level, cannot be bypassed via API
         # NOTE (future branches): filter stock calc by branch_id when ready.
@@ -365,13 +367,13 @@ def record_sale(data, user_id, username):
                     END
                 ), 0) AS current_stock
                 FROM inventory_transactions
-                WHERE item_id = ?
+                WHERE item_id = %s
             """, (item_id,)).fetchone()
 
             current_stock = int(stock_row['current_stock']) if stock_row else 0
 
             if qty_requested > current_stock:
-                name_row = conn.execute("SELECT name FROM items WHERE id = ?", (item_id,)).fetchone()
+                name_row = conn.execute("SELECT name FROM items WHERE id = %s", (item_id,)).fetchone()
                 item_name = name_row['name'] if name_row else f"Item ID {item_id}"
                 raise ValueError(
                     f"Insufficient stock for '{item_name}'. "
@@ -405,7 +407,7 @@ def record_sale(data, user_id, username):
                     sale_id, item_id, quantity,
                     original_unit_price, discount_percent, discount_amount, final_unit_price,
                     discounted_by, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 new_sale_id, item['item_id'], item['quantity'],
                 original_price, discount_percent_decimal, discount_amount, final_price,
@@ -435,11 +437,11 @@ def record_sale(data, user_id, username):
             service_subtotal += price
             conn.execute("""
                 INSERT INTO sales_services (sale_id, service_id, price)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             """, (new_sale_id, service_id, price))
 
         conn.execute(
-            "UPDATE sales SET service_fee = ? WHERE id = ?",
+            "UPDATE sales SET service_fee = %s WHERE id = %s",
             (service_subtotal, new_sale_id)
         )
 
@@ -476,18 +478,19 @@ def create_purchase_order(data, user_id, username):
         conn.execute("BEGIN")
 
         count = conn.execute(
-            "SELECT COUNT(*) FROM purchase_orders WHERE po_number LIKE ?",
+            "SELECT COUNT(*) FROM purchase_orders WHERE po_number ILIKE %s",
             (f"PO-{today_str}%",)
         ).fetchone()[0]
 
         po_number = f"PO-{today_str}-{str(count + 1).zfill(3)}"
 
-        cursor = conn.execute("""
+        po_row = conn.execute("""
             INSERT INTO purchase_orders (po_number, vendor_name, notes, status, created_by, created_at)
-            VALUES (?, ?, ?, 'PENDING', ?, ?)
-        """, (po_number, data.get('vendor_name'), data.get('notes'), user_id, clean_time))
+            VALUES (%s, %s, %s, 'PENDING', %s, %s)
+            RETURNING id
+        """, (po_number, data.get('vendor_name'), data.get('notes'), user_id, clean_time)).fetchone()
 
-        new_po_id = cursor.lastrowid
+        new_po_id = po_row["id"]
         total_order_amount = 0
 
         for item in data.get('items', []):
@@ -497,7 +500,7 @@ def create_purchase_order(data, user_id, username):
 
             conn.execute("""
                 INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
-                VALUES (?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s)
             """, (new_po_id, item['id'], qty, cost))
 
             add_transaction(
@@ -515,7 +518,7 @@ def create_purchase_order(data, user_id, username):
             )
 
         conn.execute(
-            "UPDATE purchase_orders SET total_amount = ? WHERE id = ?",
+            "UPDATE purchase_orders SET total_amount = %s WHERE id = %s",
             (total_order_amount, new_po_id)
         )
 
@@ -545,12 +548,12 @@ def get_all_purchase_orders():
 def get_purchase_order_with_items(po_id):
     """Returns a PO and its items. Used by the API detail endpoint."""
     conn = get_db()
-    po = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (po_id,)).fetchone()
+    po = conn.execute("SELECT * FROM purchase_orders WHERE id = %s", (po_id,)).fetchone()
     items = conn.execute("""
         SELECT pi.*, i.name
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
-        WHERE pi.po_id = ?
+        WHERE pi.po_id = %s
     """, (po_id,)).fetchall()
     conn.close()
     return po, items
@@ -559,7 +562,7 @@ def get_purchase_order_with_items(po_id):
 def get_po_for_receive_page(po_id):
     """Returns PO + items needed for the receive page. Returns None if not found."""
     conn = get_db()
-    po = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (po_id,)).fetchone()
+    po = conn.execute("SELECT * FROM purchase_orders WHERE id = %s", (po_id,)).fetchone()
     if not po:
         conn.close()
         return None, None
@@ -568,7 +571,7 @@ def get_po_for_receive_page(po_id):
         SELECT pi.*, i.name, i.pack_size
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
-        WHERE pi.po_id = ?
+        WHERE pi.po_id = %s
     """, (po_id,)).fetchall()
     conn.close()
     return po, items
@@ -599,7 +602,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             po_item = conn.execute("""
                 SELECT quantity_ordered, quantity_received, unit_cost
                 FROM po_items
-                WHERE po_id = ? AND item_id = ?
+                WHERE po_id = %s AND item_id = %s
             """, (po_id, item_id)).fetchone()
 
             if not po_item:
@@ -612,13 +615,13 @@ def receive_purchase_order(po_id, received_items, user_id, username):
 
             # Cost self-correction
             item_row = conn.execute(
-                "SELECT cost_per_piece FROM items WHERE id = ?", (item_id,)
+                "SELECT cost_per_piece FROM items WHERE id = %s", (item_id,)
             ).fetchone()
             current_master_cost = float(item_row["cost_per_piece"] or 0)
 
             if float(unit_cost) != current_master_cost:
                 conn.execute(
-                    "UPDATE items SET cost_per_piece = ? WHERE id = ?",
+                    "UPDATE items SET cost_per_piece = %s WHERE id = %s",
                     (unit_cost, item_id)
                 )
                 add_transaction(
@@ -666,13 +669,13 @@ def receive_purchase_order(po_id, received_items, user_id, username):
 
             conn.execute("""
                 UPDATE po_items
-                SET quantity_received = quantity_received + ?
-                WHERE po_id = ? AND item_id = ?
+                SET quantity_received = quantity_received + %s
+                WHERE po_id = %s AND item_id = %s
             """, (qty_in, po_id, item_id))
 
             updated = conn.execute("""
                 SELECT quantity_ordered, quantity_received
-                FROM po_items WHERE po_id = ? AND item_id = ?
+                FROM po_items WHERE po_id = %s AND item_id = %s
             """, (po_id, item_id)).fetchone()
 
             if updated['quantity_received'] < updated['quantity_ordered']:
@@ -680,8 +683,8 @@ def receive_purchase_order(po_id, received_items, user_id, username):
 
         new_status = 'COMPLETED' if all_completed else 'PARTIAL'
         conn.execute("""
-            UPDATE purchase_orders SET status = ?, received_at = ?
-            WHERE id = ?
+            UPDATE purchase_orders SET status = %s, received_at = %s
+            WHERE id = %s
         """, (new_status, clean_time, po_id))
 
         conn.commit()
@@ -701,7 +704,7 @@ def get_po_details_for_api(po_id):
     conn = get_db()
     po = conn.execute("""
         SELECT po_number, vendor_name, status, total_amount, created_at, received_at
-        FROM purchase_orders WHERE id = ?
+        FROM purchase_orders WHERE id = %s
     """, (po_id,)).fetchone()
 
     if not po:
@@ -714,7 +717,7 @@ def get_po_details_for_api(po_id):
             (pi.quantity_ordered * pi.unit_cost) AS subtotal
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
-        WHERE pi.po_id = ?
+        WHERE pi.po_id = %s
     """, (po_id,)).fetchall()
     conn.close()
 
@@ -756,3 +759,4 @@ def get_status_class(status):
         return "bg-danger"
     else:
         return "bg-secondary"
+

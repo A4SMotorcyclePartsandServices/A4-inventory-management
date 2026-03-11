@@ -517,7 +517,7 @@
                         <span class="value">₱ {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
-                        <span class="label">↳ Mechanic Payout</span>
+                        <span class="label">↳ Mechanic Payout (from services)</span>
                         <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
                     </div>
                     {% if data.total_shop_topup > 0 %}
@@ -533,7 +533,7 @@
                     </div>
                     {% if data.total_mech_cut_from_debt > 0 %}
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
-                        <span class="label">↳ Mechanic cut from debt svc</span>
+                        <span class="label">↳ Mechanic Payout (from debt svc)</span>
                         <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_debt) }}</span>
                     </div>
                     {% endif %}

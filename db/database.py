@@ -1,8 +1,119 @@
-import sqlite3
+import os
+import threading
 
-DB_NAME = "inventory.db"
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class DbCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def close(self):
+        return self._cursor.close()
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+
+class DbConnection:
+    """
+    Thin PostgreSQL connection wrapper.
+    Keeps conn.execute(...) ergonomics used by the app without SQL translation.
+    """
+
+    def __init__(self, raw_conn, pool=None):
+        self._conn = raw_conn
+        self._pool = pool
+
+    def execute(self, sql, params=None):
+        cursor = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        if params is None:
+            cursor.execute(sql)
+        else:
+            cursor.execute(sql, tuple(params))
+        return DbCursor(cursor)
+
+    def executemany(self, sql, seq_of_params):
+        cursor = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor.executemany(sql, seq_of_params)
+        return DbCursor(cursor)
+
+    def cursor(self, *args, **kwargs):
+        if "cursor_factory" not in kwargs:
+            kwargs["cursor_factory"] = psycopg2.extras.DictCursor
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        if self._pool is not None:
+            return self._pool.putconn(self._conn)
+        return self._conn.close()
+
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._conn.__exit__(exc_type, exc, tb)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
 
 def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+    pool = _get_pool()
+    raw_conn = pool.getconn()
+    raw_conn.autocommit = False
+    return DbConnection(raw_conn, pool=pool)
+
+
+def get_cursor(conn):
+    return conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+
+_pool_lock = threading.Lock()
+_db_pool = None
+
+
+def _get_pool():
+    global _db_pool
+    if _db_pool is not None:
+        return _db_pool
+
+    with _pool_lock:
+        if _db_pool is None:
+            min_conn = int(os.environ.get("DB_POOL_MIN", 1))
+            max_conn = int(os.environ.get("DB_POOL_MAX", 20))
+            _db_pool = psycopg2.pool.ThreadedConnectionPool(
+                min_conn,
+                max_conn,
+                host=os.environ["DB_HOST"],
+                port=os.environ.get("DB_PORT", 5432),
+                dbname=os.environ["DB_NAME"],
+                user=os.environ["DB_USER"],
+                password=os.environ["DB_PASSWORD"],
+            )
+    return _db_pool

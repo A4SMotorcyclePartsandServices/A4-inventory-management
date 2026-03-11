@@ -31,7 +31,13 @@ def get_dashboard_stats():
             LEFT JOIN inventory_transactions
                 ON items.id = inventory_transactions.item_id
             GROUP BY items.id
-            HAVING current_stock <= items.reorder_level
+            HAVING COALESCE(SUM(
+                CASE 
+                    WHEN inventory_transactions.transaction_type = 'IN'
+                    THEN inventory_transactions.quantity
+                    ELSE -inventory_transactions.quantity
+                END
+            ), 0) <= items.reorder_level
         )
     """).fetchone()[0]
 
@@ -40,7 +46,7 @@ def get_dashboard_stats():
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
-        AND inventory_transactions.transaction_date >= datetime('now', '-30 days')
+        AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
         GROUP BY items.id
         ORDER BY total_sold DESC
         LIMIT 1
@@ -61,10 +67,10 @@ def get_hot_items(limit=5):
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
-        AND inventory_transactions.transaction_date >= datetime('now', '-30 days')
+        AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
         GROUP BY items.id
         ORDER BY total_sold_last_30_days DESC
-        LIMIT ?
+        LIMIT %s
     """, (limit,)).fetchall()
     conn.close()
     return rows
@@ -82,9 +88,9 @@ def get_dead_stock(days=60):
             AND inventory_transactions.transaction_type = 'OUT'
         GROUP BY items.id
         HAVING 
-            last_sold IS NULL
-            OR last_sold <= datetime('now', ?)
-    """, (f"-{days} days",)).fetchall()
+            MAX(inventory_transactions.transaction_date) IS NULL
+            OR MAX(inventory_transactions.transaction_date) <= (NOW() - (%s * INTERVAL '1 day'))
+    """, (days,)).fetchall()
     conn.close()
     return rows
 
@@ -106,8 +112,15 @@ def get_low_stock_items():
         LEFT JOIN inventory_transactions
             ON items.id = inventory_transactions.item_id
         GROUP BY items.id
-        HAVING current_stock <= items.reorder_level
+        HAVING COALESCE(SUM(
+            CASE 
+                WHEN inventory_transactions.transaction_type = 'IN'
+                THEN inventory_transactions.quantity
+                ELSE -inventory_transactions.quantity
+            END
+        ), 0) <= items.reorder_level
         ORDER BY current_stock ASC
     """).fetchall()
     conn.close()
     return rows
+

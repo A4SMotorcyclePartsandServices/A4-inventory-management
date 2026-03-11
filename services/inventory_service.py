@@ -14,7 +14,7 @@ def get_items_with_stock(snapshot_date=None):
                     WHEN inventory_transactions.transaction_type = 'IN'
                     THEN inventory_transactions.quantity
                     WHEN inventory_transactions.transaction_type = 'OUT'
-                    AND inventory_transactions.transaction_date >= ?
+                    AND inventory_transactions.transaction_date >= %s
                     THEN -inventory_transactions.quantity
                     ELSE 0
                 END
@@ -55,7 +55,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
     # 1. FETCH THE ROWS
     # Case A: We are looking for ONE specific item by ID (Redirect from Add Item)
     if item_id:
-        sql = "SELECT * FROM items WHERE id = ?"
+        sql = "SELECT * FROM items WHERE id = %s"
         rows = conn.execute(sql, (item_id,)).fetchall()
         
     # Case B: We are doing a general text search (Normal Search)
@@ -67,7 +67,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
             query_parts = []
             params = []
             for word in words:
-                query_parts.append("(name LIKE ? OR description LIKE ?)")
+                query_parts.append("(name ILIKE %s OR description ILIKE %s)")
                 pattern = f"%{word}%"
                 params.extend([pattern, pattern])
             
@@ -125,3 +125,4 @@ def get_unique_categories():
     
     # Convert the list of row objects into a simple list of strings
     return [row['category'] for row in rows]
+

@@ -204,8 +204,15 @@
 
     /* Audit table column behavior */
     #audit-trail-table {
-        table-layout: auto !important;
-        width: 100%;
+        table-layout: fixed !important;
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+
+    #audit-trail-table th,
+    #audit-trail-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     #audit-trail-table th.audit-reference-head,
@@ -215,17 +222,33 @@
 
     #audit-trail-table td.audit-reason-cell {
         white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        min-width: 170px;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    #audit-trail-table td.audit-summary-cell,
+    #audit-trail-table td.audit-notes-cell,
+    #audit-trail-table td.audit-staff-cell {
+        white-space: nowrap;
+    }
+
+    #audit-trail-table td.audit-summary-cell .summary-text {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     #audit-trail-table td.audit-reference-cell .btn {
         display: inline-flex !important;
         align-items: center;
         justify-content: center;
+        width: auto;
         max-width: 100%;
+        margin: 0 auto;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 </style>
 {% endblock %}
@@ -1154,7 +1177,7 @@ function filterServices() {
         // Optional: don't search for just 1 character to save server resources
         if (query.length < 1) return; 
 
-        fetch(`/api/search/services?q=${encodeURIComponent(query)}`)
+        fetch(`/api/search/services?q=${encodeURIComponent(query)}&include_inactive=1`)
             .then(response => response.json())
             .then(data => {
                 tbody.innerHTML = ''; 
@@ -1553,13 +1576,13 @@ function renderAuditTrail(data) {
         return `
             <tr>
                 <td class="text-white-50 small">${log.transaction_date}</td>
-                <td><div class="fw-bold text-white">${summary}</div></td>
+                <td class="audit-summary-cell"><div class="fw-bold text-white summary-text">${summary}</div></td>
                 <td class="text-center">${badge}</td>
                 <td class="audit-reason-cell"><span class="text-white-50 small fst-italic fw-bold">${reason}</span></td>
                 <td class="text-center fw-bold">${log.total_qty}</td>
                 <td class="audit-reference-cell">${refBtn}</td>
-                <td class="text-white-50 small">${notes}</td>
-                <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
+                <td class="text-white-50 small audit-notes-cell">${notes}</td>
+                <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
             </tr>`;
     }).join('');
 }
@@ -1944,6 +1967,31 @@ async function loadLoyaltyPrograms() {
         }
 
         tbody.innerHTML = programs.map(p => {
+            const formatLoyaltyDate = (value) => {
+                if (!value) return '—';
+                const raw = String(value).trim();
+
+                // Flask/JSON date strings can look like:
+                // "Sun, 01 Mar 2026 00:00:00 GMT"
+                const parsed = new Date(raw);
+                if (!Number.isNaN(parsed.getTime())) {
+                    return parsed.toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: '2-digit'
+                    });
+                }
+
+                // Fallback for ISO-like values: keep YYYY-MM-DD only
+                const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+                if (isoMatch) return isoMatch[1];
+
+                return raw.replace(/\s+\d{2}:\d{2}:\d{2}(?:\s+GMT)?$/i, '');
+            };
+
+            const periodStartDisplay = formatLoyaltyDate(p.period_start);
+            const periodEndDisplay   = formatLoyaltyDate(p.period_end);
+
             const typeBadge = p.program_type === 'SERVICE'
                 ? `<span class="badge bg-dark border border-info text-info">Service</span>`
                 : `<span class="badge bg-dark border border-warning text-warning">Item</span>`;
@@ -1986,8 +2034,8 @@ async function loadLoyaltyPrograms() {
                         ${rewardDisplay}
                     </td>
                     <td class="text-white-50 small">
-                        ${p.period_start}<br>
-                        <span class="text-muted">to</span> ${p.period_end}
+                        ${periodStartDisplay}<br>
+                        <span class="text-muted">to</span> ${periodEndDisplay}
                     </td>
                     <td class="text-center">${statusBtn}</td>
                 </tr>`;
@@ -2180,3 +2228,4 @@ async function loyaltySubmitProgram() {
 }
 </script>
 {% endblock %}
+

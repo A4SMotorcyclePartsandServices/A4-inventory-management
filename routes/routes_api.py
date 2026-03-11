@@ -18,10 +18,10 @@ def stock_movement():
                 END
             ) AS net_change
         FROM inventory_transactions
-        WHERE transaction_date >= datetime('now', ?)
+        WHERE transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
         GROUP BY DATE(transaction_date)
         ORDER BY DATE(transaction_date)
-    """, (f"-{days} days",)).fetchall()
+    """, (days,)).fetchall()
 
     conn.close()
 
@@ -47,11 +47,11 @@ def item_movement():
                 END
             ) AS net_change
         FROM inventory_transactions
-        WHERE item_id = ?
-        AND transaction_date >= datetime('now', ?)
+        WHERE item_id = %s
+        AND transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
         GROUP BY DATE(transaction_date)
         ORDER BY DATE(transaction_date)
-    """, (item_id, f"-{days} days")).fetchall()
+    """, (item_id, days)).fetchall()
 
     conn.close()
 
@@ -72,11 +72,11 @@ def top_items_chart():
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
-        AND inventory_transactions.transaction_date >= datetime('now', ?)
+        AND inventory_transactions.transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
         GROUP BY items.id
         ORDER BY total_out DESC
         LIMIT 5
-    """, (f"-{days} days",)).fetchall()
+    """, (days,)).fetchall()
 
     conn.close()
 
@@ -88,22 +88,26 @@ def top_items_chart():
 @dashboard_api.route("/api/search/services")
 def search_services():
     query = request.args.get('q', '').strip()
+    include_inactive = str(request.args.get('include_inactive', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
     if not query:
         return jsonify({"services": []})
 
     # Split the query into words for forgiving search
     words = query.split()
-    # Create multiple LIKE clauses: WHERE name LIKE %word1% AND name LIKE %word2%...
-    where_clause = " AND ".join(["(name LIKE ? OR category LIKE ?)" for _ in words])
+    # Create multiple ILIKE clauses: WHERE name ILIKE %word1% AND name ILIKE %word2%...
+    where_clause = " AND ".join(["(name ILIKE %s OR category ILIKE %s)" for _ in words])
     params = []
     for word in words:
         params.extend([f'%{word}%', f'%{word}%'])
+
+    active_clause = "" if include_inactive else "AND is_active = 1"
 
     conn = get_db()
     cursor = conn.execute(f"""
         SELECT id, name, category, is_active
         FROM services 
         WHERE {where_clause}
+        {active_clause}
         LIMIT 20
     """, params)
     

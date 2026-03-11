@@ -21,7 +21,7 @@ def login():
 
         conn = get_db()
         user = conn.execute(
-            "SELECT * FROM users WHERE username = ?",
+            "SELECT * FROM users WHERE username = %s",
             (username,)
         ).fetchone()
         conn.close()
@@ -64,7 +64,7 @@ def manage_users():
         try:
             conn.execute("""
                 INSERT INTO users (username, password_hash, role, created_at, created_by)
-                VALUES (?, ?, 'staff', ?, ?)
+                VALUES (%s, %s, 'staff', %s, %s)
             """, (username, generate_password_hash(password), now, current_admin_id))
             conn.commit()
             flash(f"Account for {username} created successfully!", "success")
@@ -104,7 +104,7 @@ def toggle_user(user_id):
     conn = get_db()
 
     user = conn.execute(
-        "SELECT role, is_active, username FROM users WHERE id = ?",
+        "SELECT role, is_active, username FROM users WHERE id = %s",
         (user_id,)
     ).fetchone()
 
@@ -122,7 +122,7 @@ def toggle_user(user_id):
     new_status = 0 if was_active == 1 else 1
 
     conn.execute(
-        "UPDATE users SET is_active = ? WHERE id = ?",
+        "UPDATE users SET is_active = %s WHERE id = %s",
         (new_status, user_id)
     )
     conn.commit()
@@ -149,7 +149,7 @@ def add_mechanic():
     try:
         conn.execute("""
             INSERT INTO mechanics (name, commission_rate, phone, is_active) 
-            VALUES (?, ?, ?, 1)
+            VALUES (%s, %s, %s, 1)
         """, (name, commission, phone))
         conn.commit()
         flash(f"Mechanic {name} added successfully!", "success")
@@ -165,7 +165,7 @@ def toggle_mechanic(mechanic_id):
     conn = get_db()
 
     mechanic = conn.execute(
-        "SELECT is_active, name FROM mechanics WHERE id = ?",
+        "SELECT is_active, name FROM mechanics WHERE id = %s",
         (mechanic_id,)
     ).fetchone()
 
@@ -179,7 +179,7 @@ def toggle_mechanic(mechanic_id):
     # Toggle
     new_status = 0 if was_active == 1 else 1
     conn.execute(
-        "UPDATE mechanics SET is_active = ? WHERE id = ?",
+        "UPDATE mechanics SET is_active = %s WHERE id = %s",
         (new_status, mechanic_id)
     )
     conn.commit()
@@ -209,7 +209,7 @@ def sale_details(reference_id):
             FROM sales s
             LEFT JOIN mechanics m ON s.mechanic_id = m.id
             LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
-            WHERE s.id = ?
+            WHERE s.id = %s
         """, (reference_id,)).fetchone()
 
         # 2. Fetch Items
@@ -223,7 +223,7 @@ def sale_details(reference_id):
             FROM inventory_transactions t
             JOIN items i ON t.item_id = i.id
             LEFT JOIN sales_items si ON (t.reference_id = si.sale_id AND t.item_id = si.item_id)
-            WHERE CAST(t.reference_id AS TEXT) = ? 
+            WHERE CAST(t.reference_id AS TEXT) = %s 
             AND t.reference_type = 'SALE'
         """, (str(reference_id),)).fetchall()
 
@@ -232,7 +232,7 @@ def sale_details(reference_id):
             SELECT s.name, ss.price
             FROM sales_services ss
             JOIN services s ON ss.service_id = s.id
-            WHERE ss.sale_id = ?
+            WHERE ss.sale_id = %s
         """, (reference_id,)).fetchall()
         
         return {
@@ -258,7 +258,7 @@ def add_service():
         conn = get_db()
         # Normalization: Check if what they typed exists in another casing
         match = conn.execute(
-            "SELECT category FROM services WHERE LOWER(TRIM(category)) = ? LIMIT 1",
+            "SELECT category FROM services WHERE LOWER(TRIM(category)) = %s LIMIT 1",
             (new_cat.lower(),)
         ).fetchone()
         category = match['category'] if match else new_cat
@@ -269,7 +269,7 @@ def add_service():
     # --- DUPLICATE SERVICE CHECK ---
     conn = get_db()
     existing_service = conn.execute(
-        "SELECT name FROM services WHERE LOWER(TRIM(name)) = ? LIMIT 1",
+        "SELECT name FROM services WHERE LOWER(TRIM(name)) = %s LIMIT 1",
         (name.lower(),)
     ).fetchone()
 
@@ -281,7 +281,7 @@ def add_service():
     # --- SAVE ---
     try:
         conn.execute(
-            "INSERT INTO services (name, category, is_active) VALUES (?, ?, 1)",
+            "INSERT INTO services (name, category, is_active) VALUES (%s, %s, 1)",
             (name, category)
         )
         conn.commit()
@@ -297,10 +297,10 @@ def add_service():
 @auth_bp.route("/services/toggle/<int:service_id>", methods=["POST"])
 def toggle_service(service_id):
     conn = get_db()
-    service = conn.execute("SELECT is_active, name FROM services WHERE id = ?", (service_id,)).fetchone()
+    service = conn.execute("SELECT is_active, name FROM services WHERE id = %s", (service_id,)).fetchone()
     if service:
         new_status = 0 if service['is_active'] == 1 else 1
-        conn.execute("UPDATE services SET is_active = ? WHERE id = ?", (new_status, service_id))
+        conn.execute("UPDATE services SET is_active = %s WHERE id = %s", (new_status, service_id))
         conn.commit()
         flash(f"Service '{service['name']}' status updated.", "info")
     conn.close()
@@ -325,7 +325,7 @@ def add_payment_method():
     conn = get_db()
 
     existing = conn.execute(
-        "SELECT id FROM payment_methods WHERE LOWER(TRIM(name)) = ?",
+        "SELECT id FROM payment_methods WHERE LOWER(TRIM(name)) = %s",
         (name.lower(),)
     ).fetchone()
 
@@ -336,7 +336,7 @@ def add_payment_method():
 
     try:
         conn.execute(
-            "INSERT INTO payment_methods (name, category, is_active) VALUES (?, ?, 1)",
+            "INSERT INTO payment_methods (name, category, is_active) VALUES (%s, %s, 1)",
             (name, category)
         )
         conn.commit()
@@ -360,7 +360,7 @@ def toggle_payment_method(pm_id):
     conn = get_db()
 
     pm = conn.execute(
-        "SELECT name, is_active FROM payment_methods WHERE id = ?",
+        "SELECT name, is_active FROM payment_methods WHERE id = %s",
         (pm_id,)
     ).fetchone()
 
@@ -372,7 +372,7 @@ def toggle_payment_method(pm_id):
     new_status = 0 if pm['is_active'] == 1 else 1
 
     conn.execute(
-        "UPDATE payment_methods SET is_active = ? WHERE id = ?",
+        "UPDATE payment_methods SET is_active = %s WHERE id = %s",
         (new_status, pm_id)
     )
     conn.commit()
@@ -445,7 +445,7 @@ def get_item_details(item_id):
             SELECT name, category, description, pack_size,
                 vendor_price, cost_per_piece, a4s_selling_price,
                 markup, reorder_level, vendor
-            FROM items WHERE id = ?
+            FROM items WHERE id = %s
         """, (item_id,)).fetchone()
 
         if not item:
@@ -456,3 +456,4 @@ def get_item_details(item_id):
         return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
+

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template
 from db.database import get_db
 from utils.formatters import format_date
-from services.loyalty_service import get_customer_loyalty_summary
+from services.loyalty_service import get_customer_loyalty_summary, get_customer_eligibility_bulk
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -19,7 +19,7 @@ def search_customers():
     rows = conn.execute("""
         SELECT id, customer_no, customer_name
         FROM customers
-        WHERE (customer_no LIKE ? OR customer_name LIKE ?)
+        WHERE (customer_no ILIKE %s OR customer_name ILIKE %s)
         AND is_active = 1
         ORDER BY customer_name ASC
         LIMIT 10
@@ -44,17 +44,17 @@ def add_customer():
 
     conn = get_db()
     try:
-        cursor = conn.execute(
-            "INSERT INTO customers (customer_no, customer_name) VALUES (?, ?)",
+        customer_row = conn.execute(
+            "INSERT INTO customers (customer_no, customer_name) VALUES (%s, %s) RETURNING id",
             (customer_no, customer_name)
-        )
-        new_customer_id = cursor.lastrowid
+        ).fetchone()
+        new_customer_id = customer_row["id"]
 
-        vehicle_cursor = conn.execute(
-            "INSERT INTO vehicles (customer_id, vehicle_name, is_active) VALUES (?, ?, 1)",
+        vehicle_row = conn.execute(
+            "INSERT INTO vehicles (customer_id, vehicle_name, is_active) VALUES (%s, %s, 1) RETURNING id",
             (new_customer_id, vehicle_name)
-        )
-        new_vehicle_id = vehicle_cursor.lastrowid
+        ).fetchone()
+        new_vehicle_id = vehicle_row["id"]
 
         conn.commit()
         return jsonify({
@@ -83,7 +83,7 @@ def add_customer():
 def get_customer_vehicles(customer_id):
     conn = get_db()
     customer = conn.execute(
-        "SELECT id FROM customers WHERE id = ? AND is_active = 1",
+        "SELECT id FROM customers WHERE id = %s AND is_active = 1",
         (customer_id,)
     ).fetchone()
 
@@ -94,7 +94,7 @@ def get_customer_vehicles(customer_id):
     vehicles = conn.execute("""
         SELECT id, vehicle_name, is_active
         FROM vehicles
-        WHERE customer_id = ? AND is_active = 1
+        WHERE customer_id = %s AND is_active = 1
         ORDER BY vehicle_name ASC
     """, (customer_id,)).fetchall()
 
@@ -116,22 +116,22 @@ def add_customer_vehicle(customer_id):
     conn = get_db()
     try:
         customer = conn.execute(
-            "SELECT id FROM customers WHERE id = ? AND is_active = 1",
+            "SELECT id FROM customers WHERE id = %s AND is_active = 1",
             (customer_id,)
         ).fetchone()
 
         if not customer:
             return jsonify({"status": "error", "message": "Customer not found."}), 404
 
-        cursor = conn.execute(
-            "INSERT INTO vehicles (customer_id, vehicle_name, is_active) VALUES (?, ?, 1)",
+        row = conn.execute(
+            "INSERT INTO vehicles (customer_id, vehicle_name, is_active) VALUES (%s, %s, 1) RETURNING id",
             (customer_id, vehicle_name)
-        )
+        ).fetchone()
         conn.commit()
         return jsonify({
             "status": "success",
             "vehicle": {
-                "id": cursor.lastrowid,
+                "id": row["id"],
                 "vehicle_name": vehicle_name
             }
         })
@@ -158,8 +158,9 @@ def customer_list():
             COUNT(s.id) AS total_visits,
             MAX(s.transaction_date) AS last_visit,
             (
-                SELECT GROUP_CONCAT(v.vehicle_name, ', ')
-                FROM (SELECT vehicle_name FROM vehicles v2 WHERE v2.customer_id = c.id ORDER BY v2.vehicle_name) v
+                SELECT STRING_AGG(v2.vehicle_name::text, ', ' ORDER BY v2.vehicle_name)
+                FROM vehicles v2
+                WHERE v2.customer_id = c.id
             ) AS vehicles
         FROM customers c
         LEFT JOIN sales s ON s.customer_id = c.id
@@ -168,12 +169,15 @@ def customer_list():
         ORDER BY c.customer_name ASC
     """).fetchall()
 
+    customer_ids = [int(c["id"]) for c in customers]
+    loyalty_by_customer = get_customer_eligibility_bulk(customer_ids)
+
     customers_with_loyalty = []
     for c in customers:
         c_dict = dict(c)
         c_dict["last_visit_display"] = format_date(c_dict["last_visit"])
 
-        loyalty_programs = get_customer_loyalty_summary(c_dict["id"]).get("programs", [])
+        loyalty_programs = loyalty_by_customer.get(int(c_dict["id"]), [])
         preview_programs = []
         for program in loyalty_programs:
             stamp_count = int(program.get("stamp_count", 0) or 0)
@@ -215,7 +219,7 @@ def customer_transactions(customer_id):
 
     customer = conn.execute("""
         SELECT id, customer_no, customer_name, created_at
-        FROM customers WHERE id = ?
+        FROM customers WHERE id = %s
     """, (customer_id,)).fetchone()
 
     if not customer:
@@ -233,7 +237,7 @@ def customer_transactions(customer_id):
         FROM sales s
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN vehicles v ON v.id = s.vehicle_id
-        WHERE s.customer_id = ?
+        WHERE s.customer_id = %s
         ORDER BY s.transaction_date DESC
     """, (customer_id,)).fetchall()
 
@@ -245,7 +249,7 @@ def customer_transactions(customer_id):
             ls.redemption_id
         FROM loyalty_stamps ls
         JOIN loyalty_programs lp ON lp.id = ls.program_id
-        WHERE ls.customer_id = ?
+        WHERE ls.customer_id = %s
         ORDER BY ls.stamped_at ASC
     """, (customer_id,)).fetchall()
 
@@ -263,7 +267,7 @@ def customer_transactions(customer_id):
             SELECT sv.name, ss.price
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id = ?
+            WHERE ss.sale_id = %s
         """, (sale['id'],)).fetchall()
 
         # Get items for this sale
@@ -271,7 +275,7 @@ def customer_transactions(customer_id):
             SELECT i.name, si.quantity, si.final_unit_price
             FROM sales_items si
             JOIN items i ON i.id = si.item_id
-            WHERE si.sale_id = ?
+            WHERE si.sale_id = %s
         """, (sale['id'],)).fetchall()
 
         result.append({
@@ -298,3 +302,4 @@ def customer_transactions(customer_id):
         "transactions": result,
         "loyalty_summary": loyalty_summary,
     })
+

@@ -18,13 +18,13 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
     params = []
 
     if start_date:
-        conditions.append("DATE(s.transaction_date) >= ?")
+        conditions.append("DATE(s.transaction_date) >= %s")
         params.append(start_date)
     if end_date:
-        conditions.append("DATE(s.transaction_date) <= ?")
+        conditions.append("DATE(s.transaction_date) <= %s")
         params.append(end_date)
     if search:
-        conditions.append("(s.sales_number LIKE ? OR s.customer_name LIKE ?)")
+        conditions.append("(s.sales_number ILIKE %s OR s.customer_name ILIKE %s)")
         params.extend([f"%{search}%", f"%{search}%"])
     if has_discount:
         conditions.append("""
@@ -56,7 +56,7 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
         LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
         {where_clause}
         ORDER BY s.transaction_date DESC
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
     """, params + [PER_PAGE, offset]).fetchall()
 
     conn.close()
@@ -73,3 +73,4 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
         "per_page":    PER_PAGE,
         "total_pages": total_pages,
     }
+

@@ -85,7 +85,7 @@ def toggle_program_route(program_id):
         toggle_program(program_id, is_active)
         conn = get_db()
         row = conn.execute(
-            "SELECT name, is_active FROM loyalty_programs WHERE id = ?",
+            "SELECT name, is_active FROM loyalty_programs WHERE id = %s",
             (program_id,)
         ).fetchone()
         conn.close()
@@ -113,7 +113,7 @@ def eligibility(customer_id):
     Returns their stamp progress on all active programs.
     Front end uses this to show/hide the eligibility banner.
 
-    Query param ?branch_id=1 — pass once multi-branch is live.
+    Query param branch_id=1 - pass once multi-branch is live.
     """
     user_id, _ = _require_login()
     if not user_id:
@@ -186,3 +186,6 @@ def customer_loyalty_summary(customer_id):
         return jsonify(summary)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+

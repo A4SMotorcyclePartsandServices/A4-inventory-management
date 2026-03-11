@@ -2,6 +2,11 @@ from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date
 
+
+def _money(value):
+    return round(float(value or 0), 2)
+
+
 def get_all_debts():
     conn = get_db()
 
@@ -33,7 +38,7 @@ def get_all_debts():
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
-        GROUP BY s.id
+        GROUP BY s.id, m.name, pm.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
 
@@ -42,9 +47,11 @@ def get_all_debts():
     result = []
     for row in rows:
         d = dict(row)
+        d['total_amount'] = _money(d.get('total_amount'))
+        d['total_paid'] = _money(d.get('total_paid'))
+        d['service_total'] = _money(d.get('service_total'))
+        d['service_paid'] = _money(d.get('service_paid'))
         d['remaining'] = round(d['total_amount'] - d['total_paid'], 2)
-        d['service_total'] = round(d['service_total'] or 0, 2)
-        d['service_paid'] = round(d['service_paid'] or 0, 2)
         d['service_remaining'] = round(max(0, d['service_total'] - d['service_paid']), 2)
         d['item_total'] = round(max(0, d['total_amount'] - d['service_total']), 2)
         d['item_paid'] = round(max(0, d['total_paid'] - d['service_paid']), 2)
@@ -85,8 +92,8 @@ def get_debt_detail(sale_id):
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
-        WHERE s.id = ?
-        GROUP BY s.id
+        WHERE s.id = %s
+        GROUP BY s.id, m.name, pm.name
     """, (sale_id,)).fetchone()
 
     if not sale:
@@ -103,14 +110,14 @@ def get_debt_detail(sale_id):
             (si.quantity * si.final_unit_price) AS line_total
         FROM sales_items si
         JOIN items i ON i.id = si.item_id
-        WHERE si.sale_id = ?
+        WHERE si.sale_id = %s
     """, (sale_id,)).fetchall()
 
     services = conn.execute("""
         SELECT sv.name AS service_name, ss.price
         FROM sales_services ss
         JOIN services sv ON sv.id = ss.service_id
-        WHERE ss.sale_id = ?
+        WHERE ss.sale_id = %s
     """, (sale_id,)).fetchall()
 
     payments = conn.execute("""
@@ -125,16 +132,18 @@ def get_debt_detail(sale_id):
         FROM debt_payments dp
         LEFT JOIN users u            ON u.id = dp.paid_by
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
-        WHERE dp.sale_id = ?
+        WHERE dp.sale_id = %s
         ORDER BY dp.paid_at ASC
     """, (sale_id,)).fetchall()
 
     conn.close()
 
     sale_dict = dict(sale)
+    sale_dict['total_amount'] = _money(sale_dict.get('total_amount'))
+    sale_dict['total_paid'] = _money(sale_dict.get('total_paid'))
+    sale_dict['service_total'] = _money(sale_dict.get('service_total'))
+    sale_dict['service_paid'] = _money(sale_dict.get('service_paid'))
     sale_dict['remaining'] = round(sale_dict['total_amount'] - sale_dict['total_paid'], 2)
-    sale_dict['service_total'] = round(sale_dict['service_total'] or 0, 2)
-    sale_dict['service_paid'] = round(sale_dict['service_paid'] or 0, 2)
     sale_dict['service_remaining'] = round(max(0, sale_dict['service_total'] - sale_dict['service_paid']), 2)
     sale_dict['item_total'] = round(max(0, sale_dict['total_amount'] - sale_dict['service_total']), 2)
     sale_dict['item_paid'] = round(max(0, sale_dict['total_paid'] - sale_dict['service_paid']), 2)
@@ -145,6 +154,7 @@ def get_debt_detail(sale_id):
     formatted_payments = []
     for p in payments:
         pd = dict(p)
+        pd['amount_paid'] = _money(pd.get('amount_paid'))
         pd['paid_at'] = format_date(pd['paid_at'], show_time=True)
         formatted_payments.append(pd)
 
@@ -169,7 +179,7 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         pm = conn.execute("""
             SELECT id, category, is_active
             FROM payment_methods
-            WHERE id = ?
+            WHERE id = %s
         """, (pm_id,)).fetchone()
 
         if not pm or pm["is_active"] != 1:
@@ -184,15 +194,15 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
             COALESCE(SUM(dp.amount_paid), 0) AS total_paid
             FROM sales s
             LEFT JOIN debt_payments dp ON dp.sale_id = s.id
-            WHERE s.id = ?
-            GROUP BY s.id
+            WHERE s.id = %s
+            GROUP BY s.id, s.total_amount
         """, (sale_id,)).fetchone()
 
         if not sale:
             raise ValueError("Sale not found.")
 
-        total_amount = sale['total_amount']
-        total_paid   = sale['total_paid']
+        total_amount = _money(sale['total_amount'])
+        total_paid   = _money(sale['total_paid'])
         remaining    = round(total_amount - total_paid, 2)
 
         # 1b) Calculate service_portion for this payment
@@ -200,19 +210,21 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         total_service_cost = conn.execute("""
             SELECT COALESCE(SUM(price), 0)
             FROM sales_services
-            WHERE sale_id = ?
+            WHERE sale_id = %s
         """, (sale_id,)).fetchone()[0]
+        total_service_cost = _money(total_service_cost)
 
         already_paid_to_service = conn.execute("""
             SELECT COALESCE(SUM(service_portion), 0)
             FROM debt_payments
-            WHERE sale_id = ?
+            WHERE sale_id = %s
         """, (sale_id,)).fetchone()[0]
+        already_paid_to_service = _money(already_paid_to_service)
 
         remaining_service = round(total_service_cost - already_paid_to_service, 2)
 
         # 2) Guard: overpayment check
-        amount_paid = round(float(amount_paid), 2)
+        amount_paid = _money(amount_paid)
         if amount_paid <= 0:
             raise ValueError("Payment amount must be greater than zero.")
         if amount_paid > remaining:
@@ -228,7 +240,7 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         conn.execute("""
             INSERT INTO debt_payments
                 (sale_id, amount_paid, service_portion, payment_method_id, reference_no, notes, paid_by, paid_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """, (sale_id, amount_paid, service_portion, pm_id, reference_no, notes, paid_by, now))
 
         # 4) Determine new status
@@ -238,13 +250,13 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         if new_remaining <= 0:
             new_status = 'Paid'
             conn.execute(
-                "UPDATE sales SET status = 'Paid', paid_at = ? WHERE id = ?",
+                "UPDATE sales SET status = 'Paid', paid_at = %s WHERE id = %s",
                 (now, sale_id)
             )
         else:
             new_status = 'Partial'
             conn.execute(
-                "UPDATE sales SET status = 'Partial' WHERE id = ?",
+                "UPDATE sales SET status = 'Partial' WHERE id = %s",
                 (sale_id,)
             )
 
@@ -261,3 +273,4 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         raise
     finally:
         conn.close()
+

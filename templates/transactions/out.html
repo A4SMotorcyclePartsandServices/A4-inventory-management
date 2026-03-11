@@ -586,7 +586,7 @@
                                 <option value="">-- Select Provider --</option>
                                 {% for method in payment_methods %}
                                     {% if method.category in ['Online', 'Bank', 'Others'] %}
-                                        <option value="{{ method.id }}" data-category="{{ method.category }}">{{ method.name }}</option>
+                                        <option value="{{ method.id }}" data-category="{{ method.category }}" data-name="{{ (method.name or '')|lower|trim }}">{{ method.name }}</option>
                                     {% endif %}
                                 {% endfor %}
                             </select>
@@ -1477,7 +1477,12 @@ function updatePaymentCategoryUI() {
                 opt.selected = true;
                 return;
             }
-            const isCategoryMatch = opt.getAttribute('data-category') === selectedCat;
+            const optionCategory = opt.getAttribute('data-category');
+            const optionName = (opt.getAttribute('data-name') || '').trim().toLowerCase();
+            const isPlaceholderProvider =
+                (selectedCat === 'Bank' && optionName === 'bank transfer') ||
+                (selectedCat === 'Online' && (optionName === 'online payment' || optionName === 'online payment (wallet)'));
+            const isCategoryMatch = (optionCategory === selectedCat) && !isPlaceholderProvider;
             opt.style.display = isCategoryMatch ? 'block' : 'none';
         });
 

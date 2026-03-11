@@ -4,6 +4,10 @@ from db.database import get_db
 
 debt_bp = Blueprint('debt', __name__)
 
+
+def _money(value):
+    return round(float(value or 0), 2)
+
 @debt_bp.route("/utang")
 def utang_list():
     debts = get_all_debts()
@@ -111,7 +115,10 @@ def debt_audit_api():
     for r in rows:
         d = dict(r)
         d['paid_at'] = format_date(d['paid_at'], show_time=True)
-        d['fully_paid'] = round(d['running_total'], 2) >= round(d['total_amount'], 2)
+        d['amount_paid'] = _money(d.get('amount_paid'))
+        d['running_total'] = _money(d.get('running_total'))
+        d['total_amount'] = _money(d.get('total_amount'))
+        d['fully_paid'] = d['running_total'] >= d['total_amount']
         formatted.append(d)
 
     return jsonify({"payments": formatted})
@@ -150,11 +157,11 @@ def debt_summary_api():
     params = []
 
     if start_date:
-        query += " AND DATE(s.transaction_date) >= ?"
+        query += " AND DATE(s.transaction_date) >= %s"
         params.append(start_date)
 
     if end_date:
-        query += " AND DATE(s.transaction_date) <= ?"
+        query += " AND DATE(s.transaction_date) <= %s"
         params.append(end_date)
 
     query += " GROUP BY s.id ORDER BY s.transaction_date DESC"
@@ -164,8 +171,8 @@ def debt_summary_api():
 
     result = []
     for r in rows:
-        total_paid   = round(r["total_paid"], 2)
-        total_amount = round(r["total_amount"], 2)
+        total_paid   = _money(r["total_paid"])
+        total_amount = _money(r["total_amount"])
         remaining    = round(max(0, total_amount - total_paid), 2)
 
         if remaining <= 0:
@@ -210,7 +217,7 @@ def debt_payments_for_sale(sale_id):
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u            ON u.id  = dp.paid_by
         JOIN sales s                  ON s.id  = dp.sale_id
-        WHERE dp.sale_id = ?
+        WHERE dp.sale_id = %s
         ORDER BY dp.paid_at ASC
     """, (sale_id,)).fetchall()
     conn.close()
@@ -229,3 +236,4 @@ def customer_debt_statement(sale_id):
     if not data:
         return "Statement not found.", 404
     return render_template("debt/statement.html", data=data)
+

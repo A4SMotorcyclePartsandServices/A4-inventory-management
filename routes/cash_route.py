@@ -5,13 +5,13 @@ from services.cash_service import (
     get_cash_summary,
     get_cash_entries,
     get_cash_entry_count,
-    get_already_paid_mechanic_identifiers,
+    get_already_paid_mechanic_identifiers_for_dates,
     add_cash_entry,
     delete_cash_entry,
     CASH_IN_CATEGORIES,
     CASH_OUT_CATEGORIES,
 )
-from services.reports_service import get_mechanic_payouts_for_date
+from services.reports_service import get_mechanic_payouts_for_dates
 
 cash_bp = Blueprint('cash', __name__)
 LEDGER_PAGE_SIZE = 20
@@ -72,9 +72,22 @@ def cash_ledger():
     end_entry   = offset + len(entries)
 
     # --- Mechanic Payout Panel ---
-    today               = date_today.today().isoformat()
-    mechanic_payouts    = get_mechanic_payouts_for_date(today)
-    paid_today          = get_already_paid_mechanic_identifiers(today, branch_id=branch_id)
+    today = date_today.today().isoformat()
+
+    # --- Missed mechanic payouts for the past N days (quick reminder) ---
+    reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
+    reminder_days = max(1, min(REMINDER_DAYS_MAX, reminder_days))
+
+    reminder_dates = [
+        (date_today.today() - timedelta(days=days_ago)).isoformat()
+        for days_ago in range(1, reminder_days + 1)
+    ]
+    payout_dates = [today] + reminder_dates
+    payouts_by_date = get_mechanic_payouts_for_dates(payout_dates)
+    paid_by_date = get_already_paid_mechanic_identifiers_for_dates(payout_dates, branch_id=branch_id)
+
+    mechanic_payouts = payouts_by_date.get(today, [])
+    paid_today = paid_by_date.get(today, {"mechanic_ids": set(), "mechanic_names": set()})
     already_paid_ids    = paid_today.get("mechanic_ids", set())
     already_paid_names  = paid_today.get("mechanic_names", set())
 
@@ -87,15 +100,13 @@ def cash_ledger():
         )
     ]
 
-    # --- Missed mechanic payouts for the past N days (quick reminder) ---
-    reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
-    reminder_days = max(1, min(REMINDER_DAYS_MAX, reminder_days))
-
     overdue_payout_groups = []
-    for days_ago in range(1, reminder_days + 1):
-        payout_date = (date_today.today() - timedelta(days=days_ago)).isoformat()
-        mechanic_payouts_for_date = get_mechanic_payouts_for_date(payout_date)
-        paid_for_date       = get_already_paid_mechanic_identifiers(payout_date, branch_id=branch_id)
+    for payout_date in reminder_dates:
+        mechanic_payouts_for_date = payouts_by_date.get(payout_date, [])
+        paid_for_date = paid_by_date.get(
+            payout_date,
+            {"mechanic_ids": set(), "mechanic_names": set()},
+        )
         paid_ids            = paid_for_date.get("mechanic_ids", set())
         paid_names          = paid_for_date.get("mechanic_names", set())
 
@@ -212,3 +223,4 @@ def cash_delete_api(entry_id):
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": "Server error: " + str(e)}), 500
+
