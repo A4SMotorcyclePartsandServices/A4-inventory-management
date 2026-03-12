@@ -11,10 +11,55 @@ from services.reports_service import (
     get_sales_report_by_date,
     get_sales_report_by_range,
 )
+from services.transactions_service import get_purchase_order_export_data
 from services.cash_service import get_cash_entries_for_report
 from utils.formatters import format_date
 
 reports_bp = Blueprint("reports", __name__)
+
+
+@reports_bp.route("/reports/purchase-order/<int:po_id>")
+def purchase_order_report(po_id):
+    po, items = get_purchase_order_export_data(po_id)
+    if not po:
+        return "Purchase order not found.", 404
+
+    po_data = dict(po)
+    report_data = {
+        "id": po_data.get("id"),
+        "po_number": po_data.get("po_number") or "-",
+        "vendor_name": po_data.get("vendor_name") or "-",
+        "status": (po_data.get("status") or "PENDING").title(),
+        "created_at": format_date(po_data.get("created_at"), show_time=True),
+        "received_at": format_date(po_data.get("received_at"), show_time=True),
+        "total_amount": float(po_data.get("total_amount") or 0),
+        "items": [],
+    }
+
+    for idx, row in enumerate(items, start=1):
+        item = dict(row)
+        qty_ordered = int(item.get("quantity_ordered") or 0)
+        unit_cost = float(item.get("unit_cost") or 0)
+        report_data["items"].append({
+            "item_no": idx,
+            "name": item.get("name") or "",
+            "quantity_ordered": qty_ordered,
+            "quantity_received": int(item.get("quantity_received") or 0),
+            "unit_cost": unit_cost,
+            "subtotal": qty_ordered * unit_cost,
+        })
+
+    rows_per_page = 18
+    all_items = report_data["items"]
+    if all_items:
+        report_data["item_pages"] = [
+            all_items[i:i + rows_per_page]
+            for i in range(0, len(all_items), rows_per_page)
+        ]
+    else:
+        report_data["item_pages"] = [[]]
+
+    return render_template("reports/purchase_order_pdf.html", po=report_data)
 
 
 @reports_bp.route("/reports/daily")

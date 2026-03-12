@@ -137,6 +137,55 @@
     .status-completed { opacity: 0.75; }
     .status-completed:hover { opacity: 1; }
 
+    .month-group {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: var(--bg-card);
+        overflow: hidden;
+        margin-bottom: 12px;
+    }
+
+    .month-toggle {
+        width: 100%;
+        border: none;
+        background: #171a22;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        font-weight: 700;
+        font-size: 0.86rem;
+        letter-spacing: 0.2px;
+    }
+
+    .month-toggle:hover {
+        background: #1b1f29;
+    }
+
+    .month-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .month-count {
+        background: rgba(74,222,128,0.1);
+        color: #86efac;
+        border: 1px solid rgba(74,222,128,0.35);
+        border-radius: 999px;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+    }
+
+    .month-body {
+        padding: 12px;
+        border-top: 1px solid var(--border-soft);
+    }
+
     .po-number {
         font-weight: 700;
         font-size: 0.95rem;
@@ -432,22 +481,40 @@
 <!-- COMPLETED PANEL -->
 <div class="tab-panel" id="panel-completed">
     {% if completed_orders %}
-    <div class="row g-3">
-        {% for order in completed_orders %}
-        <div class="col-md-3">
-            <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                    <i class="bi bi-check-circle-fill" style="color:#4ade80; font-size:0.85rem;"></i>
-                </div>
-                <div class="po-vendor">{{ order.vendor_name }}</div>
-                <div class="po-meta">
-                    <span class="po-amount" style="font-size:0.8rem;">₱{{ "{:,.2f}".format(order.total_amount) }}</span>
+    {% for month in completed_month_groups %}
+    <div class="month-group">
+        <button class="month-toggle" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#completed-month-{{ loop.index }}"
+                aria-expanded="{{ 'true' if loop.first else 'false' }}">
+            <span><i class="bi bi-calendar3 me-2"></i>{{ month.label }}</span>
+            <span class="month-meta">
+                <span class="month-count">{{ month.orders | length }}</span>
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </button>
+        <div id="completed-month-{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}">
+            <div class="month-body">
+                <div class="row g-3">
+                    {% for order in month.orders %}
+                    <div class="col-md-3">
+                        <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
+                                <i class="bi bi-check-circle-fill" style="color:#4ade80; font-size:0.85rem;"></i>
+                            </div>
+                            <div class="po-vendor">{{ order.vendor_name }}</div>
+                            <div class="po-meta">
+                                <span class="po-amount" style="font-size:0.8rem;">₱{{ "{:,.2f}".format(order.total_amount) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-        {% endfor %}
     </div>
+    {% endfor %}
     {% else %}
     <div class="empty-state">
         <i class="bi bi-inbox"></i> No completed orders yet.
@@ -460,7 +527,24 @@
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalPONumber">Order Details</h5>
+                <h5 class="modal-title d-flex align-items-center gap-2 mb-0">
+                    <span>PO</span>
+                    <span id="modalPONumber">-</span>
+                    <a id="exportPoCsvBtn"
+                       href="#"
+                       class="btn btn-sm btn-outline-success py-0 px-2"
+                       target="_blank"
+                       title="Download CSV">
+                        <i class="bi bi-filetype-csv"></i>
+                    </a>
+                    <a id="exportPoPdfBtn"
+                            href="#"
+                            class="btn btn-sm btn-outline-danger py-0 px-2"
+                            target="_blank"
+                            title="Open printable PDF view">
+                        <i class="bi bi-filetype-pdf"></i>
+                    </a>
+                </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -533,6 +617,8 @@ async function openOrderDetails(poId) {
         document.getElementById('modalPONumber').innerText = data.po.po_number;
         document.getElementById('modalVendor').innerText = data.po.vendor_name;
         document.getElementById('modalDate').innerText = data.po.created_at;
+        document.getElementById('exportPoCsvBtn').href = `/export/purchase-order/${poId}/csv`;
+        document.getElementById('exportPoPdfBtn').href = `/reports/purchase-order/${poId}`;
 
         const receiveBtn = document.getElementById('receiveBtn');
         if (data.po.status === 'COMPLETED') {

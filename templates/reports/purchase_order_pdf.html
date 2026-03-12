@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order - {{ po.po_number }}</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent: #c1121f;
+            --ink: #1a1a1a;
+            --muted: #666;
+            --line: #333;
+            --warn: #fff2a8;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: var(--ink);
+            background: #fff;
+            padding: 24px 26px;
+            max-width: 850px;
+            margin: 0 auto;
+            font-size: 13px;
+        }
+
+        .print-bar {
+            text-align: center;
+            padding: 14px 0 12px;
+            border-bottom: 1px solid #e5e5e5;
+            margin-bottom: 18px;
+        }
+
+        .print-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 9px 24px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+        }
+
+        .po-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 14px;
+        }
+
+        .status-top {
+            text-align: center;
+            flex: 0 0 auto;
+            margin-left: auto;
+            min-width: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .status-top .meta {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #777;
+            margin-bottom: 2px;
+            font-weight: 700;
+        }
+
+        .po-title-main {
+            font-size: 0.95rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #333;
+        }
+
+        .po-title-sub {
+            font-size: 0.72rem;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .brand-wrap {
+            min-width: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+
+        .brand-logo {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .brand-copy {
+            text-align: left;
+            line-height: 1.15;
+        }
+
+        .brand-main {
+            font-size: 1.06rem;
+            font-weight: 900;
+            color: var(--accent);
+            letter-spacing: 0.2px;
+            text-transform: uppercase;
+            display: block;
+        }
+
+        .brand-sub {
+            margin-top: 2px;
+            font-size: 0.72rem;
+            color: var(--muted);
+            letter-spacing: 0.2px;
+            display: block;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 20px;
+            margin: 6px 0 12px;
+        }
+
+        .meta-row {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: end;
+            column-gap: 8px;
+            min-height: 21px;
+        }
+
+        .meta-label {
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+        }
+
+        .meta-value-line {
+            border-bottom: 1px solid #222;
+            min-height: 18px;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 2px 1px;
+            font-weight: 600;
+        }
+
+        .meta-muted {
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .po-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-top: 2px;
+            font-size: 0.88rem;
+        }
+
+        .page-section {
+            margin-top: 2px;
+        }
+
+        .po-table th,
+        .po-table td {
+            border: 1px solid var(--line);
+            padding: 5px 6px;
+            vertical-align: middle;
+        }
+
+        .po-table thead th {
+            text-align: center;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-size: 0.69rem;
+            background: #f6f6f6;
+        }
+
+        .po-table .col-item-no { width: 11%; text-align: center; }
+        .po-table .col-desc    { width: 41%; }
+        .po-table .col-qty     { width: 12%; text-align: center; }
+        .po-table .col-unit    { width: 16%; text-align: right; }
+        .po-table .col-total   { width: 20%; text-align: right; }
+
+        .total-row td {
+            font-weight: 800;
+            background: #fafafa;
+        }
+
+        .note-bar {
+            border: 1px solid var(--line);
+            border-top: none;
+            background: var(--warn);
+            text-align: center;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            padding: 5px 8px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .status-pill {
+            display: inline-block;
+            border: 2px solid #2a9d2a;
+            color: #2a9d2a;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-pill.pending { border-color: var(--accent); color: var(--accent); }
+        .status-pill.partial { border-color: #d97706; color: #d97706; }
+        .status-pill.completed { border-color: #2a9d2a; color: #2a9d2a; }
+
+        .signatures {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+        }
+
+        .sig-block .sig-role {
+            font-weight: 700;
+            margin-bottom: 30px;
+        }
+
+        .sig-sign-line {
+            border-top: 1px solid #222;
+            height: 8px;
+            margin-bottom: 0;
+            width: 72%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .sig-caption {
+            font-size: 0.78rem;
+            color: #333;
+            text-align: center;
+            line-height: 1.15;
+        }
+
+        .sig-full {
+            margin-top: 18px;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+        }
+
+        .footer {
+            margin-top: 18px;
+            font-size: 0.68rem;
+            color: #888;
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid #e5e5e5;
+            padding-top: 8px;
+        }
+
+        .continued-marker {
+            display: none;
+            margin-top: 6px;
+            text-align: right;
+            font-size: 0.76rem;
+            color: #666;
+            font-style: italic;
+            letter-spacing: 0.2px;
+        }
+
+        .page-break {
+            display: none;
+        }
+
+        .money { font-family: 'Courier New', monospace; }
+        .center { text-align: center; }
+        .right { text-align: right; }
+
+        @media print {
+            .print-bar { display: none; }
+            body { padding: 8px 10px; max-width: none; }
+            .po-table { font-size: 0.8rem; }
+            .po-table th, .po-table td { padding: 4px 5px; }
+            .meta-grid { gap: 6px 14px; margin-bottom: 8px; }
+            .meta-row { min-height: 18px; }
+            .meta-label { font-size: 0.72rem; }
+            .meta-value-line { min-height: 16px; font-size: 0.82rem; }
+            .signatures { margin-top: 12px; gap: 14px; }
+            .sig-full { margin-top: 12px; }
+            .footer { margin-top: 12px; padding-top: 6px; }
+            .continued-marker { display: block; }
+            .page-break { display: block; page-break-after: always; break-after: page; }
+            thead { display: table-header-group; }
+            tfoot { display: table-row-group; }
+            tr, td, th { page-break-inside: avoid; break-inside: avoid; }
+            .note-bar { page-break-inside: avoid; break-inside: avoid; }
+            .footer { page-break-inside: avoid; break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<div class="print-bar">
+    <button class="print-btn" onclick="window.print()">&#128438; Print Purchase Order</button>
+</div>
+
+<div class="po-header">
+    <div class="brand-wrap">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Logo" class="brand-logo">
+        <div class="brand-copy">
+            <div class="brand-main">A4S Motorcycle Shop & Services</div>
+            <div class="brand-sub">Purchase Order Form (PO)</div>
+        </div>
+    </div>
+    <div class="status-top">
+        <div class="meta">Status</div>
+        {% if po.status|upper == 'COMPLETED' %}
+            <span class="status-pill completed">Completed</span>
+        {% elif po.status|upper == 'PARTIAL' %}
+            <span class="status-pill partial">Partial</span>
+        {% else %}
+            <span class="status-pill pending">Pending</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="meta-grid">
+    <div>
+        <div class="meta-row">
+            <div class="meta-label">Vendor/Supplier:</div>
+            <div class="meta-value-line">{{ po.vendor_name }}</div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-label">Address:</div>
+            <div class="meta-value-line meta-muted">&nbsp;</div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-label">PO No:</div>
+            <div class="meta-value-line">{{ po.po_number }}</div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-label">PO Date:</div>
+            <div class="meta-value-line">{{ po.created_at }}</div>
+        </div>
+    </div>
+
+    <div>
+        <div class="meta-row">
+            <div class="meta-label">Contact Person:</div>
+            <div class="meta-value-line meta-muted">&nbsp;</div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-label">Contact No:</div>
+            <div class="meta-value-line meta-muted">&nbsp;</div>
+        </div>
+        <div class="meta-row">
+            <div class="meta-label">Payment Terms:</div>
+            <div class="meta-value-line meta-muted">&nbsp;</div>
+        </div>
+    </div>
+</div>
+
+{% for page in po["item_pages"] %}
+<div class="page-section">
+    <table class="po-table">
+        <thead>
+            <tr>
+                <th class="col-item-no">Item No.</th>
+                <th class="col-desc">Item Description</th>
+                <th class="col-qty">Qty.</th>
+                <th class="col-unit">Unit Price</th>
+                <th class="col-total">Total Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in page %}
+            <tr>
+                <td class="center">{{ item.item_no }}</td>
+                <td>{{ item.name }}</td>
+                <td class="center">{{ item.quantity_ordered }}</td>
+                <td class="right money">{{ "%.2f"|format(item.unit_cost) }}</td>
+                <td class="right money">{{ "%.2f"|format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+            {% if not page %}
+            <tr>
+                <td colspan="5" class="center meta-muted">No items recorded for this purchase order.</td>
+            </tr>
+            {% endif %}
+            {% if loop.last %}
+            <tr class="total-row">
+                <td colspan="4" class="right">Total</td>
+                <td class="right money">{{ "%.2f"|format(po.total_amount) }}</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% if not loop.last %}
+<div class="continued-marker">Continued on next page...</div>
+<div class="page-break"></div>
+{% endif %}
+{% endfor %}
+
+<div class="signatures">
+    <div class="sig-block">
+        <div class="sig-role">Prepared by:</div>
+        <div class="sig-sign-line"></div>
+        <div class="sig-caption">Signature Over Printed Name</div>
+    </div>
+    <div class="sig-block">
+        <div class="sig-role"><strong>Approved by:</strong></div>
+        <div class="sig-sign-line"></div>
+        <div class="sig-caption">Signature Over Printed Name and Date</div>
+    </div>
+</div>
+
+<div class="footer">
+    <span>This is a system-generated form</span>
+</div>
+
+</body>
+</html>

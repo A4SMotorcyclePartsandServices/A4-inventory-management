@@ -1,4 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify
+import csv
+import io
+from datetime import datetime
+from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
 from services.inventory_service import get_unique_categories
 from utils.formatters import format_date
 from services.transactions_service import (
@@ -13,6 +16,7 @@ from services.transactions_service import (
     get_po_for_receive_page,
     receive_purchase_order,
     get_po_details_for_api,
+    get_purchase_order_export_data,
 )
 
 transaction_bp = Blueprint('transaction', __name__)
@@ -160,7 +164,44 @@ def save_purchase_order():
 @transaction_bp.route("/transaction/orders/list")
 def list_orders():
     orders = get_all_purchase_orders()
-    return render_template("transactions/order_overview.html", orders=orders)
+    completed_groups_map = {}
+
+    for order in orders:
+        status = (order["status"] or "").upper()
+        if status != "COMPLETED":
+            continue
+
+        created_at = order["created_at"]
+        month_key = "unknown"
+        month_label = "Unknown Date"
+
+        if hasattr(created_at, "strftime"):
+            month_key = created_at.strftime("%Y-%m")
+            month_label = created_at.strftime("%B %Y")
+        elif isinstance(created_at, str) and created_at.strip():
+            normalized = created_at.strip().replace(" ", "T")
+            try:
+                parsed = datetime.fromisoformat(normalized)
+                month_key = parsed.strftime("%Y-%m")
+                month_label = parsed.strftime("%B %Y")
+            except ValueError:
+                pass
+
+        if month_key not in completed_groups_map:
+            completed_groups_map[month_key] = {
+                "key": month_key,
+                "label": month_label,
+                "orders": []
+            }
+        completed_groups_map[month_key]["orders"].append(order)
+
+    completed_month_groups = list(completed_groups_map.values())
+
+    return render_template(
+        "transactions/order_overview.html",
+        orders=orders,
+        completed_month_groups=completed_month_groups
+    )
 
 
 @transaction_bp.route("/api/order/<int:po_id>")
@@ -177,6 +218,69 @@ def get_order_details(po_id):
         "po": po_data,
         "items": [dict(ix) for ix in items]
     })
+
+
+@transaction_bp.route("/export/purchase-order/<int:po_id>/csv")
+def export_purchase_order_csv(po_id):
+    po, items = get_purchase_order_export_data(po_id)
+    if not po:
+        return jsonify({"error": "Order not found"}), 404
+
+    po_data = dict(po)
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["PO Number", po_data.get("po_number") or ""])
+    writer.writerow(["Vendor", po_data.get("vendor_name") or ""])
+    writer.writerow(["Status", po_data.get("status") or ""])
+    writer.writerow(["Created At", format_date(po_data.get("created_at"), show_time=True)])
+    writer.writerow(["Received At", format_date(po_data.get("received_at"), show_time=True)])
+    writer.writerow(["Total Amount", f"{float(po_data.get('total_amount') or 0):.2f}"])
+    writer.writerow([])
+    writer.writerow(["Item", "Qty Ordered", "Qty Received", "Unit Cost", "Subtotal"])
+
+    total_qty_ordered = 0
+    total_qty_received = 0
+    grand_total = 0.0
+
+    for row in items:
+        item = dict(row)
+        qty_ordered = int(item.get("quantity_ordered") or 0)
+        qty_received = int(item.get("quantity_received") or 0)
+        unit_cost = float(item.get("unit_cost") or 0)
+        subtotal = qty_ordered * unit_cost
+        total_qty_ordered += qty_ordered
+        total_qty_received += qty_received
+        grand_total += subtotal
+
+        writer.writerow([
+            item.get("name") or "",
+            qty_ordered,
+            qty_received,
+            f"{unit_cost:.2f}",
+            f"{subtotal:.2f}",
+        ])
+
+    writer.writerow([])
+    writer.writerow([
+        "TOTAL",
+        total_qty_ordered,
+        total_qty_received,
+        "",
+        f"{grand_total:.2f}",
+    ])
+
+    safe_po = "".join(
+        ch if ch.isalnum() or ch in ("-", "_") else "_"
+        for ch in (po_data.get("po_number") or f"po_{po_id}")
+    )
+    filename = f"{safe_po}_{datetime.now().strftime('%Y%m%d')}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @transaction_bp.route("/transaction/receive/<int:po_id>")

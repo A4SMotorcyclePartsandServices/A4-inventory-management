@@ -559,6 +559,35 @@ def get_purchase_order_with_items(po_id):
     return po, items
 
 
+def get_purchase_order_export_data(po_id):
+    """Returns PO + item rows formatted for CSV export."""
+    conn = get_db()
+    po = conn.execute("""
+        SELECT id, po_number, vendor_name, status, created_at, received_at, total_amount
+        FROM purchase_orders
+        WHERE id = %s
+    """, (po_id,)).fetchone()
+
+    if not po:
+        conn.close()
+        return None, []
+
+    items = conn.execute("""
+        SELECT
+            i.name,
+            pi.quantity_ordered,
+            pi.quantity_received,
+            pi.unit_cost
+        FROM po_items pi
+        JOIN items i ON pi.item_id = i.id
+        WHERE pi.po_id = %s
+        ORDER BY i.name ASC
+    """, (po_id,)).fetchall()
+
+    conn.close()
+    return po, items
+
+
 def get_po_for_receive_page(po_id):
     """Returns PO + items needed for the receive page. Returns None if not found."""
     conn = get_db()
