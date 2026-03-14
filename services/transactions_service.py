@@ -11,6 +11,12 @@ from services.approval_service import (
     request_revisions,
     resubmit_request,
 )
+from services.notification_service import (
+    archive_notifications,
+    create_notification,
+    create_notifications_for_users,
+    list_active_user_ids,
+)
 
 
 # ─────────────────────────────────────────────
@@ -476,6 +482,93 @@ PO_APPROVAL_TYPE = "PURCHASE_ORDER"
 PO_ENTITY_TYPE = "purchase_order"
 PO_EDITABLE_APPROVAL_STATUSES = {"REVISIONS_NEEDED", "APPROVED"}
 PO_RECEIVABLE_STATUSES = {"PENDING", "PARTIAL"}
+PO_ADMIN_PENDING_NOTIFICATION_TYPES = {
+    "PO_SUBMITTED_FOR_APPROVAL",
+    "PO_RESUBMITTED_FOR_APPROVAL",
+}
+
+
+def _po_notification_url(po_id, audience="general"):
+    if audience == "admin":
+        return f"/transaction/order/{int(po_id)}/review"
+    return f"/transaction/orders/list?po_id={int(po_id)}&open_po=1"
+
+
+def _archive_po_admin_notifications(conn, po_id):
+    archive_notifications(
+        entity_type=PO_ENTITY_TYPE,
+        entity_id=po_id,
+        notification_types=PO_ADMIN_PENDING_NOTIFICATION_TYPES,
+        external_conn=conn,
+    )
+
+
+def _archive_po_requester_notifications(conn, po_id, requester_id):
+    archive_notifications(
+        recipient_user_id=requester_id,
+        entity_type=PO_ENTITY_TYPE,
+        entity_id=po_id,
+        external_conn=conn,
+    )
+
+
+def _notify_po_admins_pending(conn, po_row, actor_user_id, notification_type):
+    admin_ids = [
+        admin_id for admin_id in list_active_user_ids(role="admin", external_conn=conn)
+        if int(admin_id) != int(actor_user_id)
+    ]
+    if not admin_ids:
+        return
+
+    po_id = int(po_row["id"])
+    po_number = po_row["po_number"]
+    vendor_name = po_row["vendor_name"] or "Unknown vendor"
+    verb = "submitted" if notification_type == "PO_SUBMITTED_FOR_APPROVAL" else "resubmitted"
+
+    _archive_po_admin_notifications(conn, po_id)
+    create_notifications_for_users(
+        admin_ids,
+        notification_type,
+        "Purchase order needs approval",
+        f"{po_number} for {vendor_name} was {verb} and is waiting for approval.",
+        category="approval",
+        entity_type=PO_ENTITY_TYPE,
+        entity_id=po_id,
+        action_url=_po_notification_url(po_id, audience="admin"),
+        created_by=actor_user_id,
+        metadata={
+            "po_number": po_number,
+            "vendor_name": vendor_name,
+        },
+        external_conn=conn,
+    )
+
+
+def _notify_po_requester(conn, po_row, requester_id, actor_user_id, notification_type, title, message):
+    if int(requester_id) == int(actor_user_id):
+        return
+
+    po_id = int(po_row["id"])
+    po_number = po_row["po_number"]
+    vendor_name = po_row["vendor_name"] or "Unknown vendor"
+
+    _archive_po_requester_notifications(conn, po_id, requester_id)
+    create_notification(
+        requester_id,
+        notification_type,
+        title,
+        message,
+        category="approval",
+        entity_type=PO_ENTITY_TYPE,
+        entity_id=po_id,
+        action_url=_po_notification_url(po_id, audience="requester"),
+        created_by=actor_user_id,
+        metadata={
+            "po_number": po_number,
+            "vendor_name": vendor_name,
+        },
+        external_conn=conn,
+    )
 
 
 def _coerce_positive_int(value, field_name):
@@ -921,6 +1014,14 @@ def create_purchase_order(data, user_id, username, user_role):
             external_conn=conn,
         )
 
+        if str(user_role or "").strip().lower() != "admin":
+            _notify_po_admins_pending(
+                conn,
+                po_row=po_row,
+                actor_user_id=user_id,
+                notification_type="PO_SUBMITTED_FOR_APPROVAL",
+            )
+
         conn.commit()
         return po_number, new_po_id
 
@@ -1158,6 +1259,7 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
             change_entries=change_entries,
             external_conn=conn,
         )
+        _archive_po_requester_notifications(conn, po_id, user_id)
 
         if str(user_role or "").strip().lower() == "admin":
             approve_request(
@@ -1169,6 +1271,14 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
             conn.execute(
                 "UPDATE purchase_orders SET status = %s WHERE id = %s",
                 ("PENDING", po_id),
+            )
+            _archive_po_admin_notifications(conn, po_id)
+        else:
+            _notify_po_admins_pending(
+                conn,
+                po_row=refreshed_po,
+                actor_user_id=user_id,
+                notification_type="PO_RESUBMITTED_FOR_APPROVAL",
             )
 
         conn.commit()
@@ -1217,6 +1327,21 @@ def cancel_purchase_order(po_id, user_id, user_role, notes=None):
             "UPDATE purchase_orders SET status = %s WHERE id = %s",
             ("CANCELLED", po_id),
         )
+
+        _archive_po_admin_notifications(conn, po_id)
+        if role == "admin":
+            _notify_po_requester(
+                conn,
+                po_row=po,
+                requester_id=po["created_by"],
+                actor_user_id=user_id,
+                notification_type="PO_CANCELLED",
+                title="Purchase order cancelled",
+                message=f"{po['po_number']} was cancelled by an admin.",
+            )
+        else:
+            _archive_po_requester_notifications(conn, po_id, user_id)
+
         conn.commit()
         return get_purchase_order_details(po_id, current_user_id=user_id, current_role=user_role)
     except Exception:
@@ -1248,6 +1373,19 @@ def approve_purchase_order(po_id, admin_user_id, notes=None):
             "UPDATE purchase_orders SET status = %s WHERE id = %s",
             ("PENDING", po_id),
         )
+
+        po = _get_po_row(conn, po_id)
+        _archive_po_admin_notifications(conn, po_id)
+        _notify_po_requester(
+            conn,
+            po_row=po,
+            requester_id=po["created_by"],
+            actor_user_id=admin_user_id,
+            notification_type="PO_APPROVED",
+            title="Purchase order approved",
+            message=f"{po['po_number']} was approved and is ready for receiving.",
+        )
+
         conn.commit()
         return get_purchase_order_details(po_id, current_user_id=admin_user_id, current_role="admin")
     except Exception:
@@ -1280,6 +1418,19 @@ def request_po_revisions(po_id, admin_user_id, notes, revision_items=None):
             "UPDATE purchase_orders SET status = %s WHERE id = %s",
             ("FOR_APPROVAL", po_id),
         )
+
+        po = _get_po_row(conn, po_id)
+        _archive_po_admin_notifications(conn, po_id)
+        _notify_po_requester(
+            conn,
+            po_row=po,
+            requester_id=po["created_by"],
+            actor_user_id=admin_user_id,
+            notification_type="PO_REVISIONS_REQUESTED",
+            title="Purchase order needs revision",
+            message=f"{po['po_number']} was returned for revisions.",
+        )
+
         conn.commit()
         return get_purchase_order_details(po_id, current_user_id=admin_user_id, current_role="admin")
     except Exception:

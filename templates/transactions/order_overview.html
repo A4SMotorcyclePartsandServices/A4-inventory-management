@@ -214,6 +214,12 @@
         padding: 2px 8px;
     }
 
+    .month-group-cancelled .month-count {
+        background: var(--po-cancelled-soft);
+        color: var(--po-cancelled);
+        border-color: var(--po-cancelled-border);
+    }
+
     .month-body {
         padding: 12px;
         border-top: 1px solid var(--border-soft);
@@ -934,23 +940,40 @@
 
 <div class="tab-panel" id="panel-cancelled">
     {% if cancelled_orders %}
-    <div class="row g-3">
-        {% for order in cancelled_orders %}
-        <div class="col-md-4">
-            <div class="po-box status-cancelled" onclick="openOrderDetails({{ order.id }})">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-cancelled">Cancelled</span>
-                </div>
-                <div class="po-vendor">{{ order.vendor_name }}</div>
-                <div class="po-meta">
-                    <span class="po-item-count"><i class="bi bi-box me-1"></i>{{ order.item_count }} items</span>
-                    <span class="po-amount">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
+    {% for month in cancelled_month_groups %}
+    <div class="month-group month-group-cancelled">
+        <button class="month-toggle" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#cancelled-month-{{ loop.index }}"
+                aria-expanded="{{ 'true' if loop.first else 'false' }}">
+            <span><i class="bi bi-calendar3 me-2"></i>{{ month.label }}</span>
+            <span class="month-meta">
+                <span class="month-count">{{ month.orders | length }}</span>
+                <i class="bi bi-chevron-down"></i>
+            </span>
+        </button>
+        <div id="cancelled-month-{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}">
+            <div class="month-body">
+                <div class="row g-3">
+                    {% for order in month.orders %}
+                    <div class="col-md-3">
+                        <div class="po-box status-cancelled" onclick="openOrderDetails({{ order.id }})">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
+                                <span class="badge-cancelled">Cancelled</span>
+                            </div>
+                            <div class="po-vendor">{{ order.vendor_name }}</div>
+                            <div class="po-meta">
+                                <span class="po-amount" style="font-size:0.8rem;">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-        {% endfor %}
     </div>
+    {% endfor %}
     {% else %}
     <div class="empty-state"><i class="bi bi-inbox"></i> No cancelled purchase orders.</div>
     {% endif %}
@@ -1176,6 +1199,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('confirmRevisionsBtn')?.addEventListener('click', submitRevisions);
     document.getElementById('confirmCancelBtn')?.addEventListener('click', submitCancellation);
+
+    const params = new URLSearchParams(window.location.search);
+    const shouldOpenPo = params.get('open_po') === '1';
+    const requestedPoId = parseInt(params.get('po_id') || '', 10);
+    if (shouldOpenPo && Number.isFinite(requestedPoId) && requestedPoId > 0) {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete('open_po');
+        nextUrl.searchParams.delete('po_id');
+        window.history.replaceState({}, document.title, nextUrl.pathname + nextUrl.search);
+        openOrderDetails(requestedPoId);
+    }
 });
 
 function switchTab(name, btn) {
@@ -1217,16 +1251,17 @@ async function openOrderDetails(poId) {
             reviewPageBtn.removeAttribute('href');
         }
 
-        renderAdminActions(data.permissions);
-
         const workflowActionGroup = document.getElementById('workflowActionGroup');
         const actionSeparatorOne = document.getElementById('actionSeparatorOne');
         const actionSeparatorTwo = document.getElementById('actionSeparatorTwo');
         const currentPoStatus = String(data.po.status || '').toUpperCase();
         const isReviewOnlyState = ['COMPLETED', 'CANCELLED'].includes(currentPoStatus);
+        renderAdminActions(data.permissions, currentPoStatus);
 
         const editBtn = document.getElementById('editBtn');
-        editBtn.style.display = data.permissions?.can_edit ? 'inline-flex' : 'none';
+        const isAdminReadyToReceive = currentRole === 'admin' && currentPoStatus === 'PENDING';
+        const isUserReadyToReceive = currentRole !== 'admin' && currentPoStatus === 'PENDING';
+        editBtn.style.display = data.permissions?.can_edit && !isUserReadyToReceive && !isAdminReadyToReceive ? 'inline-flex' : 'none';
         editBtn.href = `/transaction/order?po_id=${poId}`;
 
         const cancelBtn = document.getElementById('cancelBtn');
@@ -1235,9 +1270,17 @@ async function openOrderDetails(poId) {
 
         const receiveBtn = document.getElementById('receiveBtn');
         const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
+        const primaryGroup = document.getElementById('adminPrimaryActionGroup');
+        const primaryWorkflowActions = document.getElementById('primaryWorkflowActions');
         const reviewActionGroup = document.getElementById('reviewActionGroup');
+        const closeBtn = reviewActionGroup.querySelector('.btn-modal-neutral');
         const shouldPlaceReceiveRight = currentPoStatus === 'PARTIAL';
-        if (shouldPlaceReceiveRight) {
+        if (isAdminReadyToReceive) {
+            const cancelReferenceNode = cancelBtn.nextSibling;
+            primaryWorkflowActions.insertBefore(receiveBtn, cancelReferenceNode);
+        } else if (isUserReadyToReceive) {
+            reviewActionGroup.insertBefore(receiveBtn, closeBtn);
+        } else if (shouldPlaceReceiveRight) {
             reviewActionGroup.insertBefore(receiveBtn, reviewPageBtn);
         } else {
             secondaryGroup.after(receiveBtn);
@@ -1250,14 +1293,13 @@ async function openOrderDetails(poId) {
             receiveBtn.style.display = 'none';
         }
 
-        const primaryGroup = document.getElementById('adminPrimaryActionGroup');
         const hasLeadingActions = primaryGroup.childElementCount > 0 || cancelBtn.style.display !== 'none' || editBtn.style.display !== 'none';
         const hasMiddleActions = secondaryGroup.childElementCount > 0 || (!shouldPlaceReceiveRight && receiveBtn.style.display !== 'none');
         const usesSingleRowWorkflow = ['PARTIAL', 'PENDING'].includes(currentPoStatus);
 
         workflowActionGroup.style.display = isReviewOnlyState ? 'none' : 'flex';
-        actionSeparatorOne.style.display = !isReviewOnlyState && usesSingleRowWorkflow && hasLeadingActions && hasMiddleActions ? 'block' : 'none';
-        actionSeparatorTwo.style.display = !isReviewOnlyState && currentPoStatus !== 'PARTIAL' && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
+        actionSeparatorOne.style.display = !isAdminReadyToReceive && !isReviewOnlyState && usesSingleRowWorkflow && hasLeadingActions && hasMiddleActions ? 'block' : 'none';
+        actionSeparatorTwo.style.display = !isAdminReadyToReceive && !isReviewOnlyState && currentPoStatus !== 'PARTIAL' && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
 
         document.getElementById('modalItemsBody').innerHTML = (data.items || []).map(item => {
             const isFullyReceived = Number(item.quantity_received || 0) >= Number(item.quantity_ordered || 0);
@@ -1328,10 +1370,11 @@ function formatHistoryCount(count) {
     return count === 1 ? '1 entry' : `${count} entries`;
 }
 
-function renderAdminActions(permissions) {
+function renderAdminActions(permissions, currentPoStatus) {
     const primaryGroup = document.getElementById('adminPrimaryActionGroup');
     const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
     const revisionsTargetGroup = permissions?.can_receive ? secondaryGroup : primaryGroup;
+    const shouldHideRevisionsForAdminReady = currentRole === 'admin' && currentPoStatus === 'PENDING';
     primaryGroup.innerHTML = '';
     secondaryGroup.innerHTML = '';
 
@@ -1347,7 +1390,7 @@ function renderAdminActions(permissions) {
         `;
     }
 
-    if (permissions?.can_admin_request_revisions) {
+    if (permissions?.can_admin_request_revisions && !shouldHideRevisionsForAdminReady) {
         revisionsTargetGroup.innerHTML += `
             <button type="button" class="btn btn-warning btn-modal-revisions" onclick="requestRevisions()">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Revise
@@ -1357,7 +1400,7 @@ function renderAdminActions(permissions) {
 }
 
 async function approveOrder() {
-    await postOrderAction(`/api/order/${activeOrderId}/approval/approve`, {}, 'Purchase order approved.');
+    await postOrderAction(`/api/order/${activeOrderId}/approval/approve`, {}, orderModal);
 }
 
 async function cancelOrder(requireNotes) {

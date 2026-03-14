@@ -178,10 +178,11 @@ def save_purchase_order():
 def list_orders():
     orders = get_all_purchase_orders()
     completed_groups_map = {}
+    cancelled_groups_map = {}
 
     for order in orders:
         status = (order["status"] or "").upper()
-        if status != "COMPLETED":
+        if status not in {"COMPLETED", "CANCELLED"}:
             continue
 
         created_at = order["created_at"]
@@ -200,20 +201,24 @@ def list_orders():
             except ValueError:
                 pass
 
-        if month_key not in completed_groups_map:
-            completed_groups_map[month_key] = {
+        target_map = completed_groups_map if status == "COMPLETED" else cancelled_groups_map
+
+        if month_key not in target_map:
+            target_map[month_key] = {
                 "key": month_key,
                 "label": month_label,
                 "orders": []
             }
-        completed_groups_map[month_key]["orders"].append(order)
+        target_map[month_key]["orders"].append(order)
 
     completed_month_groups = list(completed_groups_map.values())
+    cancelled_month_groups = list(cancelled_groups_map.values())
 
     return render_template(
         "transactions/order_overview.html",
         orders=orders,
-        completed_month_groups=completed_month_groups
+        completed_month_groups=completed_month_groups,
+        cancelled_month_groups=cancelled_month_groups,
     )
 
 

@@ -100,6 +100,49 @@
         padding: 22px 24px;
     }
 
+    .review-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        min-width: 220px;
+    }
+
+    .review-actions .btn {
+        justify-content: center;
+    }
+
+    .review-actions .btn-review-receive {
+        border-radius: 10px;
+        background: var(--po-ready);
+        border: none;
+        color: #ffffff;
+        font-weight: 700;
+        padding: 0.5rem 0.9rem;
+    }
+
+    .review-actions .btn-review-receive:hover {
+        background: #0b5ed7;
+        color: #ffffff;
+    }
+
+    .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        box-shadow: 0 14px 36px rgba(0,0,0,0.35);
+    }
+
+    .modal-header {
+        border-bottom: 1px solid var(--border-soft);
+        padding: 18px 22px;
+    }
+
+    .modal-footer {
+        border-top: 1px solid var(--border-soft);
+        padding: 16px 22px;
+    }
+
     .review-card-title {
         margin: 0 0 16px;
         font-size: 1rem;
@@ -264,11 +307,85 @@
         color: var(--po-cancelled);
         border-color: var(--po-cancelled-border);
     }
+
+    .action-helper {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+    }
+
+    .action-textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .action-error {
+        display: none;
+        margin-top: 10px;
+        color: #f87171;
+        font-size: 0.82rem;
+    }
+
+    .action-modal .modal-dialog {
+        max-width: 980px;
+    }
+
+    .action-modal .modal-content {
+        border-radius: 18px;
+    }
+
+    .action-modal .modal-body {
+        padding: 22px 24px;
+        max-height: 72vh;
+        overflow-y: auto;
+    }
+
+    .revision-items-preview {
+        margin-top: 18px;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        overflow: hidden;
+        overflow-x: auto;
+        background: #151922;
+    }
+
+    .revision-items-preview .table {
+        margin-bottom: 0;
+        table-layout: auto;
+        min-width: 860px;
+        background: transparent;
+    }
+
+    .revision-items-preview th,
+    .revision-items-preview td {
+        font-size: 0.82rem;
+        text-align: left !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        background: transparent !important;
+        color: var(--text-primary);
+        vertical-align: top;
+    }
+
+    .revision-items-preview th:nth-child(2),
+    .revision-items-preview td:nth-child(2),
+    .revision-items-preview th:nth-child(3),
+    .revision-items-preview td:nth-child(3) {
+        text-align: center !important;
+    }
+
+    .review-revision-item-note {
+        width: 100%;
+        min-width: 280px;
+        min-height: 74px;
+        resize: vertical;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="review-shell">
+<div class="review-shell" id="reviewShell" data-po-id="{{ po.id }}">
     <div class="review-header">
         <div>
             <div class="review-title">
@@ -301,17 +418,34 @@
                     <span class="review-meta-value">{{ po.created_at or '-' }}</span>
                 </div>
                 <div class="review-meta">
-                    <span class="review-meta-label">Current Notes</span>
+                    <span class="review-meta-label">PO Notes</span>
                     <span class="review-meta-value">{{ po.notes or '-' }}</span>
                 </div>
             </div>
         </div>
 
-        <div class="d-flex gap-2 flex-wrap">
-            <a href="/transaction/orders/list" class="btn btn-outline-secondary">Back to Orders</a>
-            {% if permissions.can_edit %}
-            <a href="/transaction/order?po_id={{ po.id }}" class="btn btn-outline-warning">Edit PO</a>
+        <div class="review-actions">
+            {% if permissions.can_receive %}
+            <a href="/transaction/receive/{{ po.id }}" class="btn btn-review-receive">
+                <i class="bi bi-truck me-1"></i> Receive
+            </a>
             {% endif %}
+            {% if po.status == 'FOR_APPROVAL' and permissions.can_admin_approve %}
+            <button type="button" class="btn btn-success" id="reviewApproveBtn">
+                <i class="bi bi-check2-circle me-1"></i> Approve PO
+            </button>
+            {% endif %}
+            {% if po.status == 'FOR_APPROVAL' and permissions.can_admin_request_revisions %}
+            <button type="button" class="btn btn-warning" id="reviewReviseBtn">
+                <i class="bi bi-arrow-counterclockwise me-1"></i> Revise PO
+            </button>
+            {% endif %}
+            {% if po.status == 'FOR_APPROVAL' and permissions.can_admin_cancel %}
+            <button type="button" class="btn btn-danger" id="reviewCancelBtn">
+                <i class="bi bi-x-circle me-1"></i> Cancel PO
+            </button>
+            {% endif %}
+            <a href="/transaction/orders/list" class="btn btn-outline-secondary">Back to Orders</a>
         </div>
     </div>
 
@@ -401,6 +535,206 @@
                 </div>
             </div>
             {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let reviewRevisionsModal;
+let reviewCancelModal;
+
+async function postReviewAction(url, payload = {}) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || result.status !== 'success') {
+        throw new Error(result.message || result.error || 'Action failed.');
+    }
+    window.location.reload();
+}
+
+function collectReviewRevisionItems() {
+    return Array.from(document.querySelectorAll('.review-revision-item-note'))
+        .map((input) => {
+            const revisionNote = input.value.trim();
+            if (!revisionNote) {
+                return null;
+            }
+            return {
+                item_id: input.getAttribute('data-revision-item-id'),
+                item_name: input.getAttribute('data-revision-item-name') || 'Unknown Item',
+                revision_note: revisionNote,
+            };
+        })
+        .filter(Boolean);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const reviewShell = document.getElementById('reviewShell');
+    const reviewPoId = Number.parseInt(reviewShell?.dataset.poId || '', 10);
+
+    const revisionsModalEl = document.getElementById('reviewRevisionsModal');
+    if (revisionsModalEl) {
+        reviewRevisionsModal = new bootstrap.Modal(revisionsModalEl);
+    }
+
+    const cancelModalEl = document.getElementById('reviewCancelModal');
+    if (cancelModalEl) {
+        reviewCancelModal = new bootstrap.Modal(cancelModalEl);
+    }
+
+    document.getElementById('reviewApproveBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('reviewApproveBtn');
+        try {
+            btn.disabled = true;
+            await postReviewAction(`/api/order/${reviewPoId}/approval/approve`, {});
+        } catch (error) {
+            alert(error.message || 'Failed to approve purchase order.');
+            btn.disabled = false;
+        }
+    });
+
+    document.getElementById('reviewReviseBtn')?.addEventListener('click', () => {
+        document.getElementById('reviewRevisionsNotesInput').value = '';
+        document.getElementById('reviewRevisionsNotesError').style.display = 'none';
+        document.querySelectorAll('.review-revision-item-note').forEach((input) => {
+            input.value = '';
+        });
+        reviewRevisionsModal?.show();
+    });
+
+    document.getElementById('reviewCancelBtn')?.addEventListener('click', () => {
+        document.getElementById('reviewCancelNotesInput').value = '';
+        document.getElementById('reviewCancelNotesError').style.display = 'none';
+        reviewCancelModal?.show();
+    });
+
+    document.getElementById('reviewConfirmRevisionsBtn')?.addEventListener('click', async () => {
+        const notes = document.getElementById('reviewRevisionsNotesInput').value.trim();
+        const revisionItems = collectReviewRevisionItems();
+        const errorEl = document.getElementById('reviewRevisionsNotesError');
+
+        if (!notes && !revisionItems.length) {
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        errorEl.style.display = 'none';
+        const btn = document.getElementById('reviewConfirmRevisionsBtn');
+        try {
+            btn.disabled = true;
+            await postReviewAction(`/api/order/${reviewPoId}/approval/revisions`, {
+                notes,
+                revision_items: revisionItems,
+            });
+        } catch (error) {
+            alert(error.message || 'Failed to request revisions.');
+            btn.disabled = false;
+        }
+    });
+
+    document.getElementById('reviewConfirmCancelBtn')?.addEventListener('click', async () => {
+        const notes = document.getElementById('reviewCancelNotesInput').value.trim();
+        const errorEl = document.getElementById('reviewCancelNotesError');
+
+        if (!notes) {
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        errorEl.style.display = 'none';
+        const btn = document.getElementById('reviewConfirmCancelBtn');
+        try {
+            btn.disabled = true;
+            await postReviewAction(`/api/order/${reviewPoId}/cancel`, { notes });
+        } catch (error) {
+            alert(error.message || 'Failed to cancel purchase order.');
+            btn.disabled = false;
+        }
+    });
+});
+</script>
+
+<div class="modal fade action-modal" id="reviewRevisionsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Revise Purchase Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="action-helper">
+                    Add a summary note or item-specific revision notes for anything the requester needs to change.
+                </div>
+                <label class="review-meta-label" for="reviewRevisionsNotesInput">Summary Notes</label>
+                <textarea id="reviewRevisionsNotesInput" class="form-control action-textarea" placeholder="Explain the revisions needed"></textarea>
+                <div id="reviewRevisionsNotesError" class="action-error">Add a summary note or at least one item revision.</div>
+
+                <div class="revision-items-preview">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Ordered</th>
+                                <th>Received</th>
+                                <th>Revision Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.quantity_ordered }}</td>
+                                <td>{{ item.quantity_received }}</td>
+                                <td>
+                                    <textarea
+                                        class="form-control review-revision-item-note"
+                                        data-revision-item-id="{{ item.item_id }}"
+                                        data-revision-item-name="{{ item.name }}"
+                                        placeholder="Describe what needs to change for this item"></textarea>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="btn btn-warning" id="reviewConfirmRevisionsBtn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Submit Revision Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade action-modal" id="reviewCancelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Cancel Purchase Order</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="action-helper">
+                    Cancellation requires a reason for the approval audit trail.
+                </div>
+                <label class="review-meta-label" for="reviewCancelNotesInput">Reason</label>
+                <textarea id="reviewCancelNotesInput" class="form-control action-textarea" placeholder="Explain why this PO is being cancelled"></textarea>
+                <div id="reviewCancelNotesError" class="action-error">Cancellation reason is required.</div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back</button>
+                <button type="button" class="btn btn-danger" id="reviewConfirmCancelBtn">
+                    <i class="bi bi-x-circle me-1"></i> Confirm Cancel PO
+                </button>
+            </div>
         </div>
     </div>
 </div>

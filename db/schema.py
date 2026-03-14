@@ -446,7 +446,34 @@ def init_db():
     )
     """)
 
-    # 21. APPROVAL REQUESTS TABLE
+    # 21. NOTIFICATIONS TABLE
+    # One row per recipient user. This keeps unread/read state independent
+    # even when the same business event is visible to multiple admins.
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS notifications (
+        id                  SERIAL PRIMARY KEY,
+        recipient_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        notification_type   TEXT NOT NULL,
+        category            TEXT NOT NULL DEFAULT 'general',
+        title               TEXT NOT NULL,
+        message             TEXT NOT NULL,
+        entity_type         TEXT,
+        entity_id           INTEGER,
+        action_url          TEXT,
+        is_read             INTEGER NOT NULL DEFAULT 0,
+        read_at             TIMESTAMP,
+        is_archived         INTEGER NOT NULL DEFAULT 0,
+        created_at          TIMESTAMP DEFAULT NOW(),
+        created_by          INTEGER REFERENCES users(id),
+        metadata            JSONB NOT NULL DEFAULT '{}'::jsonb
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created ON notifications(recipient_user_id, created_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient_unread ON notifications(recipient_user_id, is_archived, is_read, created_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_entity ON notifications(entity_type, entity_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_type)")
+
+    # 22. APPROVAL REQUESTS TABLE
     # Generic approval workflow table reusable by multiple business modules.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_requests (
@@ -476,7 +503,7 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_type ON approval_requests(approval_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_requests_requester ON approval_requests(requested_by)")
 
-    # 22. APPROVAL ACTIONS TABLE
+    # 23. APPROVAL ACTIONS TABLE
     # Immutable history of workflow actions for auditability.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_actions (
@@ -530,7 +557,7 @@ def init_db():
     END $$;
     """)
 
-    # 23. APPROVAL REVISION ITEMS
+    # 24. APPROVAL REVISION ITEMS
     # Structured per-item revision requests tied to a specific approval action.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_revision_items (
@@ -547,7 +574,7 @@ def init_db():
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_revision_items_request ON approval_revision_items(approval_request_id, approval_action_id)")
 
-    # 24. APPROVAL RESUBMISSION CHANGES
+    # 25. APPROVAL RESUBMISSION CHANGES
     # Structured before/after diff captured whenever a requester resubmits.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_resubmission_changes (
