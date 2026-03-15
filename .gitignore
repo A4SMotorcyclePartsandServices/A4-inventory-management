@@ -8,6 +8,7 @@ venv/
 # Database & Local Data
 *.db
 *.csv
+*.sql
 
 # Mac/Windows clutter
 .DS_Store
