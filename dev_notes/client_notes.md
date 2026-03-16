@@ -60,6 +60,7 @@ Future upgrade: move to Redis or DB
 
 ## March 15, 2026 client notes
 
+## PO Page
 - PO Page change Approval History to PO History both sides
 - Base.html change Stock in to Stock in (PO)
 - PO Page change ready to receive to Approved PO's
@@ -97,3 +98,15 @@ Future upgrade: move to Redis or DB
 - touch the cash ledger page, make an automated cash out
 - touch the inventory return the item
 - admin panel sales and audit tab touch for data update
+
+## Payables Feature
+- Supplier and Rental Payment
+- PO page on Delivered items only
+- Include partial and completed deliveries. extract PO number, Supplier name, date of PO when it was created, total amount for completed total amount for delivered for partial deliveries. get this data automatically
+- Then manual entry for issuing cheque. possible input boxes Fill in date of cheque, cheque number, cheque amount
+- Issuing a cheque for PO order and manual entries for other cheque related needs
+- Issuing a cheque for manual entries for things like rental same input as above but extra payee input and description input
+- PO based payment
+- basically just cheque monitoring for cheque made and alerting user of due cheques
+- PDF report for this. cheques issued this month and stuff as report
+- user has access to this page but the pdf report is only for admin

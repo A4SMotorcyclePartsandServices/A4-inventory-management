@@ -208,6 +208,68 @@
         .po-table .col-qty     { width: 12%; text-align: center; }
         .po-table .col-unit    { width: 16%; text-align: right; }
         .po-table .col-total   { width: 20%; text-align: right; }
+        .po-table.partial-layout .col-item-no { width: 8%; text-align: center; }
+        .po-table.partial-layout .col-desc { width: 18%; }
+        .po-table.partial-layout .col-unit { width: 11%; text-align: right; }
+        .po-table.partial-layout .col-qty { width: 9%; text-align: center; }
+        .po-table.partial-layout .col-total { width: 12%; text-align: right; }
+
+        .po-table.partial-layout thead th {
+            font-size: 0.64rem;
+            line-height: 1.2;
+            padding: 7px 5px;
+            white-space: normal;
+            word-break: keep-all;
+        }
+
+        .partial-note {
+            margin-top: 4px;
+            font-size: 0.72rem;
+            color: var(--muted);
+            line-height: 1.25;
+        }
+
+        .summary-grid {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+        }
+
+        .summary-card {
+            border: 1px solid #d7d7d7;
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fafafa;
+        }
+
+        .summary-card.delivered {
+            background: #eef9f1;
+            border-color: #bbdfc5;
+        }
+
+        .summary-card.remaining {
+            background: #fff8e8;
+            border-color: #ecd9a4;
+        }
+
+        .summary-label {
+            display: block;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #666;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .summary-value {
+            font-size: 0.92rem;
+            font-weight: 800;
+            font-family: 'Courier New', monospace;
+        }
 
         .total-row td {
             font-weight: 800;
@@ -375,17 +437,17 @@
     <div class="status-top">
         <div class="meta">Status</div>
         {% if po.status|upper == 'COMPLETED' %}
-            <span class="status-pill completed">Completed</span>
+            <span class="status-pill completed">Completed Delivery</span>
         {% elif po.status|upper == 'CANCELLED' %}
-            <span class="status-pill cancelled">Cancelled</span>
+            <span class="status-pill cancelled">Cancelled PO</span>
         {% elif po.status|upper == 'PARTIAL' %}
-            <span class="status-pill partial">Partial</span>
+            <span class="status-pill partial">Partial Delivery</span>
         {% elif po.status|upper == 'FOR_REVISIONS' %}
             <span class="status-pill revisions">For Revisions</span>
         {% elif po.status|upper == 'FOR_APPROVAL' %}
             <span class="status-pill pending">For Approval</span>
         {% elif po.status|upper == 'READY_TO_RECEIVE' %}
-            <span class="status-pill ready">Ready to Receive</span>
+            <span class="status-pill ready">Approved</span>
         {% else %}
             <span class="status-pill pending">Pending</span>
         {% endif %}
@@ -400,7 +462,7 @@
         </div>
         <div class="meta-row">
             <div class="meta-label">Address:</div>
-            <div class="meta-value-line meta-muted">&nbsp;</div>
+            <div class="meta-value-line">{{ po.vendor_address }}</div>
         </div>
         <div class="meta-row">
             <div class="meta-label">PO No:</div>
@@ -415,11 +477,11 @@
     <div>
         <div class="meta-row">
             <div class="meta-label">Contact Person:</div>
-            <div class="meta-value-line meta-muted">&nbsp;</div>
+            <div class="meta-value-line">{{ po.vendor_contact_person }}</div>
         </div>
         <div class="meta-row">
             <div class="meta-label">Contact No:</div>
-            <div class="meta-value-line meta-muted">&nbsp;</div>
+            <div class="meta-value-line">{{ po.vendor_contact_no }}</div>
         </div>
         <div class="meta-row">
             <div class="meta-label">Payment Terms:</div>
@@ -428,10 +490,25 @@
     </div>
 </div>
 
+{% set is_partial_delivery = po.status|upper == 'PARTIAL' %}
+{% set totals = namespace(delivered=0, remaining=0) %}
 {% for page in po["item_pages"] %}
 <div class="page-section">
-    <table class="po-table">
+    <table class="po-table {% if is_partial_delivery %}partial-layout{% endif %}">
         <thead>
+            {% if is_partial_delivery %}
+            <tr>
+                <th class="col-item-no">Item No.</th>
+                <th class="col-desc">Item Description</th>
+                <th class="col-unit">Unit Price</th>
+                <th class="col-qty">Ordered Qty</th>
+                <th class="col-total">Ordered Total</th>
+                <th class="col-qty">Delivered Qty</th>
+                <th class="col-total">Delivered Total</th>
+                <th class="col-qty">Remaining Qty</th>
+                <th class="col-total">Remaining Balance</th>
+            </tr>
+            {% else %}
             <tr>
                 <th class="col-item-no">Item No.</th>
                 <th class="col-desc">Item Description</th>
@@ -439,23 +516,50 @@
                 <th class="col-unit">Unit Price</th>
                 <th class="col-total">Total Price</th>
             </tr>
+            {% endif %}
         </thead>
         <tbody>
             {% for item in page %}
+            {% set ordered_qty = item.quantity_ordered or 0 %}
+            {% set delivered_qty = item.quantity_received or 0 %}
+            {% set unit_cost = item.unit_cost or 0 %}
+            {% set ordered_total = item.subtotal or (ordered_qty * unit_cost) %}
+            {% set delivered_total = delivered_qty * unit_cost %}
+            {% set remaining_qty = ordered_qty - delivered_qty %}
+            {% set remaining_balance = remaining_qty * unit_cost %}
+            {% set totals.delivered = totals.delivered + delivered_total %}
+            {% set totals.remaining = totals.remaining + remaining_balance %}
+            {% if is_partial_delivery %}
+            <tr>
+                <td class="center">{{ item.item_no }}</td>
+                <td>
+                    {{ item.name }}
+                    <div class="partial-note">{{ delivered_qty }} of {{ ordered_qty }} delivered. {{ remaining_qty }} still expected.</div>
+                </td>
+                <td class="right money">{{ "%.2f"|format(unit_cost) }}</td>
+                <td class="center">{{ ordered_qty }}</td>
+                <td class="right money">{{ "%.2f"|format(ordered_total) }}</td>
+                <td class="center">{{ delivered_qty }}</td>
+                <td class="right money">{{ "%.2f"|format(delivered_total) }}</td>
+                <td class="center">{{ remaining_qty }}</td>
+                <td class="right money">{{ "%.2f"|format(remaining_balance) }}</td>
+            </tr>
+            {% else %}
             <tr>
                 <td class="center">{{ item.item_no }}</td>
                 <td>{{ item.name }}</td>
-                <td class="center">{{ item.quantity_ordered }}</td>
-                <td class="right money">{{ "%.2f"|format(item.unit_cost) }}</td>
-                <td class="right money">{{ "%.2f"|format(item.subtotal) }}</td>
+                <td class="center">{{ ordered_qty }}</td>
+                <td class="right money">{{ "%.2f"|format(unit_cost) }}</td>
+                <td class="right money">{{ "%.2f"|format(ordered_total) }}</td>
             </tr>
+            {% endif %}
             {% endfor %}
             {% if not page %}
             <tr>
-                <td colspan="5" class="center meta-muted">No items recorded for this purchase order.</td>
+                <td colspan="{% if is_partial_delivery %}9{% else %}5{% endif %}" class="center meta-muted">No items recorded for this purchase order.</td>
             </tr>
             {% endif %}
-            {% if loop.last %}
+            {% if loop.last and not is_partial_delivery %}
             <tr class="total-row">
                 <td colspan="4" class="right">Total</td>
                 <td class="right money">{{ "%.2f"|format(po.total_amount) }}</td>
@@ -469,6 +573,23 @@
 <div class="page-break"></div>
 {% endif %}
 {% endfor %}
+
+{% if is_partial_delivery %}
+<div class="summary-grid">
+    <div class="summary-card">
+        <span class="summary-label">PO Total</span>
+        <span class="summary-value">{{ "%.2f"|format(po.total_amount) }}</span>
+    </div>
+    <div class="summary-card delivered">
+        <span class="summary-label">Delivered Value</span>
+        <span class="summary-value">{{ "%.2f"|format(totals.delivered) }}</span>
+    </div>
+    <div class="summary-card remaining">
+        <span class="summary-label">Remaining Balance</span>
+        <span class="summary-value">{{ "%.2f"|format(totals.remaining) }}</span>
+    </div>
+</div>
+{% endif %}
 
 <div class="signatures">
     <div class="sig-block">

@@ -389,6 +389,97 @@
         border-color: var(--border-soft);
     }
 
+    .po-total-summary {
+        margin-top: 14px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .po-total-summary-card {
+        min-width: 240px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(193, 18, 31, 0.16), rgba(193, 18, 31, 0.08));
+        border: 1px solid rgba(193, 18, 31, 0.28);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .po-total-label,
+    .po-total-value {
+        font-weight: 800;
+        letter-spacing: 0.4px;
+    }
+
+    .po-total-label {
+        color: #fca5a5;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+    }
+
+    .po-total-value {
+        color: #ffffff;
+        font-size: 1.05rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .po-summary-grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .po-summary-card {
+        border-radius: 12px;
+        padding: 13px 15px;
+        border: 1px solid var(--border-soft);
+        background: #151922;
+    }
+
+    .po-summary-card.delivered {
+        background: rgba(25, 135, 84, 0.12);
+        border-color: rgba(25, 135, 84, 0.28);
+    }
+
+    .po-summary-card.remaining {
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.28);
+    }
+
+    .po-summary-title {
+        display: block;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .po-summary-value {
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+    }
+
+    .partial-note {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        white-space: normal;
+    }
+
+    @media (max-width: 767px) {
+        .po-summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .qty-badge {
         display: inline-block;
         background: #13161e;
@@ -781,22 +872,22 @@
     </button>
     <button class="po-tab tab-pending" onclick="switchTab('pending', this)">
         <span class="tab-dot"></span>
-        Ready to Receive
+        Approved PO's
         {% if pending_orders %}<span class="tab-count">{{ pending_orders | length }}</span>{% endif %}
     </button>
     <button class="po-tab tab-partial" onclick="switchTab('partial', this)">
         <span class="tab-dot"></span>
-        Partial
+        Partial Deliveries
         {% if partial_orders %}<span class="tab-count">{{ partial_orders | length }}</span>{% endif %}
     </button>
     <button class="po-tab tab-completed" onclick="switchTab('completed', this)">
         <span class="tab-dot"></span>
-        Completed
+        Completed Deliveries
         {% if completed_orders %}<span class="tab-count">{{ completed_orders | length }}</span>{% endif %}
     </button>
     <button class="po-tab tab-cancelled" onclick="switchTab('cancelled', this)">
         <span class="tab-dot"></span>
-        Cancelled
+        Cancelled PO's
         {% if cancelled_orders %}<span class="tab-count">{{ cancelled_orders | length }}</span>{% endif %}
     </button>
 </div>
@@ -857,7 +948,7 @@
             <div class="po-box status-pending" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-pending">Ready to Receive</span>
+                    <span class="badge-pending">Approved</span>
                 </div>
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
@@ -869,7 +960,7 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state"><i class="bi bi-inbox"></i> No approved purchase orders waiting for receiving.</div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No approved PO's waiting for receiving.</div>
     {% endif %}
 </div>
 
@@ -881,7 +972,7 @@
             <div class="po-box status-partial" onclick="openOrderDetails({{ order.id }})">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
-                    <span class="badge-partial">Partial</span>
+                    <span class="badge-partial">Partial Delivery</span>
                 </div>
                 <div class="po-vendor">{{ order.vendor_name }}</div>
                 <div class="po-meta">
@@ -893,7 +984,7 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="empty-state"><i class="bi bi-inbox"></i> No partially received purchase orders.</div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No partial deliveries yet.</div>
     {% endif %}
 </div>
 
@@ -919,7 +1010,7 @@
                         <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                                <span class="badge-completed">Completed</span>
+                                <span class="badge-completed">Completed Delivery</span>
                             </div>
                             <div class="po-vendor">{{ order.vendor_name }}</div>
                             <div class="po-meta">
@@ -960,7 +1051,7 @@
                         <div class="po-box status-cancelled" onclick="openOrderDetails({{ order.id }})">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                                <span class="badge-cancelled">Cancelled</span>
+                                <span class="badge-cancelled">Cancelled PO</span>
                             </div>
                             <div class="po-vendor">{{ order.vendor_name }}</div>
                             <div class="po-meta">
@@ -975,7 +1066,7 @@
     </div>
     {% endfor %}
     {% else %}
-    <div class="empty-state"><i class="bi bi-inbox"></i> No cancelled purchase orders.</div>
+    <div class="empty-state"><i class="bi bi-inbox"></i> No cancelled PO's.</div>
     {% endif %}
 </div>
 
@@ -1028,19 +1119,22 @@
                     <div class="table-responsive">
                         <table class="table table-po-items mb-0">
                             <thead>
-                                <tr>
+                                <tr id="modalItemsHeaderRow">
                                     <th>Item</th>
-                                    <th class="text-center">Ordered</th>
-                                    <th class="text-center">Received</th>
+                                    <th class="text-end" id="modalPriceHeader">Price</th>
+                                    <th class="text-end" id="modalTotalHeader">Total</th>
+                                    <th class="text-center" id="modalOrderedHeader">Ordered</th>
+                                    <th class="text-center" id="modalReceivedHeader">Received</th>
                                 </tr>
                             </thead>
                             <tbody id="modalItemsBody"></tbody>
                         </table>
                     </div>
+                    <div id="modalItemsSummary"></div>
                 </div>
 
                 <div>
-                    <span class="modal-meta-label">Approval History</span>
+                    <span class="modal-meta-label">PO History</span>
                     <button
                         type="button"
                         class="history-toggle"
@@ -1219,6 +1313,11 @@ function switchTab(name, btn) {
     document.getElementById(`panel-${name}`).classList.add('active');
 }
 
+function formatMoney(value) {
+    const amount = Number(value || 0);
+    return amount.toFixed(2);
+}
+
 async function openOrderDetails(poId) {
     if (!orderModal) {
         orderModal = new bootstrap.Modal(document.getElementById('orderModal'));
@@ -1239,7 +1338,7 @@ async function openOrderDetails(poId) {
         document.getElementById('modalCreator').innerText = data.po.created_by_username || '-';
         document.getElementById('modalDate').innerText = data.po.created_at || '-';
         document.getElementById('modalApprovalStatus').innerText = formatApprovalStatus(data.approval?.status);
-        document.getElementById('modalApprovalNotes').innerText = data.approval?.decision_notes || 'None';
+        document.getElementById('modalApprovalNotes').innerText = data.po.notes || 'None';
         document.getElementById('exportPoCsvBtn').href = `/export/purchase-order/${poId}/csv`;
         document.getElementById('exportPoPdfBtn').href = `/reports/purchase-order/${poId}`;
         const reviewPageBtn = document.getElementById('reviewPageBtn');
@@ -1255,8 +1354,25 @@ async function openOrderDetails(poId) {
         const actionSeparatorOne = document.getElementById('actionSeparatorOne');
         const actionSeparatorTwo = document.getElementById('actionSeparatorTwo');
         const currentPoStatus = String(data.po.status || '').toUpperCase();
+        const isPartialDelivery = currentPoStatus === 'PARTIAL';
         const isReviewOnlyState = ['COMPLETED', 'CANCELLED'].includes(currentPoStatus);
         renderAdminActions(data.permissions, currentPoStatus);
+        document.getElementById('modalItemsHeaderRow').innerHTML = isPartialDelivery ? `
+            <th>Item</th>
+            <th class="text-end">Price</th>
+            <th class="text-center">Ordered Qty</th>
+            <th class="text-end">Ordered Total</th>
+            <th class="text-center">Delivered Qty</th>
+            <th class="text-end">Delivered Total</th>
+            <th class="text-center">Remaining Qty</th>
+            <th class="text-end">Remaining Balance</th>
+        ` : `
+            <th>Item</th>
+            <th class="text-end" id="modalPriceHeader">Price</th>
+            <th class="text-end" id="modalTotalHeader">Total</th>
+            <th class="text-center" id="modalOrderedHeader">Ordered</th>
+            <th class="text-center" id="modalReceivedHeader">Received</th>
+        `;
 
         const editBtn = document.getElementById('editBtn');
         const isAdminReadyToReceive = currentRole === 'admin' && currentPoStatus === 'PENDING';
@@ -1301,20 +1417,85 @@ async function openOrderDetails(poId) {
         actionSeparatorOne.style.display = !isAdminReadyToReceive && !isReviewOnlyState && usesSingleRowWorkflow && hasLeadingActions && hasMiddleActions ? 'block' : 'none';
         actionSeparatorTwo.style.display = !isAdminReadyToReceive && !isReviewOnlyState && currentPoStatus !== 'PARTIAL' && usesSingleRowWorkflow && reviewPageBtn.style.display !== 'none' ? 'block' : 'none';
 
+        let deliveredValueTotal = 0;
+        let remainingBalanceTotal = 0;
+
         document.getElementById('modalItemsBody').innerHTML = (data.items || []).map(item => {
             const isFullyReceived = Number(item.quantity_received || 0) >= Number(item.quantity_ordered || 0);
+            const unitCost = Number(item.unit_cost || 0);
+            const orderedQty = Number(item.quantity_ordered || 0);
+            const deliveredQty = Number(item.quantity_received || 0);
+            const orderedSubtotal = orderedQty * unitCost;
+            const deliveredSubtotal = deliveredQty * unitCost;
+            const remainingQty = Math.max(orderedQty - deliveredQty, 0);
+            const remainingBalance = remainingQty * unitCost;
+            deliveredValueTotal += deliveredSubtotal;
+            remainingBalanceTotal += remainingBalance;
+
+            if (isPartialDelivery) {
+                return `
+                    <tr>
+                        <td>
+                            ${escapeHtml(item.name)}
+                            <div class="partial-note">
+                                ${escapeHtml(`${deliveredQty} of ${orderedQty} delivered. ${remainingQty} still expected.`)}
+                            </div>
+                        </td>
+                        <td class="text-end">${escapeHtml(formatMoney(unitCost))}</td>
+                        <td class="text-center">
+                            <span class="qty-badge">${escapeHtml(String(orderedQty))}</span>
+                        </td>
+                        <td class="text-end">${escapeHtml(formatMoney(orderedSubtotal))}</td>
+                        <td class="text-center">
+                            <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(deliveredQty))}</span>
+                        </td>
+                        <td class="text-end">${escapeHtml(formatMoney(deliveredSubtotal))}</td>
+                        <td class="text-center">
+                            <span class="qty-badge">${escapeHtml(String(remainingQty))}</span>
+                        </td>
+                        <td class="text-end">${escapeHtml(formatMoney(remainingBalance))}</td>
+                    </tr>
+                `;
+            }
+
             return `
                 <tr>
                     <td>${escapeHtml(item.name)}</td>
+                    <td class="text-end">${escapeHtml(formatMoney(unitCost))}</td>
+                    <td class="text-end">${escapeHtml(formatMoney(orderedSubtotal))}</td>
                     <td class="text-center">
-                        <span class="qty-badge">${escapeHtml(String(item.quantity_ordered ?? 0))}</span>
+                        <span class="qty-badge">${escapeHtml(String(orderedQty))}</span>
                     </td>
                     <td class="text-center">
-                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(item.quantity_received ?? 0))}</span>
+                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(deliveredQty))}</span>
                     </td>
                 </tr>
             `;
         }).join('');
+
+        document.getElementById('modalItemsSummary').innerHTML = isPartialDelivery ? `
+            <div class="po-summary-grid">
+                <div class="po-summary-card">
+                    <span class="po-summary-title">PO Total</span>
+                    <span class="po-summary-value">${escapeHtml(formatMoney(data.po.total_amount || 0))}</span>
+                </div>
+                <div class="po-summary-card delivered">
+                    <span class="po-summary-title">Delivered Value</span>
+                    <span class="po-summary-value">${escapeHtml(formatMoney(deliveredValueTotal))}</span>
+                </div>
+                <div class="po-summary-card remaining">
+                    <span class="po-summary-title">Remaining Balance</span>
+                    <span class="po-summary-value">${escapeHtml(formatMoney(remainingBalanceTotal))}</span>
+                </div>
+            </div>
+        ` : `
+            <div class="po-total-summary">
+                <div class="po-total-summary-card">
+                    <span class="po-total-label">Overall Total</span>
+                    <span class="po-total-value">${escapeHtml(formatMoney(data.po.total_amount || 0))}</span>
+                </div>
+            </div>
+        `;
 
         document.getElementById('modalApprovalHistoryCount').innerText = formatHistoryCount((data.approval?.actions || []).length);
         document.getElementById('modalApprovalHistory').innerHTML = renderApprovalHistory(data.approval?.actions || []);
@@ -1338,16 +1519,16 @@ function renderStatusBadge(poStatus, approvalStatus) {
         return '<span class="badge-for-approval">For Approval</span>';
     }
     if (poStatus === 'PENDING') {
-        return '<span class="badge-pending">Ready to Receive</span>';
+        return '<span class="badge-pending">Approved</span>';
     }
     if (poStatus === 'PARTIAL') {
-        return '<span class="badge-partial">Partial</span>';
+        return '<span class="badge-partial">Partial Delivery</span>';
     }
     if (poStatus === 'COMPLETED') {
-        return '<span class="badge-completed">Completed</span>';
+        return '<span class="badge-completed">Completed Delivery</span>';
     }
     if (poStatus === 'CANCELLED') {
-        return '<span class="badge-cancelled">Cancelled</span>';
+        return '<span class="badge-cancelled">Cancelled PO</span>';
     }
     return `<span class="badge-for-approval">${escapeHtml(String(poStatus || 'Unknown'))}</span>`;
 }

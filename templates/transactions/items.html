@@ -242,9 +242,13 @@
             <div class="row g-3">
                 <div class="col-md-6 position-relative">
                     <label class="form-label small text-white-50">Default Vendor <span class="req">*</span></label>
-                    <input type="text" id="vendor_search" class="form-control bg-dark text-white border-secondary" placeholder="Search vendor name, contact person, phone, or email" autocomplete="off" required>
-                    <input type="hidden" name="vendor_id" id="vendor_id">
-                    <div id="vendorSearchResults" class="search-results vendor-search-results"></div>
+                    <select name="vendor_id" id="vendor_select" class="form-control bg-dark text-white border-secondary" required>
+                        <option value="">-- Select Vendor --</option>
+                        {% for vendor in vendors %}
+                            <option value="{{ vendor.id }}">{{ vendor.vendor_name }}</option>
+                        {% endfor %}
+                        <option value="__NEW_VENDOR__">-- New Vendor --</option>
+                    </select>
                     <div id="vendorSelectedCard" class="vendor-selection-card" style="display:none;">
                         <div class="d-flex justify-content-between align-items-start gap-2">
                             <div>
@@ -330,15 +334,14 @@
     const markupHidden = document.getElementById('markup_input');
     const categorySelect = document.getElementById('categorySelect');
     const newCategoryInput = document.getElementById('newCategoryInput');
-    const vendorSearchInput = document.getElementById('vendor_search');
-    const vendorIdInput = document.getElementById('vendor_id');
-    const vendorSearchResults = document.getElementById('vendorSearchResults');
+    const vendorOptions = {{ vendors|tojson }};
+    const NEW_VENDOR_OPTION = '__NEW_VENDOR__';
+    const vendorSelect = document.getElementById('vendor_select');
     const vendorSelectedCard = document.getElementById('vendorSelectedCard');
     const vendorSelectedName = document.getElementById('vendorSelectedName');
     const vendorSelectedMeta = document.getElementById('vendorSelectedMeta');
     const clearVendorBtn = document.getElementById('clearVendorBtn');
-
-    let vendorSearchTimer = null;
+    const vendorMap = new Map(vendorOptions.map(vendor => [String(vendor.id), vendor]));
 
     function syncCategoryFields() {
         if (categorySelect.value === "__OTHER__") {
@@ -392,12 +395,10 @@
     }
 
     function selectVendor(vendor) {
-        vendorIdInput.value = vendor.id || '';
-        vendorSearchInput.value = vendor.vendor_name || '';
+        vendorSelect.value = String(vendor.id || '');
         vendorSelectedName.textContent = vendor.vendor_name || '';
         vendorSelectedMeta.innerHTML = renderVendorMeta(vendor);
         vendorSelectedCard.style.display = 'block';
-        vendorSearchResults.style.display = 'none';
         vendorSelectedCard.dataset.address = vendor.address || '';
         vendorSelectedCard.dataset.contactPerson = vendor.contact_person || '';
         vendorSelectedCard.dataset.contactNo = vendor.contact_no || '';
@@ -405,8 +406,7 @@
     }
 
     function clearVendorSelection() {
-        vendorIdInput.value = '';
-        vendorSearchInput.value = '';
+        vendorSelect.value = '';
         vendorSelectedName.textContent = '';
         vendorSelectedMeta.innerHTML = '';
         vendorSelectedCard.style.display = 'none';
@@ -417,7 +417,6 @@
     }
 
     function openNewVendorModal(prefill = '') {
-        vendorSearchResults.style.display = 'none';
         document.getElementById('new-vendor-name').value = prefill;
         document.getElementById('new-vendor-address').value = '';
         document.getElementById('new-vendor-contact-person').value = '';
@@ -427,52 +426,39 @@
         new bootstrap.Modal(document.getElementById('newVendorModal')).show();
     }
 
-    vendorSearchInput.addEventListener('input', () => {
-        clearTimeout(vendorSearchTimer);
-        vendorIdInput.value = '';
-        vendorSelectedCard.style.display = 'none';
-
-        const query = vendorSearchInput.value.trim();
-        if (query.length < 2) {
-            vendorSearchResults.style.display = 'none';
+    function handleVendorSelectionChange() {
+        const selectedValue = vendorSelect.value;
+        if (!selectedValue) {
+            clearVendorSelection();
+            syncVendorValidity();
             return;
         }
 
-        vendorSearchTimer = setTimeout(async () => {
-            try {
-                const response = await fetch(`/api/search/vendors?q=${encodeURIComponent(query)}`);
-                const data = await response.json();
-                const vendors = data.vendors || [];
+        if (selectedValue === NEW_VENDOR_OPTION) {
+            clearVendorSelection();
+            openNewVendorModal();
+            syncVendorValidity();
+            return;
+        }
 
-                vendorSearchResults.innerHTML = '';
+        const vendor = vendorMap.get(String(selectedValue));
+        if (vendor) {
+            selectVendor(vendor);
+        } else {
+            clearVendorSelection();
+        }
+        syncVendorValidity();
+    }
 
-                const addBtn = document.createElement('button');
-                addBtn.type = 'button';
-                addBtn.className = 'result-item no-results w-100 text-start bg-transparent border-0';
-                addBtn.innerHTML = `<i class="bi bi-truck me-2" style="color:#67c2e4;"></i>Add new vendor: <strong>${escapeHtml(query)}</strong>`;
-                addBtn.onclick = () => openNewVendorModal(query);
-                vendorSearchResults.appendChild(addBtn);
+    vendorSelect.addEventListener('change', handleVendorSelectionChange);
 
-                vendors.forEach(vendor => {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'result-item w-100 text-start bg-transparent border-0';
-                    btn.innerHTML = `
-                        <div><strong>${escapeHtml(vendor.vendor_name || '')}</strong></div>
-                        <div class="small text-muted">
-                            ${escapeHtml(vendor.contact_person || 'No contact person')}
-                            ${vendor.contact_no ? ` - ${escapeHtml(vendor.contact_no)}` : ''}
-                        </div>
-                    `;
-                    btn.onclick = () => selectVendor(vendor);
-                    vendorSearchResults.appendChild(btn);
-                });
-
-                vendorSearchResults.style.display = 'block';
-            } catch (error) {
-                console.error('Vendor search failed:', error);
+    document.getElementById('newVendorModal').addEventListener('hidden.bs.modal', () => {
+        if (!vendorSelectedCard.style.display || vendorSelectedCard.style.display === 'none') {
+            if (vendorSelect.value === NEW_VENDOR_OPTION) {
+                vendorSelect.value = '';
             }
-        }, 250);
+            syncVendorValidity();
+        }
     });
 
     clearVendorBtn.addEventListener('click', clearVendorSelection);
@@ -503,6 +489,14 @@
 
             if (data.status === 'success') {
                 bootstrap.Modal.getInstance(document.getElementById('newVendorModal')).hide();
+                vendorMap.set(String(data.vendor.id), data.vendor);
+                const existingOption = Array.from(vendorSelect.options).find(option => option.value === String(data.vendor.id));
+                if (!existingOption) {
+                    const newOption = document.createElement('option');
+                    newOption.value = String(data.vendor.id);
+                    newOption.textContent = data.vendor.vendor_name || 'New Vendor';
+                    vendorSelect.insertBefore(newOption, vendorSelect.querySelector(`option[value="${NEW_VENDOR_OPTION}"]`));
+                }
                 selectVendor(data.vendor);
                 return;
             }
@@ -513,19 +507,13 @@
         }
     });
 
-    document.addEventListener('click', (e) => {
-        if (!vendorSearchInput.contains(e.target) && !vendorSearchResults.contains(e.target)) {
-            vendorSearchResults.style.display = 'none';
-        }
-    });
-
     const form = document.querySelector('form');
 
     function syncVendorValidity() {
-        if (vendorIdInput.value.trim()) {
-            vendorSearchInput.setCustomValidity('');
+        if (vendorSelect.value && vendorSelect.value !== NEW_VENDOR_OPTION) {
+            vendorSelect.setCustomValidity('');
         } else {
-            vendorSearchInput.setCustomValidity('Please select a vendor from the list.');
+            vendorSelect.setCustomValidity('Please select a vendor from the list.');
         }
     }
 
@@ -541,9 +529,7 @@
         syncVendorValidity();
     };
 
-    vendorSearchInput.addEventListener('input', syncVendorValidity);
-    vendorSearchInput.addEventListener('change', syncVendorValidity);
-    vendorSearchInput.addEventListener('invalid', syncVendorValidity);
+    vendorSelect.addEventListener('invalid', syncVendorValidity);
     clearVendorBtn.addEventListener('click', syncVendorValidity);
 
     form.addEventListener('submit', function () {

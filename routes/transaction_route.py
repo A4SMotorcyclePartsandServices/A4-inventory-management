@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
+from db.database import get_db
 from auth.utils import admin_required, login_required
 from services.inventory_service import get_unique_categories
 from utils.formatters import format_date
@@ -29,6 +30,22 @@ from services.transactions_service import (
 transaction_bp = Blueprint('transaction', __name__)
 
 
+def _get_active_vendors():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, vendor_name, address, contact_person, contact_no, email
+            FROM vendors
+            WHERE is_active = 1
+            ORDER BY vendor_name ASC
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 @transaction_bp.route("/transaction/out")
 def transaction_out():
     context = get_transaction_out_context()
@@ -44,11 +61,13 @@ def transaction_in():
 @transaction_bp.route("/transaction/items")
 def manage_items():
     categories = get_unique_categories()
+    vendors = _get_active_vendors()
     return_to = request.args.get('return_to', 'in')
     prefill_name = (request.args.get('prefill_name') or '').strip()
     return render_template(
         "transactions/items.html",
         categories=categories,
+        vendors=vendors,
         return_to=return_to,
         prefill_name=prefill_name
     )
@@ -158,7 +177,7 @@ def save_transaction_out():
 @transaction_bp.route("/transaction/order")
 @login_required
 def create_order_page():
-    return render_template("transactions/order.html")
+    return render_template("transactions/order.html", vendors=_get_active_vendors())
 
 
 @transaction_bp.route("/transaction/order/save", methods=["POST"])

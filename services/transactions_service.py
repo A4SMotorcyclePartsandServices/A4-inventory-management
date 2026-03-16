@@ -1138,7 +1138,7 @@ def get_purchase_order_export_data(po_id):
     """Returns PO + item rows formatted for CSV export."""
     conn = get_db()
     po = conn.execute("""
-        SELECT id, po_number, vendor_name, status, created_at, received_at, total_amount
+        SELECT id, po_number, vendor_name, vendor_address, vendor_contact_person, vendor_contact_no, status, created_at, received_at, total_amount
         FROM purchase_orders
         WHERE id = %s
     """, (po_id,)).fetchone()
@@ -1253,12 +1253,20 @@ def get_purchase_order_review_context(po_id, current_user_id=None, current_role=
             }
         )
 
+    review_notes = details["po"].get("notes") or "-"
+    for action in review_timeline:
+        action_type = str(action.get("action_type") or "").upper()
+        if "CANCEL" in action_type:
+            review_notes = action.get("notes") or "-"
+            break
+
     return {
         "po": details["po"],
         "items": details["items"],
         "approval": details["approval"],
         "permissions": details["permissions"],
         "review_timeline": review_timeline,
+        "review_notes": review_notes,
     }
 
 

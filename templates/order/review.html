@@ -174,6 +174,97 @@
         font-size: 0.9rem;
     }
 
+    .review-summary-grid {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .review-summary-card {
+        border-radius: 12px;
+        padding: 13px 15px;
+        border: 1px solid var(--border-soft);
+        background: #151922;
+    }
+
+    .review-summary-card.delivered {
+        background: rgba(25, 135, 84, 0.12);
+        border-color: rgba(25, 135, 84, 0.28);
+    }
+
+    .review-summary-card.remaining {
+        background: rgba(245, 158, 11, 0.12);
+        border-color: rgba(245, 158, 11, 0.28);
+    }
+
+    .review-summary-title {
+        display: block;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }
+
+    .review-summary-value {
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+    }
+
+    .po-total-summary {
+        margin-top: 16px;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .po-total-summary-card {
+        min-width: 240px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(193, 18, 31, 0.16), rgba(193, 18, 31, 0.08));
+        border: 1px solid rgba(193, 18, 31, 0.28);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .po-total-label,
+    .po-total-value {
+        font-weight: 800;
+        letter-spacing: 0.4px;
+    }
+
+    .po-total-label {
+        color: #fca5a5;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+    }
+
+    .po-total-value {
+        color: #ffffff;
+        font-size: 1.05rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .review-inline-note {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        white-space: normal;
+    }
+
+    @media (max-width: 767px) {
+        .review-summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     .review-timeline {
         display: grid;
         gap: 16px;
@@ -396,13 +487,19 @@
                     {% if workflow_status == 'PENDING' %}
                     For Approval
                     {% elif workflow_status == 'APPROVED' %}
-                    Ready to Receive
+                    Approved
+                    {% elif workflow_status == 'PARTIAL' %}
+                    Partial Delivery
+                    {% elif workflow_status == 'COMPLETED' %}
+                    Completed Delivery
+                    {% elif workflow_status == 'CANCELLED' %}
+                    Cancelled PO
                     {% else %}
                     {{ workflow_status|replace('_', ' ') }}
                     {% endif %}
                 </span>
             </div>
-            <div class="review-subtitle">Dedicated review view for revision requests and resubmission changes.</div>
+            <div class="review-subtitle">Detailed PO history view for approvals, revisions, cancellations, and delivery progress.</div>
 
             <div class="review-meta-grid">
                 <div class="review-meta">
@@ -418,8 +515,8 @@
                     <span class="review-meta-value">{{ po.created_at or '-' }}</span>
                 </div>
                 <div class="review-meta">
-                    <span class="review-meta-label">PO Notes</span>
-                    <span class="review-meta-value">{{ po.notes or '-' }}</span>
+                    <span class="review-meta-label">Current PO Note</span>
+                    <span class="review-meta-value">{{ review_notes or '-' }}</span>
                 </div>
             </div>
         </div>
@@ -450,33 +547,92 @@
     </div>
 
     <div class="review-card">
-        <h2 class="review-card-title">Current PO Items</h2>
+        <h2 class="review-card-title">PO Item Breakdown</h2>
+        {% set is_partial_delivery = po.status == 'PARTIAL' %}
+        {% set summary = namespace(delivered=0, remaining=0) %}
         <div class="table-responsive">
             <table class="review-items-table">
                 <thead>
                     <tr>
                         <th>Item</th>
+                        <th>Price</th>
+                        {% if is_partial_delivery %}
+                        <th>Ordered Qty</th>
+                        <th>Ordered Total</th>
+                        <th>Delivered Qty</th>
+                        <th>Delivered Total</th>
+                        <th>Remaining Qty</th>
+                        <th>Remaining Balance</th>
+                        {% else %}
+                        <th>Total</th>
                         <th>Ordered</th>
                         <th>Received</th>
-                        <th>Unit Cost</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in items %}
+                    {% set ordered_qty = item.quantity_ordered or 0 %}
+                    {% set delivered_qty = item.quantity_received or 0 %}
+                    {% set unit_cost = item.unit_cost or 0 %}
+                    {% set ordered_total = ordered_qty * unit_cost %}
+                    {% set delivered_total = delivered_qty * unit_cost %}
+                    {% set remaining_qty = ordered_qty - delivered_qty %}
+                    {% set remaining_balance = remaining_qty * unit_cost %}
+                    {% set summary.delivered = summary.delivered + delivered_total %}
+                    {% set summary.remaining = summary.remaining + remaining_balance %}
                     <tr>
-                        <td>{{ item.name }}</td>
-                        <td>{{ item.quantity_ordered }}</td>
-                        <td>{{ item.quantity_received }}</td>
-                        <td>{{ "%.2f"|format(item.unit_cost or 0) }}</td>
+                        <td>
+                            {{ item.name }}
+                            {% if is_partial_delivery %}
+                            <div class="review-inline-note">{{ delivered_qty }} of {{ ordered_qty }} delivered. {{ remaining_qty }} still expected.</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(unit_cost) }}</td>
+                        {% if is_partial_delivery %}
+                        <td>{{ ordered_qty }}</td>
+                        <td>{{ "%.2f"|format(ordered_total) }}</td>
+                        <td>{{ delivered_qty }}</td>
+                        <td>{{ "%.2f"|format(delivered_total) }}</td>
+                        <td>{{ remaining_qty }}</td>
+                        <td>{{ "%.2f"|format(remaining_balance) }}</td>
+                        {% else %}
+                        <td>{{ "%.2f"|format(ordered_total) }}</td>
+                        <td>{{ ordered_qty }}</td>
+                        <td>{{ delivered_qty }}</td>
+                        {% endif %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% if is_partial_delivery %}
+        <div class="review-summary-grid">
+            <div class="review-summary-card">
+                <span class="review-summary-title">PO Total</span>
+                <span class="review-summary-value">{{ "%.2f"|format(po.total_amount or 0) }}</span>
+            </div>
+            <div class="review-summary-card delivered">
+                <span class="review-summary-title">Delivered Value</span>
+                <span class="review-summary-value">{{ "%.2f"|format(summary.delivered) }}</span>
+            </div>
+            <div class="review-summary-card remaining">
+                <span class="review-summary-title">Remaining Balance</span>
+                <span class="review-summary-value">{{ "%.2f"|format(summary.remaining) }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="po-total-summary">
+            <div class="po-total-summary-card">
+                <span class="po-total-label">Overall Total</span>
+                <span class="po-total-value">{{ "%.2f"|format(po.total_amount or 0) }}</span>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="review-card">
-        <h2 class="review-card-title">Approval Timeline</h2>
+        <h2 class="review-card-title">PO History</h2>
         <div class="review-timeline">
             {% for action in review_timeline %}
             <div class="timeline-card">
