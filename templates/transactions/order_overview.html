@@ -348,6 +348,18 @@
         padding: 24px;
     }
 
+    #orderModal .modal-body {
+        flex: 1 1 auto;
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+
+    #orderModal .modal-content {
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+
     .modal-meta-label {
         font-size: 0.7rem;
         text-transform: uppercase;
@@ -832,6 +844,79 @@
         color: var(--text-muted);
         white-space: pre-wrap;
     }
+
+    .delivery-history-list {
+        display: grid;
+        gap: 12px;
+    }
+
+    .delivery-history-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #141821;
+        padding: 14px 16px;
+    }
+
+    .delivery-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .delivery-history-title {
+        font-size: 0.86rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .delivery-history-meta {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+    }
+
+    .delivery-history-total {
+        color: #86efac;
+        font-size: 0.84rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+    }
+
+    .delivery-history-items {
+        display: grid;
+        gap: 8px;
+    }
+
+    .delivery-history-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+    }
+
+    .delivery-history-item-name {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .delivery-history-item-note {
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 0.76rem;
+        white-space: pre-wrap;
+    }
+
+    .delivery-history-item-values {
+        text-align: right;
+        color: var(--text-primary);
+        font-size: 0.8rem;
+        min-width: 150px;
+    }
 </style>
 {% endblock %}
 
@@ -1133,6 +1218,11 @@
                     <div id="modalItemsSummary"></div>
                 </div>
 
+                <div class="mb-4">
+                    <span class="modal-meta-label">Delivery History</span>
+                    <div id="modalReceiptHistory" class="delivery-history-list"></div>
+                </div>
+
                 <div>
                     <span class="modal-meta-label">PO History</span>
                     <button
@@ -1318,6 +1408,39 @@ function formatMoney(value) {
     return amount.toFixed(2);
 }
 
+function renderReceiptHistory(receipts) {
+    if (!receipts.length) {
+        return '<div class="text-muted small">No delivery history yet.</div>';
+    }
+
+    return receipts.map((receipt, index) => `
+        <div class="delivery-history-card">
+            <div class="delivery-history-header">
+                <div>
+                    <div class="delivery-history-title">Delivery Batch ${index + 1}</div>
+                    <div class="delivery-history-meta">${escapeHtml(receipt.received_at || '-')} • ${escapeHtml(receipt.received_by_username || 'System')}</div>
+                </div>
+                <div class="delivery-history-total">${escapeHtml(formatMoney(receipt.total_amount || 0))}</div>
+            </div>
+            <div class="delivery-history-items">
+                ${(receipt.items || []).map(item => `
+                    <div class="delivery-history-item">
+                        <div>
+                            <div class="delivery-history-item-name">${escapeHtml(item.item_name || 'Unknown Item')}</div>
+                            ${item.notes ? `<div class="delivery-history-item-note">${escapeHtml(item.notes)}</div>` : ''}
+                        </div>
+                        <div class="delivery-history-item-values">
+                            <div>Qty: ${escapeHtml(String(item.quantity_received ?? 0))}</div>
+                            <div>Price: ${escapeHtml(formatMoney(item.unit_cost || 0))}</div>
+                            <div>Total: ${escapeHtml(formatMoney(item.line_total || 0))}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
 async function openOrderDetails(poId) {
     if (!orderModal) {
         orderModal = new bootstrap.Modal(document.getElementById('orderModal'));
@@ -1496,6 +1619,7 @@ async function openOrderDetails(poId) {
                 </div>
             </div>
         `;
+        document.getElementById('modalReceiptHistory').innerHTML = renderReceiptHistory(data.receipt_history || []);
 
         document.getElementById('modalApprovalHistoryCount').innerText = formatHistoryCount((data.approval?.actions || []).length);
         document.getElementById('modalApprovalHistory').innerHTML = renderApprovalHistory(data.approval?.actions || []);

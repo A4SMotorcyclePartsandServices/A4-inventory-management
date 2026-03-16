@@ -271,6 +271,78 @@
             font-family: 'Courier New', monospace;
         }
 
+        .receipt-history {
+            margin-top: 16px;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+        }
+
+        .receipt-history-title {
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 10px;
+        }
+
+        .receipt-card {
+            border: 1px solid #d7d7d7;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+
+        .receipt-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .receipt-batch-title {
+            font-size: 0.78rem;
+            font-weight: 800;
+        }
+
+        .receipt-meta {
+            font-size: 0.72rem;
+            color: #666;
+        }
+
+        .receipt-total {
+            font-size: 0.8rem;
+            font-weight: 800;
+            font-family: 'Courier New', monospace;
+            white-space: nowrap;
+        }
+
+        .receipt-items {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.76rem;
+        }
+
+        .receipt-items th,
+        .receipt-items td {
+            border-top: 1px solid #dddddd;
+            padding: 6px 4px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .receipt-items th:last-child,
+        .receipt-items td:last-child {
+            text-align: right;
+        }
+
+        .receipt-item-note {
+            display: block;
+            margin-top: 3px;
+            color: #666;
+            font-size: 0.7rem;
+        }
+
         .total-row td {
             font-weight: 800;
             background: #fafafa;
@@ -588,6 +660,48 @@
         <span class="summary-label">Remaining Balance</span>
         <span class="summary-value">{{ "%.2f"|format(totals.remaining) }}</span>
     </div>
+</div>
+{% endif %}
+
+{% if po.receipt_history %}
+<div class="receipt-history">
+    <div class="receipt-history-title">Delivery History</div>
+    {% for receipt in po.receipt_history %}
+    <div class="receipt-card">
+        <div class="receipt-header">
+            <div>
+                <div class="receipt-batch-title">Delivery Batch {{ loop.index }}</div>
+                <div class="receipt-meta">{{ receipt.received_at }} • {{ receipt.received_by_username or 'System' }}</div>
+            </div>
+            <div class="receipt-total">{{ "%.2f"|format(receipt.total_amount or 0) }}</div>
+        </div>
+        <table class="receipt-items">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in receipt["items"] %}
+                <tr>
+                    <td>
+                        {{ item.item_name }}
+                        {% if item.notes %}
+                        <span class="receipt-item-note">{{ item.notes }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.quantity_received }}</td>
+                    <td class="right money">{{ "%.2f"|format(item.unit_cost or 0) }}</td>
+                    <td class="right money">{{ "%.2f"|format(item.line_total or 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 

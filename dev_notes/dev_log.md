@@ -60,6 +60,112 @@ Validation / UX
 Audit / Admin
 - Audit trail item detail modal now resolves vendor name from `vendor_id` via the vendor master table.
 
+## PO Page / Review / PDF UI Pass
+
+Implemented 2026-03-16
+
+Status wording alignment
+- PO overview page now uses client-facing labels:
+- `Approved PO's`
+- `Partial Deliveries`
+- `Completed Deliveries`
+- `Cancelled PO's`
+- PO detail modal label changed from `Approval History` to `PO History`.
+- Review page section label changed from `Approval Timeline` to `PO History`.
+- PO PDF status wording now matches the UI:
+- `Approved`
+- `Partial Delivery`
+- `Completed Delivery`
+- `Cancelled PO`
+
+PO detail modal behavior
+- Non-partial PO modal now shows item financials with:
+- `Item`
+- `Price`
+- `Total`
+- `Ordered`
+- `Received`
+- Non-partial PO modal now shows a separate summary bar below the table for `Overall Total`.
+- Partial-delivery PO modal now uses a dedicated cumulative breakdown with:
+- `Price`
+- `Ordered Qty`
+- `Ordered Total`
+- `Delivered Qty`
+- `Delivered Total`
+- `Remaining Qty`
+- `Remaining Balance`
+- Partial-delivery PO modal also shows inline per-item arrival notes and summary cards for:
+- `PO Total`
+- `Delivered Value`
+- `Remaining Balance`
+
+Review page behavior
+- Review page item breakdown now mirrors the PO modal logic.
+- Non-partial review view shows price and ordered total columns plus a separate `Overall Total` summary block.
+- Partial-delivery review view shows ordered vs delivered vs remaining value columns and summary cards.
+- Review page note display now prefers cancellation notes from PO history when the PO has been cancelled.
+- PO modal note display now shows the original PO note entered during PO creation.
+
+PO PDF behavior
+- PO PDF now renders vendor snapshot details from the purchase order record:
+- `vendor_name`
+- `vendor_address`
+- `vendor_contact_person`
+- `vendor_contact_no`
+- Partial-delivery PO PDF now uses a dedicated cumulative breakdown table with delivered vs remaining value columns.
+- Partial-delivery PO PDF includes inline item notes plus summary cards for total, delivered value, and remaining balance.
+
+## Vendor Dropdown Workflow
+
+Implemented 2026-03-16
+
+Applies to
+- `transactions/items.html`
+- `transactions/order.html`
+
+Current behavior
+- Vendor selection now uses a dropdown instead of free-text vendor search on the item create page and PO create/edit page.
+- Dropdown lists all active vendors from the `vendors` table.
+- Dropdown includes a `-- New Vendor --` option.
+- Choosing `-- New Vendor --` opens the existing add-vendor modal immediately.
+- When a vendor is created successfully from the modal, it is inserted into the dropdown and auto-selected.
+- Selected vendor details still render in the vendor summary card below the input.
+
+Route / data flow
+- `transaction_route.py` now loads active vendors server-side for `items.html` and `order.html`.
+- Vendor validation still depends on `vendor_id`; the change is UX-focused and keeps the centralized vendor model intact.
+
+## PO Receipt History / Partial Delivery Tracking
+
+Implemented 2026-03-16
+
+Problem solved
+- `purchase_orders.received_at` only stores one timestamp, so it was not enough to represent multiple arrival batches for partial deliveries.
+- Partial POs now use dedicated receipt-history tables instead of relying on a single overwritten PO-level receive date.
+
+Schema
+- Added `po_receipts` as the header table for each delivery batch / receive action.
+- Added `po_receipt_items` as the item-level rows for each delivery batch.
+- `purchase_orders.received_at` is still kept, but now acts as the latest receipt timestamp rather than the full history source.
+
+Receive flow
+- One submit from `receive.html` now creates one `po_receipts` row.
+- Each received item in that submit creates one `po_receipt_items` row.
+- Inventory is still logged to `inventory_transactions` for stock ledger / audit purposes.
+- `po_items.quantity_received` is still updated as the cumulative received total.
+- The receive flow now rejects all-zero submissions instead of allowing an empty confirmation.
+
+UI / PDF behavior
+- PO modal in `order_overview.html` now shows a `Delivery History` section using receipt batches.
+- Review page in `order/review.html` now shows the same delivery-history batches.
+- PO PDF now includes a `Delivery History` section with receipt batches and per-item delivered amounts.
+
+Source of truth
+- Delivery / arrival history: `po_receipts`, `po_receipt_items`
+- Stock movement ledger: `inventory_transactions`
+- Cumulative PO received quantities: `po_items.quantity_received`
+- Latest receipt timestamp for summary use: `purchase_orders.received_at`
+
 ## Debt Feature
 
 Relevant files

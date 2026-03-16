@@ -259,6 +259,77 @@
         white-space: normal;
     }
 
+    .delivery-history-list {
+        display: grid;
+        gap: 12px;
+    }
+
+    .delivery-history-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: #151922;
+        padding: 14px 16px;
+    }
+
+    .delivery-history-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    .delivery-history-title {
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .delivery-history-meta {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    .delivery-history-total {
+        color: #86efac;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+    }
+
+    .delivery-history-items {
+        display: grid;
+        gap: 8px;
+    }
+
+    .delivery-history-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+    }
+
+    .delivery-history-item-name {
+        font-size: 0.86rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .delivery-history-item-note {
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        white-space: pre-wrap;
+    }
+
+    .delivery-history-item-values {
+        text-align: right;
+        font-size: 0.82rem;
+        color: var(--text-primary);
+        min-width: 150px;
+    }
+
     @media (max-width: 767px) {
         .review-summary-grid {
             grid-template-columns: 1fr;
@@ -628,6 +699,44 @@
                 <span class="po-total-value">{{ "%.2f"|format(po.total_amount or 0) }}</span>
             </div>
         </div>
+        {% endif %}
+    </div>
+
+    <div class="review-card">
+        <h2 class="review-card-title">Delivery History</h2>
+        {% if receipt_history %}
+        <div class="delivery-history-list">
+            {% for receipt in receipt_history %}
+            <div class="delivery-history-card">
+                <div class="delivery-history-header">
+                    <div>
+                        <div class="delivery-history-title">Delivery Batch {{ loop.index }}</div>
+                        <div class="delivery-history-meta">{{ receipt.received_at }} • {{ receipt.received_by_username or 'System' }}</div>
+                    </div>
+                    <div class="delivery-history-total">{{ "%.2f"|format(receipt.total_amount or 0) }}</div>
+                </div>
+                <div class="delivery-history-items">
+                    {% for item in receipt["items"] %}
+                    <div class="delivery-history-item">
+                        <div>
+                            <div class="delivery-history-item-name">{{ item.item_name }}</div>
+                            {% if item.notes %}
+                            <div class="delivery-history-item-note">{{ item.notes }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="delivery-history-item-values">
+                            <div>Qty: {{ item.quantity_received }}</div>
+                            <div>Price: {{ "%.2f"|format(item.unit_cost or 0) }}</div>
+                            <div>Total: {{ "%.2f"|format(item.line_total or 0) }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-muted small">No delivery history yet.</div>
         {% endif %}
     </div>
 

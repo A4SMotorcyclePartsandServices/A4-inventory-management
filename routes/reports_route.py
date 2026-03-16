@@ -36,8 +36,15 @@ def purchase_order_report(po_id):
         "created_at": format_date(po_data.get("created_at"), show_time=True),
         "received_at": format_date(po_data.get("received_at"), show_time=True),
         "total_amount": float(po_data.get("total_amount") or 0),
+        "receipt_history": [],
         "items": [],
     }
+
+    for receipt in po_data.get("receipt_history") or []:
+        report_data["receipt_history"].append({
+            **receipt,
+            "received_at": format_date(receipt.get("received_at"), show_time=True),
+        })
 
     for idx, row in enumerate(items, start=1):
         item = dict(row)

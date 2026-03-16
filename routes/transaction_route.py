@@ -456,7 +456,12 @@ def confirm_reception():
 @transaction_bp.route("/purchase-order/details/<int:po_id>")
 @login_required
 def get_po_details(po_id):
-    details = get_po_details_for_api(po_id)
+    details = get_po_details_for_api(
+        po_id,
+        snapshot_at=(request.args.get("snapshot_at") or "").strip() or None,
+        change_reason=(request.args.get("change_reason") or "").strip() or None,
+        transaction_type=(request.args.get("transaction_type") or "").strip() or None,
+    )
     if not details:
         return jsonify({"error": "Order not found"}), 404
     return jsonify(details)

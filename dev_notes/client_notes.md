@@ -26,8 +26,7 @@ vendor fields:
 - email
 
 UI workflow implemented:
-- item creation uses vendor search / select / add modal
-- purchase order creation uses vendor search / select / add modal
+- changed item creation and purchase order creation to use dropdown format
 - missing vendor can be created inline from the modal
 
 ## Sales Rules

@@ -29,7 +29,9 @@
                         data-remaining="{{ remaining }}">
                         <td>
                             <div class="fw-bold">{{ item.name }}</div>
-                            <small class="text-muted">{{ item.pack_size }}</small>
+                            {% if item.pack_size %}
+                            <small class="text-muted">Pack size: {{ item.pack_size }}</small>
+                            {% endif %}
                             <!-- Notes field: hidden by default, appears only on over-receive -->
                             <div class="over-receive-note mt-2" style="display:none;">
                                 <input type="text"

@@ -164,7 +164,11 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     conn.close()
 
     formatted = [
-        {**dict(r), "transaction_date": format_date(r["transaction_date"], show_time=True)}
+        {
+            **dict(r),
+            "transaction_date_raw": r["transaction_date"].isoformat() if r["transaction_date"] else None,
+            "transaction_date": format_date(r["transaction_date"], show_time=True),
+        }
         for r in rows
     ]
 

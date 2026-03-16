@@ -1121,7 +1121,7 @@
             <thead>
                 <tr class="text-muted">
                 <th>Item Name</th>
-                <th class="text-center">Qty</th>
+                <th class="text-center" id="modal-po-qty-label">Qty</th>
                 <th class="text-end">Unit Price</th>
                 <th class="text-end">Subtotal</th>
                 </tr>
@@ -1329,17 +1329,24 @@ function viewSaleDetails(saleID, displayNum) {
         });
 }
 
-function viewOrder(poId) {
-    fetch(`/purchase-order/details/${poId}`)
+function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '') {
+    const params = new URLSearchParams();
+    if (snapshotAt) params.set('snapshot_at', snapshotAt);
+    if (changeReason) params.set('change_reason', changeReason);
+    if (transactionType) params.set('transaction_type', transactionType);
+    const query = params.toString();
+
+    fetch(`/purchase-order/details/${poId}${query ? `?${query}` : ''}`)
         .then(response => response.json())
         .then(data => {
             const titleEl = document.getElementById('poModalLabel');
             const orderDateEl = document.getElementById('modal-po-order-date');
             const receivedDateEl = document.getElementById('modal-po-received-date');
             const statusEl = document.getElementById('modal-po-status');
+            const qtyLabelEl = document.querySelector('#poDetailsModal #modal-po-qty-label');
 
             // Title stays generic
-            titleEl.innerText = "Purchase Order Details";
+            titleEl.innerText = data.modal_title || "Purchase Order Details";
 
             // Dates
             orderDateEl.innerText = data.created_at || '-';
@@ -1348,6 +1355,14 @@ function viewOrder(poId) {
             // Status badge
             statusEl.innerText = data.status;
             statusEl.className = `badge ${data.status_class}`;
+
+            if ((data.mode || '').toUpperCase() === 'IN') {
+                qtyLabelEl.innerText = 'Received Qty';
+            } else if ((data.mode || '').toUpperCase() === 'ORDER') {
+                qtyLabelEl.innerText = 'Ordered Qty';
+            } else {
+                qtyLabelEl.innerText = 'Qty';
+            }
 
             // Other header fields
             document.getElementById('modal-po-number').innerText = data.po_number;
@@ -1606,7 +1621,7 @@ function renderAuditTrail(data) {
             if (log.reference_type === 'PURCHASE_ORDER') {
                 refBtn = `<button class="btn btn-sm btn-outline-warning border-0" 
                     style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-                    onclick="viewOrder('${log.reference_id}')">
+                    onclick="viewOrder('${log.reference_id}', '${log.transaction_date_raw || ''}', '${log.change_reason || ''}', '${log.transaction_type || ''}')">
                     <i class="bi bi-box-seam me-1"></i>${log.po_number || log.reference_id}
                 </button>`;
             } else if (log.reference_type === 'ITEM_CATALOG') {

@@ -1159,11 +1159,13 @@ def get_purchase_order_export_data(po_id):
         ORDER BY i.name ASC
     """, (po_id,)).fetchall()
 
+    receipt_history = _get_po_receipt_history(po_id, external_conn=conn)
     conn.close()
     approval = get_approval_request_by_entity(PO_APPROVAL_TYPE, PO_ENTITY_TYPE, po_id)
     po_data = dict(po)
     po_data["approval_status"] = approval["status"] if approval else None
     po_data["display_status"] = get_po_display_status(po_data.get("status"), po_data.get("approval_status"))
+    po_data["receipt_history"] = receipt_history
     return po_data, items
 
 
@@ -1180,6 +1182,73 @@ def get_po_for_receive_page(po_id):
     return po, items
 
 
+def _get_po_receipt_history(po_id, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        receipt_rows = conn.execute(
+            """
+            SELECT id, po_id, received_at, received_by, received_by_username, notes
+            FROM po_receipts
+            WHERE po_id = %s
+            ORDER BY received_at ASC, id ASC
+            """,
+            (po_id,),
+        ).fetchall()
+
+        if not receipt_rows:
+            return []
+
+        item_rows = conn.execute(
+            """
+            SELECT
+                pri.receipt_id,
+                pri.po_id,
+                pri.item_id,
+                pri.quantity_received,
+                pri.unit_cost,
+                pri.line_total,
+                pri.is_over_receive,
+                pri.notes,
+                i.name AS item_name
+            FROM po_receipt_items pri
+            JOIN items i ON i.id = pri.item_id
+            WHERE pri.po_id = %s
+            ORDER BY pri.receipt_id ASC, i.name ASC, pri.id ASC
+            """,
+            (po_id,),
+        ).fetchall()
+
+        items_by_receipt = {}
+        for row in item_rows:
+            items_by_receipt.setdefault(row["receipt_id"], []).append({
+                "item_id": row["item_id"],
+                "item_name": row["item_name"] or "Unknown Item",
+                "quantity_received": int(row["quantity_received"] or 0),
+                "unit_cost": float(row["unit_cost"] or 0),
+                "line_total": float(row["line_total"] or 0),
+                "is_over_receive": int(row["is_over_receive"] or 0),
+                "notes": row["notes"] or "",
+            })
+
+        history = []
+        for row in receipt_rows:
+            receipt_items = items_by_receipt.get(row["id"], [])
+            history.append({
+                "id": row["id"],
+                "po_id": row["po_id"],
+                "received_at": row["received_at"],
+                "received_by": row["received_by"],
+                "received_by_username": row["received_by_username"] or "System",
+                "notes": row["notes"] or "",
+                "total_amount": round(sum(item["line_total"] for item in receipt_items), 2),
+                "items": receipt_items,
+            })
+        return history
+    finally:
+        if not external_conn:
+            conn.close()
+
+
 def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
     conn = get_db()
     try:
@@ -1188,6 +1257,7 @@ def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
             return None
 
         items = _get_po_items(conn, po_id)
+        receipt_history = _get_po_receipt_history(po_id, external_conn=conn)
         approval_stub = _get_po_approval(conn, po_id)
         approval = (
             get_approval_request_with_history(approval_stub["id"], external_conn=conn)
@@ -1210,6 +1280,13 @@ def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
         return {
             "po": po_data,
             "items": [dict(item) for item in items],
+            "receipt_history": [
+                {
+                    **receipt,
+                    "received_at": format_date(receipt.get("received_at"), show_time=True),
+                }
+                for receipt in receipt_history
+            ],
             "approval": approval,
             "permissions": permissions,
         }
@@ -1263,6 +1340,7 @@ def get_purchase_order_review_context(po_id, current_user_id=None, current_role=
     return {
         "po": details["po"],
         "items": details["items"],
+        "receipt_history": details.get("receipt_history", []),
         "approval": details["approval"],
         "permissions": details["permissions"],
         "review_timeline": review_timeline,
@@ -1553,6 +1631,8 @@ def receive_purchase_order(po_id, received_items, user_id, username):
         if (po["status"] or "").upper() not in PO_RECEIVABLE_STATUSES:
             raise ValueError("This purchase order is not approved for receiving.")
         all_completed = True
+        received_any = False
+        receipt_entries = []
 
         for entry in received_items:
             item_id = entry['item_id']
@@ -1597,6 +1677,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 )
 
             is_over_receive = qty_in > remaining
+            received_any = True
 
             if is_over_receive and not item_notes:
                 raise ValueError(f"A reason note is required for over-receiving item ID {item_id}.")
@@ -1644,6 +1725,49 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             if updated['quantity_received'] < updated['quantity_ordered']:
                 all_completed = False
 
+            receipt_entries.append({
+                "po_id": po_id,
+                "item_id": item_id,
+                "quantity_received": qty_in,
+                "unit_cost": float(unit_cost or 0),
+                "line_total": round(float(unit_cost or 0) * qty_in, 2),
+                "is_over_receive": 1 if is_over_receive else 0,
+                "notes": item_notes,
+            })
+
+        if not received_any:
+            raise ValueError("Enter at least one received quantity before confirming delivery.")
+
+        receipt_row = conn.execute(
+            """
+            INSERT INTO po_receipts (po_id, received_at, received_by, received_by_username, notes)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (po_id, clean_time, user_id, username, None),
+        ).fetchone()
+        receipt_id = receipt_row["id"]
+
+        for receipt_entry in receipt_entries:
+            conn.execute(
+                """
+                INSERT INTO po_receipt_items (
+                    receipt_id, po_id, item_id, quantity_received, unit_cost, line_total, is_over_receive, notes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    receipt_id,
+                    receipt_entry["po_id"],
+                    receipt_entry["item_id"],
+                    receipt_entry["quantity_received"],
+                    receipt_entry["unit_cost"],
+                    receipt_entry["line_total"],
+                    receipt_entry["is_over_receive"],
+                    receipt_entry["notes"] or None,
+                ),
+            )
+
         new_status = 'COMPLETED' if all_completed else 'PARTIAL'
         conn.execute("""
             UPDATE purchase_orders SET status = %s, received_at = %s
@@ -1659,7 +1783,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
         conn.close()
 
 
-def get_po_details_for_api(po_id):
+def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transaction_type=None):
     """
     Returns a formatted dict for the PO detail API response.
     Returns None if not found.
@@ -1682,11 +1806,126 @@ def get_po_details_for_api(po_id):
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
     """, (po_id,)).fetchall()
+    receipt_history = _get_po_receipt_history(po_id, external_conn=conn)
     conn.close()
 
     approval = get_approval_request_by_entity(PO_APPROVAL_TYPE, PO_ENTITY_TYPE, po_id)
 
+    def _format_snapshot_status(reason, po_status):
+        reason_normalized = str(reason or "").strip().upper()
+        if reason_normalized == "PARTIAL_ARRIVAL":
+            return "Partial Delivery", "bg-warning text-dark"
+        if reason_normalized == "PO_ARRIVAL":
+            return "Completed Delivery", "bg-success"
+        if reason_normalized == "ORDER_PLACEMENT":
+            return "Order Placement", "bg-primary"
+        return po_status or "Pending", get_status_class(po_status)
+
+    if snapshot_at and transaction_type:
+        conn = get_db()
+        try:
+            snapshot_items = []
+            total_amount = 0.0
+            received_at_value = "-"
+            snapshot_reason = str(change_reason or "").strip().upper()
+            movement_type = str(transaction_type or "").strip().upper()
+
+            if movement_type == "ORDER":
+                rows = conn.execute(
+                    """
+                    SELECT i.name, t.quantity AS quantity_snapshot, t.unit_price
+                    FROM inventory_transactions t
+                    JOIN items i ON i.id = t.item_id
+                    WHERE t.reference_type = 'PURCHASE_ORDER'
+                      AND t.reference_id = %s
+                      AND t.transaction_type = 'ORDER'
+                      AND t.transaction_date = %s
+                    ORDER BY i.name ASC
+                    """,
+                    (po_id, snapshot_at),
+                ).fetchall()
+                for row in rows:
+                    qty = int(row["quantity_snapshot"] or 0)
+                    unit_price = float(row["unit_price"] or 0)
+                    subtotal = qty * unit_price
+                    total_amount += subtotal
+                    snapshot_items.append({
+                        "name": row["name"],
+                        "quantity_ordered": qty,
+                        "unit_price": unit_price,
+                        "subtotal": subtotal,
+                    })
+            elif movement_type == "IN":
+                matched_receipt = next(
+                    (receipt for receipt in receipt_history if receipt.get("received_at") and str(receipt.get("received_at").isoformat()) == str(snapshot_at)),
+                    None,
+                )
+                if matched_receipt:
+                    received_at_value = format_date(matched_receipt.get("received_at"), show_time=True)
+                    for item in matched_receipt.get("items", []):
+                        if snapshot_reason and snapshot_reason == "PARTIAL_ARRIVAL" and int(item.get("quantity_received") or 0) <= 0:
+                            continue
+                        total_amount += float(item.get("line_total") or 0)
+                        snapshot_items.append({
+                            "name": item.get("item_name") or "Unknown Item",
+                            "quantity_ordered": int(item.get("quantity_received") or 0),
+                            "unit_price": float(item.get("unit_cost") or 0),
+                            "subtotal": float(item.get("line_total") or 0),
+                        })
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT i.name, t.quantity AS quantity_snapshot, t.unit_price
+                        FROM inventory_transactions t
+                        JOIN items i ON i.id = t.item_id
+                        WHERE t.reference_type = 'PURCHASE_ORDER'
+                          AND t.reference_id = %s
+                          AND t.transaction_type = 'IN'
+                          AND t.transaction_date = %s
+                          AND (%s = '' OR t.change_reason = %s)
+                        ORDER BY i.name ASC
+                        """,
+                        (po_id, snapshot_at, snapshot_reason, snapshot_reason),
+                    ).fetchall()
+                    received_at_value = format_date(snapshot_at, show_time=True)
+                    for row in rows:
+                        qty = int(row["quantity_snapshot"] or 0)
+                        unit_price = float(row["unit_price"] or 0)
+                        subtotal = qty * unit_price
+                        total_amount += subtotal
+                        snapshot_items.append({
+                            "name": row["name"],
+                            "quantity_ordered": qty,
+                            "unit_price": unit_price,
+                            "subtotal": subtotal,
+                        })
+
+            status_text, status_class = _format_snapshot_status(change_reason, po['status'])
+            return {
+                "modal_title": "Purchase Order Movement",
+                "po_number": po['po_number'],
+                "vendor_name": po['vendor_name'],
+                "status": status_text,
+                "status_class": status_class,
+                "total_amount": total_amount,
+                "mode": movement_type,
+                "created_at": format_date(po['created_at'], show_time=True),
+                "received_at": received_at_value,
+                "approval_status": approval["status"] if approval else None,
+                "receipt_history": [
+                    {
+                        **receipt,
+                        "received_at": format_date(receipt.get("received_at"), show_time=True),
+                    }
+                    for receipt in receipt_history
+                ],
+                "items": snapshot_items,
+            }
+        finally:
+            conn.close()
+
     return {
+        "modal_title": "Purchase Order Details",
         "po_number": po['po_number'],
         "vendor_name": po['vendor_name'],
         "status": po['status'] or "Pending",
@@ -1696,6 +1935,13 @@ def get_po_details_for_api(po_id):
         "created_at": format_date(po['created_at'], show_time=True),
         "received_at": format_date(po['received_at'], show_time=True),
         "approval_status": approval["status"] if approval else None,
+        "receipt_history": [
+            {
+                **receipt,
+                "received_at": format_date(receipt.get("received_at"), show_time=True),
+            }
+            for receipt in receipt_history
+        ],
         "items": [
             {
                 "name": item['name'],

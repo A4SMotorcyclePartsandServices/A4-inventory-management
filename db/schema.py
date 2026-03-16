@@ -228,6 +228,34 @@ def init_db():
         unit_cost           NUMERIC(12,2)
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS po_receipts (
+        id                   SERIAL PRIMARY KEY,
+        po_id                INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+        received_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        received_by          INTEGER REFERENCES users(id),
+        received_by_username TEXT,
+        notes                TEXT,
+        created_at           TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS po_receipt_items (
+        id                  SERIAL PRIMARY KEY,
+        receipt_id          INTEGER NOT NULL REFERENCES po_receipts(id) ON DELETE CASCADE,
+        po_id               INTEGER NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+        item_id             INTEGER NOT NULL REFERENCES items(id),
+        quantity_received   INTEGER NOT NULL CHECK(quantity_received > 0),
+        unit_cost           NUMERIC(12,2) NOT NULL DEFAULT 0,
+        line_total          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        is_over_receive     INTEGER NOT NULL DEFAULT 0,
+        notes               TEXT
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipts_po_id_received_at ON po_receipts(po_id, received_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipt_items_receipt_id ON po_receipt_items(receipt_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipt_items_po_id ON po_receipt_items(po_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipt_items_item_id ON po_receipt_items(item_id)")
 
     # Backfill vendor master data from legacy free-text fields.
     cur.execute("""
