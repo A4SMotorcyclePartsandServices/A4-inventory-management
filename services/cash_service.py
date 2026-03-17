@@ -3,8 +3,8 @@ from utils.formatters import format_date
 from datetime import date as date_today
 
 # --- CATEGORIES ---
-CASH_IN_CATEGORIES  = ['Petty Cash', 'Owner Deposit', 'Other Income']
-CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Other Expense', 'Mechanic Payout']
+CASH_IN_CATEGORIES  = ['Petty Cash', 'From Gcash Account', 'From Bank Account', 'For Payables', 'Others']
+CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Other Expenses', 'Mechanic Payout']
 
 # --- PHYSICAL CASH FILTER ---
 # Only payment methods in this category count as physical cash in the drawer.
@@ -381,9 +381,20 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
     if amount <= 0:
         raise ValueError("Amount must be greater than zero.")
 
+    normalized_description = (description or "").strip()
+
     valid_categories = CASH_IN_CATEGORIES if entry_type == 'CASH_IN' else CASH_OUT_CATEGORIES
     if category not in valid_categories:
         raise ValueError(f"Invalid category for {entry_type}.")
+
+    if entry_type == 'CASH_IN' and category == 'Others' and not normalized_description:
+        raise ValueError("Description is required when category is Others.")
+
+    if entry_type == 'CASH_OUT' and category == 'Other Expenses' and not normalized_description:
+        raise ValueError("Description is required when category is Other Expenses.")
+
+    if entry_type == 'CASH_OUT' and category == 'Utilities' and not normalized_description:
+        raise ValueError("Please indicate which utility this is for.")
 
     normalized_reference_id = None
     if reference_id not in (None, ""):
@@ -412,7 +423,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
             entry_type,
             amount,
             category,
-            description or None,
+            normalized_description or None,
             reference_type,
             normalized_reference_id,
             payout_for_date,

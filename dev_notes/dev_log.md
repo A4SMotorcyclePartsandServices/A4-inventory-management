@@ -361,3 +361,50 @@ Print / layout notes
 - Header + customer info + summary now use a tighter print layout.
 - Item/service breakdowns were moved into a full-width follow-up row under each receipt so they no longer waste the empty side columns.
 - Breakdown details now render as mini-tables instead of compact text rows.
+
+## Cash Ledger Rules / Sales Admin Filters
+
+Implemented 2026-03-17
+
+Cash Ledger updates
+- Cash in categories were updated to:
+- `Petty Cash`
+- `From Gcash Account`
+- `From Bank Account`
+- `For Payables`
+- `Others`
+- Cash out categories remain:
+- `Parts Purchase`
+- `Staff Expense`
+- `Utilities`
+- `Supplies`
+- `Other Expenses`
+- `Mechanic Payout`
+- Description is now required for:
+- cash in category `Others`
+- cash out category `Other Expenses`
+- cash out category `Utilities`
+- When `Utilities` is selected, the description placeholder and submit warning now explicitly say:
+- `Please indicate which utility this is for.`
+- Required description hints on the Cash Ledger form now turn red for better visibility.
+
+Mechanic payout automation
+- Cash Ledger mechanic payout rows now send an `auto_description` field from payout reporting.
+- Prefill behavior now uses:
+- mechanic name only for normal mechanic payouts
+- `mechanic name + quota top up` when quota top-up was applied
+- Existing mechanic payout ID/date autofill behavior remains intact.
+
+Sales admin tab updates
+- Added a payment-status toggle to the Sales tab in admin/users UI:
+- `All`
+- `Paid`
+- `Partial`
+- `Unpaid`
+- Sales API now accepts `payment_status`.
+- Sales admin service now validates and applies the payment status filter server-side.
+- Sales summary chips now visually match the selected status:
+- green for `Paid`
+- yellow for `Partial`
+- red for `Unpaid`
+- Discount chip styling remains separate from payment-status chip styling.

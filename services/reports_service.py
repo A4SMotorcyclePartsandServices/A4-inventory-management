@@ -150,6 +150,11 @@ def _format_cash_panel_payout_rows(mechanic_summary):
             "mechanic_name": row["mechanic_name"],
             "total_payout": row["total_payout"],
             "has_topup": row["shop_topup"] > 0,
+            "auto_description": (
+                f"{row['mechanic_name']} + quota top up"
+                if row["shop_topup"] > 0
+                else row["mechanic_name"]
+            ),
         }
         for row in mechanic_summary
         if row["total_payout"] > 0

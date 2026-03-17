@@ -2,8 +2,9 @@ from db.database import get_db
 from utils.formatters import format_date
 
 PER_PAGE = 50
+VALID_SALE_STATUSES = {"Paid", "Partial", "Unresolved"}
 
-def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has_discount=False):
+def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has_discount=False, payment_status=None):
     """
     Paginated sales history for the admin panel.
     Searchable by receipt number or customer name.
@@ -26,6 +27,11 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
     if search:
         conditions.append("(s.sales_number ILIKE %s OR s.customer_name ILIKE %s)")
         params.extend([f"%{search}%", f"%{search}%"])
+    if payment_status:
+        if payment_status not in VALID_SALE_STATUSES:
+            raise ValueError("Invalid payment status")
+        conditions.append("s.status = %s")
+        params.append(payment_status)
     if has_discount:
         conditions.append("""
             EXISTS (

@@ -60,6 +60,11 @@
         margin-top: 4px;
     }
 
+    .required-hint {
+        color: #ff6b6b !important;
+        font-weight: 700;
+    }
+
     .type-toggle {
         display: flex;
         gap: 10px;
@@ -361,6 +366,7 @@
                  data-mechanic-id="{{ m.mechanic_id }}"
                  data-mechanic-name="{{ m.mechanic_name }}"
                  data-total-payout="{{ m.total_payout }}"
+                 data-auto-description="{{ m.auto_description }}"
                  data-payout-date="{{ day.date }}">
                 <div class="payout-name">
                     <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
@@ -427,6 +433,7 @@
              data-mechanic-id="{{ m.mechanic_id }}"
              data-mechanic-name="{{ m.mechanic_name }}"
              data-total-payout="{{ m.total_payout }}"
+             data-auto-description="{{ m.auto_description }}"
              data-payout-date="{{ today }}">
             <div class="payout-name">
                 <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
@@ -488,7 +495,7 @@
 
             <!-- Description -->
             <div class="mb-4">
-                <label class="form-section-label">Description <span class="text-muted">(optional)</span></label>
+                <label class="form-section-label">Description <span class="text-muted" id="entry-description-hint">(optional)</span></label>
                 <input type="text" id="entry-description" class="form-control"
                     placeholder="e.g. Bought brake pads from supplier">
             </div>
@@ -691,6 +698,31 @@ function populateCategories(type) {
         opt.textContent = cat;
         select.appendChild(opt);
     });
+    updateDescriptionFieldState();
+}
+
+function updateDescriptionFieldState() {
+    const entryType = document.querySelector('input[name="entry_type"]:checked')?.value || 'CASH_IN';
+    const category = document.getElementById('entry-category').value;
+    const descriptionInput = document.getElementById('entry-description');
+    const descriptionHint = document.getElementById('entry-description-hint');
+
+    const requiresDescription =
+        (entryType === 'CASH_IN' && category === 'Others')
+        || (entryType === 'CASH_OUT' && ['Other Expenses', 'Utilities'].includes(category));
+    descriptionInput.required = requiresDescription;
+    descriptionHint.textContent = requiresDescription ? '(required)' : '(optional)';
+    descriptionHint.classList.toggle('required-hint', requiresDescription);
+
+    if (category === 'Mechanic Payout') {
+        descriptionInput.placeholder = 'Mechanic payout description will be filled automatically';
+    } else if (entryType === 'CASH_OUT' && category === 'Utilities') {
+        descriptionInput.placeholder = 'Please indicate which utility this is for.';
+    } else if (requiresDescription) {
+        descriptionInput.placeholder = 'Please describe this entry';
+    } else {
+        descriptionInput.placeholder = 'e.g. Supplier payment, transfer, or short note';
+    }
 }
 
 document.getElementById('entry-category').addEventListener('change', () => {
@@ -704,6 +736,7 @@ document.getElementById('entry-category').addEventListener('change', () => {
         document.getElementById('entry-payout-date').value = document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT;
         document.getElementById('entry-payout-date').max = TODAY_FOR_INPUT;
     }
+    updateDescriptionFieldState();
 });
 
 function setPayoutDate(dateValue) {
@@ -737,6 +770,8 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
             document.getElementById('entry-reference-id').value = '';
             clearPayoutDate();
         }
+
+        updateDescriptionFieldState();
     });
 });
 
@@ -766,6 +801,24 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     if (!amount || amount <= 0) {
         showFlash('Please enter a valid amount.', 'danger');
         return;
+    }
+
+    if (!description) {
+        if (entry_type === 'CASH_IN' && category === 'Others') {
+            showFlash('Description is required when category is Others.', 'danger');
+            return;
+        }
+
+        if (entry_type === 'CASH_OUT' && category === 'Other Expenses') {
+            showFlash('Description is required when category is Other Expenses.', 'danger');
+            return;
+        }
+
+        if (entry_type === 'CASH_OUT' && category === 'Utilities') {
+            showFlash('Please indicate which utility this is for.', 'danger');
+            return;
+        }
+
     }
 
     const btn = document.getElementById('submit-entry-btn');
@@ -886,7 +939,7 @@ function showPendingFlashAfterReload() {
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Pre-fill form from mechanic payout panel
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-function prefillPayout(mechanicName, mechanicId, amount, payoutForDate) {
+function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDescription) {
     // Switch to CASH_OUT
     document.getElementById('type_out').checked = true;
     populateCategories('CASH_OUT');
@@ -903,12 +956,13 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate) {
         }
     }
 
-    // Set description to mechanic name Ã¢â‚¬â€ used for already-paid matching
-    document.getElementById('entry-description').value = mechanicName;
+    // Use the client-requested auto description format for mechanic payouts.
+    document.getElementById('entry-description').value = autoDescription || mechanicName;
     const parsedId = Number.parseInt(mechanicId || '', 10);
     document.getElementById('entry-reference-id').value = Number.isFinite(parsedId) ? String(parsedId) : '';
     setPayoutDate(payoutForDate || TODAY_FOR_INPUT);
     showPayoutDateIfNeeded();
+    updateDescriptionFieldState();
 
     // Scroll to form and highlight card border
     const form = document.getElementById('submit-entry-btn').closest('.card');
@@ -924,13 +978,15 @@ function initializePendingPayoutRows() {
             const mechanicName = row.getAttribute('data-mechanic-name') || '';
             const amount = parseFloat(row.getAttribute('data-total-payout') || '0');
             const mechanicId = row.getAttribute('data-mechanic-id') || '';
+            const autoDescription = row.getAttribute('data-auto-description') || mechanicName;
             const payoutForDate = row.getAttribute('data-payout-date') || CASH_LEDGER_TODAY;
             const parsedId = Number.parseInt(mechanicId, 10);
             prefillPayout(
                 mechanicName,
                 Number.isFinite(parsedId) ? parsedId : '',
                 Number.isFinite(amount) ? amount : 0,
-                payoutForDate
+                payoutForDate,
+                autoDescription
             );
         });
     });

@@ -183,6 +183,24 @@
         color: #8fd2eb;
     }
 
+    .filter-chip-sales-paid {
+        border-color: rgba(40, 167, 69, 0.55);
+        background: rgba(40, 167, 69, 0.16);
+        color: #7ee2a8;
+    }
+
+    .filter-chip-sales-partial {
+        border-color: rgba(255, 193, 7, 0.55);
+        background: rgba(255, 193, 7, 0.16);
+        color: #ffd86b;
+    }
+
+    .filter-chip-sales-unpaid {
+        border-color: rgba(220, 53, 69, 0.55);
+        background: rgba(220, 53, 69, 0.16);
+        color: #ff9aa5;
+    }
+
     .debt-parent-row:hover .debt-expand-hint {
         color: #888;
     }
@@ -706,6 +724,17 @@
             </div>
 
             <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <div class="btn-group btn-group-sm" id="sales-status-toggle">
+                    <button type="button" class="btn btn-outline-secondary active"
+                            onclick="setSalesStatus(null, this)">All</button>
+                    <button type="button" class="btn btn-outline-success"
+                            onclick="setSalesStatus('Paid', this)">Paid</button>
+                    <button type="button" class="btn btn-outline-warning"
+                            onclick="setSalesStatus('Partial', this)">Partial</button>
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="setSalesStatus('Unresolved', this)">Unpaid</button>
+                </div>
 
                 <!-- Search -->
                 <div class="input-group input-group-sm" style="width: 220px;">
@@ -1896,6 +1925,7 @@ let salesStartDate = null;
 let salesEndDate   = null;
 let salesSearch    = '';
 let salesHasDiscount = false;
+let salesPaymentStatus = null;
 let salesSearchTimeout;
 let salesFlatpickr = null;
 
@@ -1948,11 +1978,22 @@ function clearSalesFilters() {
     if (salesFlatpickr) salesFlatpickr.clear();
     document.getElementById('sales-search-input').value = '';
     document.getElementById('sales-discount-filter').checked = false;
+    document.querySelectorAll('#sales-status-toggle .btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('#sales-status-toggle .btn').classList.add('active');
     salesStartDate = null;
     salesEndDate   = null;
     salesSearch    = '';
     salesHasDiscount = false;
+    salesPaymentStatus = null;
     salesPage      = 1;
+    loadSalesAdmin();
+}
+
+function setSalesStatus(status, btn) {
+    salesPaymentStatus = status;
+    salesPage = 1;
+    document.querySelectorAll('#sales-status-toggle .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     loadSalesAdmin();
 }
 
@@ -1970,6 +2011,7 @@ function loadSalesAdmin() {
     if (salesEndDate)   params.push(`end_date=${salesEndDate}`);
     if (salesSearch)    params.push(`search=${encodeURIComponent(salesSearch)}`);
     if (salesHasDiscount) params.push('has_discount=1');
+    if (salesPaymentStatus) params.push(`payment_status=${encodeURIComponent(salesPaymentStatus)}`);
 
     fetch(`/api/admin/sales?${params.join('&')}`)
         .then(r => r.json())
@@ -1995,7 +2037,17 @@ function renderSalesAdmin(data) {
 
     const salesSummary = `${data.total.toLocaleString()} total sales`;
     const salesDiscountText = salesHasDiscount ? ' <span class="filter-chip">Discounted sales only</span>' : '';
-    summaryEl.innerHTML = `${salesSummary}${salesDiscountText}`;
+    const salesStatusChipClass = salesPaymentStatus === 'Paid'
+        ? 'filter-chip-sales-paid'
+        : salesPaymentStatus === 'Partial'
+            ? 'filter-chip-sales-partial'
+            : salesPaymentStatus === 'Unresolved'
+                ? 'filter-chip-sales-unpaid'
+                : '';
+    const salesStatusText = salesPaymentStatus
+        ? ` <span class="filter-chip ${salesStatusChipClass}">${escapeHtml(salesPaymentStatus === 'Unresolved' ? 'Unpaid only' : `${salesPaymentStatus} only`)}</span>`
+        : '';
+    summaryEl.innerHTML = `${salesSummary}${salesStatusText}${salesDiscountText}`;
 
     if (data.total_pages > 1) {
         paginationRow.style.display = 'flex';

@@ -527,6 +527,11 @@ def admin_sales_api():
         start_date = request.args.get("start_date") or None
         end_date   = request.args.get("end_date") or None
         search     = request.args.get("search", "").strip() or None
+        payment_status = request.args.get("payment_status") or None
+
+        valid_statuses = {"Paid", "Partial", "Unresolved", None}
+        if payment_status not in valid_statuses:
+            return jsonify({"error": "Invalid payment status"}), 400
 
         has_discount = _to_bool(request.args.get("has_discount"))
 
@@ -536,6 +541,7 @@ def admin_sales_api():
             end_date=end_date,
             search=search,
             has_discount=has_discount,
+            payment_status=payment_status,
         )
         return jsonify(data)
     except Exception as e:
