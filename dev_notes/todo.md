@@ -25,9 +25,9 @@
 
 ## Reports / Export
 
-- [ ] CSV export for Items
-- [ ] CSV export for Customers
-- [ ] PDF export with tier filtering
+- [X] ~~*CSV export for Items*~~ [2026-03-17]
+- [X] ~~*CSV export for Customers*~~ [2026-03-17]
+- [X] ~~*PDF export with tier filtering*~~ [2026-03-17]
   - 0–50
   - 51–99
   - 100+

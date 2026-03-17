@@ -313,6 +313,36 @@
         padding: 4px 14px;
         border-radius: 20px;
     }
+
+    .page-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #67c2e4;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        transition: all 0.18s ease;
+    }
+
+    .export-btn:hover {
+        color: #dff6ff;
+        border-color: rgba(103, 194, 228, 0.55);
+        background: rgba(103, 194, 228, 0.16);
+    }
 </style>
 {% endblock %}
 
@@ -361,8 +391,14 @@
     <div class="page-title">
         <i class="bi bi-box me-2" style="color: var(--accent);"></i>Inventory <span>Items</span>
     </div>
-    <div class="item-count" id="itemCountBadge">
-        {{ items | length }} items
+    <div class="page-header-actions">
+        <a href="/export/items" class="export-btn">
+            <i class="bi bi-filetype-csv"></i>
+            <span>Export CSV</span>
+        </a>
+        <div class="item-count" id="itemCountBadge">
+            {{ items | length }} items
+        </div>
     </div>
 </div>
 

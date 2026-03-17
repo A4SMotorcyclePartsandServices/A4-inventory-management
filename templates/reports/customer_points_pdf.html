@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Loyalty Points Report - {{ tier_label }}</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.55;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: white;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+
+        .header-logo {
+            height: 60px;
+            width: auto;
+            margin-right: 20px;
+        }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 80px;
+        }
+
+        .report-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+
+        .report-date {
+            font-size: 15px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .meta-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin: 14px 0 18px;
+            flex-wrap: wrap;
+        }
+
+        .tier-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .generated-note {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .summary-grid {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box {
+            flex: 1;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .summary-box-title {
+            background: #e8e8e8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .summary-box-body {
+            padding: 12px;
+            font-size: 24px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #999;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #bbb;
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        .cell-center {
+            text-align: center;
+        }
+
+        .customer-name {
+            font-weight: 700;
+        }
+
+        .points-pill {
+            display: inline-block;
+            min-width: 42px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #93c5fd;
+            font-size: 12px;
+            font-weight: 800;
+            text-align: center;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .empty-state {
+            margin-top: 18px;
+            border: 1px dashed #bbb;
+            border-radius: 8px;
+            padding: 28px 24px;
+            text-align: center;
+            color: #666;
+            background: #fafafa;
+        }
+
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print">
+        <b>REPORT PREVIEW</b> &nbsp;—&nbsp; Press <b>Ctrl+P</b> or
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <div class="report-title">CUSTOMER LOYALTY REPORT</div>
+            <div class="report-date">Tier: <strong>{{ tier_label }}</strong></div>
+        </div>
+    </div>
+
+    <div class="meta-strip">
+        <div class="tier-badge">{{ tier_label }}</div>
+        <div class="generated-note">Generated: <strong>{{ generated_at }}</strong></div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box">
+            <div class="summary-box-title">Customers In Tier</div>
+            <div class="summary-box-body">{{ customers | length }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Total Points In Tier</div>
+            <div class="summary-box-body">{{ customers | sum(attribute='loyalty_points') }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Top Points In Tier</div>
+            <div class="summary-box-body">{{ customers[0].loyalty_points if customers else 0 }}</div>
+        </div>
+    </div>
+
+    {% if customers %}
+    <table>
+        <thead>
+            <tr>
+                <th width="22%">Customer Name</th>
+                <th width="14%">Mobile No.</th>
+                <th width="10%">Visits</th>
+                <th width="10%">Points</th>
+                <th width="14%">Last Visit</th>
+                <th width="18%">Vehicles</th>
+                <th width="12%">Membership Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for customer in customers %}
+            <tr>
+                <td class="customer-name">{{ customer.customer_name }}</td>
+                <td>{{ customer.customer_no or '-' }}</td>
+                <td class="cell-center">{{ customer.total_visits }}</td>
+                <td class="cell-center">
+                    <span class="points-pill">{{ customer.loyalty_points }}</span>
+                </td>
+                <td>{{ customer.last_visit or '-' }}</td>
+                <td>{{ customer.vehicles or '-' }}</td>
+                <td>{{ customer.membership_date or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        No customers found in the <strong>{{ tier_label }}</strong> tier.
+    </div>
+    {% endif %}
+
+</body>
+</html>

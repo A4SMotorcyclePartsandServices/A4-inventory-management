@@ -1,4 +1,8 @@
-from flask import Blueprint, request, jsonify, render_template
+import csv
+import io
+from datetime import datetime
+
+from flask import Blueprint, request, jsonify, render_template, Response
 from db.database import get_db
 from utils.formatters import format_date
 from services.loyalty_service import (
@@ -9,6 +13,69 @@ from services.loyalty_service import (
 )
 
 customer_bp = Blueprint('customer', __name__)
+
+POINT_TIERS = {
+    "0-50": {"label": "0-50 Points", "min": 0, "max": 50},
+    "51-99": {"label": "51-99 Points", "min": 51, "max": 99},
+    "100+": {"label": "100+ Points", "min": 100, "max": None},
+}
+
+
+def _format_export_date(value):
+    if not value or str(value).strip() == "":
+        return ""
+    try:
+        parsed = datetime.strptime(str(value)[:19], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            parsed = datetime.strptime(str(value)[:10], "%Y-%m-%d")
+        except ValueError:
+            return str(value)
+    return parsed.strftime("%b %d, %Y")
+
+
+def _get_customer_export_rows():
+    conn = get_db()
+    try:
+        customers = conn.execute("""
+            SELECT
+                c.id,
+                c.customer_no,
+                c.customer_name,
+                c.created_at,
+                COUNT(s.id) AS total_visits,
+                MAX(s.transaction_date) AS last_visit,
+                (
+                    SELECT STRING_AGG(v2.vehicle_name::text, ', ' ORDER BY v2.vehicle_name)
+                    FROM vehicles v2
+                    WHERE v2.customer_id = c.id
+                      AND v2.is_active = 1
+                ) AS vehicles
+            FROM customers c
+            LEFT JOIN sales s ON s.customer_id = c.id
+            WHERE c.is_active = 1
+            GROUP BY c.id
+            ORDER BY c.customer_name ASC
+        """).fetchall()
+
+        customer_ids = [int(c["id"]) for c in customers]
+        points_by_customer = get_customer_points_bulk(customer_ids)
+
+        export_rows = []
+        for customer in customers:
+            customer_id = int(customer["id"])
+            export_rows.append({
+                "customer_no": customer["customer_no"] or "",
+                "customer_name": customer["customer_name"] or "",
+                "total_visits": int(customer["total_visits"] or 0),
+                "loyalty_points": int(points_by_customer.get(customer_id, 0) or 0),
+                "last_visit": _format_export_date(customer["last_visit"]),
+                "vehicles": customer["vehicles"] or "",
+                "membership_date": _format_export_date(customer["created_at"]),
+            })
+        return export_rows
+    finally:
+        conn.close()
 
 
 # ─────────────────────────────────────────────
@@ -251,6 +318,72 @@ def customer_list():
 
     conn.close()
     return render_template("customers/customers_list.html", customers=customers)
+
+
+@customer_bp.route("/export/customers")
+def export_customers_csv():
+    customers = _get_customer_export_rows()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Customer No.",
+        "Customer Name",
+        "Total Visits",
+        "Loyalty Points",
+        "Last Visit",
+        "Vehicles",
+        "Membership Date",
+    ])
+
+    for customer in customers:
+        writer.writerow([
+            customer["customer_no"],
+            customer["customer_name"],
+            customer["total_visits"],
+            customer["loyalty_points"],
+            customer["last_visit"],
+            customer["vehicles"],
+            customer["membership_date"],
+        ])
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"customers_export_{timestamp}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@customer_bp.route("/reports/customers/points")
+def customer_points_report():
+    tier_key = (request.args.get("tier") or "").strip()
+    tier = POINT_TIERS.get(tier_key)
+    if not tier:
+        return "Invalid customer points tier.", 400
+
+    customers = _get_customer_export_rows()
+    filtered_customers = []
+    for customer in customers:
+        points = int(customer["loyalty_points"] or 0)
+        if points < tier["min"]:
+            continue
+        if tier["max"] is not None and points > tier["max"]:
+            continue
+        filtered_customers.append(customer)
+
+    filtered_customers.sort(
+        key=lambda customer: (-customer["loyalty_points"], customer["customer_name"].lower())
+    )
+
+    return render_template(
+        "reports/customer_points_pdf.html",
+        customers=filtered_customers,
+        tier_label=tier["label"],
+        generated_at=datetime.now().strftime("%b %d, %Y %I:%M %p"),
+    )
 
 
 # ─────────────────────────────────────────────

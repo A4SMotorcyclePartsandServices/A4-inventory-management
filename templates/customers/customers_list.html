@@ -1,6 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
+    .page-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .export-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 31px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #67c2e4;
+        text-decoration: none;
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        transition: all 0.18s ease;
+    }
+    .export-btn:hover {
+        color: #dff6ff;
+        border-color: rgba(103, 194, 228, 0.55);
+        background: rgba(103, 194, 228, 0.16);
+    }
+    .export-dropdown .dropdown-toggle::after {
+        margin-left: 8px;
+    }
+    .export-dropdown .dropdown-menu {
+        background: #151922;
+        border: 1px solid rgba(103, 194, 228, 0.22);
+        border-radius: 12px;
+        padding: 6px;
+        min-width: 180px;
+        box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+    }
+    .export-dropdown .dropdown-item {
+        color: #d8e6f3;
+        border-radius: 8px;
+        font-size: 0.84rem;
+        padding: 9px 12px;
+    }
+    .export-dropdown .dropdown-item:hover,
+    .export-dropdown .dropdown-item:focus {
+        background: rgba(103, 194, 228, 0.14);
+        color: #fff;
+    }
     /* Keep header/data columns aligned even with stacked loyalty content */
     #customers-table {
         table-layout: fixed;
@@ -52,7 +101,22 @@
         <h5 class="mb-0" style="color:var(--accent);">
             <i class="bi bi-people me-2"></i>Customers
         </h5>
-        <div class="d-flex gap-2">
+        <div class="page-actions">
+            <a href="/export/customers" class="export-btn">
+                <i class="bi bi-filetype-csv"></i>
+                <span>Export CSV</span>
+            </a>
+            <div class="dropdown export-dropdown">
+                <button class="export-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-filetype-pdf"></i>
+                    <span>Export PDF</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="/reports/customers/points?tier=0-50" target="_blank">0-50 points</a></li>
+                    <li><a class="dropdown-item" href="/reports/customers/points?tier=51-99" target="_blank">51-99 points</a></li>
+                    <li><a class="dropdown-item" href="/reports/customers/points?tier=100%2B" target="_blank">100+ points</a></li>
+                </ul>
+            </div>
             <input type="text" id="customer-filter" class="form-control form-control-sm"
                 placeholder="Filter by name or number..." style="width:220px;">
         </div>

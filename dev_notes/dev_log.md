@@ -200,3 +200,62 @@ Noted 2026-03-17
 - `inventory_transactions.unit_price` = generic transaction-level price snapshot
 - `items.cost_per_piece` = current master cost
 - Naming drift exists because `inventory_transactions.unit_price` is also used on sales, where it acts more like selling price, not purchase cost.
+
+## Customer / Item Export Feature
+
+Implemented 2026-03-17
+
+Scope
+- Added catalog export for Items as CSV.
+- Added customer export as CSV.
+- Added customer loyalty PDF export with tier filtering.
+
+Routes / entry points
+- `routes/reports_route.py`
+- `GET /export/items`
+- `routes/customer_route.py`
+- `GET /export/customers`
+- `GET /reports/customers/points?tier=...`
+
+UI placement
+- Item export button lives in `templates/index.html` in the page header beside the item count.
+- Customer export controls live in `templates/customers/customers_list.html` in the upper-right action row.
+- Customer PDF export uses a dropdown beside the CSV button to avoid adding three separate tier buttons.
+
+Item CSV behavior
+- Item CSV exports the full item catalog, not just the limited rows shown on initial page load.
+- Export includes practical catalog fields plus computed `current_stock`.
+- Export intentionally excludes legacy / low-value columns like `mechanic` and `vendor_id`.
+- Vendor display in the CSV now resolves with `COALESCE(v.vendor_name, i.vendor)` so rows using the centralized vendor model still show a readable vendor name.
+
+Customer CSV behavior
+- Customer CSV exports active customers only.
+- Export columns are aligned to the customer list use case:
+- `Customer No.`
+- `Customer Name`
+- `Total Visits`
+- `Loyalty Points`
+- `Last Visit`
+- `Vehicles`
+- `Membership Date`
+- `Customer ID` was intentionally excluded from the export.
+- Date formatting for export was normalized to `Mon DD, YYYY` style for both `Last Visit` and `Membership Date`.
+
+Customer PDF behavior
+- PDF uses the same customer-export dataset as the CSV, then filters by loyalty points tier.
+- Supported tiers:
+- `0-50`
+- `51-99`
+- `100+`
+- Results are sorted by highest points first, then by customer name.
+- PDF template lives in `templates/reports/customer_points_pdf.html`.
+- PDF page is browser-print driven, following the same preview / print-to-PDF pattern as the existing report pages.
+
+Architecture notes
+- Customer export data was centralized in `_get_customer_export_rows()` inside `customer_route.py` so CSV and tiered PDF use the same source of truth.
+- Tier definitions are centralized in `POINT_TIERS` in `customer_route.py`.
+- This keeps export rules close to the customer reporting route for now, but if customer reporting grows further it may be worth moving export assembly into a dedicated customer reporting service.
+
+Branding / report design
+- Customer points PDF was restyled to mirror existing report pages.
+- It now uses the same branded header direction as the other PDFs, including `static/media/logo.png`.

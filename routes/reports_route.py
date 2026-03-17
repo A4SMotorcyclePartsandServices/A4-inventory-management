@@ -218,6 +218,92 @@ def export_inventory_snapshot():
     )
 
 
+@reports_bp.route("/export/items")
+def export_items_csv():
+    """
+    Exports the current item catalog shown in the inventory page.
+    Includes stored item fields plus computed current stock.
+    """
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT
+            i.id,
+            i.name,
+            i.description,
+            i.category,
+            i.pack_size,
+            i.vendor_price,
+            i.cost_per_piece,
+            i.a4s_selling_price,
+            i.markup,
+            i.reorder_level,
+            COALESCE(v.vendor_name, i.vendor) AS vendor_name,
+            COALESCE(inv.current_stock, 0) AS current_stock
+        FROM items i
+        LEFT JOIN vendors v ON v.id = i.vendor_id
+        LEFT JOIN (
+            SELECT
+                item_id,
+                SUM(
+                    CASE
+                        WHEN transaction_type = 'IN' THEN quantity
+                        WHEN transaction_type = 'OUT' THEN -quantity
+                        ELSE 0
+                    END
+                ) AS current_stock
+            FROM inventory_transactions
+            GROUP BY item_id
+        ) AS inv ON inv.item_id = i.id
+        ORDER BY i.name ASC
+    """).fetchall()
+    conn.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "Item ID",
+        "Name",
+        "Description",
+        "Category",
+        "Pack Size",
+        "Vendor Price",
+        "Cost Per Piece",
+        "Selling Price",
+        "Markup (%)",
+        "Reorder Level",
+        "Current Stock",
+        "Vendor",
+    ])
+
+    for row in rows:
+        markup_value = row["markup"]
+        markup_percent = round(float(markup_value or 0) * 100, 2)
+        writer.writerow([
+            row["id"],
+            row["name"] or "",
+            row["description"] or "",
+            row["category"] or "",
+            row["pack_size"] or "",
+            row["vendor_price"] or 0,
+            row["cost_per_piece"] or 0,
+            row["a4s_selling_price"] or 0,
+            markup_percent,
+            row["reorder_level"] or 0,
+            row["current_stock"] or 0,
+            row["vendor_name"] or "",
+        ])
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"items_export_{timestamp}.csv"
+
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @reports_bp.route("/export/items-sold-today")
 def export_items_sold_today():
     today = date.today()
