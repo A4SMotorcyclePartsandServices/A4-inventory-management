@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, session, flash,
 from werkzeug.security import check_password_hash, generate_password_hash
 from db.database import get_db
 from datetime import datetime
+import re
 from utils.formatters import format_date, norm_text
 from services.audit_service import get_audit_trail
 from services.sales_admin_service import get_sales_paginated
@@ -276,6 +277,77 @@ def sale_details(reference_id):
         }
     except Exception as e:
         return {"error": str(e)}, 500
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/audit/manual-in/<int:audit_group_id>")
+def manual_in_details(audit_group_id):
+    conn = get_db()
+    try:
+        anchor = conn.execute(
+            """
+            SELECT t.id, t.item_id, t.transaction_date, t.user_id, t.user_name, i.name AS item_name
+            FROM inventory_transactions t
+            JOIN items i ON i.id = t.item_id
+            WHERE t.id = %s
+              AND t.reference_type = 'MANUAL_ADJUSTMENT'
+            """,
+            (audit_group_id,),
+        ).fetchone()
+
+        if not anchor:
+            return jsonify({"error": "Manual stock-in record not found."}), 404
+
+        related_rows = conn.execute(
+            """
+            SELECT
+                t.id,
+                t.quantity,
+                t.change_reason,
+                t.unit_price,
+                t.notes,
+                t.transaction_date,
+                t.user_name
+            FROM inventory_transactions t
+            WHERE t.reference_type = 'MANUAL_ADJUSTMENT'
+              AND t.item_id = %s
+              AND t.transaction_date = %s
+              AND COALESCE(t.user_id, 0) = COALESCE(%s, 0)
+            ORDER BY t.id ASC
+            """,
+            (anchor["item_id"], anchor["transaction_date"], anchor["user_id"]),
+        ).fetchall()
+
+        walkin_row = next((row for row in related_rows if row["change_reason"] == "WALKIN_PURCHASE"), None)
+        cost_row = next((row for row in related_rows if row["change_reason"] == "COST_PER_PIECE_UPDATED"), None)
+
+        previous_cost = None
+        updated_cost = None
+        if cost_row and cost_row["notes"]:
+            match = re.search(r"Cost updated from ([0-9]+(?:\.[0-9]+)?) to ([0-9]+(?:\.[0-9]+)?)", str(cost_row["notes"]))
+            if match:
+                previous_cost = float(match.group(1))
+                updated_cost = float(match.group(2))
+
+        return jsonify({
+            "item_name": anchor["item_name"],
+            "transaction_date": format_date(anchor["transaction_date"], show_time=True),
+            "user_name": anchor["user_name"] or "System",
+            "walkin_purchase": {
+                "quantity": int(walkin_row["quantity"] or 0) if walkin_row else 0,
+                "unit_cost": float(walkin_row["unit_price"] or 0) if walkin_row else 0,
+                "notes": walkin_row["notes"] if walkin_row else "",
+            } if walkin_row else None,
+            "cost_update": {
+                "unit_cost": float(cost_row["unit_price"] or 0) if cost_row else 0,
+                "previous_cost": previous_cost,
+                "updated_cost": updated_cost,
+                "notes": cost_row["notes"] if cost_row else "",
+            } if cost_row else None,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     finally:
         conn.close()
 

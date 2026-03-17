@@ -181,3 +181,22 @@ WHERE reference_id = ?
 AND reference_type = 'PURCHASE_ORDER'
 AND transaction_type = 'IN'
 ORDER BY transaction_date ASC
+
+## Loyalty Program Feature
+Loyalty note:
+- current client usage separates stamps and points, so mixed-program logic is not being fixed now
+- if a future loyalty program enables both stamps and points in one program, one sale can earn both
+- if reward_basis is STAMPS_OR_POINTS, redemption currently prefers stamps first and can leave points untouched for later eligibility
+
+## Manual IN / PO Receive Cost Naming
+
+Noted 2026-03-17
+
+- Manual `IN` form uses the label `Unit Cost`, but posts `unit_price` to the backend.
+- PO receive uses `po_items.unit_cost`.
+- Both flows ultimately write the incoming cost into `inventory_transactions.unit_price`.
+- Both flows also compare that incoming cost against `items.cost_per_piece`, and if different, they update `items.cost_per_piece` and add a `COST_PER_PIECE_UPDATED` audit row.
+- So today the real meaning is:
+- `inventory_transactions.unit_price` = generic transaction-level price snapshot
+- `items.cost_per_piece` = current master cost
+- Naming drift exists because `inventory_transactions.unit_price` is also used on sales, where it acts more like selling price, not purchase cost.

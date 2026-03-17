@@ -16,6 +16,10 @@ def _to_bool_int(value, default=False):
     return 1 if text in ("1", "true", "yes", "on") else 0
 
 
+def _json_safe_reward_value(value):
+    return float(value or 0)
+
+
 def _normalize_point_rules(raw_rules):
     if raw_rules is None:
         return []
@@ -655,7 +659,7 @@ def get_customer_eligibility(customer_id, branch_id=None):
                 "progress_unit": progress_unit,
                 "redemption_count": int(redemption_count or 0),
                 "reward_type": prog["reward_type"],
-                "reward_value": prog["reward_value"],
+                "reward_value": _json_safe_reward_value(prog["reward_value"]),
                 "reward_description": prog["reward_description"],
                 "period_end": prog["period_end"],
             }
@@ -809,7 +813,7 @@ def get_customer_eligibility_bulk(customer_ids, branch_id=None):
                     "progress_unit": progress_unit,
                     "redemption_count": redemption_map.get(customer_id, 0),
                     "reward_type": prog["reward_type"],
-                    "reward_value": prog["reward_value"],
+                    "reward_value": _json_safe_reward_value(prog["reward_value"]),
                     "reward_description": prog["reward_description"],
                     "period_end": prog["period_end"],
                 }
@@ -1152,7 +1156,7 @@ def redeem_reward(customer_id, program_id, sale_id, user_id):
         reward_snapshot = json.dumps(
             {
                 "reward_type": prog["reward_type"],
-                "reward_value": prog["reward_value"],
+                "reward_value": _json_safe_reward_value(prog["reward_value"]),
                 "reward_description": prog["reward_description"],
                 "program_name": prog["name"],
                 "redeemed_on": today,
@@ -1184,12 +1188,38 @@ def redeem_reward(customer_id, program_id, sale_id, user_id):
                 [(redemption_id, pid) for pid in points_to_consume],
             )
 
+        # A sale used to redeem a reward should not also keep newly-earned credit
+        # for the same program on that same sale, or the customer appears to
+        # "instantly earn back" the stamp/points they just spent.
+        conn.execute(
+            """
+            UPDATE loyalty_stamps
+            SET redemption_id = %s
+            WHERE customer_id = %s
+              AND program_id = %s
+              AND sale_id = %s
+              AND redemption_id IS NULL
+            """,
+            (redemption_id, customer_id, program_id, sale_id),
+        )
+        conn.execute(
+            """
+            UPDATE loyalty_point_ledger
+            SET redemption_id = %s
+            WHERE customer_id = %s
+              AND program_id = %s
+              AND sale_id = %s
+              AND redemption_id IS NULL
+            """,
+            (redemption_id, customer_id, program_id, sale_id),
+        )
+
         conn.commit()
         return {
             "redemption_id": redemption_id,
             "program_name": prog["name"],
             "reward_type": prog["reward_type"],
-            "reward_value": prog["reward_value"],
+            "reward_value": _json_safe_reward_value(prog["reward_value"]),
             "reward_description": prog["reward_description"],
             "consumed_basis": consume_basis,
             "stamps_consumed": len(stamps_to_consume),

@@ -18,6 +18,64 @@
         margin-right: 10px;
     }
 
+    .sale-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px;
+        border-radius: 999px;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+    }
+
+    .sale-mode-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 9px 18px;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        transition: all 0.18s ease;
+    }
+
+    .sale-mode-btn.active {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 8px 22px rgba(193,18,31,0.28);
+    }
+
+    .sale-mode-btn.quick.active {
+        background: #f4c430;
+        color: #11151d;
+        box-shadow: 0 8px 22px rgba(244,196,48,0.22);
+    }
+
+    .quick-sale-note {
+        display: none;
+        margin: -28px -32px 22px;
+        padding: 16px 32px 14px;
+        border-radius: 16px 16px 0 0;
+        background:
+            linear-gradient(180deg, rgba(244,196,48,0.13) 0%, rgba(244,196,48,0.06) 100%),
+            linear-gradient(90deg, rgba(244,196,48,0.18) 0%, rgba(244,196,48,0.02) 45%, rgba(244,196,48,0.10) 100%);
+        border-bottom: 1px solid rgba(244,196,48,0.18);
+        color: #f7d66b;
+        font-size: 0.8rem;
+        box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
+    }
+
+    .quick-sale-note strong {
+        color: #ffe28f;
+    }
+
+    .quick-sale-note i {
+        color: #f4c430;
+        margin-right: 8px;
+    }
+
     /* =====================
     MAIN FORM CARD
     ===================== */
@@ -359,11 +417,20 @@
 
 {% block content %}
 
-<div class="page-title">
-    <i class="bi bi-cart-dash"></i> New Sale
+<div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+    <div class="page-title mb-0">
+        <i class="bi bi-cart-dash"></i> Sales
+    </div>
+    <div class="sale-mode-toggle" id="sale-mode-toggle">
+        <button type="button" class="sale-mode-btn quick active" data-sale-mode="quick">Quick Sale</button>
+        <button type="button" class="sale-mode-btn" data-sale-mode="full">New Sale</button>
+    </div>
 </div>
 
 <div class="form-card">
+    <div class="quick-sale-note" id="quick-sale-note">
+        <i class="bi bi-lightning-charge-fill"></i><strong>Quick Sale rule:</strong> items only, each item must be priced below &#8369;100, and total due must not exceed &#8369;100.
+    </div>
     <div class="row g-3">
 
         <!-- DATE -->
@@ -387,7 +454,7 @@
         </div>
 
         <!-- CUSTOMER -->
-        <div class="col-md-4">
+        <div class="col-md-4" id="full-sale-customer-group" style="display:none;">
             <label class="form-label">Customer <span class="req">*</span></label>
             <div class="position-relative">
                 <input type="text" id="customer-search" class="form-control"
@@ -416,6 +483,11 @@
                     </button>
                 </div>
             </div>
+        </div>
+
+        <div class="col-md-4" id="quick-sale-customer-group">
+            <label class="form-label">Customer <span class="req">*</span></label>
+            <input type="text" id="quick-customer-name" class="form-control" placeholder="e.g. Walk-in / Customer name">
         </div>
 
         <!-- LOYALTY ELIGIBILITY BANNER -->
@@ -502,7 +574,7 @@
             <i class="bi bi-plus-circle me-1"></i> Add Item
         </button>
     </div>
-
+    <div id="mechanic-services-block">
     <!-- SECTION: MECHANIC & SERVICES -->
     <div class="form-section-divider info">
         <i class="bi bi-wrench-adjustable"></i> Mechanic & Services
@@ -558,14 +630,15 @@
             </button>
         </div>
     </div>
+    </div>
 
     <!-- SECTION: PAYMENT & TOTAL -->
-    <div class="form-section-divider accent">
+    <div class="form-section-divider accent" id="payment-section-divider">
         <i class="bi bi-credit-card"></i> Payment
     </div>
 
     <div class="row g-3 align-items-end">
-        <div class="col-md-6">
+        <div class="col-md-6" id="payment-controls-col">
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label">Payment Category</label>
@@ -611,7 +684,7 @@
             </div>
         </div>
 
-        <div class="col-md-6">
+        <div class="col-md-6" id="payment-total-col">
             <div class="total-area">
                 <div class="total-label">Total Due</div>
                 <div id="grand-total">₱0.00</div>
@@ -736,7 +809,7 @@ function showAlert(message, type = 'danger') {
 ========================================================= */
 function clearFieldErrors() {
     document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-    ['sales-number', 'customer-search', 'payment-method', 'ref-no'].forEach(id => {
+    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.classList.remove('border-danger');
@@ -761,6 +834,81 @@ function flagError(el, message) {
    INITIALIZATION
 ========================================================= */
 let dateWasManuallyChanged = false;
+const QUICK_SALE_MAX_PRICE = 100;
+const DEFAULT_CASH_PAYMENT_ID = "{{ cash_pm_id }}";
+let currentSaleMode = 'quick';
+let quickSaleOverLimitWarned = false;
+
+function isQuickSaleMode() {
+    return currentSaleMode === 'quick';
+}
+
+function syncQuickCustomerName() {
+    if (!isQuickSaleMode()) return;
+    document.getElementById('customer-id').value = '';
+    document.getElementById('customer-name').value = document.getElementById('quick-customer-name').value.trim();
+}
+
+function updateQuickSaleItemHints() {
+    if (!isQuickSaleMode()) return;
+    document.querySelectorAll('.item-row').forEach(row => {
+        const basePrice = parseFloat(row.dataset.basePrice || row.querySelector('.price-input').value || 0);
+        const itemInput = row.querySelector('.item-input');
+        if (!row.querySelector('.item-id-input').value || !basePrice) return;
+        if (basePrice >= QUICK_SALE_MAX_PRICE) {
+            itemInput.classList.add('border-danger');
+            itemInput.style.boxShadow = '0 0 0 2px rgba(193,18,31,0.18)';
+        } else {
+            itemInput.classList.remove('border-danger');
+            itemInput.style.boxShadow = '';
+        }
+    });
+}
+
+function getGrandTotalValue() {
+    return parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')) || 0;
+}
+
+function setSaleMode(mode) {
+    currentSaleMode = mode === 'full' ? 'full' : 'quick';
+
+    document.querySelectorAll('.sale-mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.saleMode === currentSaleMode);
+    });
+
+    const isQuick = isQuickSaleMode();
+    document.getElementById('quick-sale-customer-group').style.display = isQuick ? '' : 'none';
+    document.getElementById('full-sale-customer-group').style.display = isQuick ? 'none' : '';
+    document.getElementById('quick-sale-note').style.display = isQuick ? 'block' : 'none';
+    document.getElementById('mechanic-services-block').style.display = isQuick ? 'none' : '';
+    document.getElementById('payment-section-divider').style.display = isQuick ? 'none' : '';
+    document.getElementById('payment-controls-col').style.display = isQuick ? 'none' : '';
+
+    const paymentTotalCol = document.getElementById('payment-total-col');
+    paymentTotalCol.classList.toggle('col-md-12', isQuick);
+    paymentTotalCol.classList.toggle('col-md-6', !isQuick);
+
+    if (isQuick) {
+        quickSaleOverLimitWarned = false;
+        document.getElementById('payment-category').value = DEFAULT_CASH_PAYMENT_ID;
+        document.getElementById('payment-method').value = '';
+        document.getElementById('ref-no').value = '';
+        document.getElementById('trans-notes').value = '';
+        document.getElementById('mechanic-id').value = '';
+        document.getElementById('services-section').style.display = 'none';
+        clearServices();
+        if (window.clearSelectedCustomer) {
+            window.clearSelectedCustomer();
+        }
+        syncQuickCustomerName();
+    } else {
+        document.getElementById('quick-customer-name').classList.remove('border-danger');
+        document.getElementById('quick-customer-name').style.boxShadow = '';
+    }
+
+    updatePaymentCategoryUI();
+    updateQuickSaleItemHints();
+}
 
 document.addEventListener('DOMContentLoaded', () => {
     setDefaultTransactionDate();
@@ -770,12 +918,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Clear errors as user fixes fields
-    ['sales-number', 'customer-search', 'ref-no'].forEach(id => {
+    ['sales-number', 'customer-search', 'quick-customer-name', 'ref-no'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('input', clearFieldErrors);
     });
     document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
     document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
+    document.querySelectorAll('.sale-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
+    });
+    document.getElementById('quick-customer-name').addEventListener('input', syncQuickCustomerName);
+    setSaleMode('quick');
 });
 
 function setDefaultTransactionDate() {
@@ -864,6 +1017,24 @@ function calculateGrandTotal() {
     });
     document.getElementById('grand-total').innerText =
         `₱${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+    if (isQuickSaleMode()) {
+        const grandTotalEl = document.getElementById('grand-total');
+        const overLimit = total > QUICK_SALE_MAX_PRICE;
+        grandTotalEl.classList.toggle('text-warning', overLimit);
+        grandTotalEl.classList.toggle('text-danger', overLimit);
+
+        if (overLimit && !quickSaleOverLimitWarned) {
+            showAlert('Quick Sale total due cannot exceed ₱100. Remove an item, reduce quantity, or switch to New Sale.', 'warning');
+            quickSaleOverLimitWarned = true;
+        } else if (!overLimit) {
+            quickSaleOverLimitWarned = false;
+            grandTotalEl.classList.remove('text-warning', 'text-danger');
+        }
+    } else {
+        quickSaleOverLimitWarned = false;
+        document.getElementById('grand-total').classList.remove('text-warning', 'text-danger');
+    }
 }
 
 /* =========================================================
@@ -889,9 +1060,27 @@ const handleTableSearch = async (input) => {
         const data = await res.json();
         suggestions.innerHTML = '';
 
-        if (!data.items?.length) { suggestions.style.display = 'none'; return; }
+        let items = data.items || [];
+        if (isQuickSaleMode()) {
+            items = items.filter(item => Number(item.a4s_selling_price || 0) < QUICK_SALE_MAX_PRICE);
+        }
 
-        data.items.slice(0, 5).forEach(item => {
+        if (!items.length) {
+            if (isQuickSaleMode()) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'list-group-item';
+                emptyState.style.color = '#f7d66b';
+                emptyState.style.fontSize = '0.78rem';
+                emptyState.textContent = 'Quick Sale only allows items priced below ₱100.';
+                suggestions.appendChild(emptyState);
+                suggestions.style.display = 'block';
+                return;
+            }
+            suggestions.style.display = 'none';
+            return;
+        }
+
+        items.slice(0, 5).forEach(item => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
@@ -929,6 +1118,7 @@ const handleTableSearch = async (input) => {
                     rebuildSelectedItemIds();
                     suggestions.style.display = 'none';
                     calculateRow(row);
+                    updateQuickSaleItemHints();
                 };
             }
 
@@ -1000,10 +1190,26 @@ function getServiceRowByLoyaltyProgram(programId) {
     );
 }
 
+function setRedeemButtonState(programId, isActive) {
+    const btn = document.querySelector(`.loyalty-redeem-btn[data-program-id="${CSS.escape(String(programId))}"]`);
+    if (!btn) return;
+    btn.classList.toggle('active', isActive);
+    btn.textContent = isActive ? '✓ Redeeming' : 'Redeem';
+}
+
+function cancelRedeemedServiceProgram(programId) {
+    if (!programId) return;
+    loyaltyPendingRedemptions.delete(Number(programId));
+    setRedeemButtonState(programId, false);
+}
+
 function clearServiceRow(row) {
     row.querySelector('.service-input').value = '';
     row.querySelector('.service-id-input').value = '';
-    row.querySelector('.service-price-input').value = '';
+    const priceInput = row.querySelector('.service-price-input');
+    priceInput.value = '';
+    priceInput.readOnly = false;
+    priceInput.classList.remove('bg-secondary');
     row.querySelector('.service-subtotal-display').innerText = '₱0.00';
     delete row.dataset.loyaltyProgramId;
 }
@@ -1042,9 +1248,12 @@ function applyRedeemedServiceRow(redemption) {
     row.querySelector('.service-input').value = redemption.qualifying_name || redemption.name || 'Redeemed Service';
     row.querySelector('.service-id-input').value = redemption.qualifying_id;
     const redeemedPrice = Number(redemption.reward_value);
-    row.querySelector('.service-price-input').value = Number.isFinite(redeemedPrice)
+    const priceInput = row.querySelector('.service-price-input');
+    priceInput.value = Number.isFinite(redeemedPrice)
         ? redeemedPrice.toFixed(2)
         : '0.00';
+    priceInput.readOnly = true;
+    priceInput.classList.add('bg-secondary');
     row.querySelector('.search-suggestions').style.display = 'none';
 
     calculateServiceRow(row);
@@ -1158,8 +1367,7 @@ async function fetchLoyaltyEligibility(customerId) {
                     if (loyaltyPendingRedemptions.has(pid)) {
                         loyaltyPendingRedemptions.delete(pid);
                         removeRedeemedServiceRow(pid);
-                        btn.classList.remove('active');
-                        btn.textContent = 'Redeem';
+                        setRedeemButtonState(pid, false);
                     } else {
                         loyaltyPendingRedemptions.set(pid, {
                             program_id:         prog.program_id,
@@ -1171,8 +1379,7 @@ async function fetchLoyaltyEligibility(customerId) {
                             reward_value:       prog.reward_value,
                             reward_description: prog.reward_description,
                         });
-                        btn.classList.add('active');
-                        btn.textContent = '✓ Redeeming';
+                        setRedeemButtonState(pid, true);
 
                         if (prog.program_type === 'SERVICE') {
                             const mechanicSelect = document.getElementById('mechanic-id');
@@ -1358,6 +1565,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     }
 
     clearBtn.addEventListener('click', clearCustomer);
+    window.clearSelectedCustomer = clearCustomer;
 
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
@@ -1573,8 +1781,11 @@ function rebuildSelectedItemIds() {
 
 function clearItemRow(row) {
     row.querySelector('.item-id-input').value = '';
-    row.querySelector('.item-input').value = '';
-    row.querySelector('.item-input').dataset.confirmedName = '';
+    const itemInput = row.querySelector('.item-input');
+    itemInput.value = '';
+    itemInput.dataset.confirmedName = '';
+    itemInput.classList.remove('border-danger');
+    itemInput.style.boxShadow = '';
     row.querySelector('.price-input').value = '';
     row.querySelector('.stock-input').value = '--';
     row.querySelector('.discount-input').value = 0;
@@ -1660,6 +1871,10 @@ document.addEventListener('click', (e) => {
 document.addEventListener('click', (e) => {
     if (!e.target.classList.contains('remove-service-btn')) return;
     const row  = e.target.closest('tr');
+    const loyaltyProgramId = row.dataset.loyaltyProgramId;
+    if (loyaltyProgramId) {
+        cancelRedeemedServiceProgram(loyaltyProgramId);
+    }
     const rows = document.querySelectorAll('.service-row');
     if (rows.length > 1) {
         row.remove();
@@ -1741,20 +1956,24 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
 
     clearFieldErrors();
+    syncQuickCustomerName();
 
+    const quickSaleMode = isQuickSaleMode();
     const salesNum      = document.getElementById('sales-number').value.trim();
-    const customerName  = document.getElementById('customer-name').value.trim();
+    const customerName  = quickSaleMode
+        ? document.getElementById('quick-customer-name').value.trim()
+        : document.getElementById('customer-name').value.trim();
     const paymentCat    = document.getElementById('payment-category').value;
     const mechanicId    = document.getElementById('mechanic-id').value;
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo         = document.getElementById('ref-no').value.trim();
     const notes         = document.getElementById('trans-notes').value.trim();
-    const needsProvider = (paymentCat === 'Online' || paymentCat === 'Bank');
-    const needsNotes    = isOthersPaymentCategory();
+    const needsProvider = !quickSaleMode && (paymentCat === 'Online' || paymentCat === 'Bank');
+    const needsNotes    = !quickSaleMode && isOthersPaymentCategory();
     const vehicleId     = document.getElementById('vehicle-id').value;
     const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
     const vehicleIsActive  = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
-    const vehicleRequired  = document.getElementById('vehicle-id').dataset.required === '1';
+    const vehicleRequired  = !quickSaleMode && document.getElementById('vehicle-id').dataset.required === '1';
 
     let firstErrorEl = null;
     function markError(el, message) {
@@ -1763,7 +1982,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     }
 
     if (!salesNum)                                markError(document.getElementById('sales-number'), 'OR No. is required.');
-    if (!customerName)                            markError(document.getElementById('customer-search'), 'Customer is required.');
+    if (!customerName)                            markError(document.getElementById(quickSaleMode ? 'quick-customer-name' : 'customer-search'), 'Customer is required.');
     if (vehicleRequired && !vehicleId)            markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
     if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
     if (needsProvider && !selectedProvider)       markError(document.getElementById('payment-method'), 'Please select a provider.');
@@ -1849,6 +2068,11 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
+    if (quickSaleMode && validServices.length > 0) {
+        showAlert('Quick Sale only supports item sales. Switch to New Sale to add services.', 'warning');
+        return;
+    }
+
     if (missingServicePriceInput) {
         showAlert('Please enter a price for every selected service before submitting.', 'warning');
         missingServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1874,6 +2098,20 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
+    if (quickSaleMode) {
+        const invalidQuickSaleItems = validItems.filter(item =>
+            Number(item.original_price || 0) >= QUICK_SALE_MAX_PRICE || Number(item.final_price || 0) >= QUICK_SALE_MAX_PRICE
+        );
+        if (invalidQuickSaleItems.length > 0) {
+            showAlert('Quick Sale only allows items priced below ₱100. Remove the higher-priced item(s) or switch to New Sale.', 'warning');
+            return;
+        }
+        if (getGrandTotalValue() > QUICK_SALE_MAX_PRICE) {
+            showAlert('Quick Sale total due cannot exceed ₱100. Remove an item, reduce quantity, or switch to New Sale.', 'warning');
+            return;
+        }
+    }
+
     const btn = e.target;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
@@ -1882,8 +2120,20 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 });
 
 async function saveTransaction(items, services) {
+    const submitBtn = document.getElementById('submit-btn');
+
+    function resetSubmitButton() {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'SUBMIT TRANSACTION';
+    }
+
     let paymentId = document.getElementById('payment-category').value;
     let refNo = null;
+    const quickSaleMode = isQuickSaleMode();
+
+    if (quickSaleMode) {
+        syncQuickCustomerName();
+    }
 
     let finalDate;
     if (dateWasManuallyChanged) {
@@ -1894,24 +2144,25 @@ async function saveTransaction(items, services) {
         finalDate = new Date(now - offset).toISOString().slice(0, 19);
     }
 
-    if (paymentId === 'Online' || paymentId === 'Bank') {
+    if (!quickSaleMode && (paymentId === 'Online' || paymentId === 'Bank')) {
         paymentId = document.getElementById('payment-method').value;
         refNo = document.getElementById('ref-no').value || null;
     }
 
     const payload = {
+        quick_sale:        quickSaleMode,
         sales_number:      document.getElementById('sales-number').value,
-        customer_name:     document.getElementById('customer-name').value,
-        customer_id:       document.getElementById('customer-id').value || null,
-        mechanic_id:       document.getElementById('mechanic-id').value || null,
-        vehicle_id:        document.getElementById('vehicle-id').value || null,
-        payment_method_id: paymentId,
+        customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : document.getElementById('customer-name').value,
+        customer_id:       quickSaleMode ? null : (document.getElementById('customer-id').value || null),
+        mechanic_id:       quickSaleMode ? null : (document.getElementById('mechanic-id').value || null),
+        vehicle_id:        quickSaleMode ? null : (document.getElementById('vehicle-id').value || null),
+        payment_method_id: quickSaleMode ? DEFAULT_CASH_PAYMENT_ID : paymentId,
         reference_no:      refNo,
         total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
-        notes:             document.getElementById('trans-notes').value,
+        notes:             quickSaleMode ? '' : document.getElementById('trans-notes').value,
         transaction_date:  finalDate,
         items,
-        services
+        services:          quickSaleMode ? [] : services
     };
 
     try {
@@ -1925,20 +2176,16 @@ async function saveTransaction(items, services) {
 
         if (!res.ok) {
             showAlert(result.message);
-            document.getElementById('submit-btn').disabled = false;
-            document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
+            resetSubmitButton();
             return;
         }
 
-        // ── Loyalty: process pending redemptions after sale is saved ──
-        // sale_id comes from the updated route (loyalty_patches.py).
-        // If no redemptions were toggled, this block is a no-op.
         const saleId     = result.sale_id;
         const customerId = payload.customer_id;
 
         if (saleId && customerId && loyaltyPendingRedemptions.size > 0) {
-            const redeemPromises = [...loyaltyPendingRedemptions.keys()].map(programId =>
-                fetch('/api/loyalty/redeem', {
+            for (const programId of loyaltyPendingRedemptions.keys()) {
+                const redeemRes = await fetch('/api/loyalty/redeem', {
                     method:  'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body:    JSON.stringify({
@@ -1946,24 +2193,23 @@ async function saveTransaction(items, services) {
                         program_id:  programId,
                         sale_id:     saleId,
                     })
-                }).then(r => r.json())
-            );
+                });
+                const redeemResult = await redeemRes.json();
 
-            // Fire all, don't block the redirect.
-            // The sale is already committed. A failed redemption here (e.g. race condition)
-            // does NOT roll back the sale — staff would need to retry manually.
-            // TODO: surface redemption errors via a flash message post-redirect in the future.
-            Promise.all(redeemPromises).catch(err => {
-                console.error('Loyalty redemption error:', err);
-            });
+                if (!redeemRes.ok || redeemResult.status !== 'success') {
+                    showAlert(redeemResult.message || 'Sale saved, but loyalty redemption failed. Please retry before leaving this page.', 'warning');
+                    resetSubmitButton();
+                    return;
+                }
+            }
         }
 
         window.location.href = '/transaction/out';
 
     } catch (err) {
         console.error('Submission failed:', err);
-        document.getElementById('submit-btn').disabled = false;
-        document.getElementById('submit-btn').innerHTML = 'SUBMIT TRANSACTION';
+        showAlert('Submission failed. Please try again.', 'danger');
+        resetSubmitButton();
     }
 }
 </script>

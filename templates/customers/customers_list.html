@@ -124,7 +124,7 @@
                         <button type="button"
                                 class="btn btn-link p-0 text-decoration-none loyalty-summary-trigger"
                                 style="color:inherit;"
-                                title="Open row and jump to loyalty details">
+                                title="Open row and jump to loyalty status">
                             <div class="d-flex justify-content-center align-items-center flex-wrap gap-1">
                                 <span class="badge bg-dark border border-info text-info" style="font-size:0.66rem;">
                                     {{ ns.active }} redeemable
@@ -134,14 +134,6 @@
                                     {{ ns.ready }} ready
                                 </span>
                                 {% endif %}
-                                {% if ns.earn_only > 0 %}
-                                <span class="badge bg-primary" style="font-size:0.66rem;">
-                                    {{ ns.earn_only }} earn-only
-                                </span>
-                                {% endif %}
-                                <span class="badge bg-secondary" style="font-size:0.66rem;">
-                                    View loyalty details
-                                </span>
                             </div>
                         </button>
                         {% else %}
@@ -274,6 +266,7 @@ document.querySelectorAll('.loyalty-summary-trigger').forEach(trigger => {
         await openCustomerRow(row, true);
     });
 });
+
 
 /* ─── Build transaction detail HTML ─────────────────── */
 function buildTransactionHTML(data) {

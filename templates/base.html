@@ -215,6 +215,16 @@
             position: relative;
         }
 
+        .table td.actions-cell,
+        .table th.actions-cell {
+            overflow: visible !important;
+            white-space: nowrap !important;
+        }
+
+        .table td.actions-cell {
+            text-overflow: unset !important;
+        }
+
         /* Helper: common positioning layer for autocomplete/dropdown overlays inside table cells */
         .table .dropdown-cell .search-suggestions,
         .table .dropdown-cell .table-overlay-menu {

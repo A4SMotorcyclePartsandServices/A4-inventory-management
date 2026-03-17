@@ -250,6 +250,85 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+    #sales-admin-body td.actions-cell,
+    #debt-audit-body td.actions-cell {
+        overflow: visible !important;
+        white-space: nowrap !important;
+    }
+
+    #sales-admin-body td.actions-cell .btn-group,
+    #debt-audit-body td.actions-cell .btn-group,
+    #debt-audit-body td.actions-cell .action-cluster {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        flex-wrap: nowrap;
+    }
+
+    #sales-admin-body td.actions-cell .btn,
+    #debt-audit-body td.actions-cell .btn,
+    #debt-audit-body td.actions-cell a.btn {
+        flex: 0 0 auto;
+    }
+
+    .po-movement-card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+        padding: 0.9rem 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .po-movement-card.po-accent-warning {
+        border-color: rgba(255, 193, 7, 0.35);
+        background: linear-gradient(180deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.05));
+    }
+
+    .po-movement-card.po-accent-success {
+        border-color: rgba(25, 135, 84, 0.35);
+        background: linear-gradient(180deg, rgba(25, 135, 84, 0.12), rgba(25, 135, 84, 0.05));
+    }
+
+    .po-movement-card.po-accent-info,
+    .po-movement-card.po-accent-primary {
+        border-color: rgba(13, 202, 240, 0.32);
+        background: linear-gradient(180deg, rgba(13, 202, 240, 0.12), rgba(13, 202, 240, 0.05));
+    }
+
+    .po-movement-entry {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 0.7rem;
+        margin-top: 0.7rem;
+    }
+
+    .po-movement-toggle {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        text-align: left;
+    }
+
+    .po-movement-toggle:hover {
+        opacity: 0.92;
+    }
+
+    .po-movement-toggle:focus-visible {
+        outline: 2px solid rgba(255, 255, 255, 0.22);
+        outline-offset: 4px;
+        border-radius: 8px;
+    }
+
+    .po-movement-chevron {
+        transition: transform 0.18s ease;
+    }
+
+    .po-movement-toggle[aria-expanded="true"] .po-movement-chevron {
+        transform: rotate(180deg);
+    }
 </style>
 {% endblock %}
 
@@ -676,7 +755,7 @@
                         <th style="width:13%;">Payment</th>
                         <th style="width:12%;">Status</th>
                         <th style="width:12%;">Total</th>
-                        <th style="width:8%; text-align:center;">Action</th>
+                        <th class="actions-cell" style="width:11%; text-align:center;">Action</th>
                     </tr>
                 </thead>
                 <tbody id="sales-admin-body">
@@ -765,7 +844,7 @@
                         <th class="text-end">Total Paid</th>
                         <th class="text-end">Remaining</th>
                         <th class="text-center">Status</th>
-                        <th class="text-center" style="width: 6%;">Actions</th>
+                        <th class="text-center actions-cell" style="width: 10%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="debt-audit-body">
@@ -1116,6 +1195,8 @@
             </div>
             </div>
 
+            <div id="po-movement-details" class="d-none"></div>
+
             <!-- Items table -->
             <table class="table table-dark table-hover border-secondary">
             <thead>
@@ -1149,6 +1230,22 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="itemCreatedBody">
+                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="manualInDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark border-secondary text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-success">
+                        <i class="bi bi-box-arrow-in-down me-1 text-success"></i> Manual Stock IN Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="manualInDetailsBody">
                     <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
                 </div>
             </div>
@@ -1329,12 +1426,145 @@ function viewSaleDetails(saleID, displayNum) {
         });
 }
 
+function viewManualInDetails(auditGroupId) {
+    const body = document.getElementById('manualInDetailsBody');
+    body.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>';
+
+    const modal = new bootstrap.Modal(document.getElementById('manualInDetailsModal'));
+    modal.show();
+
+    fetch(`/audit/manual-in/${auditGroupId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                body.innerHTML = `<div class="text-danger text-center py-3">${escapeHtml(data.error)}</div>`;
+                return;
+            }
+
+            const walkin = data.walkin_purchase;
+            const costUpdate = data.cost_update;
+
+            body.innerHTML = `
+                <div class="mb-3">
+                    <div class="text-white fw-bold fs-5">${escapeHtml(data.item_name || 'Unknown Item')}</div>
+                    <div class="text-white-50 small mt-1">
+                        <i class="bi bi-clock me-1"></i>${escapeHtml(data.transaction_date || '—')}
+                        <span class="ms-3"><i class="bi bi-person me-1"></i>${escapeHtml(data.user_name || 'System')}</span>
+                    </div>
+                </div>
+
+                ${walkin ? `
+                    <div class="border border-secondary rounded p-3 mb-3">
+                        <div class="text-success fw-bold mb-2"><i class="bi bi-box-arrow-in-down me-1"></i> Walk-in Purchase</div>
+                        <div class="small text-white-50 mb-1">Quantity Received</div>
+                        <div class="fw-bold text-warning mb-2">${walkin.quantity}</div>
+                        <div class="small text-white-50 mb-1">Unit Cost</div>
+                        <div class="fw-bold text-info mb-2">₱${Number(walkin.unit_cost || 0).toFixed(2)}</div>
+                        <div class="small text-white-50 mb-1">Notes</div>
+                        <div class="text-info">${escapeHtml(walkin.notes || '—')}</div>
+                    </div>
+                ` : ''}
+
+                ${costUpdate ? `
+                    <div class="border border-secondary rounded p-3">
+                        <div class="text-warning fw-bold mb-2"><i class="bi bi-arrow-repeat me-1"></i> Master Cost Update</div>
+                        ${costUpdate.previous_cost != null && costUpdate.updated_cost != null ? `
+                            <div class="small text-white-50 mb-1">Cost Per Piece</div>
+                            <div class="fw-bold text-warning mb-2">
+                                ₱${Number(costUpdate.previous_cost).toFixed(2)} → ₱${Number(costUpdate.updated_cost).toFixed(2)}
+                            </div>
+                        ` : `
+                            <div class="small text-white-50 mb-1">Updated Cost</div>
+                            <div class="fw-bold text-warning mb-2">₱${Number(costUpdate.unit_cost || 0).toFixed(2)}</div>
+                        `}
+                        <div class="small text-white-50 mb-1">Audit Note</div>
+                        <div class="text-info">${escapeHtml(costUpdate.notes || '—')}</div>
+                    </div>
+                ` : '<div class="text-muted small">No cost-per-piece update was recorded for this manual stock-in.</div>'}
+            `;
+        })
+        .catch(() => {
+            body.innerHTML = '<div class="text-danger text-center py-3">Failed to load manual stock-in details.</div>';
+        });
+}
+
 function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '') {
     const params = new URLSearchParams();
     if (snapshotAt) params.set('snapshot_at', snapshotAt);
     if (changeReason) params.set('change_reason', changeReason);
     if (transactionType) params.set('transaction_type', transactionType);
     const query = params.toString();
+
+    const formatPeso = (value) => `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const renderMovementDetails = (details) => {
+        const container = document.getElementById('po-movement-details');
+        if (!details || !Array.isArray(details.entries) || details.entries.length === 0) {
+            container.className = 'd-none';
+            container.innerHTML = '';
+            return;
+        }
+
+        const accent = escapeHtml(details.accent || 'info');
+        const title = escapeHtml(details.title || 'Movement Details');
+        const summary = escapeHtml(details.summary || '');
+        const contextNote = details.context_note
+            ? `<div class="small text-white-50 mt-2">${escapeHtml(details.context_note)}</div>`
+            : '';
+        const collapseId = 'po-movement-details-body';
+
+        const entriesHtml = details.entries.map(entry => {
+            const hasCostDelta = entry.previous_cost != null && entry.updated_cost != null;
+            const qtyLine = entry.quantity != null
+                ? `<div class="small text-white-50">Qty</div><div class="fw-bold text-white mb-2">${escapeHtml(String(entry.quantity))}</div>`
+                : '';
+            const unitCostLine = entry.unit_cost != null
+                ? `<div class="small text-white-50">Unit Cost</div><div class="fw-bold text-info mb-2">${formatPeso(entry.unit_cost)}</div>`
+                : '';
+            const subtotalLine = entry.subtotal != null
+                ? `<div class="small text-white-50">Subtotal</div><div class="fw-bold text-info mb-2">${formatPeso(entry.subtotal)}</div>`
+                : '';
+            const costDeltaLine = hasCostDelta
+                ? `<div class="small text-white-50">Cost Per Piece</div><div class="fw-bold text-warning mb-2">${formatPeso(entry.previous_cost)} → ${formatPeso(entry.updated_cost)}</div>`
+                : '';
+            const notesLine = entry.notes
+                ? `<div class="small text-white-50">Notes</div><div class="text-info">${escapeHtml(entry.notes)}</div>`
+                : '';
+
+            return `
+                <div class="po-movement-entry">
+                    <div class="fw-bold text-white mb-2">${escapeHtml(entry.item_name || 'Unknown Item')}</div>
+                    <div class="row g-3">
+                        <div class="col-sm-3">${qtyLine}</div>
+                        <div class="col-sm-3">${unitCostLine}</div>
+                        <div class="col-sm-3">${subtotalLine}</div>
+                        <div class="col-sm-3">${costDeltaLine}</div>
+                    </div>
+                    ${notesLine}
+                </div>
+            `;
+        }).join('');
+
+        container.className = `po-movement-card po-accent-${accent}`;
+        container.innerHTML = `
+            <button class="po-movement-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="true" aria-controls="${collapseId}">
+                <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+                    <div>
+                        <div class="small text-white-50 text-uppercase fw-bold mb-1">Audit Row Context</div>
+                        <div class="fw-bold text-white">${title}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 text-white-50 small">
+                        <span>Hide details</span>
+                        <i class="bi bi-chevron-down po-movement-chevron"></i>
+                    </div>
+                </div>
+            </button>
+            <div id="${collapseId}" class="collapse show">
+                ${summary ? `<div class="small text-white-50 mt-2">${summary}</div>` : ''}
+                ${contextNote}
+                ${entriesHtml}
+            </div>
+        `;
+    };
 
     fetch(`/purchase-order/details/${poId}${query ? `?${query}` : ''}`)
         .then(response => response.json())
@@ -1367,7 +1597,8 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
             // Other header fields
             document.getElementById('modal-po-number').innerText = data.po_number;
             document.getElementById('modal-po-vendor').innerText = data.vendor_name;
-            document.getElementById('modal-po-total').innerText = '₱' + parseFloat(data.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('modal-po-total').innerText = formatPeso(data.total_amount || 0);
+            renderMovementDetails(data.movement_details);
 
             // Itemized list
             const list = document.getElementById('po-items-list');
@@ -1375,8 +1606,8 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
                 <tr>
                     <td>${escapeHtml(item.name)}</td>
                     <td class="text-center">${item.quantity_ordered}</td>
-                    <td class="text-end">₱${parseFloat(item.unit_price).toFixed(2)}</td>
-                    <td class="text-end text-info">₱${parseFloat(item.subtotal).toFixed(2)}</td>
+                    <td class="text-end">${formatPeso(item.unit_price)}</td>
+                    <td class="text-end text-info">${formatPeso(item.subtotal)}</td>
                 </tr>
             `).join('');
 
@@ -1617,7 +1848,13 @@ function renderAuditTrail(data) {
             : '<span class="text-muted">—</span>';
 
         let refBtn = '<span class="text-muted">---</span>';
-        if (log.reference_id) {
+        if (log.reference_type === 'MANUAL_ADJUSTMENT' && log.audit_group_id) {
+            refBtn = `<button class="btn btn-sm btn-outline-success border-0"
+                style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                onclick="viewManualInDetails('${log.audit_group_id}')">
+                <i class="bi bi-box-arrow-in-down me-1"></i>Manual IN
+            </button>`;
+        } else if (log.reference_id) {
             if (log.reference_type === 'PURCHASE_ORDER') {
                 refBtn = `<button class="btn btn-sm btn-outline-warning border-0" 
                     style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
@@ -1793,7 +2030,7 @@ function renderSalesAdmin(data) {
             </td>
             <td>${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}</td>
             <td class="fw-bold text-danger">₱${parseFloat(sale.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-            <td class="text-center">
+            <td class="text-center actions-cell">
                 <div class="btn-group">
                     <button class="btn btn-sm btn-outline-info me-1"
                             onclick="viewSaleDetails('${sale.id}', '${sale.sales_number}')">
@@ -1893,19 +2130,21 @@ function renderDebtTable() {
                 <td class="text-center">
                     ${statusBadge}
                 </td>
-                <td class="text-center">
-                    <button type="button"
-                            class="btn btn-sm btn-outline-info me-1 view-debt-payments-btn"
-                            data-sale-id="${sale.sale_id}"
-                            data-sale-receipt="${sale.sales_number || ''}"
-                            title="View payment history">
-                        <i class="bi bi-eye"></i>
-                    </button>
-                    <a href="/debt/statement/${sale.sale_id}" target="_blank"
-                    class="btn btn-sm btn-outline-warning"
-                    title="Print customer statement">
-                        <i class="bi bi-printer"></i>
-                    </a>
+                <td class="text-center actions-cell">
+                    <div class="action-cluster">
+                        <button type="button"
+                                class="btn btn-sm btn-outline-info view-debt-payments-btn"
+                                data-sale-id="${sale.sale_id}"
+                                data-sale-receipt="${sale.sales_number || ''}"
+                                title="View payment history">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        <a href="/debt/statement/${sale.sale_id}" target="_blank"
+                        class="btn btn-sm btn-outline-warning"
+                        title="Print customer statement">
+                            <i class="bi bi-printer"></i>
+                        </a>
+                    </div>
                 </td>
             </tr>
             `;

@@ -1,5 +1,6 @@
 from db.database import get_db
 from datetime import datetime
+import re
 from utils.formatters import format_date
 from services.loyalty_service import log_stamps_for_sale
 from services.approval_service import (
@@ -287,6 +288,8 @@ def record_sale(data, user_id, username):
     except (TypeError, ValueError):
         raise ValueError("Invalid payment method selected.")
 
+    quick_sale = bool(data.get("quick_sale"))
+
     conn = get_db()
     try:
         pm = conn.execute("""
@@ -298,6 +301,8 @@ def record_sale(data, user_id, username):
             raise ValueError("Invalid or inactive payment method selected.")
 
         payment_category = (pm["category"] or "").strip()
+        if quick_sale and payment_category != "Cash":
+            raise ValueError("Quick Sale must use a cash payment method.")
         sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
 
         # 2) Normalize time
@@ -339,7 +344,101 @@ def record_sale(data, user_id, username):
             labels = [f"{r['name']} (ID {r['id']})" for r in items_data]
             raise ValueError(f"Duplicate item(s) detected: {', '.join(labels)}. Please adjust Qty Out instead.")
 
+        item_catalog = {}
+        normalized_items = []
+        if raw_items:
+            normalized_item_ids = []
+            for item in raw_items:
+                try:
+                    normalized_item_ids.append(int(item.get("item_id")))
+                except (TypeError, ValueError):
+                    raise ValueError("One or more selected items are invalid.")
+
+            placeholders = ",".join(["%s"] * len(normalized_item_ids))
+            item_rows = conn.execute(
+                f"""
+                SELECT id, name, a4s_selling_price
+                FROM items
+                WHERE id IN ({placeholders})
+                """,
+                tuple(normalized_item_ids),
+            ).fetchall()
+            item_catalog = {int(row["id"]): dict(row) for row in item_rows}
+
+            missing_item_ids = [iid for iid in normalized_item_ids if iid not in item_catalog]
+            if missing_item_ids:
+                raise ValueError("One or more selected items no longer exist.")
+
+            for item in raw_items:
+                item_id = int(item.get("item_id"))
+                item_row = item_catalog.get(item_id)
+                if not item_row:
+                    raise ValueError("One or more selected items no longer exist.")
+
+                try:
+                    qty = int(item.get("quantity", 0) or 0)
+                except (TypeError, ValueError):
+                    raise ValueError("One or more item quantities are invalid.")
+                if qty <= 0:
+                    raise ValueError("Item quantities must be at least 1.")
+
+                try:
+                    discount_percent_whole = float(item.get("discount_percent", 0) or 0)
+                except (TypeError, ValueError):
+                    raise ValueError("One or more item discounts are invalid.")
+                if discount_percent_whole < 0 or discount_percent_whole > 50:
+                    raise ValueError("Item discount must be between 0 and 50 percent.")
+
+                master_price = round(float(item_row.get("a4s_selling_price") or 0), 2)
+                submitted_original_price = round(float(item.get("original_price", 0) or 0), 2)
+                submitted_final_price = round(float(item.get("final_price", 0) or 0), 2)
+                expected_final_price = round(master_price * (1 - (discount_percent_whole / 100)), 2)
+
+                if abs(submitted_original_price - master_price) > 0.01:
+                    raise ValueError(f"Price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
+                if abs(submitted_final_price - expected_final_price) > 0.01:
+                    raise ValueError(f"Discounted price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
+
+                normalized_items.append({
+                    "item_id": item_id,
+                    "name": item_row["name"],
+                    "quantity": qty,
+                    "original_price": master_price,
+                    "discount_percent_whole": discount_percent_whole,
+                    "discount_percent_decimal": discount_percent_whole / 100,
+                    "final_price": expected_final_price,
+                    "discount_amount": round(master_price - expected_final_price, 2),
+                })
+
+        if quick_sale:
+            raw_services = data.get("services", []) or []
+            if raw_services:
+                raise ValueError("Quick Sale only supports item sales.")
+            if data.get("mechanic_id"):
+                raise ValueError("Quick Sale cannot be assigned to a mechanic.")
+            customer_name = str(data.get("customer_name") or "").strip()
+            if not customer_name:
+                raise ValueError("Quick Sale requires a customer name.")
+            if not raw_items:
+                raise ValueError("Quick Sale requires at least one item.")
+
+            computed_quick_total = 0.0
+            for item in normalized_items:
+                master_price = float(item["original_price"] or 0)
+                final_price = float(item["final_price"] or 0)
+                qty = int(item["quantity"] or 0)
+
+                if master_price >= 100:
+                    raise ValueError(f"'{item['name']}' is not eligible for Quick Sale because its catalog price is 100 pesos or more.")
+                if final_price >= 100:
+                    raise ValueError("Quick Sale only allows items priced below 100 pesos.")
+                computed_quick_total += qty * final_price
+
+            if round(computed_quick_total, 2) > 100:
+                raise ValueError("Quick Sale total due cannot exceed 100 pesos.")
+
         conn.execute("BEGIN")
+        sale_total_amount = 0.0
 
         # 4) Insert sale
         vehicle_id = data.get("vehicle_id")
@@ -371,7 +470,7 @@ def record_sale(data, user_id, username):
             data.get('customer_name'),
             data.get('customer_id') or None,
             vehicle_id,
-            data.get('total_amount'),
+            sale_total_amount,
             payment_method_id,
             data.get('reference_no'),
             sale_status,
@@ -412,16 +511,19 @@ def record_sale(data, user_id, username):
                 )
 
         # 5) Items OUT
-        for item in raw_items:
-            original_price = float(item.get('original_price', 0))
-            final_price = float(item.get('final_price', 0))
-            discount_percent_whole = float(item.get('discount_percent', 0))
-            discount_percent_decimal = discount_percent_whole / 100
-            discount_amount = original_price - final_price
+        item_total_amount = 0.0
+        for item in normalized_items:
+            original_price = float(item["original_price"])
+            final_price = float(item["final_price"])
+            discount_percent_whole = float(item["discount_percent_whole"])
+            discount_percent_decimal = float(item["discount_percent_decimal"])
+            discount_amount = float(item["discount_amount"])
+            quantity = int(item["quantity"])
+            item_total_amount += quantity * final_price
 
             add_transaction(
                 item_id=item['item_id'],
-                quantity=item['quantity'],
+                quantity=quantity,
                 transaction_type='OUT',
                 user_id=user_id,
                 user_name=username,
@@ -440,14 +542,14 @@ def record_sale(data, user_id, username):
                     discounted_by, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
-                new_sale_id, item['item_id'], item['quantity'],
+                new_sale_id, item['item_id'], quantity,
                 original_price, discount_percent_decimal, discount_amount, final_price,
                 user_id if discount_percent_whole > 0 else None,
                 clean_time
             ))
 
         # 6) Services
-        service_subtotal = 0
+        service_subtotal = 0.0
         for service in data.get('services', []):
             service_id = service.get('service_id')
             if not service_id:
@@ -471,13 +573,13 @@ def record_sale(data, user_id, username):
                 VALUES (%s, %s, %s)
             """, (new_sale_id, service_id, price))
 
+        sale_total_amount = round(item_total_amount + service_subtotal, 2)
         conn.execute(
-            "UPDATE sales SET service_fee = %s WHERE id = %s",
-            (service_subtotal, new_sale_id)
+            "UPDATE sales SET total_amount = %s, service_fee = %s WHERE id = %s",
+            (sale_total_amount, service_subtotal, new_sale_id)
         )
-
         service_ids = [s["service_id"] for s in data.get("services", [])]
-        item_ids    = [i["item_id"] for i in raw_items]
+        item_ids    = [i["item_id"] for i in normalized_items]
         log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
 
         conn.commit()
@@ -1817,9 +1919,132 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
             return "Partial Delivery", "bg-warning text-dark"
         if reason_normalized == "PO_ARRIVAL":
             return "Completed Delivery", "bg-success"
+        if reason_normalized == "BONUS_STOCK":
+            return "Bonus Stock", "bg-info text-dark"
+        if reason_normalized == "COST_PER_PIECE_UPDATED":
+            return "Cost Updated", "bg-warning text-dark"
         if reason_normalized == "ORDER_PLACEMENT":
             return "Order Placement", "bg-primary"
         return po_status or "Pending", get_status_class(po_status)
+
+    def _parse_cost_update_note(note_text):
+        if not note_text:
+            return None, None
+        match = re.search(
+            r"Cost updated from ([0-9]+(?:\.[0-9]+)?) to ([0-9]+(?:\.[0-9]+)?)",
+            str(note_text),
+        )
+        if not match:
+            return None, None
+        return float(match.group(1)), float(match.group(2))
+
+    def _build_po_movement_details(reason, movement_type, movement_rows, matched_receipt=None):
+        reason_normalized = str(reason or "").strip().upper()
+        movement_normalized = str(movement_type or "").strip().upper()
+        if not reason_normalized:
+            return None
+
+        base = {
+            "reason": reason_normalized,
+            "context_note": "",
+            "entries": [],
+        }
+
+        if movement_normalized == "ORDER" and reason_normalized == "ORDER_PLACEMENT":
+            return {
+                **base,
+                "title": "Order Placement",
+                "accent": "info",
+                "summary": "This audit row captured the original PO quantities and unit costs at placement time.",
+                "entries": [
+                    {
+                        "item_name": row["name"] or "Unknown Item",
+                        "quantity": int(row["quantity"] or 0),
+                        "unit_cost": float(row["unit_price"] or 0),
+                        "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
+                        "notes": row["notes"] or "",
+                    }
+                    for row in movement_rows
+                    if str(row["change_reason"] or "").strip().upper() == "ORDER_PLACEMENT"
+                ],
+            }
+
+        if reason_normalized in {"PO_ARRIVAL", "PARTIAL_ARRIVAL"}:
+            entries = [
+                {
+                    "item_name": row["name"] or "Unknown Item",
+                    "quantity": int(row["quantity"] or 0),
+                    "unit_cost": float(row["unit_price"] or 0),
+                    "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
+                    "notes": row["notes"] or "",
+                }
+                for row in movement_rows
+                if str(row["change_reason"] or "").strip().upper() == reason_normalized and int(row["quantity"] or 0) > 0
+            ]
+            if not entries and matched_receipt:
+                entries = [
+                    {
+                        "item_name": item.get("item_name") or "Unknown Item",
+                        "quantity": int(item.get("quantity_received") or 0),
+                        "unit_cost": float(item.get("unit_cost") or 0),
+                        "subtotal": float(item.get("line_total") or 0),
+                        "notes": item.get("notes") or "",
+                    }
+                    for item in matched_receipt.get("items", [])
+                    if int(item.get("quantity_received") or 0) > 0
+                ]
+            return {
+                **base,
+                "title": "Receipt Movement",
+                "accent": "success" if reason_normalized == "PO_ARRIVAL" else "warning",
+                "summary": "This audit row represents the quantity received for this PO receipt event.",
+                "entries": entries,
+            }
+
+        if reason_normalized == "BONUS_STOCK":
+            return {
+                **base,
+                "title": "Bonus Stock",
+                "accent": "primary",
+                "summary": "This audit row records extra stock received beyond the ordered quantity.",
+                "context_note": "The receipt batch below still shows the full PO delivery snapshot for the same timestamp.",
+                "entries": [
+                    {
+                        "item_name": row["name"] or "Unknown Item",
+                        "quantity": int(row["quantity"] or 0),
+                        "unit_cost": float(row["unit_price"] or 0),
+                        "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
+                        "notes": row["notes"] or "",
+                    }
+                    for row in movement_rows
+                    if str(row["change_reason"] or "").strip().upper() == "BONUS_STOCK"
+                ],
+            }
+
+        if reason_normalized == "COST_PER_PIECE_UPDATED":
+            entries = []
+            for row in movement_rows:
+                if str(row["change_reason"] or "").strip().upper() != "COST_PER_PIECE_UPDATED":
+                    continue
+                previous_cost, updated_cost = _parse_cost_update_note(row["notes"])
+                entries.append({
+                    "item_name": row["name"] or "Unknown Item",
+                    "quantity": int(row["quantity"] or 0),
+                    "unit_cost": float(row["unit_price"] or 0),
+                    "previous_cost": previous_cost,
+                    "updated_cost": updated_cost,
+                    "notes": row["notes"] or "",
+                })
+            return {
+                **base,
+                "title": "Cost Per Piece Update",
+                "accent": "warning",
+                "summary": "This audit row updated the item master cost during the same PO receipt event.",
+                "context_note": "The receipt batch below shows the related PO delivery snapshot recorded at the same timestamp.",
+                "entries": entries,
+            }
+
+        return None
 
     if snapshot_at and transaction_type:
         conn = get_db()
@@ -1829,23 +2054,24 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
             received_at_value = "-"
             snapshot_reason = str(change_reason or "").strip().upper()
             movement_type = str(transaction_type or "").strip().upper()
+            matched_receipt = None
+            movement_rows = conn.execute(
+                """
+                SELECT i.name, t.item_id, t.quantity, t.unit_price, t.notes, t.change_reason
+                FROM inventory_transactions t
+                JOIN items i ON i.id = t.item_id
+                WHERE t.reference_type = 'PURCHASE_ORDER'
+                  AND t.reference_id = %s
+                  AND t.transaction_type = %s
+                  AND t.transaction_date = %s
+                ORDER BY t.id ASC
+                """,
+                (po_id, movement_type, snapshot_at),
+            ).fetchall()
 
             if movement_type == "ORDER":
-                rows = conn.execute(
-                    """
-                    SELECT i.name, t.quantity AS quantity_snapshot, t.unit_price
-                    FROM inventory_transactions t
-                    JOIN items i ON i.id = t.item_id
-                    WHERE t.reference_type = 'PURCHASE_ORDER'
-                      AND t.reference_id = %s
-                      AND t.transaction_type = 'ORDER'
-                      AND t.transaction_date = %s
-                    ORDER BY i.name ASC
-                    """,
-                    (po_id, snapshot_at),
-                ).fetchall()
-                for row in rows:
-                    qty = int(row["quantity_snapshot"] or 0)
+                for row in movement_rows:
+                    qty = int(row["quantity"] or 0)
                     unit_price = float(row["unit_price"] or 0)
                     subtotal = qty * unit_price
                     total_amount += subtotal
@@ -1873,23 +2099,11 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                             "subtotal": float(item.get("line_total") or 0),
                         })
                 else:
-                    rows = conn.execute(
-                        """
-                        SELECT i.name, t.quantity AS quantity_snapshot, t.unit_price
-                        FROM inventory_transactions t
-                        JOIN items i ON i.id = t.item_id
-                        WHERE t.reference_type = 'PURCHASE_ORDER'
-                          AND t.reference_id = %s
-                          AND t.transaction_type = 'IN'
-                          AND t.transaction_date = %s
-                          AND (%s = '' OR t.change_reason = %s)
-                        ORDER BY i.name ASC
-                        """,
-                        (po_id, snapshot_at, snapshot_reason, snapshot_reason),
-                    ).fetchall()
                     received_at_value = format_date(snapshot_at, show_time=True)
-                    for row in rows:
-                        qty = int(row["quantity_snapshot"] or 0)
+                    for row in movement_rows:
+                        if snapshot_reason and str(row["change_reason"] or "").strip().upper() != snapshot_reason:
+                            continue
+                        qty = int(row["quantity"] or 0)
                         unit_price = float(row["unit_price"] or 0)
                         subtotal = qty * unit_price
                         total_amount += subtotal
@@ -1901,6 +2115,12 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                         })
 
             status_text, status_class = _format_snapshot_status(change_reason, po['status'])
+            movement_details = _build_po_movement_details(
+                snapshot_reason,
+                movement_type,
+                movement_rows,
+                matched_receipt=matched_receipt,
+            )
             return {
                 "modal_title": "Purchase Order Movement",
                 "po_number": po['po_number'],
@@ -1919,6 +2139,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                     }
                     for receipt in receipt_history
                 ],
+                "movement_details": movement_details,
                 "items": snapshot_items,
             }
         finally:
@@ -1986,4 +2207,3 @@ def get_status_class(status):
         return "bg-danger"
     else:
         return "bg-secondary"
-

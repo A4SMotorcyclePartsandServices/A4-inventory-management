@@ -99,6 +99,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
 
     data_query = f"""
         SELECT
+            MIN(t.id) AS audit_group_id,
             t.transaction_date,
             t.transaction_type,
             SUM(t.quantity) AS total_qty,
@@ -130,6 +131,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         UNION ALL
 
         SELECT
+            NULL AS audit_group_id,
             s.transaction_date,
             'OUT' AS transaction_type,
             0 AS total_qty,

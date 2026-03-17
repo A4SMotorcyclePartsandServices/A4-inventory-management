@@ -75,7 +75,7 @@ Future upgrade: move to Redis or DB
 ## OUT Page
 - when a redemption is redeemed block price input
 - customer modal do not require vehicle make it only required
-- NEW FEATURE. QUICK SALE basically free form customer name, onl record the item sale. restrictions less than 100 pesos only are the items that can be sold. Quick sale default view
+- NEW FEATURE. QUICK SALE basically free form customer name, only record the item sale. restrictions less than 100 pesos only are the items that can be sold. Quick sale default view
 
 ## Loyalty Program
 - Analytics on which customer availed the most within the loyalty program's
