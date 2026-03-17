@@ -1,6 +1,5 @@
 import csv
 import io
-from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
 from db.database import get_db
 from auth.utils import admin_required, login_required
@@ -13,7 +12,7 @@ from services.transactions_service import (
     process_manual_stock_in,
     record_sale,
     create_purchase_order,
-    get_all_purchase_orders,
+    get_active_purchase_orders,
     get_purchase_order_with_items,
     get_purchase_order_details,
     get_po_for_receive_page,
@@ -22,7 +21,10 @@ from services.transactions_service import (
     receive_purchase_order,
     get_po_details_for_api,
     get_purchase_order_export_data,
+    get_purchase_order_archive_month_summaries,
+    get_purchase_orders_by_archive_month,
     request_po_revisions,
+    search_purchase_orders,
     update_purchase_order,
     get_purchase_order_review_context,
 )
@@ -202,49 +204,17 @@ def save_purchase_order():
 @transaction_bp.route("/transaction/orders/list")
 @login_required
 def list_orders():
-    orders = get_all_purchase_orders()
-    completed_groups_map = {}
-    cancelled_groups_map = {}
-
-    for order in orders:
-        status = (order["status"] or "").upper()
-        if status not in {"COMPLETED", "CANCELLED"}:
-            continue
-
-        created_at = order["created_at"]
-        month_key = "unknown"
-        month_label = "Unknown Date"
-
-        if hasattr(created_at, "strftime"):
-            month_key = created_at.strftime("%Y-%m")
-            month_label = created_at.strftime("%B %Y")
-        elif isinstance(created_at, str) and created_at.strip():
-            normalized = created_at.strip().replace(" ", "T")
-            try:
-                parsed = datetime.fromisoformat(normalized)
-                month_key = parsed.strftime("%Y-%m")
-                month_label = parsed.strftime("%B %Y")
-            except ValueError:
-                pass
-
-        target_map = completed_groups_map if status == "COMPLETED" else cancelled_groups_map
-
-        if month_key not in target_map:
-            target_map[month_key] = {
-                "key": month_key,
-                "label": month_label,
-                "orders": []
-            }
-        target_map[month_key]["orders"].append(order)
-
-    completed_month_groups = list(completed_groups_map.values())
-    cancelled_month_groups = list(cancelled_groups_map.values())
+    orders = get_active_purchase_orders()
+    completed_month_groups = get_purchase_order_archive_month_summaries("COMPLETED")
+    cancelled_month_groups = get_purchase_order_archive_month_summaries("CANCELLED")
 
     return render_template(
         "transactions/order_overview.html",
         orders=orders,
         completed_month_groups=completed_month_groups,
         cancelled_month_groups=cancelled_month_groups,
+        completed_total_count=sum(group["order_count"] for group in completed_month_groups),
+        cancelled_total_count=sum(group["order_count"] for group in cancelled_month_groups),
     )
 
 
@@ -273,6 +243,36 @@ def get_order_details(po_id):
     if not details:
         return jsonify({"error": "Order not found"}), 404
     return jsonify(details)
+
+
+@transaction_bp.route("/api/orders/search")
+@login_required
+def search_orders():
+    query = (request.args.get("q") or "").strip()
+    if len(query) < 2:
+        return jsonify({"orders": []})
+
+    limit_raw = request.args.get("limit", 20)
+    try:
+        limit = int(limit_raw)
+    except (TypeError, ValueError):
+        limit = 20
+
+    limit = max(1, min(limit, 20))
+    return jsonify({"orders": search_purchase_orders(query, limit=limit)})
+
+
+@transaction_bp.route("/api/orders/archive-month")
+@login_required
+def get_archive_month_orders():
+    status = (request.args.get("status") or "").strip().upper()
+    month_key = (request.args.get("month") or "").strip()
+    try:
+        orders = get_purchase_orders_by_archive_month(status, month_key)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"orders": orders})
 
 
 @transaction_bp.route("/api/order/<int:po_id>/update", methods=["POST"])

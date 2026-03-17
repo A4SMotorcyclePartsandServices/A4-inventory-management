@@ -53,6 +53,133 @@
         flex-wrap: wrap;
     }
 
+    .po-search-shell {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 22px;
+    }
+
+    .po-search-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border-soft);
+        background: var(--bg-card);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .po-search-icon {
+        color: var(--accent);
+        font-size: 0.95rem;
+    }
+
+    .po-search-input {
+        flex: 1 1 auto;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text-primary);
+        font-size: 0.92rem;
+    }
+
+    .po-search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .po-search-clear {
+        display: none;
+        border: 1px solid var(--border-soft);
+        background: #171a22;
+        color: var(--text-primary);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+
+    .po-search-meta {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        padding: 0 2px;
+    }
+
+    .po-search-meta strong {
+        color: var(--text-primary);
+    }
+
+    .po-search-results {
+        display: none;
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: var(--bg-card);
+        padding: 18px;
+    }
+
+    .po-search-results.active,
+    .po-search-meta.active {
+        display: flex;
+    }
+
+    .po-search-results.active {
+        display: block;
+    }
+
+    .po-search-empty {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        padding: 26px 10px 10px;
+        text-align: center;
+    }
+
+    .po-search-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .po-search-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .po-search-status-dot.for-approval { background: var(--po-amber); }
+    .po-search-status-dot.revisions { background: var(--po-revisions); }
+    .po-search-status-dot.pending { background: var(--po-ready); }
+    .po-search-status-dot.partial { background: var(--po-partial); }
+    .po-search-status-dot.completed { background: var(--po-completed); }
+    .po-search-status-dot.cancelled { background: var(--po-cancelled); }
+
+    .po-tab-search-hidden,
+    .po-panel-search-hidden {
+        display: none !important;
+    }
+
+    .archive-loading,
+    .archive-error,
+    .archive-empty {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        text-align: center;
+        padding: 18px 10px 8px;
+    }
+
+    .archive-error {
+        color: #fca5a5;
+    }
+
     .po-tab {
         display: flex;
         align-items: center;
@@ -937,12 +1064,29 @@
     </div>
 </div>
 
+<div class="po-search-shell">
+    <div class="po-search-bar">
+        <i class="bi bi-search po-search-icon"></i>
+        <input
+            id="poSearchInput"
+            class="po-search-input"
+            type="search"
+            placeholder="Search PO number across all statuses"
+            autocomplete="off"
+            spellcheck="false"
+        >
+        <button id="poSearchClear" type="button" class="po-search-clear">Clear</button>
+    </div>
+    <div id="poSearchMeta" class="po-search-meta">
+        <span id="poSearchSummary"></span>
+        <span>Search checks all PO states, not just the active tab.</span>
+    </div>
+</div>
+
 {% set for_approval_orders = orders | selectattr("status", "equalto", "FOR_APPROVAL") | rejectattr("approval_status", "equalto", "REVISIONS_NEEDED") | list %}
 {% set revision_orders = orders | selectattr("status", "equalto", "FOR_APPROVAL") | selectattr("approval_status", "equalto", "REVISIONS_NEEDED") | list %}
 {% set pending_orders = orders | selectattr("status", "equalto", "PENDING") | list %}
 {% set partial_orders = orders | selectattr("status", "equalto", "PARTIAL") | list %}
-{% set completed_orders = orders | selectattr("status", "equalto", "COMPLETED") | list %}
-{% set cancelled_orders = orders | selectattr("status", "equalto", "CANCELLED") | list %}
 
 <div class="po-tabs">
     <button class="po-tab tab-for-approval active" onclick="switchTab('for-approval', this)">
@@ -968,13 +1112,17 @@
     <button class="po-tab tab-completed" onclick="switchTab('completed', this)">
         <span class="tab-dot"></span>
         Completed Deliveries
-        {% if completed_orders %}<span class="tab-count">{{ completed_orders | length }}</span>{% endif %}
+        {% if completed_total_count %}<span class="tab-count">{{ completed_total_count }}</span>{% endif %}
     </button>
     <button class="po-tab tab-cancelled" onclick="switchTab('cancelled', this)">
         <span class="tab-dot"></span>
         Cancelled PO's
-        {% if cancelled_orders %}<span class="tab-count">{{ cancelled_orders | length }}</span>{% endif %}
+        {% if cancelled_total_count %}<span class="tab-count">{{ cancelled_total_count }}</span>{% endif %}
     </button>
+</div>
+
+<div id="poSearchResults" class="po-search-results">
+    <div id="poSearchResultsBody" class="row g-3"></div>
 </div>
 
 <div class="tab-panel active" id="panel-for-approval">
@@ -982,7 +1130,18 @@
     <div class="row g-3">
         {% for order in for_approval_orders %}
         <div class="col-md-4">
-            <div class="po-box status-for-approval" onclick="openOrderDetails({{ order.id }})">
+            <div
+                class="po-box status-for-approval"
+                data-po-card
+                data-po-id="{{ order.id }}"
+                data-po-number="{{ order.po_number }}"
+                data-po-vendor="{{ order.vendor_name }}"
+                data-po-amount="{{ "{:,.2f}".format(order.total_amount or 0) }}"
+                data-po-items="{{ order.item_count }}"
+                data-po-status-key="for-approval"
+                data-po-status-label="For Approval"
+                onclick="openOrderDetails({{ order.id }})"
+            >
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-for-approval">For Approval</span>
@@ -1006,7 +1165,18 @@
     <div class="row g-3">
         {% for order in revision_orders %}
         <div class="col-md-4">
-            <div class="po-box status-revisions" onclick="openOrderDetails({{ order.id }})">
+            <div
+                class="po-box status-revisions"
+                data-po-card
+                data-po-id="{{ order.id }}"
+                data-po-number="{{ order.po_number }}"
+                data-po-vendor="{{ order.vendor_name }}"
+                data-po-amount="{{ "{:,.2f}".format(order.total_amount or 0) }}"
+                data-po-items="{{ order.item_count }}"
+                data-po-status-key="revisions"
+                data-po-status-label="For Revisions"
+                onclick="openOrderDetails({{ order.id }})"
+            >
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-revisions">For Revisions</span>
@@ -1030,7 +1200,18 @@
     <div class="row g-3">
         {% for order in pending_orders %}
         <div class="col-md-4">
-            <div class="po-box status-pending" onclick="openOrderDetails({{ order.id }})">
+            <div
+                class="po-box status-pending"
+                data-po-card
+                data-po-id="{{ order.id }}"
+                data-po-number="{{ order.po_number }}"
+                data-po-vendor="{{ order.vendor_name }}"
+                data-po-amount="{{ "{:,.2f}".format(order.total_amount or 0) }}"
+                data-po-items="{{ order.item_count }}"
+                data-po-status-key="pending"
+                data-po-status-label="Approved"
+                onclick="openOrderDetails({{ order.id }})"
+            >
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-pending">Approved</span>
@@ -1054,7 +1235,18 @@
     <div class="row g-3">
         {% for order in partial_orders %}
         <div class="col-md-4">
-            <div class="po-box status-partial" onclick="openOrderDetails({{ order.id }})">
+            <div
+                class="po-box status-partial"
+                data-po-card
+                data-po-id="{{ order.id }}"
+                data-po-number="{{ order.po_number }}"
+                data-po-vendor="{{ order.vendor_name }}"
+                data-po-amount="{{ "{:,.2f}".format(order.total_amount or 0) }}"
+                data-po-items="{{ order.item_count }}"
+                data-po-status-key="partial"
+                data-po-status-label="Partial Delivery"
+                onclick="openOrderDetails({{ order.id }})"
+            >
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-partial">Partial Delivery</span>
@@ -1074,7 +1266,7 @@
 </div>
 
 <div class="tab-panel" id="panel-completed">
-    {% if completed_orders %}
+    {% if completed_month_groups %}
     {% for month in completed_month_groups %}
     <div class="month-group">
         <button class="month-toggle" type="button"
@@ -1083,28 +1275,20 @@
                 aria-expanded="{{ 'true' if loop.first else 'false' }}">
             <span><i class="bi bi-calendar3 me-2"></i>{{ month.label }}</span>
             <span class="month-meta">
-                <span class="month-count">{{ month.orders | length }}</span>
+                <span class="month-count">{{ month.order_count }}</span>
                 <i class="bi bi-chevron-down"></i>
             </span>
         </button>
         <div id="completed-month-{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}">
             <div class="month-body">
-                <div class="row g-3">
-                    {% for order in month.orders %}
-                    <div class="col-md-3">
-                        <div class="po-box status-completed" onclick="openOrderDetails({{ order.id }})">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                                <span class="badge-completed">Completed Delivery</span>
-                            </div>
-                            <div class="po-vendor">{{ order.vendor_name }}</div>
-                            <div class="po-meta">
-                                <span class="po-amount" style="font-size:0.8rem;">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
+                <div
+                    class="row g-3"
+                    id="completed-month-body-{{ loop.index }}"
+                    data-archive-month-body
+                    data-archive-status="COMPLETED"
+                    data-archive-month="{{ month.key }}"
+                    data-archive-loaded="false"
+                ></div>
             </div>
         </div>
     </div>
@@ -1115,7 +1299,7 @@
 </div>
 
 <div class="tab-panel" id="panel-cancelled">
-    {% if cancelled_orders %}
+    {% if cancelled_month_groups %}
     {% for month in cancelled_month_groups %}
     <div class="month-group month-group-cancelled">
         <button class="month-toggle" type="button"
@@ -1124,28 +1308,20 @@
                 aria-expanded="{{ 'true' if loop.first else 'false' }}">
             <span><i class="bi bi-calendar3 me-2"></i>{{ month.label }}</span>
             <span class="month-meta">
-                <span class="month-count">{{ month.orders | length }}</span>
+                <span class="month-count">{{ month.order_count }}</span>
                 <i class="bi bi-chevron-down"></i>
             </span>
         </button>
         <div id="cancelled-month-{{ loop.index }}" class="collapse {% if loop.first %}show{% endif %}">
             <div class="month-body">
-                <div class="row g-3">
-                    {% for order in month.orders %}
-                    <div class="col-md-3">
-                        <div class="po-box status-cancelled" onclick="openOrderDetails({{ order.id }})">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <div class="po-number" style="font-size:0.85rem;">{{ order.po_number }}</div>
-                                <span class="badge-cancelled">Cancelled PO</span>
-                            </div>
-                            <div class="po-vendor">{{ order.vendor_name }}</div>
-                            <div class="po-meta">
-                                <span class="po-amount" style="font-size:0.8rem;">P{{ "{:,.2f}".format(order.total_amount or 0) }}</span>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
+                <div
+                    class="row g-3"
+                    id="cancelled-month-body-{{ loop.index }}"
+                    data-archive-month-body
+                    data-archive-status="CANCELLED"
+                    data-archive-month="{{ month.key }}"
+                    data-archive-loaded="false"
+                ></div>
             </div>
         </div>
     </div>
@@ -1356,6 +1532,9 @@ let cancelModal;
 let activeOrderId = null;
 let activeOrderDetails = null;
 let approvalHistoryCollapse;
+let activeTabName = 'for-approval';
+let poSearchDebounceTimer = null;
+let poSearchController = null;
 const currentRole = {{ session.get('role')|tojson }};
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -1383,6 +1562,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('confirmRevisionsBtn')?.addEventListener('click', submitRevisions);
     document.getElementById('confirmCancelBtn')?.addEventListener('click', submitCancellation);
+    document.getElementById('poSearchInput')?.addEventListener('input', handlePoSearchInput);
+    document.getElementById('poSearchClear')?.addEventListener('click', clearPoSearch);
+    document.querySelectorAll('[data-archive-month-body]').forEach(bindArchiveMonthLoader);
+    document.querySelectorAll('.collapse.show [data-archive-month-body]').forEach(loadArchiveMonthIfNeeded);
 
     const params = new URLSearchParams(window.location.search);
     const shouldOpenPo = params.get('open_po') === '1';
@@ -1397,10 +1580,303 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function switchTab(name, btn) {
+    if (hasActivePoSearch()) {
+        clearPoSearch();
+    }
+    activeTabName = name;
     document.querySelectorAll('.po-tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`panel-${name}`).classList.add('active');
+}
+
+function handlePoSearchInput(event) {
+    const query = event.target.value || '';
+    const normalizedQuery = normalizePoSearchValue(query);
+    const summaryEl = document.getElementById('poSearchSummary');
+    const clearBtn = document.getElementById('poSearchClear');
+
+    clearBtn.style.display = query.trim() ? 'inline-flex' : 'none';
+
+    if (!normalizedQuery) {
+        cancelPendingPoSearch();
+        restoreDefaultPoOverview();
+        return;
+    }
+
+    if (normalizedQuery.length < 2) {
+        cancelPendingPoSearch();
+        activatePoSearchResults();
+        summaryEl.innerHTML = 'Type at least <strong>2 characters</strong> to search PO numbers.';
+        document.getElementById('poSearchResultsBody').innerHTML =
+            '<div class="col-12"><div class="po-search-empty">Keep typing to search across all purchase order states.</div></div>';
+        return;
+    }
+
+    activatePoSearchResults();
+    summaryEl.innerHTML = `Searching for <strong>${escapeHtml(query.trim())}</strong>...`;
+    document.getElementById('poSearchResultsBody').innerHTML =
+        '<div class="col-12"><div class="po-search-empty">Looking up matching purchase orders...</div></div>';
+
+    window.clearTimeout(poSearchDebounceTimer);
+    poSearchDebounceTimer = window.setTimeout(() => {
+        runPoSearch(query.trim());
+    }, 220);
+}
+
+function clearPoSearch() {
+    const searchInput = document.getElementById('poSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    cancelPendingPoSearch();
+    restoreDefaultPoOverview();
+}
+
+function restoreDefaultPoOverview() {
+    document.querySelector('.po-tabs')?.classList.remove('po-tab-search-hidden');
+    document.getElementById('poSearchResults')?.classList.remove('active');
+    document.getElementById('poSearchMeta')?.classList.remove('active');
+    const resultsBodyEl = document.getElementById('poSearchResultsBody');
+    const summaryEl = document.getElementById('poSearchSummary');
+    const clearBtn = document.getElementById('poSearchClear');
+    if (resultsBodyEl) {
+        resultsBodyEl.innerHTML = '';
+    }
+    if (summaryEl) {
+        summaryEl.innerHTML = '';
+    }
+    if (clearBtn) {
+        clearBtn.style.display = 'none';
+    }
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('po-panel-search-hidden', 'active');
+    });
+    document.getElementById(`panel-${activeTabName}`)?.classList.add('active');
+}
+
+function activatePoSearchResults() {
+    document.querySelector('.po-tabs')?.classList.add('po-tab-search-hidden');
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('po-panel-search-hidden');
+        panel.classList.remove('active');
+    });
+    document.getElementById('poSearchResults')?.classList.add('active');
+    document.getElementById('poSearchMeta')?.classList.add('active');
+}
+
+function hasActivePoSearch() {
+    return Boolean(normalizePoSearchValue(document.getElementById('poSearchInput')?.value || ''));
+}
+
+function normalizePoSearchValue(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function cancelPendingPoSearch() {
+    window.clearTimeout(poSearchDebounceTimer);
+    poSearchDebounceTimer = null;
+    if (poSearchController) {
+        poSearchController.abort();
+        poSearchController = null;
+    }
+}
+
+async function runPoSearch(query) {
+    cancelPendingPoSearch();
+    poSearchController = new AbortController();
+
+    try {
+        const response = await fetch(`/api/orders/search?q=${encodeURIComponent(query)}&limit=20`, {
+            signal: poSearchController.signal
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to search purchase orders.');
+        }
+
+        const matches = Array.isArray(data.orders) ? data.orders.map(mapSearchOrderResult) : [];
+        const currentQuery = document.getElementById('poSearchInput')?.value.trim() || '';
+        if (currentQuery !== query) {
+            return;
+        }
+
+        document.getElementById('poSearchSummary').innerHTML = matches.length
+            ? `<strong>${matches.length}</strong> result${matches.length === 1 ? '' : 's'} for <strong>${escapeHtml(query)}</strong>${matches.length === 20 ? ' <span class="text-muted">Showing the first 20. Keep typing to narrow results.</span>' : ''}`
+            : `No PO found for <strong>${escapeHtml(query)}</strong>`;
+        document.getElementById('poSearchResultsBody').innerHTML = matches.length
+            ? matches.map(renderPoSearchResultCard).join('')
+            : '<div class="col-12"><div class="po-search-empty">No purchase order matched that PO number.</div></div>';
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            return;
+        }
+
+        document.getElementById('poSearchSummary').innerHTML = 'Search is temporarily unavailable.';
+        document.getElementById('poSearchResultsBody').innerHTML =
+            '<div class="col-12"><div class="po-search-empty">Could not load search results right now.</div></div>';
+    } finally {
+        poSearchController = null;
+    }
+}
+
+function mapSearchOrderResult(order) {
+    const statusKey = getSearchStatusKey(order.status, order.approval_status);
+    return {
+        id: order.id,
+        poNumber: order.po_number || '-',
+        vendor: order.vendor_name || '-',
+        amount: Number(order.total_amount || 0).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }),
+        items: order.item_count || 0,
+        statusKey,
+        statusLabel: getSearchStatusLabel(statusKey)
+    };
+}
+
+function getSearchStatusKey(poStatus, approvalStatus) {
+    if (poStatus === 'FOR_APPROVAL' && approvalStatus === 'REVISIONS_NEEDED') {
+        return 'revisions';
+    }
+    if (poStatus === 'FOR_APPROVAL') {
+        return 'for-approval';
+    }
+    if (poStatus === 'PENDING') {
+        return 'pending';
+    }
+    if (poStatus === 'PARTIAL') {
+        return 'partial';
+    }
+    if (poStatus === 'COMPLETED') {
+        return 'completed';
+    }
+    if (poStatus === 'CANCELLED') {
+        return 'cancelled';
+    }
+    return 'for-approval';
+}
+
+function getSearchStatusLabel(statusKey) {
+    if (statusKey === 'revisions') {
+        return 'For Revisions';
+    }
+    if (statusKey === 'pending') {
+        return 'Approved';
+    }
+    if (statusKey === 'partial') {
+        return 'Partial Delivery';
+    }
+    if (statusKey === 'completed') {
+        return 'Completed Delivery';
+    }
+    if (statusKey === 'cancelled') {
+        return 'Cancelled PO';
+    }
+    return 'For Approval';
+}
+
+function renderPoSearchResultCard(match) {
+    return `
+        <div class="col-md-4">
+            <div class="po-box status-${escapeHtml(match.statusKey)}" onclick="openOrderDetails(${Number(match.id)})">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="po-number">${escapeHtml(match.poNumber)}</div>
+                    ${renderStatusBadgeByKey(match.statusKey, match.statusLabel)}
+                </div>
+                <div class="po-vendor">${escapeHtml(match.vendor)}</div>
+                <div class="po-meta">
+                    <span class="po-item-count"><i class="bi bi-box me-1"></i>${escapeHtml(String(match.items))} items</span>
+                    <span class="po-amount">P${escapeHtml(match.amount)}</span>
+                </div>
+                <div class="po-search-status">
+                    <span class="po-search-status-dot ${escapeHtml(match.statusKey)}"></span>
+                    <span>${escapeHtml(match.statusLabel)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderStatusBadgeByKey(statusKey, fallbackLabel) {
+    if (statusKey === 'for-approval') {
+        return '<span class="badge-for-approval">For Approval</span>';
+    }
+    if (statusKey === 'revisions') {
+        return '<span class="badge-revisions">For Revisions</span>';
+    }
+    if (statusKey === 'pending') {
+        return '<span class="badge-pending">Approved</span>';
+    }
+    if (statusKey === 'partial') {
+        return '<span class="badge-partial">Partial Delivery</span>';
+    }
+    if (statusKey === 'completed') {
+        return '<span class="badge-completed">Completed Delivery</span>';
+    }
+    if (statusKey === 'cancelled') {
+        return '<span class="badge-cancelled">Cancelled PO</span>';
+    }
+    return `<span class="badge-for-approval">${escapeHtml(fallbackLabel || 'Unknown')}</span>`;
+}
+
+function bindArchiveMonthLoader(bodyEl) {
+    const collapseEl = bodyEl.closest('.collapse');
+    if (!collapseEl) {
+        return;
+    }
+
+    collapseEl.addEventListener('show.bs.collapse', () => {
+        loadArchiveMonthIfNeeded(bodyEl);
+    });
+}
+
+async function loadArchiveMonthIfNeeded(bodyEl) {
+    if (!bodyEl || bodyEl.dataset.archiveLoaded === 'true' || bodyEl.dataset.archiveLoading === 'true') {
+        return;
+    }
+
+    bodyEl.dataset.archiveLoading = 'true';
+    bodyEl.innerHTML = '<div class="col-12"><div class="archive-loading">Loading purchase orders for this month...</div></div>';
+
+    const status = bodyEl.dataset.archiveStatus || '';
+    const month = bodyEl.dataset.archiveMonth || '';
+
+    try {
+        const response = await fetch(`/api/orders/archive-month?status=${encodeURIComponent(status)}&month=${encodeURIComponent(month)}`);
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load archived purchase orders.');
+        }
+
+        const orders = Array.isArray(data.orders) ? data.orders.map(mapSearchOrderResult) : [];
+        bodyEl.innerHTML = orders.length
+            ? orders.map(renderArchiveMonthCard).join('')
+            : '<div class="col-12"><div class="archive-empty">No purchase orders found for this month.</div></div>';
+        bodyEl.dataset.archiveLoaded = 'true';
+    } catch (error) {
+        bodyEl.innerHTML = '<div class="col-12"><div class="archive-error">Could not load this archive month right now.</div></div>';
+    } finally {
+        bodyEl.dataset.archiveLoading = 'false';
+    }
+}
+
+function renderArchiveMonthCard(match) {
+    return `
+        <div class="col-md-3">
+            <div class="po-box status-${escapeHtml(match.statusKey)}" onclick="openOrderDetails(${Number(match.id)})">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div class="po-number" style="font-size:0.85rem;">${escapeHtml(match.poNumber)}</div>
+                    ${renderStatusBadgeByKey(match.statusKey, match.statusLabel)}
+                </div>
+                <div class="po-vendor">${escapeHtml(match.vendor)}</div>
+                <div class="po-meta">
+                    <span class="po-amount" style="font-size:0.8rem;">P${escapeHtml(match.amount)}</span>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function formatMoney(value) {

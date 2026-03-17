@@ -198,6 +198,8 @@ def init_db():
     cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_contact_no TEXT")
     cur.execute("ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS vendor_email TEXT")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_purchase_orders_vendor_id ON purchase_orders(vendor_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_purchase_orders_po_number_lower ON purchase_orders(LOWER(po_number))")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_purchase_orders_status_created_at ON purchase_orders(status, created_at DESC)")
     cur.execute("""
     DO $$
     BEGIN

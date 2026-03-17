@@ -1227,6 +1227,177 @@ def get_all_purchase_orders():
     return orders
 
 
+def search_purchase_orders(query, limit=20):
+    """Searches purchase orders by PO number across all states."""
+    cleaned_query = str(query or "").strip()
+    if not cleaned_query:
+        return []
+
+    normalized_query = re.sub(r"[^A-Za-z0-9]", "", cleaned_query).lower()
+    if not normalized_query:
+        return []
+
+    safe_limit = max(1, min(int(limit or 20), 20))
+    raw_query = cleaned_query.lower()
+    raw_prefix = f"{raw_query}%"
+    raw_contains = f"%{raw_query}%"
+    normalized_prefix = f"{normalized_query}%"
+    normalized_contains = f"%{normalized_query}%"
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                po.id,
+                po.po_number,
+                po.vendor_name,
+                po.status,
+                po.total_amount,
+                po.created_at,
+                ar.status AS approval_status,
+                (
+                    SELECT COUNT(*)
+                    FROM po_items pi
+                    WHERE pi.po_id = po.id
+                ) AS item_count,
+                CASE
+                    WHEN LOWER(po.po_number) = %s THEN 0
+                    WHEN REPLACE(REPLACE(LOWER(po.po_number), '-', ''), ' ', '') = %s THEN 0
+                    WHEN LOWER(po.po_number) LIKE %s THEN 1
+                    WHEN REPLACE(REPLACE(LOWER(po.po_number), '-', ''), ' ', '') LIKE %s THEN 1
+                    WHEN LOWER(po.po_number) LIKE %s THEN 2
+                    WHEN REPLACE(REPLACE(LOWER(po.po_number), '-', ''), ' ', '') LIKE %s THEN 2
+                    ELSE 3
+                END AS match_rank
+            FROM purchase_orders po
+            LEFT JOIN approval_requests ar
+                ON ar.approval_type = %s
+               AND ar.entity_type = %s
+               AND ar.entity_id = po.id
+            WHERE LOWER(po.po_number) LIKE %s
+               OR REPLACE(REPLACE(LOWER(po.po_number), '-', ''), ' ', '') LIKE %s
+            ORDER BY match_rank ASC, po.created_at DESC, po.id DESC
+            LIMIT %s
+            """,
+            (
+                raw_query,
+                normalized_query,
+                raw_prefix,
+                normalized_prefix,
+                raw_contains,
+                normalized_contains,
+                PO_APPROVAL_TYPE,
+                PO_ENTITY_TYPE,
+                raw_contains,
+                normalized_contains,
+                safe_limit,
+            ),
+        ).fetchall()
+
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def get_active_purchase_orders():
+    """Returns non-archived purchase orders for the overview page."""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT po.*,
+                ar.id AS approval_request_id,
+                ar.status AS approval_status,
+                ar.decision_notes AS approval_decision_notes,
+                ar.current_revision_no,
+                (SELECT COUNT(*) FROM po_items WHERE po_id = po.id) as item_count
+            FROM purchase_orders po
+            LEFT JOIN approval_requests ar
+                ON ar.approval_type = %s
+               AND ar.entity_type = %s
+               AND ar.entity_id = po.id
+            WHERE po.status NOT IN ('COMPLETED', 'CANCELLED')
+            ORDER BY created_at DESC
+            """,
+            (PO_APPROVAL_TYPE, PO_ENTITY_TYPE),
+        ).fetchall()
+        return rows
+    finally:
+        conn.close()
+
+
+def get_purchase_order_archive_month_summaries(status):
+    """Returns archive month summaries for completed/cancelled purchase orders."""
+    normalized_status = str(status or "").strip().upper()
+    if normalized_status not in {"COMPLETED", "CANCELLED"}:
+        raise ValueError("Unsupported archive status.")
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') AS month_key,
+                TO_CHAR(DATE_TRUNC('month', created_at), 'FMMonth YYYY') AS month_label,
+                COUNT(*) AS order_count
+            FROM purchase_orders
+            WHERE status = %s
+            GROUP BY DATE_TRUNC('month', created_at)
+            ORDER BY DATE_TRUNC('month', created_at) DESC
+            """,
+            (normalized_status,),
+        ).fetchall()
+        return [
+            {
+                "key": row["month_key"] or "unknown",
+                "label": str(row["month_label"] or "Unknown Date").strip() or "Unknown Date",
+                "order_count": int(row["order_count"] or 0),
+            }
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
+def get_purchase_orders_by_archive_month(status, month_key):
+    """Returns purchase orders for a single archive month."""
+    normalized_status = str(status or "").strip().upper()
+    normalized_month_key = str(month_key or "").strip()
+    if normalized_status not in {"COMPLETED", "CANCELLED"}:
+        raise ValueError("Unsupported archive status.")
+    if not re.fullmatch(r"\d{4}-\d{2}", normalized_month_key):
+        raise ValueError("Invalid archive month.")
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                po.id,
+                po.po_number,
+                po.vendor_name,
+                po.status,
+                po.total_amount,
+                po.created_at,
+                ar.status AS approval_status,
+                (SELECT COUNT(*) FROM po_items WHERE po_id = po.id) AS item_count
+            FROM purchase_orders po
+            LEFT JOIN approval_requests ar
+                ON ar.approval_type = %s
+               AND ar.entity_type = %s
+               AND ar.entity_id = po.id
+            WHERE po.status = %s
+              AND TO_CHAR(DATE_TRUNC('month', po.created_at), 'YYYY-MM') = %s
+            ORDER BY po.created_at DESC, po.id DESC
+            """,
+            (PO_APPROVAL_TYPE, PO_ENTITY_TYPE, normalized_status, normalized_month_key),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
 def get_purchase_order_with_items(po_id):
     """Returns a PO and its items. Used by the API detail endpoint."""
     conn = get_db()
