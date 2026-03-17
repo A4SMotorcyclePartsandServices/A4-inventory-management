@@ -1,5 +1,12 @@
-from flask import Blueprint, render_template, request, jsonify, session, flash
-from services.debt_service import get_all_debts, get_debt_detail, record_payment
+from flask import Blueprint, render_template, request, jsonify, session, flash, redirect, url_for
+from services.debt_service import (
+    get_all_debts,
+    get_customer_active_debt_payments,
+    get_debt_detail,
+    get_customer_debt_statement,
+    get_customer_id_for_debt_sale,
+    record_payment,
+)
 from db.database import get_db
 
 debt_bp = Blueprint('debt', __name__)
@@ -144,6 +151,7 @@ def debt_summary_api():
             s.id            AS sale_id,
             s.sales_number,
             s.customer_name,
+            s.customer_id,
             s.total_amount,
             s.transaction_date,
             COALESCE(SUM(dp.amount_paid), 0) AS total_paid
@@ -169,7 +177,7 @@ def debt_summary_api():
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
-    result = []
+    grouped = {}
     for r in rows:
         total_paid   = _money(r["total_paid"])
         total_amount = _money(r["total_amount"])
@@ -182,17 +190,55 @@ def debt_summary_api():
         else:
             status = "unpaid"
 
-        result.append({
-            "sale_id":       r["sale_id"],
-            "sales_number":  r["sales_number"],
+        group_key = f"customer:{r['customer_id']}" if r["customer_id"] else f"sale:{r['sale_id']}"
+        entry = grouped.setdefault(group_key, {
+            "customer_id": r["customer_id"],
+            "sale_id": r["sale_id"],
             "customer_name": r["customer_name"] or "Walk-in",
-            "total_amount":  total_amount,
-            "total_paid":    total_paid,
-            "remaining":     remaining,
-            "status":        status,
-            "date":          format_date(r["transaction_date"]),
+            "latest_sales_number": r["sales_number"],
+            "receipt_count": 0,
+            "total_amount": 0.0,
+            "total_paid": 0.0,
+            "remaining": 0.0,
+            "latest_transaction_date": r["transaction_date"],
         })
 
+        entry["total_amount"] = round(entry["total_amount"] + total_amount, 2)
+        entry["total_paid"] = round(entry["total_paid"] + total_paid, 2)
+        entry["remaining"] = round(entry["remaining"] + remaining, 2)
+        entry["receipt_count"] += 1
+
+        current_txn = r["transaction_date"]
+        if current_txn and (entry["latest_transaction_date"] is None or current_txn > entry["latest_transaction_date"]):
+            entry["latest_transaction_date"] = current_txn
+            entry["latest_sales_number"] = r["sales_number"]
+
+    result = []
+    for entry in grouped.values():
+        if entry["remaining"] <= 0:
+            status = "paid"
+        elif entry["total_paid"] > 0:
+            status = "partial"
+        else:
+            status = "unpaid"
+
+        result.append({
+            "customer_id": entry["customer_id"],
+            "sale_id": entry["sale_id"],
+            "customer_name": entry["customer_name"],
+            "latest_sales_number": entry["latest_sales_number"],
+            "receipt_count": entry["receipt_count"],
+            "total_amount": entry["total_amount"],
+            "total_paid": entry["total_paid"],
+            "remaining": entry["remaining"],
+            "status": status,
+            "sort_date": entry["latest_transaction_date"],
+            "date": format_date(entry["latest_transaction_date"]),
+        })
+
+    result.sort(key=lambda row: (row["sort_date"] or "", row["customer_name"].lower()), reverse=True)
+    for row in result:
+        row.pop("sort_date", None)
     return jsonify({"sales": result})
 
 
@@ -229,11 +275,27 @@ def debt_payments_for_sale(sale_id):
         ]
     })
 
-@debt_bp.route("/debt/statement/<int:sale_id>")
-def customer_debt_statement(sale_id):
-    from services.debt_service import get_debt_detail
-    data = get_debt_detail(sale_id)
+
+@debt_bp.route("/api/debt/customer/<int:customer_id>/payments")
+def debt_payments_for_customer(customer_id):
+    data = get_customer_active_debt_payments(customer_id)
+    if not data:
+        return jsonify({"error": "Customer debt record not found"}), 404
+
+    return jsonify(data)
+
+@debt_bp.route("/debt/statement/customer/<int:customer_id>")
+def customer_debt_statement(customer_id):
+    data = get_customer_debt_statement(customer_id)
     if not data:
         return "Statement not found.", 404
     return render_template("debt/statement.html", data=data)
+
+
+@debt_bp.route("/debt/statement/<int:sale_id>")
+def customer_debt_statement_from_sale(sale_id):
+    customer_id = get_customer_id_for_debt_sale(sale_id)
+    if not customer_id:
+        return "Statement not found.", 404
+    return redirect(url_for("debt.customer_debt_statement", customer_id=customer_id))
 

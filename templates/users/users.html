@@ -838,7 +838,7 @@
                 <thead>
                     <tr class="border-bottom border-secondary">
                         <th>Customer</th>
-                        <th>Receipt #</th>
+                        <th>Debt Records</th>
                         <th>Date</th>
                         <th class="text-end">Total Debt</th>
                         <th class="text-end">Total Paid</th>
@@ -1620,7 +1620,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
 }
 
 // --- DEBT TAB STATE ---
-let debtAllSales = [];       // full server response, never mutated
+let debtAllCustomers = [];       // full server response, never mutated
 let debtActiveFilter = 'unpaid'; // default view is unpaid only
 let debtFlatpickr = null; 
 
@@ -1644,7 +1644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 document.querySelector('[data-bs-target="#debt-audit-tab"]').addEventListener('shown.bs.tab', function () {
     // Only fetch if not already loaded (no date filter applied yet)
-    if (debtAllSales.length === 0) {
+    if (debtAllCustomers.length === 0) {
         loadDebtSummary();
     }
 });
@@ -1662,7 +1662,7 @@ function loadDebtSummary(startDate = null, endDate = null) {
     fetch(url)
         .then(r => r.json())
         .then(data => {
-            debtAllSales = data.sales || [];
+            debtAllCustomers = data.sales || [];
             renderDebtTable();
         })
         .catch(() => {
@@ -1697,13 +1697,13 @@ function applyDebtDateFilter() {
     const start = fmt(selected[0]);
     const end   = fmt(selected[1]);
 
-    debtAllSales = [];
+    debtAllCustomers = [];
     loadDebtSummary(start, end);
 }
 
 function clearDebtDateFilter() {
     if (debtFlatpickr) debtFlatpickr.clear();
-    debtAllSales = [];
+    debtAllCustomers = [];
     loadDebtSummary();
 }
 
@@ -2090,15 +2090,15 @@ function renderDebtTable() {
 
     // Apply status filter client-side (data already loaded, no limit on server)
     const filtered = debtActiveFilter === 'all'
-        ? debtAllSales
+        ? debtAllCustomers
         : debtActiveFilter === 'paid'
-            ? debtAllSales.filter(s => s.status === 'paid')
-            : debtAllSales.filter(s => s.status !== 'paid'); // unpaid = partial + unpaid
+            ? debtAllCustomers.filter(customer => customer.status === 'paid')
+            : debtAllCustomers.filter(customer => customer.status !== 'paid'); // unpaid = partial + unpaid
 
-    // Summary counts always reflect full dataset, not filtered view
-    const totalCount  = debtAllSales.length;
-    const openCount   = debtAllSales.filter(s => s.status !== 'paid').length;
-    summaryEl.textContent = `${totalCount} total · ${openCount} open`;
+    // Summary counts always reflect full grouped dataset, not filtered view
+    const totalCount  = debtAllCustomers.length;
+    const openCount   = debtAllCustomers.filter(customer => customer.status !== 'paid').length;
+    summaryEl.textContent = `${totalCount} customers · ${openCount} open`;
 
     if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>`;
@@ -2108,7 +2108,9 @@ function renderDebtTable() {
     tbody.innerHTML = '';
 
     filtered.forEach(sale => {
-            const displaySalesNo = sale.sales_number || sale.sale_id;
+            const debtRecordLabel = sale.receipt_count > 1
+                ? `${sale.receipt_count} receipts`
+                : (sale.latest_sales_number || sale.sale_id || '1 receipt');
             const customerName = sale.customer_name || 'Walk-in';
 
         const statusBadge = {
@@ -2120,7 +2122,7 @@ function renderDebtTable() {
         tbody.innerHTML += `
             <tr class="debt-parent-row ${sale.status === 'paid' ? 'opacity-75' : ''}">
                 <td class="fw-bold">${customerName}</td>
-                <td class="text-warning">${escapeHtml(displaySalesNo)}</td>
+                <td class="text-warning">${escapeHtml(debtRecordLabel)}</td>
                 <td class="text-white-50 small">${escapeHtml(sale.date)}</td>
                 <td class="text-end">₱${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
                 <td class="text-end text-success">₱${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
@@ -2134,12 +2136,14 @@ function renderDebtTable() {
                     <div class="action-cluster">
                         <button type="button"
                                 class="btn btn-sm btn-outline-info view-debt-payments-btn"
+                                data-customer-id="${sale.customer_id || ''}"
                                 data-sale-id="${sale.sale_id}"
-                                data-sale-receipt="${sale.sales_number || ''}"
+                                data-sale-receipt="${sale.latest_sales_number || ''}"
+                                data-receipt-count="${sale.receipt_count || 1}"
                                 title="View payment history">
                             <i class="bi bi-eye"></i>
                         </button>
-                        <a href="/debt/statement/${sale.sale_id}" target="_blank"
+                        <a href="${sale.customer_id ? `/debt/statement/customer/${sale.customer_id}` : `/debt/statement/${sale.sale_id}`}" target="_blank"
                         class="btn btn-sm btn-outline-warning"
                         title="Print customer statement">
                             <i class="bi bi-printer"></i>
@@ -2154,12 +2158,81 @@ function renderDebtTable() {
 document.addEventListener('click', (e) => {
     const viewDebtBtn = (e.target instanceof Element) ? e.target.closest('.view-debt-payments-btn') : null;
     if (!viewDebtBtn) return;
+    const customerId = viewDebtBtn.dataset.customerId;
     const saleId = viewDebtBtn.dataset.saleId;
     const saleReceipt = viewDebtBtn.dataset.saleReceipt || '';
+    const receiptCount = parseInt(viewDebtBtn.dataset.receiptCount || '1', 10);
+    if (customerId) {
+        showDebtPaymentsModalForCustomer(parseInt(customerId, 10), saleReceipt, receiptCount);
+        return;
+    }
     if (!saleId) return;
 
     showDebtPaymentsModal(parseInt(saleId, 10), saleReceipt);
 });
+
+function showDebtPaymentsModalForCustomer(customerId, saleReceipt = '', receiptCount = 1) {
+    const body = document.getElementById('debt-payments-body');
+    body.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading payment history...</div>';
+    new bootstrap.Modal(document.getElementById('debtPaymentsModal')).show();
+
+    fetch(`/api/debt/customer/${customerId}/payments`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                body.innerHTML = `<div class="text-danger text-center py-2">${escapeHtml(data.error)}</div>`;
+                return;
+            }
+
+            const payments = data.payments || [];
+            const customerName = data.customer?.customer_name || 'Customer';
+            const remaining = parseFloat(data.summary?.remaining || 0);
+            const receiptLabel = receiptCount > 1 ? `${receiptCount} active receipts` : (saleReceipt || '1 active receipt');
+            const header = `
+                <div class="mb-3">
+                    <div>Customer <span class="fw-semibold text-warning">${escapeHtml(customerName)}</span></div>
+                    <div class="text-white-50 small">${escapeHtml(receiptLabel)} · Running balance ₱${remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                </div>`;
+
+            if (!payments.length) {
+                body.innerHTML = `${header}<div class="text-muted text-center py-2">No payment entries recorded yet.</div>`;
+                return;
+            }
+
+            const rows = payments.map(p => `
+                <tr style="font-size:0.83rem;">
+                    <td class="text-white-50">${escapeHtml(p.paid_at_display || p.paid_at || '—')}</td>
+                    <td class="text-warning">${escapeHtml(p.sales_number || `Sale #${p.sale_id}`)}</td>
+                    <td class="fw-bold text-info">₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '—')}</span></td>
+                    <td class="text-white-50">${escapeHtml(p.reference_no || '—')}</td>
+                    <td class="text-white-50"><i class="bi bi-person me-1"></i>${escapeHtml(p.paid_by || 'Staff')}</td>
+                    <td class="text-white-50 small fst-italic">${escapeHtml(p.notes || '')}</td>
+                </tr>`).join('');
+
+            body.innerHTML = `
+                ${header}
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm table-hover mb-0 debt-payments-table">
+                        <thead style="font-size:0.72rem;">
+                            <tr class="text-muted">
+                                <th class="date-paid-col">Date Paid</th>
+                                <th>Receipt</th>
+                                <th>Amount</th>
+                                <th style="width: 18%;">Method</th>
+                                <th style="width: 14%;">Reference</th>
+                                <th style="width: 15%;">Staff</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        })
+        .catch(() => {
+            body.innerHTML = '<div class="text-danger text-center py-2">Failed to load payment history.</div>';
+        });
+}
 
 function showDebtPaymentsModal(saleId, saleReceipt = '') {
     const body = document.getElementById('debt-payments-body');

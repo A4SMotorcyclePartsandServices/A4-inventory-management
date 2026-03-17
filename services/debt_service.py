@@ -165,6 +165,273 @@ def get_debt_detail(sale_id):
         'payments': formatted_payments,
     }
 
+
+def get_customer_debt_statement(customer_id):
+    conn = get_db()
+    try:
+        customer = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.customer_no,
+                c.customer_name,
+                c.created_at,
+                MAX(s.transaction_date) AS last_visit
+            FROM customers c
+            LEFT JOIN sales s ON s.customer_id = c.id
+            WHERE c.id = %s AND c.is_active = 1
+            GROUP BY c.id
+            """,
+            (customer_id,),
+        ).fetchone()
+
+        if not customer:
+            return None
+
+        debt_sales = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.sales_number,
+                s.customer_id,
+                s.customer_name,
+                s.total_amount,
+                s.status,
+                s.notes,
+                s.transaction_date,
+                s.paid_at,
+                v.vehicle_name,
+                m.name AS mechanic_name,
+                pm.name AS payment_method,
+                COALESCE(SUM(dp.amount_paid), 0) AS total_paid,
+                COALESCE((
+                    SELECT SUM(ss.price)
+                    FROM sales_services ss
+                    WHERE ss.sale_id = s.id
+                ), 0) AS service_total,
+                COALESCE((
+                    SELECT SUM(dp2.service_portion)
+                    FROM debt_payments dp2
+                    WHERE dp2.sale_id = s.id
+                ), 0) AS service_paid
+            FROM sales s
+            LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            LEFT JOIN vehicles v         ON v.id = s.vehicle_id
+            LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
+            WHERE s.customer_id = %s
+              AND s.payment_method_id IN (
+                    SELECT id FROM payment_methods WHERE category = 'Debt'
+              )
+            GROUP BY s.id, m.name, pm.name, v.vehicle_name
+            ORDER BY s.transaction_date ASC, s.id ASC
+            """,
+            (customer_id,),
+        ).fetchall()
+
+        if not debt_sales:
+            return None
+
+        active_sales = []
+        active_sale_ids = []
+        total_debt_amount = 0.0
+        total_paid_amount = 0.0
+
+        for row in debt_sales:
+            sale = dict(row)
+            sale["total_amount"] = _money(sale.get("total_amount"))
+            sale["total_paid"] = _money(sale.get("total_paid"))
+            sale["service_total"] = _money(sale.get("service_total"))
+            sale["service_paid"] = _money(sale.get("service_paid"))
+            sale["remaining"] = round(max(0, sale["total_amount"] - sale["total_paid"]), 2)
+            sale["service_remaining"] = round(max(0, sale["service_total"] - sale["service_paid"]), 2)
+            sale["item_total"] = round(max(0, sale["total_amount"] - sale["service_total"]), 2)
+            sale["item_paid"] = round(max(0, sale["total_paid"] - sale["service_paid"]), 2)
+            sale["item_remaining"] = round(max(0, sale["remaining"] - sale["service_remaining"]), 2)
+            sale["transaction_date_display"] = format_date(sale["transaction_date"])
+            sale["paid_at_display"] = format_date(sale["paid_at"])
+
+            if sale["remaining"] > 0:
+                active_sales.append(sale)
+                active_sale_ids.append(int(sale["id"]))
+                total_debt_amount += sale["total_amount"]
+                total_paid_amount += sale["total_paid"]
+
+        payments = []
+        if active_sale_ids:
+            item_rows = conn.execute(
+                """
+                SELECT
+                    si.sale_id,
+                    i.name AS item_name,
+                    si.quantity,
+                    si.final_unit_price,
+                    (si.quantity * si.final_unit_price) AS line_total
+                FROM sales_items si
+                JOIN items i ON i.id = si.item_id
+                WHERE si.sale_id = ANY(%s)
+                ORDER BY si.sale_id ASC, i.name ASC, si.id ASC
+                """,
+                (active_sale_ids,),
+            ).fetchall()
+
+            service_rows = conn.execute(
+                """
+                SELECT
+                    ss.sale_id,
+                    sv.name AS service_name,
+                    ss.price
+                FROM sales_services ss
+                JOIN services sv ON sv.id = ss.service_id
+                WHERE ss.sale_id = ANY(%s)
+                ORDER BY ss.sale_id ASC, sv.name ASC, ss.id ASC
+                """,
+                (active_sale_ids,),
+            ).fetchall()
+
+            payment_rows = conn.execute(
+                """
+                SELECT
+                    dp.id,
+                    dp.sale_id,
+                    dp.amount_paid,
+                    dp.reference_no,
+                    dp.notes,
+                    dp.paid_at,
+                    s.sales_number,
+                    u.username AS paid_by,
+                    pm.name AS payment_method
+                FROM debt_payments dp
+                JOIN sales s                  ON s.id = dp.sale_id
+                LEFT JOIN users u             ON u.id = dp.paid_by
+                LEFT JOIN payment_methods pm  ON pm.id = dp.payment_method_id
+                WHERE dp.sale_id = ANY(%s)
+                ORDER BY dp.paid_at ASC, dp.id ASC
+                """,
+                (active_sale_ids,),
+            ).fetchall()
+
+            items_by_sale = {}
+            for row in item_rows:
+                items_by_sale.setdefault(int(row["sale_id"]), []).append({
+                    "item_name": row["item_name"],
+                    "quantity": int(row["quantity"] or 0),
+                    "final_unit_price": _money(row["final_unit_price"]),
+                    "line_total": _money(row["line_total"]),
+                })
+
+            services_by_sale = {}
+            for row in service_rows:
+                services_by_sale.setdefault(int(row["sale_id"]), []).append({
+                    "service_name": row["service_name"],
+                    "price": _money(row["price"]),
+                })
+
+            for sale in active_sales:
+                sale_id = int(sale["id"])
+                sale["items"] = items_by_sale.get(sale_id, [])
+                sale["services"] = services_by_sale.get(sale_id, [])
+
+            payments = []
+            for row in payment_rows:
+                payment = dict(row)
+                payment["amount_paid"] = _money(payment.get("amount_paid"))
+                payment["paid_at_display"] = format_date(payment["paid_at"])
+                payments.append(payment)
+        else:
+            for sale in active_sales:
+                sale["items"] = []
+                sale["services"] = []
+
+        running_balance = 0.0
+        ledger = []
+        for sale in active_sales:
+            sale_reference = sale["sales_number"] or f"Sale #{sale['id']}"
+            running_balance = round(running_balance + sale["total_amount"], 2)
+            ledger.append({
+                "entry_type": "debt",
+                "sort_at": sale["transaction_date"],
+                "sort_id": f"debt-{sale['id']}",
+                "date_display": sale["transaction_date_display"],
+                "description": f"Debt posted for {sale_reference}",
+                "reference": sale_reference,
+                "debit_amount": sale["total_amount"],
+                "credit_amount": 0.0,
+                "running_balance": running_balance,
+            })
+
+        for payment in payments:
+            payment_reference = payment["sales_number"] or f"Sale #{payment['sale_id']}"
+            running_balance = round(running_balance - payment["amount_paid"], 2)
+            ledger.append({
+                "entry_type": "payment",
+                "sort_at": payment["paid_at"],
+                "sort_id": f"payment-{payment['id']}",
+                "date_display": payment["paid_at_display"],
+                "description": f"Payment received for {payment_reference}",
+                "reference": payment["reference_no"] or payment["sales_number"] or "-",
+                "debit_amount": 0.0,
+                "credit_amount": payment["amount_paid"],
+                "running_balance": 0.0,
+            })
+
+        ledger.sort(key=lambda entry: (entry["sort_at"] or datetime.min, entry["sort_id"]))
+        running_balance = 0.0
+        for entry in ledger:
+            if entry["entry_type"] == "debt":
+                running_balance = round(running_balance + entry["debit_amount"], 2)
+            else:
+                running_balance = round(running_balance - entry["credit_amount"], 2)
+            entry["running_balance"] = running_balance
+
+        customer_dict = dict(customer)
+        customer_dict["created_at_display"] = format_date(customer["created_at"])
+        customer_dict["last_visit_display"] = format_date(customer["last_visit"])
+
+        return {
+            "customer": customer_dict,
+            "summary": {
+                "active_sale_count": len(active_sales),
+                "total_amount": round(total_debt_amount, 2),
+                "total_paid": round(total_paid_amount, 2),
+                "remaining": round(max(0, total_debt_amount - total_paid_amount), 2),
+                "statement_date": format_date(datetime.now()),
+            },
+            "active_sales": active_sales,
+            "payments": payments,
+            "ledger": ledger,
+        }
+    finally:
+        conn.close()
+
+
+def get_customer_id_for_debt_sale(sale_id):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT customer_id
+            FROM sales
+            WHERE id = %s
+            """,
+            (sale_id,),
+        ).fetchone()
+        return int(row["customer_id"]) if row and row["customer_id"] else None
+    finally:
+        conn.close()
+
+
+def get_customer_active_debt_payments(customer_id):
+    statement = get_customer_debt_statement(customer_id)
+    if not statement:
+        return None
+
+    return {
+        "customer": statement["customer"],
+        "summary": statement["summary"],
+        "payments": statement["payments"],
+    }
+
 def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes, paid_by):
     conn = get_db()
 

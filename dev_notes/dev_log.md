@@ -248,6 +248,59 @@ Customer PDF behavior
 - `51-99`
 - `100+`
 - Results are sorted by highest points first, then by customer name.
+
+## Customer Debt Statement / Debt Payments Grouping
+
+Implemented 2026-03-17
+
+Problem solved
+- Debt statements were previously tied to one `sale_id`, so one customer with multiple utang sales produced multiple separate statements.
+- The Debt Payments tab also listed debt rows per sale instead of per customer, which made the audit harder to read for repeat debt customers.
+
+Current behavior
+- Debt statements are now customer-based instead of sale-based.
+- The primary printable route is now `/debt/statement/customer/<customer_id>`.
+- Legacy `/debt/statement/<sale_id>` links still work, but now redirect to the matching customer statement.
+- Each customer statement consolidates all active utang for that customer into one printable account statement.
+
+Statement contents
+- Customer header now shows:
+- `Customer`
+- `Customer No`
+- `Last Visit`
+- Statement summary now shows:
+- `Active Utang`
+- `Total Paid on Active Utang`
+- `Running Balance`
+- Active debt sales are listed together in one section instead of one statement per receipt.
+- Payment history is aggregated across the customer's active utang.
+- A running balance ledger is built by combining debt postings and debt payments in chronological order.
+
+Sale breakdown details
+- Each active debt sale now includes its sold items from `sales_items`.
+- Each active debt sale now includes its sold services from `sales_services`.
+- Item / service breakdowns are rendered below each receipt in a separate full-width detail row.
+- The detail area uses compact mini tables so wide print space is used more efficiently.
+
+Debt Payments tab behavior
+- Debt Payments summary API now groups rows by customer instead of one row per debt sale.
+- The table now shows one customer row with combined totals for debt, paid amount, and remaining balance.
+- Receipt display now acts as a grouped debt-record label, including multi-receipt counts when applicable.
+- The payment-history modal can now load aggregated customer debt payments using `customer_id`.
+- Print actions from the debt table now open the consolidated customer statement.
+
+Print / formatting updates
+- Statement print layout was tightened to reduce wasted space on paper.
+- Print view uses smaller margins, reduced padding, and denser table spacing.
+- The top information area uses a print-only two-column layout for customer details and summary cards.
+- Statement date fields were normalized to date-only display in the printable statement.
+- `Member Since` was replaced with `Last Visit`, sourced from the customer's latest sale date.
+
+Implementation notes
+- Main route updates live in `routes/debt_route.py`.
+- Data shaping and ledger logic live in `services/debt_service.py`.
+- Printable statement UI lives in `templates/debt/statement.html`.
+- Debt Payments tab UI behavior lives in `templates/users/users.html`.
 - PDF template lives in `templates/reports/customer_points_pdf.html`.
 - PDF page is browser-print driven, following the same preview / print-to-PDF pattern as the existing report pages.
 
@@ -259,3 +312,52 @@ Architecture notes
 Branding / report design
 - Customer points PDF was restyled to mirror existing report pages.
 - It now uses the same branded header direction as the other PDFs, including `static/media/logo.png`.
+
+## Debt Statement Consolidation / Print Layout
+
+Implemented 2026-03-17 22:37:54
+
+Scope
+- Reworked debt statements from sale-level to customer-level.
+- Grouped the Admin `Debt Payments` tab by customer instead of one row per debt sale.
+- Improved the printable debt statement layout to use space more efficiently on paper.
+
+Routes / entry points
+- `routes/debt_route.py`
+- `GET /debt/statement/customer/<customer_id>`
+- `GET /debt/statement/<sale_id>` now redirects to the matching customer statement when a customer exists.
+- `GET /api/debt/customer/<customer_id>/payments`
+- `GET /api/debt/summary` now returns grouped customer rows for the admin debt tab.
+
+Customer statement behavior
+- One customer statement now aggregates that customer's active utang instead of generating one statement per sale.
+- Statement summary shows:
+- active utang count
+- total paid on active utang
+- running balance
+- Active utang section now shows each receipt with:
+- receipt number
+- sale date
+- vehicle
+- total / paid / balance
+- item breakdown
+- service breakdown
+- Payment history section now aggregates payments across the customer's active utang.
+- Running balance ledger now combines debt postings and payments across the customer timeline.
+
+Customer source of truth
+- Statement uses `sales.customer_id` and the real `customers` table instead of grouping by raw `customer_name`.
+- `Last Visit` on the printable statement now comes from the same `MAX(s.transaction_date)` customer history signal already used on the customer list.
+- Printable statement dates were normalized to date-only display; no times are shown in the statement anymore.
+
+Admin debt tab changes
+- Debt summary rows are now grouped per customer.
+- The old sale-based print button now opens the consolidated customer statement.
+- The eye button now opens aggregated payment history for that customer's active utang.
+- Legacy rows without a usable `customer_id` still fall back to the old sale-based behavior to avoid breaking access.
+
+Print / layout notes
+- Added print-only compaction for margins, spacing, and table density.
+- Header + customer info + summary now use a tighter print layout.
+- Item/service breakdowns were moved into a full-width follow-up row under each receipt so they no longer waste the empty side columns.
+- Breakdown details now render as mini-tables instead of compact text rows.
