@@ -18,6 +18,7 @@ from services.notification_service import (
     create_notifications_for_users,
     list_active_user_ids,
 )
+from services.payables_service import ensure_payable_for_po_receipt
 
 
 # ─────────────────────────────────────────────
@@ -2046,6 +2047,13 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             UPDATE purchase_orders SET status = %s, received_at = %s
             WHERE id = %s
         """, (new_status, clean_time, po_id))
+
+        ensure_payable_for_po_receipt(
+            receipt_id,
+            created_by=user_id,
+            created_by_username=username,
+            external_conn=conn,
+        )
 
         conn.commit()
 

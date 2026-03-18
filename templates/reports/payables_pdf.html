@@ -1,0 +1,290 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report.report_title }} - {{ report.date_label }}</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.55;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: white;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+
+        .header-logo {
+            height: 60px;
+            width: auto;
+            margin-right: 20px;
+        }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 80px;
+        }
+
+        .report-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+
+        .report-date {
+            font-size: 16px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .meta-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin: 14px 0 18px;
+            flex-wrap: wrap;
+        }
+
+        .report-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .generated-note {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .summary-grid {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box {
+            flex: 1;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .summary-box-title {
+            background: #e8e8e8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .summary-box-body {
+            padding: 12px;
+            font-size: 24px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #999;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #bbb;
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        .cell-center {
+            text-align: center;
+        }
+
+        .cell-right {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .payee-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .cell-submeta {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #555;
+            line-height: 1.45;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-issued { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+        .badge-cleared { background: #d4edda; color: #155724; border: 1px solid #a3cfbb; }
+        .badge-cancelled { background: #e5e7eb; color: #374151; border: 1px solid #cbd5e1; }
+        .badge-bounced { background: #f8d7da; color: #721c24; border: 1px solid #f1aeb5; }
+
+        .empty-state {
+            margin-top: 18px;
+            border: 1px dashed #bbb;
+            padding: 22px;
+            text-align: center;
+            color: #666;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        You can print or save this payables report as PDF.
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <h1 class="report-title">{{ report.report_title }}</h1>
+            <div class="report-date">{{ report.date_label }}</div>
+        </div>
+    </div>
+
+    <div class="meta-strip">
+        <div class="report-badge">Cheque Monitoring Report</div>
+        <div class="generated-note">Generated: {{ report.generated_at }}</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box">
+            <div class="summary-box-title">Total Cheques</div>
+            <div class="summary-box-body">{{ report["items"]|length }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Total Amount</div>
+            <div class="summary-box-body">₱{{ "{:,.2f}".format(report.total_amount) }}</div>
+        </div>
+    </div>
+
+    {% if report["items"] %}
+    <table>
+        <thead>
+            <tr>
+                <th class="cell-center">Cheque Date</th>
+                <th class="cell-center">Due Date</th>
+                <th>Cheque / Status</th>
+                <th>Payee / Source</th>
+                <th>Description / PO</th>
+                <th class="cell-right">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report["items"] %}
+            <tr>
+                <td class="cell-center">{{ item.cheque_date }}</td>
+                <td class="cell-center">{{ item.due_date }}</td>
+                <td>
+                    <strong>{{ item.cheque_no }}</strong>
+                    <div class="cell-submeta">
+                        <span class="badge badge-{{ item.status|lower }}">{{ item.status }}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="payee-name">{{ item.payee_name }}</div>
+                    <div class="cell-submeta">
+                        {{ 'PO Delivery' if item.source_type == 'PO_DELIVERY' else 'Manual Payable' }}
+                    </div>
+                </td>
+                <td>
+                    {{ item.description or '-' }}
+                    <div class="cell-submeta">
+                        {% if item.po_number_snapshot %}
+                            PO No.: {{ item.po_number_snapshot }}
+                        {% else %}
+                            No linked PO
+                        {% endif %}
+                        {% if item.delivery_received_at_snapshot and item.delivery_received_at_snapshot != '-' %}
+                            <br>Delivery: {{ item.delivery_received_at_snapshot }}
+                        {% endif %}
+                        {% if item.notes %}
+                            <br>Notes: {{ item.notes }}
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="cell-right">₱{{ "{:,.2f}".format(item.cheque_amount) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">No cheque records found for the selected report range.</div>
+    {% endif %}
+</body>
+</html>

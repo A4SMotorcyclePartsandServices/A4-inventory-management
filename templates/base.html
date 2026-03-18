@@ -837,6 +837,11 @@
                 <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
             </a>
 
+            <a href="{{ url_for('payables.payables_page') }}"
+            class="{% if 'payables' in request.path %}active-link{% endif %}">
+                <i class="bi bi-journal-check"></i> Payables
+            </a>
+
             <a href="{{ url_for('cash.cash_ledger') }}"
             class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
                 <i class="bi bi-safe2"></i> Cash Ledger

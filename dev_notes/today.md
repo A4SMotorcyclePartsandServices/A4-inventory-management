@@ -1,15 +1,16 @@
 # Today – March 16
 
 ## Tasks
-- [X] ~~*when a redemption is redeemed block price input*~~ [2026-03-17]
-- [X]c~~*ustomer modal do not require vehicle make it only required*~~ [2026-03-17]
-- [X]N~~*EW FEATURE. QUICK SALE basically free form customer name, only record the item sale. restrictions less than 100 pesos only are the items that can be sold. Quick sale default view*~~ [2026-03-17]
-- [X] ~~*CSV export for Items*~~ [2026-03-17]
-- [X] ~~*CSV export for Customers*~~ [2026-03-17]
-- [X] ~~*PDF export with tier filtering*~~ [2026-03-17]
-  - 0–50
-  - 51–99
-  - 100+
+- [X] Supplier and Rental Payment
+- [X] PO page on Delivered items only
+- [X] Include partial and completed deliveries. extract PO number, Supplier name, date of PO when it was created, total amount for completed total amount for delivered for partial deliveries. get this data automatically
+- [X] Then manual entry for issuing cheque. possible input boxes Fill in date of cheque, cheque number, cheque amount
+- [X] Issuing a cheque for PO order and manual entries for other cheque related needs
+- [X] Issuing a cheque for manual entries for things like rental same input as above but extra payee input and description input
+- [X] PO based payment
+- [X] basically just cheque monitoring for cheque made and alerting user of due cheques
+- [X] PDF report for this. cheques issued this month and stuff as report
+- [X] user has access to this page but the pdf report is only for admin
 
 ## Notes
 new PO workflow may bode well for Payables page. check first the workflow before making the payables page

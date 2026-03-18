@@ -529,7 +529,58 @@ def init_db():
     )
     """)
 
-    # 22. NOTIFICATIONS TABLE
+    # 22. PAYABLES TABLES
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS payables (
+        id                           SERIAL PRIMARY KEY,
+        source_type                  TEXT NOT NULL CHECK(source_type IN ('PO_DELIVERY', 'MANUAL')),
+        po_id                        INTEGER REFERENCES purchase_orders(id) ON DELETE SET NULL,
+        po_receipt_id                INTEGER REFERENCES po_receipts(id) ON DELETE SET NULL,
+        vendor_id                    INTEGER REFERENCES vendors(id) ON DELETE SET NULL,
+        vendor_name_snapshot         TEXT,
+        po_number_snapshot           TEXT,
+        po_created_at_snapshot       TIMESTAMP,
+        delivery_received_at_snapshot TIMESTAMP,
+        payee_name                   TEXT NOT NULL,
+        description                  TEXT,
+        reference_no                 TEXT,
+        amount_due                   NUMERIC(12,2) NOT NULL DEFAULT 0,
+        status                       TEXT NOT NULL CHECK(status IN ('OPEN', 'PARTIAL', 'FULLY_ISSUED', 'CANCELLED')) DEFAULT 'OPEN',
+        created_by                   INTEGER REFERENCES users(id),
+        created_by_username          TEXT,
+        created_at                   TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at                   TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS payable_cheques (
+        id                          SERIAL PRIMARY KEY,
+        payable_id                  INTEGER NOT NULL REFERENCES payables(id) ON DELETE CASCADE,
+        cheque_no                   TEXT NOT NULL,
+        cheque_date                 DATE NOT NULL,
+        due_date                    DATE NOT NULL,
+        cheque_amount               NUMERIC(12,2) NOT NULL DEFAULT 0,
+        status                      TEXT NOT NULL CHECK(status IN ('ISSUED', 'CLEARED', 'CANCELLED', 'BOUNCED')) DEFAULT 'ISSUED',
+        notes                       TEXT,
+        reminded_due_minus_7        INTEGER NOT NULL DEFAULT 0,
+        reminded_due_today          INTEGER NOT NULL DEFAULT 0,
+        created_by                  INTEGER REFERENCES users(id),
+        created_by_username         TEXT,
+        created_at                  TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at                  TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_source_type ON payables(source_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_status ON payables(status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_po_id ON payables(po_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_po_receipt_id ON payables(po_receipt_id)")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payables_po_receipt_unique ON payables(po_receipt_id) WHERE po_receipt_id IS NOT NULL")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_payable_id ON payable_cheques(payable_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_due_date ON payable_cheques(due_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_status ON payable_cheques(status)")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payable_cheques_cheque_no_unique ON payable_cheques(cheque_no)")
+
+    # 23. NOTIFICATIONS TABLE
     # One row per recipient user. This keeps unread/read state independent
     # even when the same business event is visible to multiple admins.
     cur.execute("""
@@ -556,7 +607,7 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_entity ON notifications(entity_type, entity_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_type)")
 
-    # 23. APPROVAL REQUESTS TABLE
+    # 24. APPROVAL REQUESTS TABLE
     # Generic approval workflow table reusable by multiple business modules.
     cur.execute("""
     CREATE TABLE IF NOT EXISTS approval_requests (

@@ -54,6 +54,9 @@ Target: internet-facing production deployment for this Flask app.
 
 ### Operational checks
 
+- Important: hosting platform is still undecided, and the Payables cheque reminder system now depends on a production scheduler.
+- Important: before go-live, choose a hosting platform that supports a daily scheduled task / cron-style job.
+- Important: schedule `python scripts/run_payables_reminders.py` to run once daily at 8:00 AM Asia/Manila so 7-day and due-today cheque notifications are created without requiring a page visit.
 - Turn on monitoring for:
   - application errors
   - repeated login failures

@@ -166,6 +166,159 @@ Source of truth
 - Cumulative PO received quantities: `po_items.quantity_received`
 - Latest receipt timestamp for summary use: `purchase_orders.received_at`
 
+## Payables Feature
+
+Implemented 2026-03-18
+
+Scope
+- Added a new `Payables` page for cheque monitoring and payable tracking.
+- Covers both PO-linked supplier payments and fully manual / free-form payables such as rent.
+- Page is staff-accessible and admin-accessible.
+- PDF report generation is admin-only.
+
+Core business model
+- A payable is the obligation record.
+- A cheque is the payment instrument linked to that payable.
+- Payables do not touch `Cash Ledger`, because cheque handling is treated separately from cash on hand.
+
+PO-based payables behavior
+- PO-based payables only come from actual PO delivery batches.
+- One delivery batch creates one payable.
+- Source of truth is `po_receipts`, not `purchase_orders.received_at`.
+- This means one PO can create multiple payable rows when it is received in multiple batches.
+- Payable amount for PO-based entries uses the exact receipt-batch total, derived from `po_receipt_items.line_total`.
+- The payable stores PO and vendor snapshot details for reporting / UI display:
+- `po_number_snapshot`
+- `vendor_name_snapshot`
+- `po_created_at_snapshot`
+- `delivery_received_at_snapshot`
+
+Manual payables behavior
+- Manual payables are fully free-form.
+- Intended for rental and other non-PO cheque obligations.
+- Required fields:
+- `payee_name`
+- `description`
+- `amount_due`
+- Optional field:
+- `reference_no`
+
+Schema
+- Added `payables` table.
+- Added `payable_cheques` table.
+
+`payables` table responsibilities
+- stores payable source type:
+- `PO_DELIVERY`
+- `MANUAL`
+- stores linked PO receipt batch when applicable via `po_receipt_id`
+- stores display snapshot values for vendor / PO metadata
+- stores:
+- `payee_name`
+- `description`
+- `reference_no`
+- `amount_due`
+- `status`
+
+`payable_cheques` table responsibilities
+- stores cheque-level data:
+- `cheque_no`
+- `cheque_date`
+- `due_date`
+- `cheque_amount`
+- `status`
+- `notes`
+- stores reminder flags:
+- `reminded_due_minus_7`
+- `reminded_due_today`
+
+Status model
+- Payable statuses:
+- `OPEN`
+- `PARTIAL`
+- `FULLY_ISSUED`
+- `CANCELLED`
+- Cheque statuses:
+- `ISSUED`
+- `CLEARED`
+- `CANCELLED`
+- `BOUNCED`
+
+Status sync rules
+- Payable status is recalculated from cheque totals.
+- Active cheque amount includes cheque statuses:
+- `ISSUED`
+- `CLEARED`
+- `CANCELLED` cheques do not count toward issued amount.
+- `OPEN` means no active cheque amount yet.
+- `PARTIAL` means active cheque amount is below payable amount.
+- `FULLY_ISSUED` means active cheque amount meets or exceeds payable amount.
+
+Automation
+- PO receive flow now auto-creates a payable after a receipt batch is saved.
+- Integration point is inside `receive_purchase_order()` in `transactions_service.py`.
+- This keeps PO receipt creation and payable creation in the same DB transaction.
+- Duplicate PO-based payable creation is prevented by unique `po_receipt_id`.
+
+Routes / entry points
+- New blueprint: `payables_route.py`
+- Page route:
+- `GET /transaction/payables`
+- Manual payable create:
+- `POST /transaction/payables/manual`
+- Issue cheque:
+- `POST /transaction/payables/<payable_id>/cheques`
+- Update cheque status:
+- `POST /transaction/payables/cheques/<cheque_id>/status`
+- Admin PDF route:
+- `GET /reports/payables`
+
+UI behavior
+- Navigation link was added below `Receivables` in `base.html`.
+- Page shows:
+- summary cards
+- PO-based payables section
+- manual payables section
+- cheque history per payable
+- cheque issuance modals
+- manual payable modal
+- PO-based `View PO Page` button deep-links into the PO overview and auto-opens the correct PO modal using:
+- `po_id`
+- `open_po=1`
+- Internal delivery-batch IDs are intentionally hidden from the UI because they are backend-facing.
+
+PDF / reporting
+- Added a Payables PDF report page following the same browser print / save-to-PDF pattern used by the existing report pages.
+- Report includes cheque-level information such as:
+- cheque date
+- due date
+- cheque number
+- payee
+- source type
+- linked PO number when applicable
+- amount
+- status
+- report filter uses Flatpickr date range on the Payables page.
+- If no date range is provided, the backend defaults the report to the current month.
+
+Permissions
+- All logged-in users can access the Payables page.
+- Only admins can open the Payables PDF report route.
+- Non-admin users do not see the `Generate PDF` button in the page UI.
+
+Reminders / notifications
+- Cheque reminders are generated for:
+- 7 days before due date
+- exact due date
+- Reminder generation is no longer tied to opening the Payables page.
+- A standalone script now exists for scheduled reminder runs:
+- `scripts/run_payables_reminders.py`
+- Intended production command:
+- `python scripts/run_payables_reminders.py`
+- Hosted deployment must provide a daily scheduled task for this command.
+- Recommended run time is `8:00 AM` Asia/Manila.
+- The existing notification bell only reads notifications already stored in the DB; it does not generate payable reminders itself.
+
 ## Debt Feature
 
 Relevant files
