@@ -11,7 +11,10 @@ from services.transactions_service import (
     get_transaction_out_context,
     process_manual_stock_in,
     record_sale,
+    record_sale_refund,
+    search_sales_for_refund,
     create_purchase_order,
+    get_sale_refund_context,
     get_active_purchase_orders,
     get_purchase_order_with_items,
     get_purchase_order_details,
@@ -52,6 +55,12 @@ def _get_active_vendors():
 def transaction_out():
     context = get_transaction_out_context()
     return render_template("transactions/out.html", **context)
+
+
+@transaction_bp.route("/transaction/refund")
+@login_required
+def transaction_refund():
+    return render_template("transactions/refund.html")
 
 
 @transaction_bp.route("/transaction/in")
@@ -170,6 +179,54 @@ def save_transaction_out():
     except Exception as e:
         print(f"DATABASE ERROR: {str(e)}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@transaction_bp.route("/api/sales/<int:sale_id>/refund-context")
+@login_required
+def sale_refund_context_api(sale_id):
+    try:
+        return jsonify(get_sale_refund_context(sale_id))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@transaction_bp.route("/api/sales/<int:sale_id>/refund", methods=["POST"])
+@login_required
+def refund_sale_api(sale_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = record_sale_refund(
+            sale_id=sale_id,
+            data=data,
+            user_id=session.get('user_id'),
+            username=session.get('username'),
+        )
+        return jsonify({"status": "success", **result}), 200
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@transaction_bp.route("/api/sales/refund-search")
+@login_required
+def refund_sale_search_api():
+    try:
+        query = (request.args.get("q") or "").strip()
+        days = request.args.get("days")
+        has_refundable = str(request.args.get("has_refundable") or "").strip().lower() in {"1", "true", "yes", "on"}
+        limit = request.args.get("limit", 50)
+        rows = search_sales_for_refund(
+            query=query,
+            days=days,
+            has_refundable=has_refundable,
+            limit=limit,
+        )
+        return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ─────────────────────────────────────────────

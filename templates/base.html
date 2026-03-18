@@ -48,6 +48,11 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid var(--border-soft);
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            align-self: flex-start;
+            overflow-y: auto;
         }
 
         .sidebar .logo {
@@ -59,6 +64,30 @@
 
         .sidebar img {
             height: 90px;
+        }
+
+        .sidebar-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            flex: 1;
+            padding-bottom: 12px;
+        }
+
+        .nav-group {
+            display: grid;
+            gap: 6px;
+            position: relative;
+        }
+
+        .nav-group-title {
+            font-size: 0.66rem;
+            font-weight: 800;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            color: #b48a6b;
+            padding: 0 10px 7px;
+            border-bottom: 1px solid rgba(180,138,107,0.12);
         }
 
         .sidebar a {
@@ -86,9 +115,32 @@
         }
 
         .sidebar .admin-section {
-            margin-top: 35px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border-soft);
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .sidebar {
+            scrollbar-width: thin;
+            scrollbar-color: #3b414f transparent;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #323847 0%, #262c38 100%);
+            border-radius: 999px;
+            border: 2px solid var(--bg-sidebar);
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #444c5d 0%, #313847 100%);
         }
 
         .content {
@@ -824,61 +876,75 @@
         </div>
 
         {% if session.get('user_id') %}
-            <a href="/" class="{% if request.path == '/' %}active-link{% endif %}">
-                <i class="bi bi-box"></i> Items
-            </a>
+            <div class="sidebar-nav">
+                <div class="nav-group">
+                    <div class="nav-group-title">Setup</div>
+                    <a href="/" class="{% if request.path == '/' %}active-link{% endif %}">
+                        <i class="bi bi-box"></i> Items
+                    </a>
+                    <a href="/customers" class="{% if request.path == '/customers' %}active-link{% endif %}">
+                        <i class="bi bi-people"></i> Customers
+                    </a>
+                </div>
 
-            <a href="{{ url_for('transaction.list_orders') }}"
-            class="{% if 'orders' in request.path %}active-link{% endif %}">
-                <i class="bi bi-box-arrow-in-down"></i> Stock In (PO)
-            </a>
+                <div class="nav-group">
+                    <div class="nav-group-title">Daily Counter</div>
+                    <a href="{{ url_for('transaction.transaction_out') }}"
+                    class="{% if '/out' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-cart-plus"></i> New Sale
+                    </a>
+                    <a href="{{ url_for('transaction.transaction_refund') }}"
+                    class="{% if '/refund' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-arrow-counterclockwise"></i> Refunds
+                    </a>
+                    <a href="{{ url_for('debt.utang_list') }}" 
+                    class="{% if 'utang' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
+                    </a>
+                    <a href="{{ url_for('cash.cash_ledger') }}"
+                    class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-safe2"></i> Cash Ledger
+                    </a>
+                </div>
 
-            <a href="{{ url_for('transaction.transaction_out') }}"
-            class="{% if '/out' in request.path %}active-link{% endif %}">
-                <i class="bi bi-cart-plus"></i> New Sale
-            </a>
+                <div class="nav-group">
+                    <div class="nav-group-title">Purchasing</div>
+                    <a href="{{ url_for('transaction.list_orders') }}"
+                    class="{% if 'orders' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-box-arrow-in-down"></i> Stock In (PO)
+                    </a>
+                    <a href="{{ url_for('payables.payables_page') }}"
+                    class="{% if 'payables' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-journal-check"></i> Payables
+                    </a>
+                </div>
 
-            <a href="/customers" class="nav-link {% if request.path == '/customers' %}active{% endif %}">
-                <i class="bi bi-people"></i>
-                <span>Customers</span>
-            </a>
+                <div class="nav-group">
+                    <div class="nav-group-title">Insights</div>
+                    <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-fire"></i> Hot Items
+                    </a>
+                    <a href="/dead-stock" class="{% if 'dead-stock' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-emoji-frown"></i> Dead Stock
+                    </a>
+                    <a href="/low-stock" class="{% if 'low-stock' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-exclamation-triangle"></i> Low Stock
+                    </a>
+                </div>
 
-            <a href="{{ url_for('debt.utang_list') }}" 
-            class="{% if 'utang' in request.path %}active-link{% endif %}">
-                <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
-            </a>
-
-            <a href="{{ url_for('payables.payables_page') }}"
-            class="{% if 'payables' in request.path %}active-link{% endif %}">
-                <i class="bi bi-journal-check"></i> Payables
-            </a>
-
-            <a href="{{ url_for('cash.cash_ledger') }}"
-            class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
-                <i class="bi bi-safe2"></i> Cash Ledger
-            </a>
-
-            <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">
-                <i class="bi bi-fire"></i> Hot Items
-            </a>
-            <a href="/dead-stock" class="{% if 'dead-stock' in request.path %}active-link{% endif %}">
-                <i class="bi bi-emoji-frown"></i> Dead Stock
-            </a>
-            <a href="/low-stock" class="{% if 'low-stock' in request.path %}active-link{% endif %}">
-                <i class="bi bi-exclamation-triangle"></i> Low Stock
-            </a>
-
-            {% if session.get('role') == 'admin' %}
-            <div class="admin-section">
-                <a href="/dashboard" class="{% if 'dashboard' in request.path %}active-link{% endif %}">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </a>
-                <a href="{{ url_for('auth.manage_users') }}"
-                class="{% if 'users' in request.path %}active-link{% endif %}">
-                    <i class="bi bi-shield-lock"></i> Admin Panel
-                </a>
+                {% if session.get('role') == 'admin' %}
+                <div class="nav-group admin-section">
+                    <div class="nav-group-title">Admin</div>
+                    <a href="/dashboard" class="{% if 'dashboard' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('auth.manage_users') }}"
+                    class="{% if 'users' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-shield-lock"></i> Admin Panel
+                    </a>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         {% endif %}
     </div>
 
@@ -1068,7 +1134,7 @@
                         <input type="hidden" name="start_date" id="report-start-hidden">
                         <input type="hidden" name="end_date"   id="report-end-hidden">
                     </div>
-                    <p class="text small">The report will generate a PDF summary of all transactions, mechanic commissions, and items sold for the selected date range.</p>
+                    <p class="text small">The report will generate a PDF summary of all transactions, mechanic commissions, items sold, and sale refunds for the selected date range.</p>
                 </div>
                 <div class="modal-footer border-top-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

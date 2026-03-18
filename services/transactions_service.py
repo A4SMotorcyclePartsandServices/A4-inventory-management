@@ -1,5 +1,5 @@
 from db.database import get_db
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from utils.formatters import format_date
 from services.loyalty_service import log_stamps_for_sale
@@ -596,6 +596,802 @@ def record_sale(data, user_id, username):
 # ─────────────────────────────────────────────
 # PURCHASE ORDERS
 # ─────────────────────────────────────────────
+
+REFUND_WINDOW_DAYS = 7
+
+
+def _normalize_db_timestamp(raw_value=None):
+    now_obj = datetime.now()
+    if raw_value:
+        clean_time = str(raw_value).replace('T', ' ')
+        if len(clean_time) == 16:
+            clean_time += ":00"
+        return clean_time
+    return now_obj.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _build_refund_number(conn, sales_number, sale_id):
+    or_number = str(sales_number or sale_id).strip()
+    stamp = datetime.now().strftime("%m%d")
+    base_number = f"RF-{or_number}-{stamp}"
+
+    existing_count_row = conn.execute(
+        """
+        SELECT COUNT(*) AS existing_count
+        FROM sale_refunds
+        WHERE refund_number = %s
+           OR refund_number LIKE %s
+        """,
+        (base_number, f"{base_number}-%"),
+    ).fetchone()
+
+    existing_count = int(existing_count_row["existing_count"] or 0)
+    if existing_count <= 0:
+        return base_number
+    return f"{base_number}-{existing_count + 1}"
+
+
+def _derive_refund_state(total_refunded, remaining_qty):
+    refunded_amount = round(float(total_refunded or 0), 2)
+    remaining_quantity = int(remaining_qty or 0)
+    if refunded_amount <= 0:
+        return "Not Refunded"
+    if remaining_quantity <= 0:
+        return "Fully Refunded"
+    return "Partially Refunded"
+
+
+def _get_cash_payment_method_id(conn):
+    row = conn.execute(
+        """
+        SELECT id
+        FROM payment_methods
+        WHERE category = %s
+        ORDER BY id ASC
+        LIMIT 1
+        """,
+        ("Cash",),
+    ).fetchone()
+    if not row:
+        raise ValueError("No cash payment method is configured for exchanges.")
+    return int(row["id"])
+
+
+def _build_exchange_number(conn, sales_number, sale_id):
+    or_number = str(sales_number or sale_id).strip()
+    base_number = f"EX-{or_number}"
+
+    existing_count_row = conn.execute(
+        """
+        SELECT COUNT(*) AS existing_count
+        FROM sale_exchanges
+        WHERE exchange_number = %s
+           OR exchange_number LIKE %s
+        """,
+        (base_number, f"{base_number}-%"),
+    ).fetchone()
+
+    existing_count = int(existing_count_row["existing_count"] or 0)
+    if existing_count <= 0:
+        return base_number
+    return f"{base_number}-{existing_count + 1}"
+
+
+def _determine_exchange_type(net_adjustment_amount):
+    amount = round(float(net_adjustment_amount or 0), 2)
+    if amount > 0:
+        return "CUSTOMER_TOPUP"
+    if amount < 0:
+        return "SHOP_CASH_OUT"
+    return "EVEN"
+
+
+def _insert_sale_refund(conn, sale_id, refund_number, refund_lines, reason, notes, user_id, username, refund_time):
+    refund_amount = round(sum(line["line_total"] for line in refund_lines), 2)
+    refund_row = conn.execute(
+        """
+        INSERT INTO sale_refunds (
+            sale_id,
+            refund_number,
+            refund_amount,
+            reason,
+            notes,
+            refunded_by,
+            refunded_by_username,
+            refund_date
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            sale_id,
+            refund_number,
+            refund_amount,
+            reason,
+            notes,
+            user_id,
+            username,
+            refund_time,
+        ),
+    ).fetchone()
+
+    refund_id = int(refund_row["id"])
+    audit_notes = f"{refund_number}: {reason}" + (f" | {notes}" if notes else "")
+
+    for line in refund_lines:
+        conn.execute(
+            """
+            INSERT INTO sale_refund_items (
+                refund_id,
+                sale_item_id,
+                item_id,
+                quantity,
+                unit_price,
+                line_total
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                refund_id,
+                line["sale_item_id"],
+                line["item_id"],
+                line["quantity"],
+                line["final_unit_price"],
+                line["line_total"],
+            ),
+        )
+
+        add_transaction(
+            item_id=line["item_id"],
+            quantity=line["quantity"],
+            transaction_type='IN',
+            user_id=user_id,
+            user_name=username,
+            reference_id=sale_id,
+            reference_type='SALE',
+            change_reason='CUSTOMER_REFUND',
+            unit_price=line["final_unit_price"],
+            transaction_date=refund_time,
+            external_conn=conn,
+            notes=audit_notes,
+        )
+
+    return {
+        "refund_id": refund_id,
+        "refund_number": refund_number,
+        "refund_amount": refund_amount,
+    }
+
+
+def _create_exchange_replacement_sale(
+    conn,
+    original_sale,
+    exchange_number,
+    replacement_item_id,
+    replacement_quantity,
+    refund_time,
+    user_id,
+    username,
+    reason,
+    notes,
+):
+    replacement_item_row = conn.execute(
+        """
+        SELECT id, name, a4s_selling_price
+        FROM items
+        WHERE id = %s
+        FOR UPDATE
+        """,
+        (replacement_item_id,),
+    ).fetchone()
+    if not replacement_item_row:
+        raise ValueError("Replacement item not found.")
+
+    current_stock_row = conn.execute(
+        """
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN transaction_type = 'IN' THEN quantity
+                WHEN transaction_type = 'OUT' THEN -quantity
+                ELSE 0
+            END
+        ), 0) AS current_stock
+        FROM inventory_transactions
+        WHERE item_id = %s
+        """,
+        (replacement_item_id,),
+    ).fetchone()
+    current_stock = int(current_stock_row["current_stock"] or 0)
+    if replacement_quantity > current_stock:
+        raise ValueError(
+            f"Insufficient stock for replacement item '{replacement_item_row['name']}'. "
+            f"Requested: {replacement_quantity}, Available: {current_stock}."
+        )
+
+    unit_price = round(float(replacement_item_row["a4s_selling_price"] or 0), 2)
+    replacement_amount = round(replacement_quantity * unit_price, 2)
+    cash_payment_method_id = _get_cash_payment_method_id(conn)
+    original_sale_label = original_sale["sales_number"] or f"#{original_sale['id']}"
+    exchange_notes = f"Exchange replacement linked to {original_sale_label} via {exchange_number}. Reason: {reason}"
+    if notes:
+        exchange_notes += f" | {notes}"
+
+    replacement_sale_row = conn.execute(
+        """
+        INSERT INTO sales (
+            sales_number,
+            customer_name,
+            customer_id,
+            vehicle_id,
+            total_amount,
+            payment_method_id,
+            reference_no,
+            status,
+            notes,
+            user_id,
+            transaction_date,
+            mechanic_id,
+            paid_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'Paid', %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            exchange_number,
+            original_sale["customer_name"],
+            original_sale["customer_id"],
+            original_sale["vehicle_id"],
+            replacement_amount,
+            cash_payment_method_id,
+            original_sale["sales_number"],
+            exchange_notes,
+            user_id,
+            refund_time,
+            None,
+            refund_time,
+        ),
+    ).fetchone()
+    replacement_sale_id = int(replacement_sale_row["id"])
+
+    conn.execute(
+        """
+        INSERT INTO sales_items (
+            sale_id, item_id, quantity,
+            original_unit_price, discount_percent, discount_amount, final_unit_price,
+            discounted_by, created_at
+        ) VALUES (%s, %s, %s, %s, 0, 0, %s, NULL, %s)
+        """,
+        (
+            replacement_sale_id,
+            replacement_item_id,
+            replacement_quantity,
+            unit_price,
+            unit_price,
+            refund_time,
+        ),
+    )
+
+    add_transaction(
+        item_id=replacement_item_id,
+        quantity=replacement_quantity,
+        transaction_type='OUT',
+        user_id=user_id,
+        user_name=username,
+        reference_id=replacement_sale_id,
+        reference_type='SALE',
+        change_reason='CUSTOMER_EXCHANGE_REPLACEMENT',
+        unit_price=unit_price,
+        transaction_date=refund_time,
+        external_conn=conn,
+        notes=exchange_notes,
+    )
+
+    return {
+        "replacement_sale_id": replacement_sale_id,
+        "replacement_sales_number": exchange_number,
+        "replacement_item_name": replacement_item_row["name"],
+        "replacement_quantity": replacement_quantity,
+        "replacement_unit_price": unit_price,
+        "replacement_amount": replacement_amount,
+    }
+
+
+def _sale_refund_cutoff(sale_row):
+    transaction_date = sale_row["transaction_date"]
+    if not transaction_date:
+        return None
+    return transaction_date.date() + timedelta(days=REFUND_WINDOW_DAYS)
+
+
+def get_sale_refund_context(sale_id):
+    conn = get_db()
+    try:
+        sale = conn.execute(
+            """
+            SELECT
+                s.id,
+                s.sales_number,
+                s.customer_name,
+                s.customer_id,
+                s.vehicle_id,
+                s.total_amount,
+                s.status,
+                s.notes,
+                s.transaction_date,
+                s.mechanic_id,
+                m.name AS mechanic_name,
+                pm.name AS payment_method_name,
+                pm.category AS payment_method_category,
+                se.exchange_number,
+                se.original_sale_id,
+                os.sales_number AS original_sales_number
+            FROM sales s
+            LEFT JOIN mechanics m ON m.id = s.mechanic_id
+            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
+            LEFT JOIN sales os ON os.id = se.original_sale_id
+            WHERE s.id = %s
+            """,
+            (sale_id,),
+        ).fetchone()
+
+        if not sale:
+            raise ValueError("Sale not found.")
+
+        item_rows = conn.execute(
+            """
+            SELECT
+                si.id AS sale_item_id,
+                si.item_id,
+                i.name,
+                si.quantity AS sold_quantity,
+                si.original_unit_price,
+                si.discount_amount,
+                si.final_unit_price,
+                COALESCE((
+                    SELECT SUM(sri.quantity)
+                    FROM sale_refund_items sri
+                    JOIN sale_refunds sr ON sr.id = sri.refund_id
+                    WHERE sri.sale_item_id = si.id
+                ), 0) AS refunded_quantity
+            FROM sales_items si
+            JOIN items i ON i.id = si.item_id
+            WHERE si.sale_id = %s
+            ORDER BY i.name ASC, si.id ASC
+            """,
+            (sale_id,),
+        ).fetchall()
+
+        service_rows = conn.execute(
+            """
+            SELECT sv.name, ss.price
+            FROM sales_services ss
+            JOIN services sv ON sv.id = ss.service_id
+            WHERE ss.sale_id = %s
+            ORDER BY sv.name ASC, ss.id ASC
+            """,
+            (sale_id,),
+        ).fetchall()
+
+        refund_rows = conn.execute(
+            """
+            SELECT
+                sr.id,
+                sr.refund_number,
+                sr.refund_amount,
+                sr.reason,
+                sr.notes,
+                sr.refund_date,
+                sr.refunded_by_username,
+                se.exchange_number,
+                se.exchange_type,
+                se.replacement_amount,
+                se.net_adjustment_amount,
+                rs.sales_number AS replacement_sales_number
+            FROM sale_refunds sr
+            LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
+            LEFT JOIN sales rs ON rs.id = se.replacement_sale_id
+            WHERE sr.sale_id = %s
+            ORDER BY sr.refund_date DESC, sr.id DESC
+            """,
+            (sale_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    sale_data = dict(sale)
+    cutoff_date = _sale_refund_cutoff(sale)
+    today = datetime.now().date()
+
+    refundable_items = []
+    for row in item_rows:
+        refunded_qty = int(row["refunded_quantity"] or 0)
+        refundable_items.append({
+            "sale_item_id": int(row["sale_item_id"]),
+            "item_id": int(row["item_id"]),
+            "name": row["name"],
+            "sold_quantity": int(row["sold_quantity"] or 0),
+            "refunded_quantity": refunded_qty,
+            "refundable_quantity": max(0, int(row["sold_quantity"] or 0) - refunded_qty),
+            "original_price": round(float(row["original_unit_price"] or 0), 2),
+            "discount_amount": round(float(row["discount_amount"] or 0), 2),
+            "final_unit_price": round(float(row["final_unit_price"] or 0), 2),
+        })
+
+    refund_history = [
+        {
+            **dict(row),
+            "refund_amount": round(float(row["refund_amount"] or 0), 2),
+            "replacement_amount": round(float(row["replacement_amount"] or 0), 2),
+            "net_adjustment_amount": round(float(row["net_adjustment_amount"] or 0), 2),
+            "refund_date_display": format_date(row["refund_date"], show_time=True),
+        }
+        for row in refund_rows
+    ]
+    total_refunded = round(sum(row["refund_amount"] for row in refund_history), 2)
+
+    can_refund = True
+    refund_block_reason = ""
+    if sale_data["status"] != "Paid":
+        can_refund = False
+        refund_block_reason = "Only fully paid sales can be refunded."
+    elif not refundable_items:
+        can_refund = False
+        refund_block_reason = "This sale has no item lines to refund."
+    elif max((item["refundable_quantity"] for item in refundable_items), default=0) <= 0:
+        can_refund = False
+        refund_block_reason = "All refundable item quantities have already been returned."
+    elif cutoff_date and today > cutoff_date:
+        can_refund = False
+        refund_block_reason = f"Refund window expired on {cutoff_date.isoformat()}."
+
+    sale_data.update({
+        "transaction_date_display": format_date(sale_data["transaction_date"], show_time=True),
+        "refund_cutoff_date": cutoff_date.isoformat() if cutoff_date else None,
+        "refund_cutoff_display": format_date(cutoff_date.isoformat()) if cutoff_date else None,
+        "total_amount": round(float(sale_data["total_amount"] or 0), 2),
+        "total_refunded": total_refunded,
+        "net_amount": round(float(sale_data["total_amount"] or 0) - total_refunded, 2),
+        "refund_state": _derive_refund_state(
+            total_refunded,
+            sum(item["refundable_quantity"] for item in refundable_items),
+        ),
+        "can_refund": can_refund,
+        "refund_block_reason": refund_block_reason,
+        "items": refundable_items,
+        "services": [
+            {
+                **dict(row),
+                "price": round(float(row["price"] or 0), 2),
+            }
+            for row in service_rows
+        ],
+        "refund_history": refund_history,
+    })
+    return sale_data
+
+
+def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=50):
+    conn = get_db()
+    try:
+        conditions = []
+        params = []
+
+        search_text = str(query or "").strip()
+        if search_text:
+            like = f"%{search_text}%"
+            conditions.append("(s.sales_number ILIKE %s OR s.customer_name ILIKE %s)")
+            params.extend([like, like])
+
+        if days:
+            try:
+                days_int = int(days)
+            except (TypeError, ValueError):
+                days_int = 0
+            if days_int > 0:
+                conditions.append("DATE(s.transaction_date) >= CURRENT_DATE - (%s * INTERVAL '1 day')")
+                params.append(days_int)
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        query_sql = f"""
+            SELECT
+                s.id,
+                s.sales_number,
+                s.customer_name,
+                s.total_amount,
+                s.status,
+                s.transaction_date,
+                pm.name AS payment_method_name,
+                pm.category AS payment_method_category,
+                COALESCE(refunds.total_refunded, 0) AS refunded_amount,
+                COALESCE(items.total_remaining_qty, 0) AS remaining_qty,
+                se.exchange_number,
+                se.original_sale_id,
+                os.sales_number AS original_sales_number
+            FROM sales s
+            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
+            LEFT JOIN sales os ON os.id = se.original_sale_id
+            LEFT JOIN (
+                SELECT
+                    sr.sale_id,
+                    SUM(sr.refund_amount) AS total_refunded
+                FROM sale_refunds sr
+                GROUP BY sr.sale_id
+            ) refunds ON refunds.sale_id = s.id
+            LEFT JOIN (
+                SELECT
+                    si.sale_id,
+                    SUM(
+                        GREATEST(
+                            si.quantity - COALESCE(refunded.refunded_quantity, 0),
+                            0
+                        )
+                    ) AS total_remaining_qty
+                FROM sales_items si
+                LEFT JOIN (
+                    SELECT
+                        sri.sale_item_id,
+                        SUM(sri.quantity) AS refunded_quantity
+                    FROM sale_refund_items sri
+                    GROUP BY sri.sale_item_id
+                ) refunded ON refunded.sale_item_id = si.id
+                GROUP BY si.sale_id
+            ) items ON items.sale_id = s.id
+            {where_clause}
+            ORDER BY s.transaction_date DESC, s.id DESC
+            LIMIT %s
+        """
+
+        rows = conn.execute(query_sql, params + [max(1, min(int(limit or 50), 100))]).fetchall()
+    finally:
+        conn.close()
+
+    today = datetime.now().date()
+    results = []
+    for row in rows:
+        cutoff_date = _sale_refund_cutoff(row)
+        can_refund = (
+            row["status"] == "Paid"
+            and int(row["remaining_qty"] or 0) > 0
+            and (cutoff_date is None or today <= cutoff_date)
+        )
+        result = {
+            "id": int(row["id"]),
+            "sales_number": row["sales_number"] or f"#{row['id']}",
+            "customer_name": row["customer_name"] or "Walk-in",
+            "transaction_date": format_date(row["transaction_date"], show_time=True),
+            "payment_method_name": row["payment_method_name"] or "—",
+            "payment_method_category": row["payment_method_category"] or "",
+            "status": row["status"],
+            "total_amount": round(float(row["total_amount"] or 0), 2),
+            "refunded_amount": round(float(row["refunded_amount"] or 0), 2),
+            "net_amount": round(float(row["total_amount"] or 0) - float(row["refunded_amount"] or 0), 2),
+            "remaining_qty": int(row["remaining_qty"] or 0),
+            "refund_cutoff_date": cutoff_date.isoformat() if cutoff_date else None,
+            "refund_cutoff_display": format_date(cutoff_date.isoformat()) if cutoff_date else None,
+            "has_refundable_items": int(row["remaining_qty"] or 0) > 0,
+            "can_refund": can_refund,
+            "refund_state": _derive_refund_state(row["refunded_amount"], row["remaining_qty"]),
+            "is_exchange_replacement": bool(row["exchange_number"]),
+            "exchange_number": row["exchange_number"] or "",
+            "original_sales_number": row["original_sales_number"] or "",
+        }
+        if has_refundable and not result["can_refund"]:
+            continue
+        results.append(result)
+
+    return results
+
+
+def record_sale_refund(sale_id, data, user_id, username):
+    if not user_id:
+        raise ValueError("User session not found.")
+
+    reason = str((data or {}).get("reason") or "").strip()
+    notes = str((data or {}).get("notes") or "").strip() or None
+    raw_items = (data or {}).get("items") or []
+    exchange_data = (data or {}).get("exchange") or {}
+    exchange_enabled = str(exchange_data.get("mode") or "").strip().lower() == "swap" or bool(exchange_data.get("enabled"))
+    refund_time = _normalize_db_timestamp((data or {}).get("refund_date"))
+
+    if not reason:
+        raise ValueError("Refund reason is required.")
+
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+
+        sale = conn.execute(
+            """
+            SELECT id, sales_number, customer_name, customer_id, vehicle_id, status, transaction_date
+            FROM sales
+            WHERE id = %s
+            """,
+            (sale_id,),
+        ).fetchone()
+        if not sale:
+            raise ValueError("Sale not found.")
+        if sale["status"] != "Paid":
+            raise ValueError("Only fully paid sales can be refunded.")
+
+        cutoff_date = _sale_refund_cutoff(sale)
+        refund_date_obj = datetime.strptime(refund_time, "%Y-%m-%d %H:%M:%S").date()
+        if cutoff_date and refund_date_obj > cutoff_date:
+            raise ValueError(f"Refund window expired on {cutoff_date.isoformat()}.")
+
+        sale_item_rows = conn.execute(
+            """
+            SELECT
+                si.id AS sale_item_id,
+                si.item_id,
+                i.name,
+                si.quantity AS sold_quantity,
+                si.final_unit_price,
+                COALESCE((
+                    SELECT SUM(sri.quantity)
+                    FROM sale_refund_items sri
+                    JOIN sale_refunds sr ON sr.id = sri.refund_id
+                    WHERE sri.sale_item_id = si.id
+                ), 0) AS refunded_quantity
+            FROM sales_items si
+            JOIN items i ON i.id = si.item_id
+            WHERE si.sale_id = %s
+            FOR UPDATE
+            """,
+            (sale_id,),
+        ).fetchall()
+
+        if not sale_item_rows:
+            raise ValueError("This sale has no item lines to refund.")
+
+        sale_item_map = {
+            int(row["sale_item_id"]): {
+                "sale_item_id": int(row["sale_item_id"]),
+                "item_id": int(row["item_id"]),
+                "name": row["name"],
+                "remaining_quantity": max(
+                    0,
+                    int(row["sold_quantity"] or 0) - int(row["refunded_quantity"] or 0),
+                ),
+                "final_unit_price": round(float(row["final_unit_price"] or 0), 2),
+            }
+            for row in sale_item_rows
+        }
+
+        refund_lines = []
+        for raw_item in raw_items:
+            try:
+                sale_item_id = int(raw_item.get("sale_item_id"))
+                quantity = int(raw_item.get("quantity"))
+            except (TypeError, ValueError):
+                raise ValueError("Refund quantities must be whole numbers.")
+
+            if quantity <= 0:
+                continue
+
+            sale_item = sale_item_map.get(sale_item_id)
+            if not sale_item:
+                raise ValueError("One or more refund items are invalid.")
+            if quantity > sale_item["remaining_quantity"]:
+                raise ValueError(
+                    f"Refund quantity for '{sale_item['name']}' exceeds the remaining refundable quantity."
+                )
+
+            refund_lines.append({
+                **sale_item,
+                "quantity": quantity,
+                "line_total": round(quantity * sale_item["final_unit_price"], 2),
+            })
+
+        if not refund_lines:
+            raise ValueError("Select at least one item quantity to refund.")
+
+        refund_number = _build_refund_number(conn, sale["sales_number"], sale_id)
+        refund_result = _insert_sale_refund(
+            conn=conn,
+            sale_id=sale_id,
+            refund_number=refund_number,
+            refund_lines=refund_lines,
+            reason=reason,
+            notes=notes,
+            user_id=user_id,
+            username=username,
+            refund_time=refund_time,
+        )
+
+        result = {
+            **refund_result,
+            "sale_id": int(sale["id"]),
+            "sales_number": sale["sales_number"] or f"#{sale['id']}",
+            "customer_name": sale["customer_name"] or "Walk-in",
+        }
+
+        if exchange_enabled:
+            try:
+                replacement_item_id = int(exchange_data.get("replacement_item_id"))
+                replacement_quantity = int(exchange_data.get("replacement_quantity"))
+            except (TypeError, ValueError):
+                raise ValueError("Select a valid replacement item and quantity for the swap.")
+            if replacement_quantity <= 0:
+                raise ValueError("Replacement quantity must be at least 1.")
+
+            exchange_number = _build_exchange_number(conn, sale["sales_number"], sale_id)
+            replacement_result = _create_exchange_replacement_sale(
+                conn=conn,
+                original_sale=sale,
+                exchange_number=exchange_number,
+                replacement_item_id=replacement_item_id,
+                replacement_quantity=replacement_quantity,
+                refund_time=refund_time,
+                user_id=user_id,
+                username=username,
+                reason=reason,
+                notes=notes,
+            )
+
+            net_adjustment_amount = round(
+                float(replacement_result["replacement_amount"]) - float(refund_result["refund_amount"]),
+                2,
+            )
+            exchange_type = _determine_exchange_type(net_adjustment_amount)
+
+            exchange_row = conn.execute(
+                """
+                INSERT INTO sale_exchanges (
+                    exchange_number,
+                    original_sale_id,
+                    refund_id,
+                    replacement_sale_id,
+                    exchange_type,
+                    refunded_amount,
+                    replacement_amount,
+                    net_adjustment_amount,
+                    reason,
+                    notes,
+                    exchanged_by,
+                    exchanged_by_username,
+                    exchanged_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    exchange_number,
+                    sale_id,
+                    refund_result["refund_id"],
+                    replacement_result["replacement_sale_id"],
+                    exchange_type,
+                    refund_result["refund_amount"],
+                    replacement_result["replacement_amount"],
+                    net_adjustment_amount,
+                    reason,
+                    notes,
+                    user_id,
+                    username,
+                    refund_time,
+                ),
+            ).fetchone()
+
+            result.update({
+                "mode": "swap",
+                "exchange_id": int(exchange_row["id"]),
+                "exchange_number": exchange_number,
+                "exchange_type": exchange_type,
+                "replacement_sale_id": replacement_result["replacement_sale_id"],
+                "replacement_sales_number": replacement_result["replacement_sales_number"],
+                "replacement_item_name": replacement_result["replacement_item_name"],
+                "replacement_quantity": replacement_result["replacement_quantity"],
+                "replacement_amount": replacement_result["replacement_amount"],
+                "net_adjustment_amount": net_adjustment_amount,
+            })
+        else:
+            result["mode"] = "refund"
+
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 PO_APPROVAL_TYPE = "PURCHASE_ORDER"
 PO_ENTITY_TYPE = "purchase_order"

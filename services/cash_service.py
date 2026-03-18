@@ -37,10 +37,12 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
             s.customer_name,
             s.total_amount  AS amount,
             s.transaction_date AS created_at,
-            u.username      AS recorded_by
+            u.username      AS recorded_by,
+            se.exchange_number
         FROM sales s
         JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN users u       ON u.id  = s.user_id
+        LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
         WHERE pm.category IN ({placeholders})
         AND s.status = 'Paid'
     """
@@ -88,6 +90,38 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
     return conn.execute(query, params).fetchall()
 
 
+def _get_sale_refunds_cash(conn, branch_id=1, date_from=None, date_to=None):
+    """
+    [Source 3] Sale refunds.
+    Refunds always reduce physical cash on hand because cash leaves the drawer.
+    """
+    params = []
+    query = """
+        SELECT
+            sr.id AS reference_id,
+            sr.refund_number,
+            s.sales_number,
+            s.customer_name,
+            sr.refund_amount AS amount,
+            sr.refund_date AS created_at,
+            sr.refunded_by_username AS recorded_by,
+            se.exchange_number
+        FROM sale_refunds sr
+        JOIN sales s ON s.id = sr.sale_id
+        LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
+        WHERE 1 = 1
+    """
+
+    if date_from:
+        query += " AND DATE(sr.refund_date) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(sr.refund_date) <= %s"
+        params.append(date_to)
+
+    return conn.execute(query, params).fetchall()
+
+
 def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_type=None):
     """
     [Sources 3 & 4] Manual petty cash entries.
@@ -122,7 +156,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
     return conn.execute(query, params).fetchall()
 
 
-def _build_unified(sales_rows, debt_rows, manual_rows):
+def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
     """
     Merges all 3 sources into a single normalized list sorted newest first.
     Each row has the same shape regardless of source — the HTML never needs
@@ -135,8 +169,8 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
         unified.append({
             'entry_type':  'CASH_IN',
             'amount':      _money(row['amount']),
-            'category':    'Cash Sale',
-            'description': f"{row['sales_number']} — {customer}",
+            'category':    'Exchange Replacement' if row['exchange_number'] else 'Cash Sale',
+            'description': f"{row['sales_number']} — {customer}" + (f" ({row['exchange_number']})" if row['exchange_number'] else ""),
             'created_at':  format_date(row['created_at'], show_time=True),
             'recorded_by': row['recorded_by'] or '—',
             'source':      'sale',
@@ -153,6 +187,20 @@ def _build_unified(sales_rows, debt_rows, manual_rows):
             'created_at':  format_date(row['created_at'], show_time=True),
             'recorded_by': row['recorded_by'] or '—',
             'source':      'debt_payment',
+            '_raw_date':   row['created_at'] or '',
+        })
+
+    for row in refund_rows:
+        customer = row['customer_name'] or 'Walk-in'
+        label = row['refund_number'] or f"Refund #{row['reference_id']}"
+        unified.append({
+            'entry_type':  'CASH_OUT',
+            'amount':      _money(row['amount']),
+            'category':    'Exchange Refund' if row['exchange_number'] else 'Sale Refund',
+            'description': f"{label} - {row['sales_number'] or 'Sale'} - {customer}" + (f" ({row['exchange_number']})" if row['exchange_number'] else ""),
+            'created_at':  format_date(row['created_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or '-',
+            'source':      'refund',
             '_raw_date':   row['created_at'] or '',
         })
 
@@ -190,6 +238,7 @@ def get_cash_summary(branch_id=1):
     conn = get_db()
     sales_rows  = _get_sales_cash(conn, branch_id)
     debt_rows   = _get_debt_cash_payments(conn, branch_id)
+    refund_rows = _get_sale_refunds_cash(conn, branch_id)
     manual_rows = _get_manual_entries(conn, branch_id)
     conn.close()
 
@@ -200,6 +249,8 @@ def get_cash_summary(branch_id=1):
         total_in += _money(row['amount'])
     for row in debt_rows:
         total_in += _money(row['amount'])
+    for row in refund_rows:
+        total_out += _money(row['amount'])
     for row in manual_rows:
         if row['entry_type'] == 'CASH_IN':
             total_in  += _money(row['amount'])
@@ -232,14 +283,16 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
     if entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
 
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
     conn.close()
 
-    return len(sales_rows) + len(debt_rows) + len(manual_rows)
+    return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(manual_rows)
 
 
 def get_cash_entries(branch_id=1, limit=None, offset=None,
@@ -259,14 +312,16 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
     if entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
 
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)
 
     # Apply pagination after merge+sort so ordering is always correct
     if offset:
@@ -474,10 +529,11 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1):
     conn = get_db()
     sales_rows  = _get_sales_cash(conn, branch_id, date_from, date_to)
     debt_rows   = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
+    refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
     manual_rows = _get_manual_entries(conn, branch_id, date_from, date_to)
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)
 
     # Reverse to oldest-first for PDF reading order
     unified.reverse()

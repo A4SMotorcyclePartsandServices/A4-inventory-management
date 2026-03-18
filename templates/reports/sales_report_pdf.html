@@ -361,6 +361,12 @@
             <tr>
                 <td style="font-weight: 700;">
                     {{ sale.sales_number }}
+                    {% if sale.report_label and sale.report_label != 'Sale' %}
+                    <div style="font-size: 10px; color: #7f1d1d; font-weight: 700; margin-top: 2px;">
+                        {{ sale.report_label }}
+                        {% if sale.exchange_number %} · {{ sale.exchange_number }}{% endif %}
+                    </div>
+                    {% endif %}
                     {% if is_range %}
                     <div style="font-size: 11px; color: #666; font-weight: 400; margin-top: 3px;">
                         {{ sale.transaction_date }}
@@ -508,6 +514,12 @@
                         <span class="label">Product Revenue</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</span>
                     </div>
+                    {% if data.total_refunds > 0 %}
+                    <div class="fin-row" style="color: #721c24;">
+                        <span class="label" style="color: #721c24;">Sale Refunds</span>
+                        <span class="value" style="color: #721c24; font-weight: 700;">- ₱ {{ "%.2f"|format(data.total_refunds) }}</span>
+                    </div>
+                    {% endif %}
                     <div class="fin-row">
                         <span class="label">Service Revenue</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_service_revenue) }}</span>
@@ -625,6 +637,44 @@
             <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #155724; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span>TOTAL COLLECTED</span>
                 <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if data.refunds %}
+    <div style="margin-top: 14px; border: 1px solid #f1aeb5; border-radius: 6px; overflow: hidden;">
+        <div class="summary-box-title" style="background: #f8d7da; color: #721c24; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            Sale Refunds
+        </div>
+        <div style="padding: 10px 12px;">
+            {% for refund in data.refunds %}
+            <div class="summary-item-row" style="align-items: flex-start;">
+                <span>
+                    {{ refund.customer_name }}
+                    <span style="font-size: 11px; color: #666;">(OR: {{ refund.sales_number }})</span>
+                    {% if refund.report_label %}
+                    <span style="font-size: 11px; color: #7f1d1d;"> · {{ refund.report_label }}</span>
+                    {% endif %}
+                    <span style="font-size: 11px; color: #888;"> · {{ refund.refund_number }}</span>
+                    <span style="font-size: 11px; color: #aaa;"> · {{ refund.refund_date }}</span>
+                    {% if refund.reason %}
+                    <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Reason: {{ refund.reason }}</div>
+                    {% endif %}
+                    {% if refund["items"] %}
+                    <div style="font-size: 11px; color: #555; margin-top: 3px;">
+                        {% for item in refund["items"] %}
+                            {{ item.quantity }}x {{ item.item_name }} (₱ {{ "%.2f"|format(item.line_total) }}){% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </span>
+                <span style="color: #721c24; font-weight: 700;">₱ {{ "%.2f"|format(refund.refund_amount) }}</span>
+            </div>
+            {% endfor %}
+            <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #721c24; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <span>TOTAL REFUNDS</span>
+                <span>₱ {{ "%.2f"|format(data.total_refunds) }}</span>
             </div>
         </div>
     </div>

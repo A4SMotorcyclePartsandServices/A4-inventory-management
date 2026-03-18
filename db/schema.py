@@ -177,6 +177,58 @@ def init_db():
         created_at          TIMESTAMP DEFAULT NOW()
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sale_refunds (
+        id                    SERIAL PRIMARY KEY,
+        sale_id               INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        refund_number         TEXT NOT NULL UNIQUE,
+        refund_amount         NUMERIC(12,2) NOT NULL DEFAULT 0,
+        reason                TEXT NOT NULL,
+        notes                 TEXT,
+        refunded_by           INTEGER REFERENCES users(id),
+        refunded_by_username  TEXT,
+        refund_date           TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at            TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sale_refund_items (
+        id                  SERIAL PRIMARY KEY,
+        refund_id           INTEGER NOT NULL REFERENCES sale_refunds(id) ON DELETE CASCADE,
+        sale_item_id        INTEGER NOT NULL REFERENCES sales_items(id),
+        item_id             INTEGER NOT NULL REFERENCES items(id),
+        quantity            INTEGER NOT NULL CHECK(quantity > 0),
+        unit_price          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        line_total          NUMERIC(12,2) NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_refunds_sale_id ON sale_refunds(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_refunds_refund_date ON sale_refunds(refund_date DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_refund_items_refund_id ON sale_refund_items(refund_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_refund_items_sale_item_id ON sale_refund_items(sale_item_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sale_exchanges (
+        id                       SERIAL PRIMARY KEY,
+        exchange_number          TEXT NOT NULL UNIQUE,
+        original_sale_id         INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        refund_id                INTEGER NOT NULL REFERENCES sale_refunds(id) ON DELETE CASCADE,
+        replacement_sale_id      INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        exchange_type            TEXT NOT NULL CHECK(exchange_type IN ('EVEN', 'CUSTOMER_TOPUP', 'SHOP_CASH_OUT')),
+        refunded_amount          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        replacement_amount       NUMERIC(12,2) NOT NULL DEFAULT 0,
+        net_adjustment_amount    NUMERIC(12,2) NOT NULL DEFAULT 0,
+        reason                   TEXT NOT NULL,
+        notes                    TEXT,
+        exchanged_by             INTEGER REFERENCES users(id),
+        exchanged_by_username    TEXT,
+        exchanged_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_at               TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_exchanges_original_sale_id ON sale_exchanges(original_sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_exchanges_replacement_sale_id ON sale_exchanges(replacement_sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_exchanges_refund_id ON sale_exchanges(refund_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_exchanges_exchanged_at ON sale_exchanges(exchanged_at DESC)")
 
     # 13. PURCHASE ORDERS (The Header)
     cur.execute("""

@@ -57,9 +57,39 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
             s.customer_name,
             s.total_amount,
             s.status,
-            pm.name AS payment_method_name
+            pm.name AS payment_method_name,
+            COALESCE(r.total_refunded, 0) AS refunded_amount,
+            r.last_refund_date,
+            COALESCE(items.total_remaining_qty, 0) AS remaining_qty
         FROM sales s
         LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
+        LEFT JOIN (
+            SELECT
+                sale_id,
+                SUM(refund_amount) AS total_refunded,
+                MAX(refund_date) AS last_refund_date
+            FROM sale_refunds
+            GROUP BY sale_id
+        ) r ON r.sale_id = s.id
+        LEFT JOIN (
+            SELECT
+                si.sale_id,
+                SUM(
+                    GREATEST(
+                        si.quantity - COALESCE(refunded.refunded_quantity, 0),
+                        0
+                    )
+                ) AS total_remaining_qty
+            FROM sales_items si
+            LEFT JOIN (
+                SELECT
+                    sri.sale_item_id,
+                    SUM(sri.quantity) AS refunded_quantity
+                FROM sale_refund_items sri
+                GROUP BY sri.sale_item_id
+            ) refunded ON refunded.sale_item_id = si.id
+            GROUP BY si.sale_id
+        ) items ON items.sale_id = s.id
         {where_clause}
         ORDER BY s.transaction_date DESC
         LIMIT %s OFFSET %s
@@ -68,7 +98,21 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
     conn.close()
 
     formatted = [
-        {**dict(r), "transaction_date": format_date(r["transaction_date"], show_time=True)}
+        {
+            **dict(r),
+            "transaction_date": format_date(r["transaction_date"], show_time=True),
+            "refunded_amount": round(float(r["refunded_amount"] or 0), 2),
+            "last_refund_date": format_date(r["last_refund_date"], show_time=True) if r["last_refund_date"] else None,
+            "net_amount": round(float(r["total_amount"] or 0) - float(r["refunded_amount"] or 0), 2),
+            "has_refund": float(r["refunded_amount"] or 0) > 0,
+            "refund_state": (
+                "Fully Refunded"
+                if float(r["refunded_amount"] or 0) > 0 and int(r["remaining_qty"] or 0) <= 0
+                else "Partially Refunded"
+                if float(r["refunded_amount"] or 0) > 0
+                else None
+            ),
+        }
         for r in rows
     ]
 

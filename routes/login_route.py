@@ -7,6 +7,7 @@ from utils.formatters import format_date, norm_text
 from services.audit_service import get_audit_trail
 from services.payables_service import get_payables_audit_log
 from services.sales_admin_service import get_sales_paginated
+from services.transactions_service import get_sale_refund_context
 from auth.utils import (
     clear_failed_login_attempts,
     ensure_authenticated_user,
@@ -232,54 +233,12 @@ def toggle_mechanic(mechanic_id):
 # --- NEW ROUTE: Get Sale Details for the Modal ---
 @auth_bp.route("/sales/details/<reference_id>")
 def sale_details(reference_id):
-    conn = get_db()
     try:
-        # 1. Fetch Sale Metadata (Total, Mechanic, AND Payment Method)
-        sale_info = conn.execute("""
-            SELECT 
-                s.total_amount, 
-                m.name as mechanic_name,
-                pm.name as payment_method
-            FROM sales s
-            LEFT JOIN mechanics m ON s.mechanic_id = m.id
-            LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
-            WHERE s.id = %s
-        """, (reference_id,)).fetchone()
-
-        # 2. Fetch Items
-        items = conn.execute("""
-            SELECT 
-                i.name, 
-                t.quantity, 
-                t.unit_price as original_price,
-                si.discount_amount,
-                si.final_unit_price
-            FROM inventory_transactions t
-            JOIN items i ON t.item_id = i.id
-            LEFT JOIN sales_items si ON (t.reference_id = si.sale_id AND t.item_id = si.item_id)
-            WHERE CAST(t.reference_id AS TEXT) = %s 
-            AND t.reference_type = 'SALE'
-        """, (str(reference_id),)).fetchall()
-
-        # 3. Fetch Services
-        services = conn.execute("""
-            SELECT s.name, ss.price
-            FROM sales_services ss
-            JOIN services s ON ss.service_id = s.id
-            WHERE ss.sale_id = %s
-        """, (reference_id,)).fetchall()
-        
-        return {
-            "total_amount": sale_info["total_amount"] if sale_info else 0,
-            "mechanic": sale_info["mechanic_name"] if sale_info else None,
-            "payment_method": sale_info["payment_method"] if sale_info else "N/A",
-            "items": [dict(ix) for ix in items],
-            "services": [dict(sx) for sx in services]
-        }
+        return get_sale_refund_context(int(reference_id))
+    except ValueError as e:
+        return {"error": str(e)}, 404
     except Exception as e:
         return {"error": str(e)}, 500
-    finally:
-        conn.close()
 
 
 @auth_bp.route("/audit/manual-in/<int:audit_group_id>")

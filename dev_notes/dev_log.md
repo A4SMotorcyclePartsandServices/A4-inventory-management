@@ -520,25 +520,13 @@ Print / layout notes
 Implemented 2026-03-17
 
 Cash Ledger updates
-- Cash in categories were updated to:
-- `Petty Cash`
-- `From Gcash Account`
-- `From Bank Account`
-- `For Payables`
-- `Others`
-- Cash out categories remain:
-- `Parts Purchase`
-- `Staff Expense`
-- `Utilities`
-- `Supplies`
-- `Other Expenses`
-- `Mechanic Payout`
+- Cash in categories were updated to: `Petty Cash`, `From Gcash Account`, `From Bank Account`, `For Payables`, `Others`.
+- Cash out categories remain: `Parts Purchase`, `Staff Expense`, `Utilities`, `Supplies`, `Other Expenses`, `Mechanic Payout`.
 - Description is now required for:
 - cash in category `Others`
 - cash out category `Other Expenses`
 - cash out category `Utilities`
-- When `Utilities` is selected, the description placeholder and submit warning now explicitly say:
-- `Please indicate which utility this is for.`
+- When `Utilities` is selected, the description placeholder and submit warning now explicitly say `Please indicate which utility this is for.`
 - Required description hints on the Cash Ledger form now turn red for better visibility.
 
 Mechanic payout automation
@@ -549,11 +537,7 @@ Mechanic payout automation
 - Existing mechanic payout ID/date autofill behavior remains intact.
 
 Sales admin tab updates
-- Added a payment-status toggle to the Sales tab in admin/users UI:
-- `All`
-- `Paid`
-- `Partial`
-- `Unpaid`
+- Added a payment-status toggle to the Sales tab in admin/users UI: `All`, `Paid`, `Partial`, `Unpaid`.
 - Sales API now accepts `payment_status`.
 - Sales admin service now validates and applies the payment status filter server-side.
 - Sales summary chips now visually match the selected status:
@@ -561,3 +545,99 @@ Sales admin tab updates
 - yellow for `Partial`
 - red for `Unpaid`
 - Discount chip styling remains separate from payment-status chip styling.
+
+## Refund / Exchange Feature
+
+Implemented 2026-03-18
+
+Scope
+- Added a dedicated staff-facing `Refunds` page for item refunds and item swaps / exchanges.
+- Refund processing was moved out of the admin-only `users.html` page.
+- Refunds apply only to item lines; services are shown for context only and are not refundable.
+- Refund flow updates stock, cash movement, admin history, and reports.
+
+Core business model
+- A refund reverses the original sold item quantity back into inventory.
+- Refund amount is based on the sold line's stored `final_unit_price`, so item discounts are respected.
+- Refunds are sale-linked and can work for both regular sales and quick sales because the feature does not depend on a customer master record.
+- Fully paid sales can be refunded; non-refundable states are blocked in the refund flow.
+
+Refund rules
+- Refundable quantity is tracked per `sales_item` line.
+- Services never contribute to refundable quantity.
+- Refund status now depends on remaining refundable item quantity:
+- `Not Refunded`
+- `Partially Refunded`
+- `Fully Refunded`
+- This avoids mislabeling mixed item + service sales as only partially refunded after all refundable items are already returned.
+
+Schema / data model
+- Added `sale_refunds` as the refund header table.
+- Added `sale_refund_items` as the refunded item detail rows.
+- Added `sale_exchanges` to link a refund to its replacement sale when a swap is processed.
+
+Refund numbering
+- Refund numbers now use `RF-{OR No.}-{MMDD}`.
+- If needed for uniqueness on repeated same-day refunds:
+- `RF-{OR No.}-{MMDD}-2`
+- `RF-{OR No.}-{MMDD}-3`
+
+Exchange numbering
+- Exchange numbers now use `EX-{OR No.}`.
+- If needed for uniqueness on repeated exchanges:
+- `EX-{OR No.}-2`
+- `EX-{OR No.}-3`
+
+Exchange / swap behavior
+- Swaps are implemented as a linked `refund + replacement sale` model.
+- Returned item value uses the original sold line price.
+- Replacement item uses the current catalog selling price at the time of swap.
+- Difference handling rules:
+- `EVEN`
+- `CUSTOMER_TOPUP`
+- `SHOP_CASH_OUT`
+- Replacement sale is recorded as a real paid cash sale so inventory, sales totals, and cash adjustments remain auditable.
+- Exchange replacement sales remain refundable, because a replacement item may also need to be corrected later.
+
+Search / page behavior
+- Refund page does not auto-load recent sales.
+- Staff must deliberately search by receipt number or customer name.
+- Search filters include date presets and `Has Refundable Items`.
+- Search results and detail panel reset cleanly when clearing the search.
+- Exchange replacement sales are clearly labeled in search results and detail view so staff can distinguish them from original sales.
+
+UI behavior
+- Added new page: `templates/transactions/refund.html`.
+- Refund page shows:
+- searchable sale list
+- sale summary
+- refundable item table
+- services context block
+- refund form
+- refund history
+- swap mode with replacement item search, quantity, and difference summary
+- Browser alerts / confirms were replaced with in-app toast notifications and modal confirmation.
+- The page was visually aligned with the rest of the app and no longer auto-generates heavy result sets on load.
+
+Users / admin history
+- `users.html` sales and audit modals now show refund-aware sale details and refund history.
+- Modal top metadata layout was tightened so payment chip sits beside the date.
+- Refund detail text in the item column now wraps correctly instead of truncating.
+
+Inventory / cash integration
+- Refunds create stock-in inventory transactions so returned items appear correctly in audit and stock history.
+- Cash ledger records cash-out for refunds.
+- Exchange-linked refund and replacement-sale entries are labeled distinctly in the cash ledger layer.
+
+Reporting
+- Sales reports now show refund events and exchange replacement sales with explicit report labels:
+- `Refund`
+- `Exchange Refund`
+- `Exchange Replacement`
+- This applies to both current-day and date-range sales reports.
+- Refund item rendering in the report template was fixed to avoid Jinja's `dict.items` collision by using `refund["items"]`.
+
+Operational notes
+- A known watchlist item remains for item-based loyalty programs:
+- refunded item sales do not yet roll back any earned loyalty stamps / points.
+- This was intentionally deferred because item-based loyalty is rare for the client and needs a separate ledger-safe design.

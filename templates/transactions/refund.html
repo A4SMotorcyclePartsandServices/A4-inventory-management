@@ -1,0 +1,1435 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .page-title {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.3px;
+        margin-bottom: 6px;
+    }
+
+    .page-title i {
+        color: var(--accent);
+        margin-right: 10px;
+    }
+
+    .page-subtitle {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        margin-bottom: 24px;
+    }
+
+    .form-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        padding: 24px 28px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .form-section-divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 18px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        color: var(--text-muted);
+    }
+
+    .form-section-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-soft);
+    }
+
+    .form-section-divider.accent { color: var(--accent); }
+    .form-section-divider.info { color: #67c2e4; }
+
+    .form-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+
+    .form-label .req {
+        color: var(--accent);
+        margin-left: 2px;
+    }
+
+    .refund-page {
+        max-width: 1320px;
+    }
+
+    .refund-layout {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+    }
+
+    .search-note {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        line-height: 1.5;
+        margin-bottom: 14px;
+    }
+
+    .search-input,
+    .refund-input {
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 10px;
+    }
+
+    .search-input:focus,
+    .refund-input:focus {
+        background: #141720;
+        color: var(--text-primary);
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(193,18,31,0.18);
+    }
+
+    .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .search-bar {
+        display: grid;
+        gap: 12px;
+    }
+
+    .search-input-wrap {
+        position: relative;
+    }
+
+    .search-submit-btn {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .search-submit-btn:hover {
+        color: var(--text-primary);
+    }
+
+    .search-bar .search-input {
+        width: 100%;
+        min-height: 46px;
+        padding-left: 40px;
+        padding-right: 84px;
+        font-size: 0.95rem;
+    }
+
+    .search-clear-link {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        padding: 0;
+    }
+
+    .search-clear-link:hover {
+        color: var(--text-primary);
+    }
+
+    .filter-chip {
+        border: 1px solid var(--border-soft);
+        background: #141720;
+        color: var(--text-muted);
+        border-radius: 999px;
+        padding: 8px 13px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        transition: all 0.16s ease;
+    }
+
+    .filter-chip.active {
+        background: rgba(193,18,31,0.18);
+        color: #fff;
+        border-color: rgba(193,18,31,0.36);
+    }
+
+    .panel-meta {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    .result-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+        max-height: calc(100vh - 310px);
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
+    .sale-result {
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        padding: 14px 15px;
+        background: #13161e;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sale-result:hover,
+    .sale-result.active {
+        border-color: rgba(193,18,31,0.4);
+        background: rgba(193,18,31,0.08);
+        transform: translateY(-1px);
+        box-shadow: 0 8px 18px rgba(0,0,0,0.18);
+    }
+
+    .sale-result-title {
+        color: var(--accent);
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .sale-result-sub {
+        color: #b9c1d1;
+        font-size: 0.86rem;
+        margin-top: 2px;
+    }
+
+    .sale-result-flag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        background: rgba(103,194,228,0.12);
+        color: #67c2e4;
+        border: 1px solid rgba(103,194,228,0.28);
+    }
+
+    .sale-result-line {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        margin-top: 8px;
+    }
+
+    .sale-amount {
+        color: #ffd166;
+        font-size: 1rem;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+    }
+
+    .refund-state {
+        font-size: 0.65rem;
+        font-weight: 800;
+        border-radius: 999px;
+        padding: 4px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }
+
+    .refund-state.none {
+        background: rgba(103,194,228,0.12);
+        color: #67c2e4;
+        border: 1px solid rgba(103,194,228,0.28);
+    }
+
+    .refund-state.partial {
+        background: rgba(255,209,102,0.12);
+        color: #ffd166;
+        border: 1px solid rgba(255,209,102,0.28);
+    }
+
+    .refund-state.full {
+        background: rgba(255,107,107,0.12);
+        color: #ff6b6b;
+        border: 1px solid rgba(255,107,107,0.28);
+    }
+
+    .refund-detail-card {
+        min-height: 760px;
+    }
+
+    .details-empty {
+        min-height: 560px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: var(--text-muted);
+        border: 1px dashed var(--border-soft);
+        border-radius: 16px;
+        background: #13161e;
+        padding: 30px;
+    }
+
+    .detail-shell {
+        display: grid;
+        gap: 22px;
+        align-content: start;
+    }
+
+    .warning-banner {
+        border: 1px solid rgba(255,193,7,0.35);
+        background: rgba(255,193,7,0.10);
+        color: #ffd166;
+        border-radius: 14px;
+        padding: 13px 15px;
+        line-height: 1.5;
+    }
+
+    .exchange-banner {
+        border: 1px solid rgba(103,194,228,0.35);
+        background: rgba(103,194,228,0.10);
+        color: #9fdff4;
+        border-radius: 14px;
+        padding: 13px 15px;
+        line-height: 1.5;
+    }
+
+    .detail-header {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        padding-bottom: 8px;
+        position: relative;
+    }
+
+    .detail-heading {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+        text-align: center;
+        align-items: center;
+    }
+
+    .detail-title {
+        color: var(--accent);
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.2px;
+        margin: 0;
+    }
+
+    .detail-subtitle {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    .detail-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .detail-meta-label {
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+
+    .detail-meta-value {
+        color: var(--text-primary);
+    }
+
+    .detail-header .refund-state {
+        position: absolute;
+        right: 0;
+        top: 0;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-top: 2px;
+    }
+
+    .summary-box {
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: #13161e;
+        padding: 14px 15px;
+    }
+
+    .summary-label {
+        color: var(--text-muted);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        font-weight: 700;
+    }
+
+    .summary-value {
+        color: var(--text-primary);
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-top: 5px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .detail-block {
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: var(--bg-card);
+        padding: 20px 22px;
+        overflow: hidden;
+    }
+
+    .detail-block.soft {
+        background: #13161e;
+    }
+
+    .block-title {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1.8px;
+        margin-bottom: 14px;
+        font-weight: 700;
+    }
+
+    .refund-table {
+        margin-bottom: 0;
+    }
+
+    .refund-table thead th {
+        color: var(--accent);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        background: #13161e !important;
+        border-color: var(--border-soft);
+        white-space: nowrap;
+    }
+
+    .refund-table td {
+        background: transparent !important;
+        border-color: var(--border-soft);
+        vertical-align: middle;
+    }
+
+    .refund-table tbody tr:hover {
+        background: #1a1d26 !important;
+    }
+
+    .services-table thead th {
+        color: #67c2e4;
+    }
+
+    .refund-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .refund-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px;
+        border-radius: 999px;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        margin-bottom: 14px;
+    }
+
+    .refund-mode-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 8px 16px;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }
+
+    .refund-mode-btn.active {
+        background: rgba(193,18,31,0.18);
+        color: #fff;
+    }
+
+    .exchange-panel {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-soft);
+        display: none;
+    }
+
+    .exchange-panel.active {
+        display: block;
+    }
+
+    .replacement-results {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+        max-height: 220px;
+        overflow-y: auto;
+    }
+
+    .replacement-result {
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #13161e;
+        padding: 10px 12px;
+        color: var(--text-primary);
+    }
+
+    .replacement-result:hover {
+        border-color: rgba(193,18,31,0.35);
+        background: rgba(193,18,31,0.08);
+    }
+
+    .replacement-selected {
+        margin-top: 12px;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #13161e;
+        padding: 12px 14px;
+    }
+
+    .exchange-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .exchange-summary-box {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #13161e;
+        padding: 12px 14px;
+    }
+
+    .exchange-summary-box .label {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+
+    .exchange-summary-box .value {
+        margin-top: 6px;
+        font-size: 1rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+    }
+
+    .value-topup { color: #4ade80; }
+    .value-cashout { color: #ff6b6b; }
+    .value-even { color: #67c2e4; }
+
+    .refund-action-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    .action-note {
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        line-height: 1.55;
+        max-width: 560px;
+    }
+
+    .history-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .history-item {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: #13161e;
+        padding: 13px 14px;
+    }
+
+    .empty-history {
+        border: 1px dashed var(--border-soft);
+        border-radius: 12px;
+        padding: 16px;
+        color: var(--text-muted);
+        background: #13161e;
+    }
+
+    #refundConfirmModal .modal-content {
+        background: #1a1d26;
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        color: var(--text-primary);
+    }
+
+    #refundConfirmModal .modal-header,
+    #refundConfirmModal .modal-footer {
+        border-color: var(--border-soft);
+    }
+
+    .refund-confirm-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .refund-confirm-title i {
+        color: var(--accent);
+    }
+
+    .refund-confirm-note {
+        color: var(--text-muted);
+        line-height: 1.6;
+    }
+
+    @media (max-width: 1100px) {
+        .refund-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .result-list {
+            max-height: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .summary-grid,
+        .refund-form-grid,
+        .exchange-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .refund-action-bar,
+        .detail-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .form-card {
+            padding: 18px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 refund-page">
+    <div class="page-title"><i class="bi bi-arrow-counterclockwise"></i>Refunds</div>
+    <div class="page-subtitle">Find a paid sale, review the remaining refundable items, and reverse the stock and cash movement.</div>
+
+    <div class="refund-layout">
+        <section class="form-card search-pane">
+            <div class="form-section-divider accent">
+                <i class="bi bi-search"></i> Find Sale
+            </div>
+            <div class="search-note">Search by receipt number or customer name, then open the sale you want to refund.</div>
+
+            <div class="search-bar">
+                <div class="search-input-wrap">
+                    <button type="button" class="search-submit-btn" id="refund-search-btn" aria-label="Search refunds">
+                        <i class="bi bi-search"></i>
+                    </button>
+                    <input
+                        type="text"
+                        id="refund-search-input"
+                        class="form-control search-input"
+                        placeholder="Search receipt # or customer name"
+                    >
+                    <button type="button" class="search-clear-link" id="refund-clear-btn">
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="filter-row">
+                <button type="button" class="filter-chip active" data-days="7">Last 7 Days</button>
+                <button type="button" class="filter-chip" data-days="1">Today</button>
+                <button type="button" class="filter-chip" data-days="30">Last 30 Days</button>
+                <button type="button" class="filter-chip" data-days="">All Dates</button>
+                <button type="button" class="filter-chip" id="has-refundable-toggle">Has Refundable Items</button>
+            </div>
+
+            <div class="panel-meta mt-3" id="refund-search-summary">Search for a receipt # or customer name to begin.</div>
+            <div class="result-list" id="refund-search-results">
+                <div class="text-muted small">No sales are loaded automatically on this page.</div>
+            </div>
+        </section>
+
+        <section class="form-card refund-detail-card">
+            <div id="refund-detail-panel" class="details-empty">
+                <div>
+                    <div class="fw-bold text-white mb-2 fs-5">Select a sale to start a refund</div>
+                    <div class="small">Choose a sale from the left panel to review its items, services, deadline, and refund history.</div>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<div class="modal fade" id="refundConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title refund-confirm-title">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                    <span>Confirm Refund</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="refund-confirm-note" id="refundConfirmMessage">
+                    This refund will return stock to inventory and record cash out for the refund.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="refundConfirmSubmitBtn">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Confirm Refund
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let refundSearchDays = '7';
+let refundHasRefundableOnly = false;
+let refundSearchRows = [];
+let selectedRefundSaleId = null;
+let refundSearchPerformed = false;
+let refundSearchLoading = false;
+let pendingRefundPayload = null;
+let selectedReplacementItem = null;
+
+function refundEmptyDetailMarkup() {
+    return `
+        <div class="details-empty">
+            <div>
+                <div class="fw-bold text-white mb-2 fs-5">Select a sale to start a refund</div>
+                <div class="small">Choose a sale from the left panel to review its items, services, deadline, and refund history.</div>
+            </div>
+        </div>`;
+}
+
+function refundMoney(value) {
+    return `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function refundAlert(message, type = 'warning') {
+    const icons = {
+        success: 'bi-check-circle-fill',
+        danger: 'bi-x-circle-fill',
+        warning: 'bi-exclamation-triangle-fill',
+        info: 'bi-info-circle-fill',
+    };
+
+    const container = document.getElementById('flash-container');
+    if (!container) {
+        window.alert(message);
+        return;
+    }
+
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type} shadow-lg flash-alert`;
+    alert.innerHTML = `
+        <div class="flash-content">
+            <div class="flash-icon flash-icon-${type}">
+                <i class="bi ${icons[type] || icons.info}"></i>
+            </div>
+            <div class="flash-text">${message}</div>
+        </div>
+        <div class="flash-progress"></div>`;
+
+    container.appendChild(alert);
+    requestAnimationFrame(() => {
+        alert.classList.add('show');
+    });
+
+    setTimeout(() => {
+        alert.classList.remove('show');
+        alert.classList.add('hide');
+        setTimeout(() => alert.remove(), 350);
+    }, 4000);
+}
+
+function refundStateClass(state) {
+    if (state === 'Fully Refunded') return 'full';
+    if (state === 'Partially Refunded') return 'partial';
+    return 'none';
+}
+
+function getSelectedRefundMode() {
+    return document.querySelector('.refund-mode-btn.active')?.dataset.mode || 'refund';
+}
+
+function getCurrentRefundSelectionTotal() {
+    return Array.from(document.querySelectorAll('.refund-qty-input'))
+        .reduce((total, input) => {
+            const qty = Number(input.value || 0);
+            const unitPrice = Number(input.dataset.unitPrice || 0);
+            return total + (qty > 0 ? qty * unitPrice : 0);
+        }, 0);
+}
+
+function getCurrentReplacementTotal() {
+    const qty = Number(document.getElementById('replacementQuantityInput')?.value || 0);
+    const unitPrice = Number(selectedReplacementItem?.a4s_selling_price || 0);
+    return qty > 0 ? qty * unitPrice : 0;
+}
+
+function updateExchangeSummary() {
+    const refundTotal = getCurrentRefundSelectionTotal();
+    const replacementTotal = getCurrentReplacementTotal();
+    const difference = Number((replacementTotal - refundTotal).toFixed(2));
+
+    const refundEl = document.getElementById('exchangeRefundTotal');
+    const replacementEl = document.getElementById('exchangeReplacementTotal');
+    const differenceEl = document.getElementById('exchangeDifferenceTotal');
+    const submitBtn = document.getElementById('submitRefundBtn');
+    const mode = getSelectedRefundMode();
+
+    if (refundEl) refundEl.textContent = refundMoney(refundTotal);
+    if (replacementEl) replacementEl.textContent = refundMoney(replacementTotal);
+    if (differenceEl) {
+        differenceEl.textContent = refundMoney(Math.abs(difference));
+        differenceEl.classList.remove('value-topup', 'value-cashout', 'value-even');
+        if (difference > 0) {
+            differenceEl.classList.add('value-topup');
+            differenceEl.dataset.label = 'Customer Top-up';
+        } else if (difference < 0) {
+            differenceEl.classList.add('value-cashout');
+            differenceEl.dataset.label = 'Cash Out';
+        } else {
+            differenceEl.classList.add('value-even');
+            differenceEl.dataset.label = 'Even Exchange';
+        }
+    }
+
+    if (submitBtn) {
+        submitBtn.innerHTML = mode === 'swap'
+            ? '<i class="bi bi-arrow-left-right me-1"></i> Process Swap'
+            : '<i class="bi bi-arrow-counterclockwise me-1"></i> Process Refund';
+    }
+}
+
+function toggleRefundMode(mode) {
+    document.querySelectorAll('.refund-mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    document.getElementById('exchangePanel')?.classList.toggle('active', mode === 'swap');
+    updateExchangeSummary();
+}
+
+function renderReplacementSelectedCard() {
+    const el = document.getElementById('replacementSelectedCard');
+    if (!el) return;
+    if (!selectedReplacementItem) {
+        el.innerHTML = '<div class="panel-meta">No replacement item selected.</div>';
+        return;
+    }
+
+    el.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <div class="fw-semibold text-white">${escapeHtml(selectedReplacementItem.name)}</div>
+                <div class="panel-meta">Current stock: ${escapeHtml(String(selectedReplacementItem.current_stock || 0))}</div>
+                <div class="panel-meta">Current price: ${refundMoney(selectedReplacementItem.a4s_selling_price || 0)}</div>
+            </div>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearReplacementSelection()">Clear</button>
+        </div>
+    `;
+}
+
+function clearReplacementSelection() {
+    selectedReplacementItem = null;
+    const searchInput = document.getElementById('replacementSearchInput');
+    const qtyInput = document.getElementById('replacementQuantityInput');
+    const resultsEl = document.getElementById('replacementSearchResults');
+    if (searchInput) searchInput.value = '';
+    if (qtyInput) qtyInput.value = '1';
+    if (resultsEl) resultsEl.innerHTML = '';
+    renderReplacementSelectedCard();
+    updateExchangeSummary();
+}
+
+function chooseReplacementItem(item) {
+    selectedReplacementItem = item;
+    document.getElementById('replacementSearchInput').value = item.name || '';
+    document.getElementById('replacementSearchResults').innerHTML = '';
+    renderReplacementSelectedCard();
+    updateExchangeSummary();
+}
+
+function searchReplacementItems() {
+    const query = document.getElementById('replacementSearchInput')?.value.trim() || '';
+    const resultsEl = document.getElementById('replacementSearchResults');
+    if (!resultsEl) return;
+    if (query.length < 2) {
+        resultsEl.innerHTML = '';
+        return;
+    }
+
+    resultsEl.innerHTML = '<div class="text-muted small">Searching items...</div>';
+    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then(data => {
+            const rows = data.items || [];
+            if (!rows.length) {
+                resultsEl.innerHTML = '<div class="text-muted small">No replacement items found.</div>';
+                return;
+            }
+            resultsEl.innerHTML = '';
+            rows.slice(0, 8).forEach(item => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'replacement-result';
+                btn.innerHTML = `
+                    <div class="fw-semibold text-white">${escapeHtml(item.name || 'Unnamed Item')}</div>
+                    <div class="panel-meta">Stock: ${escapeHtml(String(item.current_stock || 0))} · Price: ${refundMoney(item.a4s_selling_price || 0)}</div>
+                `;
+                btn.addEventListener('click', () => chooseReplacementItem(item));
+                resultsEl.appendChild(btn);
+            });
+        })
+        .catch(() => {
+            resultsEl.innerHTML = '<div class="text-danger small">Failed to search items.</div>';
+        });
+}
+
+function initializeRefundDetailControls() {
+    document.querySelectorAll('.refund-qty-input').forEach(input => {
+        input.addEventListener('input', updateExchangeSummary);
+    });
+
+    document.querySelectorAll('.refund-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => toggleRefundMode(btn.dataset.mode));
+    });
+
+    const replacementSearchInput = document.getElementById('replacementSearchInput');
+    if (replacementSearchInput) {
+        replacementSearchInput.addEventListener('input', searchReplacementItems);
+    }
+
+    const replacementQtyInput = document.getElementById('replacementQuantityInput');
+    if (replacementQtyInput) {
+        replacementQtyInput.addEventListener('input', updateExchangeSummary);
+    }
+
+    renderReplacementSelectedCard();
+    toggleRefundMode('refund');
+}
+
+function resetRefundSearchState() {
+    refundSearchPerformed = false;
+    refundSearchRows = [];
+    selectedRefundSaleId = null;
+    document.getElementById('refund-search-summary').textContent = 'Search for a receipt # or customer name to begin.';
+    document.getElementById('refund-search-results').innerHTML = '<div class="text-muted small">No sales are loaded automatically on this page.</div>';
+    document.getElementById('refund-detail-panel').innerHTML = refundEmptyDetailMarkup();
+}
+
+function loadRefundSearch(autoSelectFirst = false) {
+    const resultsEl = document.getElementById('refund-search-results');
+    const summaryEl = document.getElementById('refund-search-summary');
+    const query = document.getElementById('refund-search-input').value.trim();
+    const searchBtn = document.getElementById('refund-search-btn');
+
+    if (!query) {
+        resetRefundSearchState();
+        return;
+    }
+
+    if (refundSearchLoading) {
+        return;
+    }
+
+    refundSearchPerformed = true;
+    refundSearchLoading = true;
+    searchBtn.disabled = true;
+    resultsEl.innerHTML = '<div class="text-muted small">Loading...</div>';
+
+    const params = new URLSearchParams();
+    if (query) params.set('q', query);
+    if (refundSearchDays !== '') params.set('days', refundSearchDays);
+    if (refundHasRefundableOnly) params.set('has_refundable', '1');
+
+    fetch(`/api/sales/refund-search?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            refundSearchRows = data.rows || [];
+            summaryEl.textContent = `${refundSearchRows.length.toLocaleString()} sale${refundSearchRows.length === 1 ? '' : 's'} found`;
+
+            if (!refundSearchRows.length) {
+                resultsEl.innerHTML = '<div class="text-muted small">No sales matched the current filters.</div>';
+                if (!selectedRefundSaleId) {
+                    document.getElementById('refund-detail-panel').innerHTML = `
+                        <div class="details-empty">
+                            <div>
+                                <div class="fw-bold text-white mb-2 fs-5">No sale selected</div>
+                                <div class="small">Try a different receipt number, customer name, or date filter.</div>
+                            </div>
+                        </div>`;
+                }
+                return;
+            }
+
+            resultsEl.innerHTML = refundSearchRows.map(row => `
+                <button type="button" class="sale-result ${selectedRefundSaleId === row.id ? 'active' : ''}" onclick="openRefundSale(${row.id})">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="sale-result-title">OR NO. ${escapeHtml(row.sales_number || '-')}</div>
+                            <div class="sale-result-sub">${escapeHtml(row.customer_name || 'Walk-in')}</div>
+                            ${row.is_exchange_replacement ? `<div class="sale-result-flag"><i class="bi bi-arrow-left-right"></i> Exchange Replacement</div>` : ''}
+                        </div>
+                        <span class="refund-state ${refundStateClass(row.refund_state)}">${escapeHtml(row.refund_state)}</span>
+                    </div>
+                    <div class="sale-result-line">${escapeHtml(row.transaction_date || '')} · ${escapeHtml(row.payment_method_name || '-')}</div>
+                    ${row.is_exchange_replacement ? `<div class="sale-result-line">Linked from original OR ${escapeHtml(row.original_sales_number || '-')}</div>` : ''}
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="sale-amount">${refundMoney(row.total_amount)}</div>
+                        <div class="panel-meta">${row.refunded_amount > 0 ? `Refunded ${refundMoney(row.refunded_amount)}` : 'No refunds yet'}</div>
+                    </div>
+                    <div class="sale-result-line">${row.can_refund ? `Refund until ${escapeHtml(row.refund_cutoff_display || '')}` : 'Refund unavailable'}</div>
+                </button>
+            `).join('');
+
+            if (autoSelectFirst && refundSearchRows.length > 0) {
+                openRefundSale(refundSearchRows[0].id);
+            }
+        })
+        .catch(error => {
+            summaryEl.textContent = 'Failed to load sales';
+            resultsEl.innerHTML = `<div class="text-danger small">${escapeHtml(error.message || 'Failed to load sales.')}</div>`;
+        })
+        .finally(() => {
+            refundSearchLoading = false;
+            searchBtn.disabled = false;
+        });
+}
+
+function renderRefundDetail(data) {
+    const detailEl = document.getElementById('refund-detail-panel');
+    const refundableItems = (data.items || []).filter(item => Number(item.refundable_quantity || 0) > 0);
+    const refundState = data.refund_state || 'Not Refunded';
+
+    detailEl.innerHTML = `
+        <div class="detail-shell">
+            ${!data.can_refund ? `<div class="warning-banner"><strong>Refund blocked.</strong> ${escapeHtml(data.refund_block_reason || 'Refund is not available for this sale.')}</div>` : ''}
+            ${data.exchange_number ? `<div class="exchange-banner"><strong>Exchange replacement sale.</strong> This OR was created from exchange ${escapeHtml(data.exchange_number)} and is linked back to original OR ${escapeHtml(data.original_sales_number || '-')}.</div>` : ''}
+
+            <div class="detail-header">
+                <div class="detail-heading">
+                    <div class="detail-title">OR NO. ${escapeHtml(data.sales_number || `#${data.id}`)}</div>
+                    <div class="detail-meta-row">
+                        <div class="detail-subtitle">
+                            <span class="detail-meta-label">Customer name:</span>
+                            <span class="detail-meta-value">${escapeHtml(data.customer_name || 'Walk-in')}</span>
+                        </div>
+                        <div class="detail-subtitle">
+                            <span class="detail-meta-label">Date:</span>
+                            <span class="detail-meta-value">${escapeHtml(data.transaction_date_display || '-')}</span>
+                        </div>
+                    </div>
+                    <div class="detail-meta-row">
+                        <div class="detail-subtitle">
+                            <span class="detail-meta-label">Payment:</span>
+                            <span class="detail-meta-value">${escapeHtml(data.payment_method_name || '-')}</span>
+                        </div>
+                        <div class="detail-subtitle">
+                            <span class="detail-meta-label">Refund deadline:</span>
+                            <span class="detail-meta-value">${escapeHtml(data.refund_cutoff_display || '-')}</span>
+                        </div>
+                    </div>
+                </div>
+                <span class="refund-state ${refundStateClass(refundState)}">${escapeHtml(refundState)}</span>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-box">
+                    <div class="summary-label">Sale Total</div>
+                    <div class="summary-value">${refundMoney(data.total_amount)}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Refunded So Far</div>
+                    <div class="summary-value text-danger">${refundMoney(data.total_refunded)}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Net Sale</div>
+                    <div class="summary-value text-warning">${refundMoney(data.net_amount)}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="summary-label">Refundable Items</div>
+                    <div class="summary-value">${refundableItems.length}</div>
+                </div>
+            </div>
+
+            <div class="detail-block">
+                <div class="block-title">Refundable Items</div>
+                <div class="table-responsive">
+                    <table class="table table-dark refund-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-center">Sold</th>
+                                <th class="text-center">Refunded</th>
+                                <th class="text-center">Remaining</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Refund Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(data.items || []).map(item => `
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold text-white">${escapeHtml(item.name)}</div>
+                                        ${Number(item.discount_amount || 0) > 0 ? `<div class="small text-success mt-1">Discount applied: ${refundMoney(item.discount_amount)}</div>` : ''}
+                                    </td>
+                                    <td class="text-center">${item.sold_quantity}</td>
+                                    <td class="text-center text-danger">${item.refunded_quantity}</td>
+                                    <td class="text-center text-warning fw-bold">${item.refundable_quantity}</td>
+                                    <td class="text-end">${refundMoney(item.final_unit_price)}</td>
+                                    <td class="text-end" style="min-width: 120px;">
+                                        ${data.can_refund && item.refundable_quantity > 0 ? `
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="${item.refundable_quantity}"
+                                                value="0"
+                                                class="form-control form-control-sm refund-input text-end refund-qty-input"
+                                                data-sale-item-id="${item.sale_item_id}"
+                                                data-unit-price="${item.final_unit_price}"
+                                            >
+                                        ` : '<span class="text-muted">-</span>'}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="detail-block soft">
+                <div class="block-title">Services</div>
+                <div class="panel-meta mb-3">Services are shown for context only and are not refundable.</div>
+                <div class="table-responsive">
+                    <table class="table table-dark refund-table services-table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th class="text-end">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${(data.services || []).length ? data.services.map(service => `
+                                <tr>
+                                    <td>${escapeHtml(service.name)}</td>
+                                    <td class="text-end">${refundMoney(service.price)}</td>
+                                </tr>
+                            `).join('') : '<tr><td colspan="2" class="text-muted">No services recorded on this sale.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="detail-block">
+                <div class="block-title">Refund Form</div>
+                <div class="refund-mode-toggle">
+                    <button type="button" class="refund-mode-btn active" data-mode="refund">Refund Only</button>
+                    <button type="button" class="refund-mode-btn" data-mode="swap">Swap Item</button>
+                </div>
+                <div class="refund-form-grid">
+                    <div>
+                        <label class="form-label">Reason <span class="req">*</span></label>
+                        <input type="text" id="refundReasonInput" class="form-control refund-input" maxlength="200" ${data.can_refund ? '' : 'disabled'} placeholder="Why is the item being refunded?">
+                    </div>
+                    <div>
+                        <label class="form-label">Note</label>
+                        <input type="text" id="refundNotesInput" class="form-control refund-input" maxlength="300" ${data.can_refund ? '' : 'disabled'} placeholder="Optional note">
+                    </div>
+                </div>
+                <div id="exchangePanel" class="exchange-panel">
+                    <div class="refund-form-grid">
+                        <div>
+                            <label class="form-label">Replacement Item <span class="req">*</span></label>
+                            <input type="text" id="replacementSearchInput" class="form-control refund-input" ${data.can_refund ? '' : 'disabled'} placeholder="Search replacement item">
+                            <div id="replacementSearchResults" class="replacement-results"></div>
+                        </div>
+                        <div>
+                            <label class="form-label">Replacement Qty <span class="req">*</span></label>
+                            <input type="number" id="replacementQuantityInput" class="form-control refund-input text-end" min="1" step="1" value="1" ${data.can_refund ? '' : 'disabled'}>
+                            <div id="replacementSelectedCard" class="replacement-selected">
+                                <div class="panel-meta">No replacement item selected.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="exchange-summary">
+                        <div class="exchange-summary-box">
+                            <div class="label">Refund Value</div>
+                            <div class="value" id="exchangeRefundTotal">${refundMoney(0)}</div>
+                        </div>
+                        <div class="exchange-summary-box">
+                            <div class="label">Replacement Value</div>
+                            <div class="value" id="exchangeReplacementTotal">${refundMoney(0)}</div>
+                        </div>
+                        <div class="exchange-summary-box">
+                            <div class="label">Difference</div>
+                            <div class="value value-even" id="exchangeDifferenceTotal">${refundMoney(0)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="refund-action-bar">
+                    <div class="action-note">Refunds return stock to inventory and record cash out. Swaps do the refund first, then create a linked exchange replacement sale using the replacement item's current selling price.</div>
+                    <button type="button" class="btn btn-danger" id="submitRefundBtn" ${data.can_refund ? '' : 'disabled'} onclick="submitRefundForSelectedSale()">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Process Refund
+                    </button>
+                </div>
+            </div>
+
+            <div class="detail-block soft">
+                <div class="block-title">Refund History</div>
+                <div class="history-list">
+                    ${(data.refund_history || []).length ? data.refund_history.map(refund => `
+                        <div class="history-item">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-bold text-danger">${escapeHtml(refund.refund_number || 'Refund')}</div>
+                                    <div class="panel-meta">${escapeHtml(refund.refund_date_display || '')} · ${escapeHtml(refund.refunded_by_username || 'System')}</div>
+                                    ${refund.exchange_number ? `<div class="small text-info mt-1">Exchange ${escapeHtml(refund.exchange_number)} · Replacement OR ${escapeHtml(refund.replacement_sales_number || '-')}</div>` : ''}
+                                    <div class="mt-1 text-white">${escapeHtml(refund.reason || '')}</div>
+                                    ${refund.notes ? `<div class="small text-info mt-1">${escapeHtml(refund.notes)}</div>` : ''}
+                                </div>
+                                <div class="fw-bold text-danger">${refundMoney(refund.refund_amount)}</div>
+                            </div>
+                        </div>
+                    `).join('') : '<div class="empty-history">No refunds recorded for this sale.</div>'}
+                </div>
+            </div>
+        </div>
+    `;
+    selectedReplacementItem = null;
+    initializeRefundDetailControls();
+}
+
+function openRefundSale(saleId) {
+    selectedRefundSaleId = saleId;
+    const detailEl = document.getElementById('refund-detail-panel');
+    detailEl.innerHTML = '<div class="details-empty"><div class="small">Loading sale details...</div></div>';
+    if (refundSearchPerformed) {
+        loadRefundSearch(false);
+    }
+
+    fetch(`/sales/details/${saleId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            renderRefundDetail(data);
+        })
+        .catch(error => {
+            detailEl.innerHTML = `<div class="details-empty"><div class="text-danger">${escapeHtml(error.message || 'Failed to load sale details.')}</div></div>`;
+        });
+}
+
+function submitRefundForSelectedSale() {
+    if (!selectedRefundSaleId) return;
+
+    const items = Array.from(document.querySelectorAll('.refund-qty-input'))
+        .map(input => ({
+            sale_item_id: Number(input.dataset.saleItemId),
+            quantity: Number(input.value || 0),
+        }))
+        .filter(item => item.quantity > 0);
+
+    const reason = document.getElementById('refundReasonInput')?.value.trim() || '';
+    const notes = document.getElementById('refundNotesInput')?.value.trim() || '';
+    const mode = getSelectedRefundMode();
+
+    if (!items.length) {
+        refundAlert('Select at least one item quantity to refund.', 'warning');
+        return;
+    }
+    if (!reason) {
+        refundAlert('Refund reason is required.', 'warning');
+        return;
+    }
+    if (mode === 'swap') {
+        const replacementQuantity = Number(document.getElementById('replacementQuantityInput')?.value || 0);
+        if (!selectedReplacementItem || !selectedReplacementItem.id) {
+            refundAlert('Select a replacement item for the swap.', 'warning');
+            return;
+        }
+        if (replacementQuantity <= 0) {
+            refundAlert('Replacement quantity must be at least 1.', 'warning');
+            return;
+        }
+        pendingRefundPayload = {
+            items,
+            reason,
+            notes,
+            exchange: {
+                enabled: true,
+                mode: 'swap',
+                replacement_item_id: selectedReplacementItem.id,
+                replacement_quantity: replacementQuantity,
+            },
+        };
+
+        const difference = Number((getCurrentReplacementTotal() - getCurrentRefundSelectionTotal()).toFixed(2));
+        const adjustmentText = difference > 0
+            ? `Customer top-up required: ${refundMoney(difference)}.`
+            : difference < 0
+            ? `Shop cash out required: ${refundMoney(Math.abs(difference))}.`
+            : 'This is an even exchange.';
+        document.getElementById('refundConfirmMessage').textContent = `This swap will return stock for the selected refund item(s), create a linked replacement sale for ${selectedReplacementItem.name}, and settle the difference immediately. ${adjustmentText}`;
+    } else {
+        pendingRefundPayload = { items, reason, notes };
+        document.getElementById('refundConfirmMessage').textContent = 'This refund will return stock to inventory and record cash out for the refund.';
+    }
+    const confirmModalEl = document.getElementById('refundConfirmModal');
+    bootstrap.Modal.getOrCreateInstance(confirmModalEl).show();
+}
+
+function confirmRefundSubmission() {
+    if (!selectedRefundSaleId || !pendingRefundPayload) {
+        return;
+    }
+
+    const btn = document.getElementById('submitRefundBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Processing...';
+    const confirmSubmitBtn = document.getElementById('refundConfirmSubmitBtn');
+    confirmSubmitBtn.disabled = true;
+
+    fetch(`/api/sales/${selectedRefundSaleId}/refund`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': APP_CSRF_TOKEN,
+        },
+        body: JSON.stringify(pendingRefundPayload),
+    })
+        .then(async response => {
+            const result = await response.json();
+            if (!response.ok || result.status === 'error') {
+                throw new Error(result.message || 'Failed to process refund.');
+            }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('refundConfirmModal')).hide();
+            const successMessage = result.mode === 'swap'
+                ? `Exchange ${result.exchange_number} saved. Replacement sale ${result.replacement_sales_number} recorded.`
+                : `Refund ${result.refund_number} saved.`;
+            refundAlert(successMessage, 'success');
+            loadRefundSearch(false);
+            openRefundSale(selectedRefundSaleId);
+        })
+        .catch(error => {
+            refundAlert(error.message || 'Failed to process refund.', 'danger');
+        })
+        .finally(() => {
+            pendingRefundPayload = null;
+            const submitBtn = document.getElementById('submitRefundBtn');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i> Process Refund';
+            }
+            confirmSubmitBtn.disabled = false;
+        });
+}
+
+document.getElementById('refund-search-btn').addEventListener('click', function () {
+    loadRefundSearch(false);
+});
+
+document.getElementById('refund-clear-btn').addEventListener('click', function () {
+    document.getElementById('refund-search-input').value = '';
+    resetRefundSearchState();
+    document.getElementById('refund-search-input').focus();
+});
+
+document.getElementById('refundConfirmSubmitBtn').addEventListener('click', function () {
+    confirmRefundSubmission();
+});
+
+document.getElementById('refundConfirmModal').addEventListener('hidden.bs.modal', function () {
+    pendingRefundPayload = null;
+    const confirmSubmitBtn = document.getElementById('refundConfirmSubmitBtn');
+    if (confirmSubmitBtn) {
+        confirmSubmitBtn.disabled = false;
+    }
+});
+
+document.getElementById('refund-search-input').addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        loadRefundSearch(false);
+    }
+});
+
+document.querySelectorAll('[data-days]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        refundSearchDays = btn.dataset.days;
+        document.querySelectorAll('[data-days]').forEach(chip => chip.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+document.getElementById('has-refundable-toggle').addEventListener('click', function () {
+    refundHasRefundableOnly = !refundHasRefundableOnly;
+    this.classList.toggle('active', refundHasRefundableOnly);
+});
+</script>
+{% endblock %}

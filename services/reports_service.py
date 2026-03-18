@@ -407,10 +407,13 @@ def get_sales_report_by_date(report_date):
             m.id              AS mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
-            pm.name           AS payment_method
+            pm.name           AS payment_method,
+            se.exchange_number,
+            se.original_sale_id
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+        LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) = %s
         ORDER BY s.transaction_date ASC
     """, (report_date,)).fetchall()
@@ -440,7 +443,27 @@ def get_sales_report_by_date(report_date):
         ORDER BY dp.paid_at ASC
     """, (report_date,)).fetchall()
 
-    if not sales_rows and not all_unresolved and not debt_collected_rows:
+    refund_rows = conn.execute("""
+        SELECT
+            sr.id,
+            sr.refund_number,
+            sr.refund_amount,
+            sr.reason,
+            sr.notes,
+            sr.refund_date,
+            sr.refunded_by_username,
+            s.sales_number,
+            s.customer_name,
+            se.exchange_number,
+            se.replacement_sale_id
+        FROM sale_refunds sr
+        JOIN sales s ON s.id = sr.sale_id
+        LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
+        WHERE DATE(sr.refund_date) = %s
+        ORDER BY sr.refund_date ASC, sr.id ASC
+    """, (report_date,)).fetchall()
+
+    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
         conn.close()
         return []
 
@@ -448,6 +471,7 @@ def get_sales_report_by_date(report_date):
     all_sale_ids  = [row["id"] for row in sales_rows]
     items_by_sale    = {}
     services_by_sale = {}
+    refund_items_by_id = {}
 
     if paid_sale_ids:
         placeholders = ",".join(["%s"] * len(paid_sale_ids))
@@ -476,6 +500,29 @@ def get_sales_report_by_date(report_date):
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
+    refund_ids = [row["id"] for row in refund_rows]
+    if refund_ids:
+        placeholders = ",".join(["%s"] * len(refund_ids))
+        refund_item_rows = conn.execute(f"""
+            SELECT
+                sri.refund_id,
+                i.name AS item_name,
+                sri.quantity,
+                sri.unit_price,
+                sri.line_total
+            FROM sale_refund_items sri
+            JOIN items i ON i.id = sri.item_id
+            WHERE sri.refund_id IN ({placeholders})
+            ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
+        """, refund_ids).fetchall()
+        for row in refund_item_rows:
+            refund_items_by_id.setdefault(row["refund_id"], []).append({
+                "item_name": row["item_name"],
+                "quantity": int(row["quantity"] or 0),
+                "unit_price": round(_num(row["unit_price"]), 2),
+                "line_total": round(_num(row["line_total"]), 2),
+            })
+
     conn.close()
 
     debt_collected = [
@@ -493,6 +540,23 @@ def get_sales_report_by_date(report_date):
         for row in debt_collected_rows
     ]
     total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
+    refunds = [
+        {
+            "refund_number": row["refund_number"] or f"Refund #{row['id']}",
+            "sales_number": row["sales_number"] or "—",
+            "customer_name": row["customer_name"] or "Walk-in",
+            "refund_amount": round(_num(row["refund_amount"]), 2),
+            "reason": row["reason"] or "",
+            "notes": row["notes"] or "",
+            "refund_date": format_date(row["refund_date"], show_time=True),
+            "refunded_by_username": row["refunded_by_username"] or "System",
+            "items": refund_items_by_id.get(row["id"], []),
+            "report_label": "Exchange Refund" if row["exchange_number"] else "Refund",
+            "exchange_number": row["exchange_number"] or "",
+        }
+        for row in refund_rows
+    ]
+    total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales            = []
     total_gross           = 0.0
@@ -516,6 +580,8 @@ def get_sales_report_by_date(report_date):
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products":         items_by_sale.get(sale_id, []),
                 "services":         services_by_sale.get(sale_id, []),
+                "report_label":     "Exchange Replacement" if sale["exchange_number"] else "Sale",
+                "exchange_number":  sale["exchange_number"] or "",
             })
             total_gross += total_amount
 
@@ -541,15 +607,17 @@ def get_sales_report_by_date(report_date):
         "total_gross":            round(total_gross, 2),
         "total_mech_cut":         totals["total_mech_cut"],
         "total_shop_topup":       totals["total_shop_topup"],
-        "net_revenue":            round(total_gross - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "net_revenue":            round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
         "total_shop_commission":  totals["total_shop_commission"],
         "total_service_revenue":  round(total_service_revenue, 2),
-        "total_product_revenue":  round(total_gross - total_service_revenue, 2),
+        "total_product_revenue":  round(total_gross - total_service_revenue - total_refunds, 2),
         "debt_collected":         debt_collected,
         "total_debt_collected":   total_debt_collected,
         "total_mech_cut_from_paid":  totals["total_mech_cut_from_paid"],
         "total_shop_comm_from_paid": totals["total_shop_comm_from_paid"],
         "total_mech_cut_from_debt":  totals["total_mech_cut_from_debt"],
+        "refunds":                refunds,
+        "total_refunds":          total_refunds,
     }
 
 
@@ -572,10 +640,13 @@ def get_sales_report_by_range(start_date, end_date):
             m.id              AS mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
-            pm.name           AS payment_method
+            pm.name           AS payment_method,
+            se.exchange_number,
+            se.original_sale_id
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+        LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
         ORDER BY s.transaction_date ASC
     """, (start_date, end_date)).fetchall()
@@ -605,7 +676,27 @@ def get_sales_report_by_range(start_date, end_date):
         ORDER BY dp.paid_at ASC
     """, (start_date, end_date)).fetchall()
 
-    if not sales_rows and not all_unresolved and not debt_collected_rows:
+    refund_rows = conn.execute("""
+        SELECT
+            sr.id,
+            sr.refund_number,
+            sr.refund_amount,
+            sr.reason,
+            sr.notes,
+            sr.refund_date,
+            sr.refunded_by_username,
+            s.sales_number,
+            s.customer_name,
+            se.exchange_number,
+            se.replacement_sale_id
+        FROM sale_refunds sr
+        JOIN sales s ON s.id = sr.sale_id
+        LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
+        WHERE DATE(sr.refund_date) BETWEEN %s AND %s
+        ORDER BY sr.refund_date ASC, sr.id ASC
+    """, (start_date, end_date)).fetchall()
+
+    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
         conn.close()
         return []
 
@@ -613,6 +704,7 @@ def get_sales_report_by_range(start_date, end_date):
     all_sale_ids  = [row["id"] for row in sales_rows]
     items_by_sale    = {}
     services_by_sale = {}
+    refund_items_by_id = {}
 
     if paid_sale_ids:
         placeholders = ",".join(["%s"] * len(paid_sale_ids))
@@ -641,6 +733,29 @@ def get_sales_report_by_range(start_date, end_date):
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
+    refund_ids = [row["id"] for row in refund_rows]
+    if refund_ids:
+        placeholders = ",".join(["%s"] * len(refund_ids))
+        refund_item_rows = conn.execute(f"""
+            SELECT
+                sri.refund_id,
+                i.name AS item_name,
+                sri.quantity,
+                sri.unit_price,
+                sri.line_total
+            FROM sale_refund_items sri
+            JOIN items i ON i.id = sri.item_id
+            WHERE sri.refund_id IN ({placeholders})
+            ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
+        """, refund_ids).fetchall()
+        for row in refund_item_rows:
+            refund_items_by_id.setdefault(row["refund_id"], []).append({
+                "item_name": row["item_name"],
+                "quantity": int(row["quantity"] or 0),
+                "unit_price": round(_num(row["unit_price"]), 2),
+                "line_total": round(_num(row["line_total"]), 2),
+            })
+
     conn.close()
 
     debt_collected = [
@@ -658,6 +773,23 @@ def get_sales_report_by_range(start_date, end_date):
         for row in debt_collected_rows
     ]
     total_debt_collected = round(sum(r["amount_paid"] for r in debt_collected), 2)
+    refunds = [
+        {
+            "refund_number": row["refund_number"] or f"Refund #{row['id']}",
+            "sales_number": row["sales_number"] or "—",
+            "customer_name": row["customer_name"] or "Walk-in",
+            "refund_amount": round(_num(row["refund_amount"]), 2),
+            "reason": row["reason"] or "",
+            "notes": row["notes"] or "",
+            "refund_date": format_date(row["refund_date"], show_time=True),
+            "refunded_by_username": row["refunded_by_username"] or "System",
+            "items": refund_items_by_id.get(row["id"], []),
+            "report_label": "Exchange Refund" if row["exchange_number"] else "Refund",
+            "exchange_number": row["exchange_number"] or "",
+        }
+        for row in refund_rows
+    ]
+    total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales            = []
     total_gross           = 0.0
@@ -681,6 +813,8 @@ def get_sales_report_by_range(start_date, end_date):
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products":         items_by_sale.get(sale_id, []),
                 "services":         services_by_sale.get(sale_id, []),
+                "report_label":     "Exchange Replacement" if sale["exchange_number"] else "Sale",
+                "exchange_number":  sale["exchange_number"] or "",
             })
             total_gross += total_amount
 
@@ -752,15 +886,17 @@ def get_sales_report_by_range(start_date, end_date):
         "total_gross":            round(total_gross, 2),
         "total_mech_cut":         totals["total_mech_cut"],
         "total_shop_topup":       totals["total_shop_topup"],
-        "net_revenue":            round(total_gross - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "net_revenue":            round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
         "total_shop_commission":  totals["total_shop_commission"],
         "total_service_revenue":  round(total_service_revenue, 2),
-        "total_product_revenue":  round(total_gross - total_service_revenue, 2),
+        "total_product_revenue":  round(total_gross - total_service_revenue - total_refunds, 2),
         "debt_collected":         debt_collected,
         "total_debt_collected":   total_debt_collected,
         "total_mech_cut_from_paid":  totals["total_mech_cut_from_paid"],
         "total_shop_comm_from_paid": totals["total_shop_comm_from_paid"],
         "total_mech_cut_from_debt":  totals["total_mech_cut_from_debt"],
+        "refunds":                refunds,
+        "total_refunds":          total_refunds,
         "quota_failures":            sorted(
             quota_failures,
             key=lambda row: (row["date"], row["mechanic_name"]),

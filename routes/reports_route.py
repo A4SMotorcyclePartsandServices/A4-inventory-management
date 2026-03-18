@@ -134,6 +134,8 @@ def sales_summary_report():
             "net_revenue":          0.0,
             "debt_collected":       [],
             "total_debt_collected": 0.0,
+            "refunds":              [],
+            "total_refunds":        0.0,
         }
 
     return render_template(

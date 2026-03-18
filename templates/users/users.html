@@ -291,6 +291,22 @@
         flex: 0 0 auto;
     }
 
+    #saleDetailsModal table {
+        table-layout: auto !important;
+    }
+
+    #saleDetailsModal th,
+    #saleDetailsModal td {
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+
+    #saleDetailsModal td:first-child {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
     .po-movement-card {
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
@@ -1272,6 +1288,7 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <div id="saleDetailsMeta" class="small text-white-50 mb-3"></div>
                     <table class="table table-dark table-sm">
                         <thead>
                             <tr>
@@ -1280,9 +1297,15 @@
                                 <th class="text-center">Qty</th>
                             </tr>
                         </thead>
-                        <tbody id="saleItemsList">
-                            </tbody>
+                        <tbody id="saleItemsList"></tbody>
                     </table>
+                    <div class="border-top border-secondary pt-3 mt-3">
+                        <div class="fw-bold text-warning mb-2">Refund History</div>
+                        <div id="saleRefundHistory" class="mt-3"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -1499,7 +1522,7 @@ function filterServices() {
     }, 300);
 }
 
-function viewSaleDetails(saleID, displayNum) {
+function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
     document.getElementById('modalSaleID').innerText = displayNum || saleID;
     const list = document.getElementById('saleItemsList');
     list.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
@@ -1567,6 +1590,138 @@ function viewSaleDetails(saleID, displayNum) {
                     </td>
                     <td></td>
                 </tr>`;
+        });
+}
+
+function formatPeso(value) {
+    return `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function renderRefundHistory(data) {
+    const historyEl = document.getElementById('saleRefundHistory');
+    const refunds = data.refund_history || [];
+    if (!refunds.length) {
+        historyEl.innerHTML = '<div class="small text-white-50">No refunds recorded for this sale.</div>';
+        return;
+    }
+
+    historyEl.innerHTML = `
+        <div class="small text-white-50 mb-2">Refund History</div>
+        <div class="list-group list-group-flush">
+            ${refunds.map(refund => `
+                <div class="list-group-item bg-dark text-white border-secondary px-0">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-bold text-danger">${escapeHtml(refund.refund_number || 'Refund')}</div>
+                            <div class="small text-white-50">${escapeHtml(refund.refund_date_display || '')} · ${escapeHtml(refund.refunded_by_username || 'System')}</div>
+                            <div class="small mt-1">${escapeHtml(refund.reason || '')}</div>
+                            ${refund.notes ? `<div class="small text-info mt-1">${escapeHtml(refund.notes)}</div>` : ''}
+                        </div>
+                        <div class="fw-bold text-danger">${formatPeso(refund.refund_amount)}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function populateSaleDetails(data, saleID, displayNum) {
+    document.getElementById('modalSaleID').innerText = displayNum || data.sales_number || saleID;
+
+    const meta = document.getElementById('saleDetailsMeta');
+    meta.innerHTML = `
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span>${escapeHtml(data.customer_name || 'Walk-in')}</span>
+            <span>&middot;</span>
+            <span>${escapeHtml(data.transaction_date_display || '')}</span>
+            <span class="badge bg-dark border border-secondary text-info">${escapeHtml(data.payment_method_name || 'N/A')}</span>
+        </div>
+        <div class="mt-1 d-flex flex-wrap align-items-center gap-2">
+            <span>Sale: ${formatPeso(data.total_amount)}</span>
+            ${Number(data.total_refunded || 0) > 0 ? `<span class="text-danger">Refunded: ${formatPeso(data.total_refunded)}</span><span class="text-warning">Net: ${formatPeso(data.net_amount)}</span>` : ''}
+        </div>
+    `;
+
+    const list = document.getElementById('saleItemsList');
+    list.innerHTML = '';
+
+    (data.items || []).forEach(item => {
+        const hasDisc = Number(item.discount_amount || 0) > 0;
+        let itemLabel = `<div>${escapeHtml(item.name)}</div>`;
+        if (hasDisc) {
+            itemLabel += `<small class="text-success">Disc: -${formatPeso(item.discount_amount)}</small>`;
+        }
+        if (Number(item.refunded_quantity || 0) > 0) {
+            itemLabel += `<div class="small text-danger">Refunded: ${item.refunded_quantity} / Remaining: ${item.refundable_quantity}</div>`;
+        }
+
+        let priceDisplay = `<div>${formatPeso(item.original_price)}</div>`;
+        if (hasDisc) {
+            priceDisplay += `<div class="text-success fw-bold">${formatPeso(item.final_unit_price)}</div>`;
+        }
+
+        list.innerHTML += `
+            <tr>
+                <td>${itemLabel}</td>
+                <td class="text-center align-middle">${priceDisplay}</td>
+                <td class="text-center align-middle fw-bold text-warning">${item.sold_quantity}</td>
+            </tr>`;
+    });
+
+    if (data.services && data.services.length > 0) {
+        const mechanicLabel = data.mechanic_name ? ` (by ${escapeHtml(data.mechanic_name)})` : '';
+        list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services${mechanicLabel}</td></tr>`;
+        data.services.forEach(svc => {
+            list.innerHTML += `
+                <tr>
+                    <td>${escapeHtml(svc.name)}</td>
+                    <td class="text-center">${formatPeso(svc.price)}</td>
+                    <td class="text-center text-muted">1</td>
+                </tr>`;
+        });
+    }
+
+    const badgeMap = {
+        'Cash': 'bg-success',
+        'Utang': 'bg-warning',
+        'Debt': 'bg-warning text-dark',
+    };
+    const badgeClass = badgeMap[data.payment_method_name] || 'bg-primary';
+    list.innerHTML += `
+        <tr class="border-top border-danger">
+            <td class="fw-bold pt-3 text-danger">
+                GRAND TOTAL
+                <span class="badge ${badgeClass} ms-2" style="font-size: 0.65rem; vertical-align: middle;">
+                    ${escapeHtml(data.payment_method_name || 'N/A')}
+                </span>
+            </td>
+            <td class="pt-3 fw-bold fs-5 text-danger text-center">${formatPeso(data.total_amount)}</td>
+            <td></td>
+        </tr>`;
+
+    renderRefundHistory(data);
+}
+
+function viewSaleDetails(saleID, displayNum) {
+    document.getElementById('modalSaleID').innerText = displayNum || saleID;
+    document.getElementById('saleItemsList').innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+    document.getElementById('saleDetailsMeta').innerHTML = '';
+    document.getElementById('saleRefundHistory').innerHTML = '';
+
+    const myModal = new bootstrap.Modal(document.getElementById('saleDetailsModal'));
+    myModal.show();
+
+    fetch(`/sales/details/${saleID}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('saleItemsList').innerHTML = `<tr><td colspan="3" class="text-center text-danger py-3">${escapeHtml(data.error)}</td></tr>`;
+                return;
+            }
+            populateSaleDetails(data, saleID, displayNum);
+        })
+        .catch(() => {
+            document.getElementById('saleItemsList').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Failed to load sale details.</td></tr>';
         });
 }
 
@@ -2503,8 +2658,14 @@ function renderSalesAdmin(data) {
                     ${escapeHtml(sale.payment_method_name || '—')}
                 </span>
             </td>
-            <td>${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}</td>
-            <td class="fw-bold text-danger">₱${parseFloat(sale.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td>
+                ${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}
+                ${sale.has_refund ? `<div class="small text-danger mt-1 fw-bold">${escapeHtml(sale.refund_state || 'Refunded')}</div>` : ''}
+            </td>
+            <td class="fw-bold text-danger">
+                ₱${parseFloat(sale.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
+                ${sale.has_refund ? `<div class="small text-warning fw-semibold">Net: ₱${parseFloat(sale.net_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div><div class="small text-danger">Refunded: ₱${parseFloat(sale.refunded_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div>` : ''}
+            </td>
             <td class="text-center actions-cell">
                 <div class="btn-group">
                     <button class="btn btn-sm btn-outline-info me-1"
