@@ -396,6 +396,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'payables-audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#payables-audit-tab" type="button">
+            <i class="bi bi-journal-check"></i> Payables Audit
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link {% if active_tab == 'loyalty-tab' %}active{% endif %}"
                 data-bs-toggle="tab" data-bs-target="#loyalty-tab" type="button">
             <i class="bi bi-award-fill"></i> Loyalty
@@ -980,6 +985,101 @@
         </div>
 
     </div>
+    <!-- PAYABLES AUDIT TAB -->
+    <div class="tab-pane fade {% if active_tab == 'payables-audit-tab' %}show active{% endif %}" id="payables-audit-tab">
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-warning fw-semibold fs-5 mb-0">
+                    <i class="bi bi-journal-check me-2"></i> Payables Movement
+                </h6>
+                <span class="text-warning small" id="payables-audit-summary"></span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <select id="payables-audit-event-filter" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 210px;">
+                    <option value="">All Events</option>
+                    <option value="PO_PAYABLE_CREATED">Payable Created (PO)</option>
+                    <option value="MANUAL_PAYABLE_CREATED">Payable Created (Manual)</option>
+                    <option value="CHEQUE_ISSUED">Cheque Issued</option>
+                    <option value="CHEQUE_STATUS_UPDATED">Cheque Status Updated</option>
+                </select>
+
+                <select id="payables-audit-source-filter" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 160px;">
+                    <option value="">All Sources</option>
+                    <option value="PO_DELIVERY">PO Delivery</option>
+                    <option value="MANUAL">Manual</option>
+                </select>
+
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="payables-audit-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+
+                <div class="input-group input-group-sm" style="width: 200px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="payables-audit-payee-search"
+                        class="form-control form-control-sm"
+                        placeholder="Search payee..."
+                        style="background:#141720; border-color:#333; color:#fff;">
+                </div>
+
+                <div class="input-group input-group-sm" style="width: 210px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="payables-audit-cheque-search"
+                        class="form-control form-control-sm"
+                        placeholder="Search cheque no..."
+                        style="background:#141720; border-color:#333; color:#fff;">
+                </div>
+
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearPayablesAuditFilters()" title="Clear filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle" id="payables-audit-table">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th style="width: 13%;">Date & Time</th>
+                        <th style="width: 16%;">Payee / Vendor</th>
+                        <th style="width: 10%;">Source</th>
+                        <th style="width: 13%;">Event</th>
+                        <th style="width: 20%;">Reference</th>
+                        <th style="width: 11%;" class="text-end">Amount</th>
+                        <th style="width: 17%;">Staff</th>
+                    </tr>
+                </thead>
+                <tbody id="payables-audit-body">
+                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3" id="payables-audit-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="payables-audit-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="payables-audit-prev-btn" onclick="payablesAuditChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="payables-audit-next-btn" onclick="payablesAuditChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
     <!-- LOYALTY PROGRAMS TAB -->
     <div class="tab-pane fade {% if active_tab == 'loyalty-tab' %}show active{% endif %}" id="loyalty-tab">
 
@@ -1248,6 +1348,21 @@
         </div>
     </div>
 </div>
+    <div class="modal fade" id="payablesAuditDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark border-secondary text-white">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-warning">
+                        <i class="bi bi-journal-check me-1 text-warning"></i> Payables Audit Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="payablesAuditDetailsBody">
+                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Select a payable audit row.</div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- ITEM CREATED MODAL -->
     <div class="modal fade" id="itemCreatedModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1917,6 +2032,314 @@ function renderAuditTrail(data) {
                 <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
             </tr>`;
     }).join('');
+}
+
+// --- PAYABLES AUDIT TAB STATE ---
+let payablesAuditPage = 1;
+let payablesAuditStartDate = null;
+let payablesAuditEndDate = null;
+let payablesAuditEventType = '';
+let payablesAuditSourceType = '';
+let payablesAuditPayeeSearch = '';
+let payablesAuditChequeNoSearch = '';
+let payablesAuditSearchTimeout = null;
+let payablesAuditFlatpickr = null;
+let payablesAuditRowsById = {};
+
+document.querySelector('[data-bs-target="#payables-audit-tab"]').addEventListener('shown.bs.tab', function () {
+    if (document.getElementById('payables-audit-body').textContent.includes('Loading')) {
+        loadPayablesAudit();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    payablesAuditFlatpickr = flatpickr('#payables-audit-date-range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        onClose: function(selectedDates) {
+            if (selectedDates.length === 2) {
+                const fmt = d => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+                payablesAuditStartDate = fmt(selectedDates[0]);
+                payablesAuditEndDate = fmt(selectedDates[1]);
+                payablesAuditPage = 1;
+                loadPayablesAudit();
+            }
+        }
+    });
+
+    document.getElementById('payables-audit-event-filter')?.addEventListener('change', function () {
+        payablesAuditEventType = this.value || '';
+        payablesAuditPage = 1;
+        loadPayablesAudit();
+    });
+
+    document.getElementById('payables-audit-source-filter')?.addEventListener('change', function () {
+        payablesAuditSourceType = this.value || '';
+        payablesAuditPage = 1;
+        loadPayablesAudit();
+    });
+
+    document.getElementById('payables-audit-payee-search')?.addEventListener('input', function () {
+        clearTimeout(payablesAuditSearchTimeout);
+        payablesAuditSearchTimeout = setTimeout(() => {
+            payablesAuditPayeeSearch = this.value.trim();
+            payablesAuditPage = 1;
+            loadPayablesAudit();
+        }, 400);
+    });
+
+    document.getElementById('payables-audit-cheque-search')?.addEventListener('input', function () {
+        clearTimeout(payablesAuditSearchTimeout);
+        payablesAuditSearchTimeout = setTimeout(() => {
+            payablesAuditChequeNoSearch = this.value.trim();
+            payablesAuditPage = 1;
+            loadPayablesAudit();
+        }, 400);
+    });
+
+    if (document.getElementById('payables-audit-tab')?.classList.contains('show')) {
+        loadPayablesAudit();
+    }
+});
+
+function clearPayablesAuditFilters() {
+    if (payablesAuditFlatpickr) payablesAuditFlatpickr.clear();
+    payablesAuditStartDate = null;
+    payablesAuditEndDate = null;
+    payablesAuditEventType = '';
+    payablesAuditSourceType = '';
+    payablesAuditPayeeSearch = '';
+    payablesAuditChequeNoSearch = '';
+    payablesAuditPage = 1;
+
+    document.getElementById('payables-audit-event-filter').value = '';
+    document.getElementById('payables-audit-source-filter').value = '';
+    document.getElementById('payables-audit-payee-search').value = '';
+    document.getElementById('payables-audit-cheque-search').value = '';
+
+    loadPayablesAudit();
+}
+
+function payablesAuditChangePage(direction) {
+    payablesAuditPage += direction;
+    loadPayablesAudit();
+}
+
+function loadPayablesAudit() {
+    const tbody = document.getElementById('payables-audit-body');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    const params = [`page=${payablesAuditPage}`];
+    if (payablesAuditStartDate) params.push(`start_date=${encodeURIComponent(payablesAuditStartDate)}`);
+    if (payablesAuditEndDate) params.push(`end_date=${encodeURIComponent(payablesAuditEndDate)}`);
+    if (payablesAuditEventType) params.push(`event_type=${encodeURIComponent(payablesAuditEventType)}`);
+    if (payablesAuditSourceType) params.push(`source_type=${encodeURIComponent(payablesAuditSourceType)}`);
+    if (payablesAuditPayeeSearch) params.push(`payee_search=${encodeURIComponent(payablesAuditPayeeSearch)}`);
+    if (payablesAuditChequeNoSearch) params.push(`cheque_no_search=${encodeURIComponent(payablesAuditChequeNoSearch)}`);
+
+    fetch(`/api/payables/audit?${params.join('&')}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">${escapeHtml(data.error)}</td></tr>`;
+                return;
+            }
+            renderPayablesAudit(data);
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Failed to load data.</td></tr>';
+        });
+}
+
+function renderPayablesAudit(data) {
+    const tbody = document.getElementById('payables-audit-body');
+    const summaryEl = document.getElementById('payables-audit-summary');
+    const pageLabel = document.getElementById('payables-audit-page-label');
+    const paginationRow = document.getElementById('payables-audit-pagination-row');
+    const prevBtn = document.getElementById('payables-audit-prev-btn');
+    const nextBtn = document.getElementById('payables-audit-next-btn');
+
+    summaryEl.textContent = `${Number(data.total || 0).toLocaleString()} total entries`;
+
+    if (Number(data.total_pages || 0) > 1) {
+        paginationRow.style.display = 'flex';
+        pageLabel.className = 'page-indicator small';
+        pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= data.total_pages;
+    } else {
+        paginationRow.style.display = 'none';
+    }
+
+    if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No records found.</td></tr>';
+        return;
+    }
+
+    const sourceBadge = {
+        'PO_DELIVERY': '<span class="badge bg-info text-dark">PO Delivery</span>',
+        'MANUAL': '<span class="badge bg-secondary">Manual</span>',
+    };
+
+    const eventBadge = {
+        'PO_PAYABLE_CREATED': '<span class="badge bg-primary">Payable Created</span>',
+        'MANUAL_PAYABLE_CREATED': '<span class="badge bg-primary">Payable Created</span>',
+        'CHEQUE_ISSUED': '<span class="badge bg-success">Cheque Issued</span>',
+        'CHEQUE_STATUS_UPDATED': '<span class="badge bg-warning text-dark">Status Updated</span>',
+    };
+    payablesAuditRowsById = {};
+    (data.rows || []).forEach((row) => {
+        payablesAuditRowsById[String(row.id)] = row;
+    });
+
+    tbody.innerHTML = data.rows.map(log => {
+        const referenceLabel = log.cheque_no_snapshot
+            ? `${escapeHtml(log.cheque_no_snapshot)}`
+            : (log.po_number_snapshot ? `${escapeHtml(log.po_number_snapshot)}` : 'View Details');
+
+        return `
+            <tr>
+                <td class="text-white-50 small">${escapeHtml(log.created_at || '-')}</td>
+                <td>
+                    <div class="fw-bold text-white">${escapeHtml(log.payee_name_snapshot || '-')}</div>
+                </td>
+                <td>${sourceBadge[log.source_type] || `<span class="badge bg-dark border border-secondary">${escapeHtml(log.source_label || log.source_type || '-')}</span>`}</td>
+                <td>${eventBadge[log.event_type] || `<span class="badge bg-dark border border-secondary">${escapeHtml(log.event_label || log.event_type || '-')}</span>`}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-warning border-0"
+                        style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                        onclick="openPayablesAuditDetails('${log.id}')">
+                        <i class="bi bi-search me-1"></i>${referenceLabel}
+                    </button>
+                </td>
+                <td class="text-end fw-bold">${log.amount_snapshot > 0 ? `₱${Number(log.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '<span class="text-muted">—</span>'}</td>
+                <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${escapeHtml(log.created_by_username || 'System')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function viewPayablesAuditDetails(auditId) {
+    const data = payablesAuditRowsById[String(auditId)];
+    const body = document.getElementById('payablesAuditDetailsBody');
+    if (!body || !data) {
+        return;
+    }
+
+    const statusText = data.old_status && data.new_status
+        ? `${escapeHtml(data.old_status)} → ${escapeHtml(data.new_status)}`
+        : (data.new_status ? escapeHtml(data.new_status) : '—');
+
+    body.innerHTML = `
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Date & Time</div>
+                <div class="fw-bold">${escapeHtml(data.created_at || '-')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Staff</div>
+                <div class="fw-bold">${escapeHtml(data.created_by_username || 'System')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Payee / Vendor</div>
+                <div class="fw-bold text-warning">${escapeHtml(data.payee_name_snapshot || '-')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Source</div>
+                <div class="fw-bold">${escapeHtml(data.source_label || '-')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Event</div>
+                <div class="fw-bold">${escapeHtml(data.event_label || '-')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Amount</div>
+                <div class="fw-bold text-info">${data.amount_snapshot > 0 ? `₱${Number(data.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">PO Number</div>
+                <div class="fw-bold">${escapeHtml(data.po_number_snapshot || '—')}</div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-white-50 mb-1">Cheque Number</div>
+                <div class="fw-bold">${escapeHtml(data.cheque_no_snapshot || '—')}</div>
+            </div>
+            <div class="col-12">
+                <div class="small text-white-50 mb-1">Status</div>
+                <div class="fw-bold">${statusText}</div>
+            </div>
+            <div class="col-12">
+                <div class="small text-white-50 mb-1">Notes</div>
+                <div class="text-info">${escapeHtml(data.notes || '—')}</div>
+            </div>
+        </div>
+    `;
+
+    new bootstrap.Modal(document.getElementById('payablesAuditDetailsModal')).show();
+}
+
+function openPayablesAuditDetails(auditId) {
+    const data = payablesAuditRowsById[String(auditId)];
+    const body = document.getElementById('payablesAuditDetailsBody');
+    if (!body || !data) {
+        return;
+    }
+
+    const statusText = data.old_status && data.new_status
+        ? `${escapeHtml(data.old_status)} -> ${escapeHtml(data.new_status)}`
+        : (data.new_status ? escapeHtml(data.new_status) : '-');
+
+    body.innerHTML = `
+        <div class="mb-3">
+            <div class="text-white fw-bold fs-5">${escapeHtml(data.event_label || 'Payables Audit Event')}</div>
+            <div class="text-white-50 small mt-1">
+                <i class="bi bi-clock me-1"></i>${escapeHtml(data.created_at || '-')}
+                <span class="ms-3"><i class="bi bi-person me-1"></i>${escapeHtml(data.created_by_username || 'System')}</span>
+            </div>
+        </div>
+
+        <div class="border border-secondary rounded p-3 mb-3">
+            <div class="text-warning fw-bold mb-2">
+                <i class="bi bi-building me-1"></i> Payable Reference
+            </div>
+            <div class="small text-white-50 mb-1">Payee / Vendor</div>
+            <div class="fw-bold text-warning mb-2">${escapeHtml(data.payee_name_snapshot || '-')}</div>
+            <div class="small text-white-50 mb-1">Source</div>
+            <div class="fw-bold mb-2">${escapeHtml(data.source_label || '-')}</div>
+            <div class="small text-white-50 mb-1">Amount</div>
+            <div class="fw-bold text-info mb-0">${data.amount_snapshot > 0 ? `&#8369;${Number(data.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</div>
+        </div>
+
+        <div class="border border-secondary rounded p-3 mb-3">
+            <div class="text-info fw-bold mb-2">
+                <i class="bi bi-link-45deg me-1"></i> Linked Reference
+            </div>
+            <div class="small text-white-50 mb-1">PO Number</div>
+            <div class="fw-bold mb-2">${escapeHtml(data.po_number_snapshot || '-')}</div>
+            <div class="small text-white-50 mb-1">Cheque Number</div>
+            <div class="fw-bold text-info mb-0">${escapeHtml(data.cheque_no_snapshot || '-')}</div>
+        </div>
+
+        <div class="border border-secondary rounded p-3">
+            <div class="text-success fw-bold mb-2">
+                <i class="bi bi-arrow-repeat me-1"></i> Change Details
+            </div>
+            <div class="small text-white-50 mb-1">Status</div>
+            <div class="fw-bold mb-2">${statusText}</div>
+            <div class="small text-white-50 mb-1">Notes</div>
+            <div class="text-info">${escapeHtml(data.notes || '-')}</div>
+        </div>
+    `;
+
+    new bootstrap.Modal(document.getElementById('payablesAuditDetailsModal')).show();
 }
 
 // --- SALES TAB STATE ---

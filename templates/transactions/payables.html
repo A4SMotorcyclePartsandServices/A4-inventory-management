@@ -249,6 +249,15 @@
         border: 1px solid var(--border-soft);
         color: var(--text-primary);
     }
+    .inline-warning {
+        font-size: 0.78rem;
+        color: #f4c430;
+        margin-top: 6px;
+        display: none;
+    }
+    .inline-warning.is-visible {
+        display: block;
+    }
     .modal-header, .modal-footer {
         border-color: var(--border-soft);
     }
@@ -425,7 +434,7 @@
         <div class="modal fade" id="issueChequeModal{{ payable.id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
                 <div class="modal-content">
-                    <form method="post" action="{{ url_for('payables.issue_payable_cheque_action', payable_id=payable.id) }}">
+                    <form method="post" action="{{ url_for('payables.issue_payable_cheque_action', payable_id=payable.id) }}" class="issue-cheque-form" data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
                         <div class="modal-header">
                             <h5 class="modal-title">Issue Cheque for {{ payable.payee_name }}</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -446,7 +455,8 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Cheque Amount</label>
-                                    <input type="number" step="0.01" min="0.01" max="{{ '%.2f'|format(payable.remaining_balance) }}" name="cheque_amount" class="form-control" value="{{ '%.2f'|format(payable.remaining_balance) }}" required>
+                                    <input type="number" step="0.01" min="0.01" max="{{ '%.2f'|format(payable.remaining_balance) }}" name="cheque_amount" class="form-control cheque-amount-input" value="{{ '%.2f'|format(payable.remaining_balance) }}" required>
+                                    <div class="inline-warning cheque-amount-warning">Cheque amount cannot go over the remaining balance.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Remaining Balance</label>
@@ -564,7 +574,7 @@
         <div class="modal fade" id="issueChequeModal{{ payable.id }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered modal-lg">
                 <div class="modal-content">
-                    <form method="post" action="{{ url_for('payables.issue_payable_cheque_action', payable_id=payable.id) }}">
+                    <form method="post" action="{{ url_for('payables.issue_payable_cheque_action', payable_id=payable.id) }}" class="issue-cheque-form" data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
                         <div class="modal-header">
                             <h5 class="modal-title">Issue Cheque for {{ payable.payee_name }}</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -585,7 +595,8 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Cheque Amount</label>
-                                    <input type="number" step="0.01" min="0.01" max="{{ '%.2f'|format(payable.remaining_balance) }}" name="cheque_amount" class="form-control" value="{{ '%.2f'|format(payable.remaining_balance) }}" required>
+                                    <input type="number" step="0.01" min="0.01" max="{{ '%.2f'|format(payable.remaining_balance) }}" name="cheque_amount" class="form-control cheque-amount-input" value="{{ '%.2f'|format(payable.remaining_balance) }}" required>
+                                    <div class="inline-warning cheque-amount-warning">Cheque amount cannot go over the remaining balance.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Remaining Balance</label>
@@ -629,7 +640,7 @@
                             <input type="text" name="payee_name" class="form-control" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Reference No.</label>
+                            <label class="form-label">Reference No./OR No.</label>
                             <input type="text" name="reference_no" class="form-control" placeholder="Optional reference">
                         </div>
                         <div class="col-md-6">
@@ -688,6 +699,50 @@ document.addEventListener('DOMContentLoaded', function () {
                 endHidden.value = fmt(selectedDates[1]);
             }
         }
+    });
+
+    document.querySelectorAll('.issue-cheque-form').forEach((form) => {
+        const amountInput = form.querySelector('.cheque-amount-input');
+        const warningEl = form.querySelector('.cheque-amount-warning');
+        const remainingBalance = Number.parseFloat(form.getAttribute('data-remaining-balance') || '0');
+        const submitBtn = form.querySelector('button[type="submit"]');
+
+        if (!amountInput || !warningEl || !Number.isFinite(remainingBalance)) {
+            return;
+        }
+
+        const syncAmountState = () => {
+            const parsed = Number.parseFloat(amountInput.value || '0');
+            if (!Number.isFinite(parsed)) {
+                warningEl.classList.remove('is-visible');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+            }
+
+            if (parsed > remainingBalance) {
+                amountInput.value = remainingBalance.toFixed(2);
+                warningEl.classList.add('is-visible');
+                if (submitBtn) submitBtn.disabled = false;
+            } else {
+                warningEl.classList.remove('is-visible');
+                if (submitBtn) submitBtn.disabled = parsed <= 0;
+            }
+        };
+
+        amountInput.addEventListener('input', syncAmountState);
+        amountInput.addEventListener('change', syncAmountState);
+
+        form.addEventListener('submit', (event) => {
+            const parsed = Number.parseFloat(amountInput.value || '0');
+            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > remainingBalance) {
+                event.preventDefault();
+                amountInput.value = remainingBalance.toFixed(2);
+                warningEl.classList.add('is-visible');
+                amountInput.focus();
+            }
+        });
+
+        syncAmountState();
     });
 });
 </script>

@@ -579,6 +579,32 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_due_date ON payable_cheques(due_date)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_status ON payable_cheques(status)")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payable_cheques_cheque_no_unique ON payable_cheques(cheque_no)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS payables_audit_log (
+        id                   SERIAL PRIMARY KEY,
+        payable_id           INTEGER REFERENCES payables(id) ON DELETE SET NULL,
+        cheque_id            INTEGER REFERENCES payable_cheques(id) ON DELETE SET NULL,
+        event_type           TEXT NOT NULL,
+        source_type          TEXT,
+        po_id                INTEGER REFERENCES purchase_orders(id) ON DELETE SET NULL,
+        po_receipt_id        INTEGER REFERENCES po_receipts(id) ON DELETE SET NULL,
+        po_number_snapshot   TEXT,
+        payee_name_snapshot  TEXT,
+        cheque_no_snapshot   TEXT,
+        amount_snapshot      NUMERIC(12,2),
+        old_status           TEXT,
+        new_status           TEXT,
+        notes                TEXT,
+        created_by           INTEGER REFERENCES users(id),
+        created_by_username  TEXT,
+        created_at           TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_created_at ON payables_audit_log(created_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_event_type ON payables_audit_log(event_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_source_type ON payables_audit_log(source_type)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_payable_id ON payables_audit_log(payable_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_cheque_id ON payables_audit_log(cheque_id)")
 
     # 23. NOTIFICATIONS TABLE
     # One row per recipient user. This keeps unread/read state independent

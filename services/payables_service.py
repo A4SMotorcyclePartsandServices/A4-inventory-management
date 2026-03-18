@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from db.database import get_db
 from services.notification_service import create_notifications_for_users, list_active_user_ids
@@ -14,6 +15,11 @@ CHEQUE_STATUS_ISSUED = "ISSUED"
 CHEQUE_STATUS_CLEARED = "CLEARED"
 CHEQUE_STATUS_CANCELLED = "CANCELLED"
 CHEQUE_STATUS_BOUNCED = "BOUNCED"
+MAX_PAYEE_NAME_LENGTH = 160
+MAX_DESCRIPTION_LENGTH = 500
+MAX_REFERENCE_NO_LENGTH = 120
+MAX_CHEQUE_NO_LENGTH = 120
+MAX_NOTES_LENGTH = 500
 
 
 def _now():
@@ -22,6 +28,28 @@ def _now():
 
 def _normalize_money(value):
     return round(float(value or 0), 2)
+
+
+def _parse_money(raw_value, field_label):
+    value = str(raw_value or "").strip()
+    if not value:
+        raise ValueError(f"{field_label} is required.")
+    try:
+        parsed = Decimal(value)
+    except (InvalidOperation, ValueError):
+        raise ValueError(f"{field_label} must be a valid amount.")
+    if parsed.is_nan() or parsed.is_infinite():
+        raise ValueError(f"{field_label} must be a valid amount.")
+    return float(parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _clean_text(raw_value, field_label, *, required=False, max_length=None):
+    value = str(raw_value or "").replace("\x00", "").strip()
+    if required and not value:
+        raise ValueError(f"{field_label} is required.")
+    if max_length and len(value) > max_length:
+        raise ValueError(f"{field_label} must be at most {max_length} characters.")
+    return value
 
 
 def _parse_iso_date(raw_value, field_label):
@@ -36,6 +64,121 @@ def _parse_iso_date(raw_value, field_label):
 
 def _payables_action_url():
     return "/transaction/payables"
+
+
+def _normalize_page(page):
+    try:
+        parsed = int(page or 1)
+    except (TypeError, ValueError):
+        parsed = 1
+    return max(1, parsed)
+
+
+def _escape_like(value):
+    return str(value or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _build_payable_audit_snapshot(payable_id, *, cheque_id=None, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                p.id AS payable_id,
+                p.source_type,
+                p.po_id,
+                p.po_receipt_id,
+                p.po_number_snapshot,
+                p.payee_name,
+                p.amount_due,
+                pc.id AS cheque_id,
+                pc.cheque_no,
+                pc.cheque_amount
+            FROM payables p
+            LEFT JOIN payable_cheques pc ON pc.id = %s
+            WHERE p.id = %s
+            """,
+            (int(cheque_id) if cheque_id is not None else None, int(payable_id)),
+        ).fetchone()
+        if not row:
+            return None
+        return dict(row)
+    finally:
+        if not external_conn:
+            conn.close()
+
+
+def log_payables_audit_event(
+    *,
+    event_type,
+    payable_id=None,
+    cheque_id=None,
+    source_type=None,
+    po_id=None,
+    po_receipt_id=None,
+    po_number_snapshot=None,
+    payee_name_snapshot=None,
+    cheque_no_snapshot=None,
+    amount_snapshot=None,
+    old_status=None,
+    new_status=None,
+    notes=None,
+    created_by=None,
+    created_by_username=None,
+    external_conn=None,
+):
+    conn = external_conn if external_conn else get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO payables_audit_log (
+                payable_id,
+                cheque_id,
+                event_type,
+                source_type,
+                po_id,
+                po_receipt_id,
+                po_number_snapshot,
+                payee_name_snapshot,
+                cheque_no_snapshot,
+                amount_snapshot,
+                old_status,
+                new_status,
+                notes,
+                created_by,
+                created_by_username,
+                created_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                int(payable_id) if payable_id is not None else None,
+                int(cheque_id) if cheque_id is not None else None,
+                str(event_type or "").strip(),
+                str(source_type or "").strip() or None,
+                int(po_id) if po_id is not None else None,
+                int(po_receipt_id) if po_receipt_id is not None else None,
+                str(po_number_snapshot or "").strip() or None,
+                str(payee_name_snapshot or "").strip() or None,
+                str(cheque_no_snapshot or "").strip() or None,
+                _normalize_money(amount_snapshot) if amount_snapshot is not None else None,
+                str(old_status or "").strip() or None,
+                str(new_status or "").strip() or None,
+                str(notes or "").strip() or None,
+                int(created_by) if created_by is not None else None,
+                str(created_by_username or "").strip() or None,
+                _now(),
+            ),
+        )
+        if not external_conn:
+            conn.commit()
+    except Exception:
+        if not external_conn:
+            conn.rollback()
+        raise
+    finally:
+        if not external_conn:
+            conn.close()
 
 
 def _sum_active_cheque_amount(payable_id, external_conn=None):
@@ -190,6 +333,21 @@ def ensure_payable_for_po_receipt(receipt_id, *, created_by=None, created_by_use
 
         payable_id = int(payable_row["id"])
         sync_payable_status(payable_id, external_conn=conn)
+        log_payables_audit_event(
+            event_type="PO_PAYABLE_CREATED",
+            payable_id=payable_id,
+            source_type="PO_DELIVERY",
+            po_id=receipt["po_id"],
+            po_receipt_id=receipt["id"],
+            po_number_snapshot=receipt["po_number"],
+            payee_name_snapshot=receipt["vendor_name"] or "Supplier",
+            amount_snapshot=receipt["total_amount"],
+            new_status=PAYABLE_STATUS_OPEN,
+            notes="Auto-created from PO delivery batch.",
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
+        )
 
         if not external_conn:
             conn.commit()
@@ -204,15 +362,11 @@ def ensure_payable_for_po_receipt(receipt_id, *, created_by=None, created_by_use
 
 
 def create_manual_payable(*, payee_name, description, amount_due, reference_no=None, created_by=None, created_by_username=None):
-    payee_name = str(payee_name or "").strip()
-    description = str(description or "").strip()
-    reference_no = str(reference_no or "").strip()
-    amount_due_value = _normalize_money(amount_due)
+    payee_name = _clean_text(payee_name, "Payee", required=True, max_length=MAX_PAYEE_NAME_LENGTH)
+    description = _clean_text(description, "Description", required=True, max_length=MAX_DESCRIPTION_LENGTH)
+    reference_no = _clean_text(reference_no, "Reference no.", max_length=MAX_REFERENCE_NO_LENGTH)
+    amount_due_value = _parse_money(amount_due, "Amount due")
 
-    if not payee_name:
-        raise ValueError("Payee is required.")
-    if not description:
-        raise ValueError("Description is required.")
     if amount_due_value <= 0:
         raise ValueError("Amount due must be greater than zero.")
 
@@ -248,8 +402,21 @@ def create_manual_payable(*, payee_name, description, amount_due, reference_no=N
                 _now(),
             ),
         ).fetchone()
+        payable_id = int(row["id"])
+        log_payables_audit_event(
+            event_type="MANUAL_PAYABLE_CREATED",
+            payable_id=payable_id,
+            source_type="MANUAL",
+            payee_name_snapshot=payee_name,
+            amount_snapshot=amount_due_value,
+            new_status=PAYABLE_STATUS_OPEN,
+            notes=description,
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
+        )
         conn.commit()
-        return int(row["id"])
+        return payable_id
     except Exception:
         conn.rollback()
         raise
@@ -268,14 +435,12 @@ def issue_payable_cheque(
     created_by=None,
     created_by_username=None,
 ):
-    cheque_no = str(cheque_no or "").strip()
-    notes = str(notes or "").strip()
-    cheque_amount_value = _normalize_money(cheque_amount)
+    cheque_no = _clean_text(cheque_no, "Cheque number", required=True, max_length=MAX_CHEQUE_NO_LENGTH)
+    notes = _clean_text(notes, "Notes", max_length=MAX_NOTES_LENGTH)
+    cheque_amount_value = _parse_money(cheque_amount, "Cheque amount")
     cheque_date_value = _parse_iso_date(cheque_date, "Cheque date")
     due_date_value = _parse_iso_date(due_date, "Due date")
 
-    if not cheque_no:
-        raise ValueError("Cheque number is required.")
     if cheque_amount_value <= 0:
         raise ValueError("Cheque amount must be greater than zero.")
     if due_date_value < cheque_date_value:
@@ -285,7 +450,7 @@ def issue_payable_cheque(
     try:
         payable = conn.execute(
             """
-            SELECT id, payee_name, amount_due, status
+            SELECT id, source_type, po_id, po_receipt_id, po_number_snapshot, payee_name, amount_due, status
             FROM payables
             WHERE id = %s
             """,
@@ -313,7 +478,7 @@ def issue_payable_cheque(
         if cheque_amount_value > remaining_balance:
             raise ValueError(f"Cheque amount exceeds the remaining balance of {remaining_balance:,.2f}.")
 
-        conn.execute(
+        cheque_row = conn.execute(
             """
             INSERT INTO payable_cheques (
                 payable_id,
@@ -329,6 +494,7 @@ def issue_payable_cheque(
                 updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
             """,
             (
                 int(payable_id),
@@ -343,6 +509,25 @@ def issue_payable_cheque(
                 _now(),
                 _now(),
             ),
+        ).fetchone()
+        cheque_id = int(cheque_row["id"])
+
+        log_payables_audit_event(
+            event_type="CHEQUE_ISSUED",
+            payable_id=payable_id,
+            cheque_id=cheque_id,
+            source_type=payable["source_type"],
+            po_id=payable["po_id"],
+            po_receipt_id=payable["po_receipt_id"],
+            po_number_snapshot=payable["po_number_snapshot"],
+            payee_name_snapshot=payable["payee_name"],
+            cheque_no_snapshot=cheque_no,
+            amount_snapshot=cheque_amount_value,
+            new_status=CHEQUE_STATUS_ISSUED,
+            notes=notes,
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
         )
 
         sync_payable_status(payable_id, external_conn=conn)
@@ -354,7 +539,7 @@ def issue_payable_cheque(
         conn.close()
 
 
-def update_payable_cheque_status(cheque_id, status):
+def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_by_username=None):
     normalized_status = str(status or "").strip().upper()
     if normalized_status not in {
         CHEQUE_STATUS_ISSUED,
@@ -366,6 +551,28 @@ def update_payable_cheque_status(cheque_id, status):
 
     conn = get_db()
     try:
+        current = conn.execute(
+            """
+            SELECT
+                pc.id,
+                pc.payable_id,
+                pc.cheque_no,
+                pc.cheque_amount,
+                pc.status,
+                p.source_type,
+                p.po_id,
+                p.po_receipt_id,
+                p.po_number_snapshot,
+                p.payee_name
+            FROM payable_cheques pc
+            JOIN payables p ON p.id = pc.payable_id
+            WHERE pc.id = %s
+            """,
+            (int(cheque_id),),
+        ).fetchone()
+        if not current:
+            raise ValueError("Cheque record not found.")
+
         row = conn.execute(
             """
             UPDATE payable_cheques
@@ -376,8 +583,24 @@ def update_payable_cheque_status(cheque_id, status):
             """,
             (normalized_status, _now(), int(cheque_id)),
         ).fetchone()
-        if not row:
-            raise ValueError("Cheque record not found.")
+        log_payables_audit_event(
+            event_type="CHEQUE_STATUS_UPDATED",
+            payable_id=current["payable_id"],
+            cheque_id=current["id"],
+            source_type=current["source_type"],
+            po_id=current["po_id"],
+            po_receipt_id=current["po_receipt_id"],
+            po_number_snapshot=current["po_number_snapshot"],
+            payee_name_snapshot=current["payee_name"],
+            cheque_no_snapshot=current["cheque_no"],
+            amount_snapshot=current["cheque_amount"],
+            old_status=current["status"],
+            new_status=normalized_status,
+            notes=f"Cheque status updated from {current['status']} to {normalized_status}.",
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
+        )
 
         sync_payable_status(int(row["payable_id"]), external_conn=conn)
         conn.commit()
@@ -578,6 +801,123 @@ def build_payables_report_context(start_date=None, end_date=None):
         "total_amount": round(total_amount, 2),
         "start_date": start_value,
         "end_date": end_value,
+    }
+
+
+def get_payables_audit_log(
+    *,
+    page=1,
+    start_date=None,
+    end_date=None,
+    event_type=None,
+    source_type=None,
+    payee_search=None,
+    cheque_no_search=None,
+    per_page=20,
+):
+    current_page = _normalize_page(page)
+    offset = (current_page - 1) * per_page
+    params = []
+    conditions = []
+
+    start_value = str(start_date or "").strip() or None
+    end_value = str(end_date or "").strip() or None
+    if start_value:
+        conditions.append("DATE(created_at) >= %s")
+        params.append(start_value)
+    if end_value:
+        conditions.append("DATE(created_at) <= %s")
+        params.append(end_value)
+
+    event_value = str(event_type or "").strip().upper() or None
+    valid_event_types = {"PO_PAYABLE_CREATED", "MANUAL_PAYABLE_CREATED", "CHEQUE_ISSUED", "CHEQUE_STATUS_UPDATED"}
+    if event_value:
+        if event_value not in valid_event_types:
+            raise ValueError("Invalid payables audit event type.")
+        conditions.append("event_type = %s")
+        params.append(event_value)
+
+    source_value = str(source_type or "").strip().upper() or None
+    valid_source_types = {"PO_DELIVERY", "MANUAL"}
+    if source_value:
+        if source_value not in valid_source_types:
+            raise ValueError("Invalid payables audit source type.")
+        conditions.append("source_type = %s")
+        params.append(source_value)
+
+    payee_value = str(payee_search or "").strip()
+    if payee_value:
+        conditions.append("payee_name_snapshot ILIKE %s ESCAPE '\\'")
+        params.append(f"%{_escape_like(payee_value)}%")
+
+    cheque_value = str(cheque_no_search or "").strip()
+    if cheque_value:
+        conditions.append("cheque_no_snapshot ILIKE %s ESCAPE '\\'")
+        params.append(f"%{_escape_like(cheque_value)}%")
+
+    where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    conn = get_db()
+    try:
+        total_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS total_count
+            FROM payables_audit_log
+            {where_sql}
+            """,
+            params,
+        ).fetchone()
+        total = int(total_row["total_count"] or 0)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        if current_page > total_pages:
+            current_page = total_pages
+            offset = (current_page - 1) * per_page
+
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM payables_audit_log
+            {where_sql}
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s OFFSET %s
+            """,
+            params + [per_page, offset],
+        ).fetchall()
+    finally:
+        conn.close()
+
+    serialized_rows = []
+    for row in rows:
+        data = dict(row)
+        event_type_value = data.get("event_type") or "-"
+        source_type_value = data.get("source_type") or "-"
+        serialized_rows.append({
+            "id": int(data["id"]),
+            "created_at": format_date(data.get("created_at"), show_time=True),
+            "event_type": event_type_value,
+            "event_label": {
+                "PO_PAYABLE_CREATED": "PO Payable Created",
+                "MANUAL_PAYABLE_CREATED": "Manual Payable Created",
+                "CHEQUE_ISSUED": "Cheque Issued",
+                "CHEQUE_STATUS_UPDATED": "Cheque Status Updated",
+            }.get(event_type_value, event_type_value.replace("_", " ").title()),
+            "source_type": source_type_value,
+            "source_label": "PO Delivery" if source_type_value == "PO_DELIVERY" else ("Manual" if source_type_value == "MANUAL" else source_type_value),
+            "po_number_snapshot": data.get("po_number_snapshot") or "",
+            "payee_name_snapshot": data.get("payee_name_snapshot") or "-",
+            "cheque_no_snapshot": data.get("cheque_no_snapshot") or "",
+            "amount_snapshot": _normalize_money(data.get("amount_snapshot")),
+            "old_status": data.get("old_status") or "",
+            "new_status": data.get("new_status") or "",
+            "notes": data.get("notes") or "",
+            "created_by_username": data.get("created_by_username") or "System",
+        })
+
+    return {
+        "rows": serialized_rows,
+        "page": current_page,
+        "total": total,
+        "total_pages": total_pages,
     }
 
 

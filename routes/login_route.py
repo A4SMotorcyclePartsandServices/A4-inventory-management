@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 from utils.formatters import format_date, norm_text
 from services.audit_service import get_audit_trail
+from services.payables_service import get_payables_audit_log
 from services.sales_admin_service import get_sales_paginated
 from auth.utils import (
     clear_failed_login_attempts,
@@ -544,6 +545,33 @@ def admin_sales_api():
             payment_status=payment_status,
         )
         return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@auth_bp.route("/api/payables/audit")
+def payables_audit_api():
+    try:
+        page = int(request.args.get("page", 1))
+        start_date = request.args.get("start_date") or None
+        end_date = request.args.get("end_date") or None
+        event_type = request.args.get("event_type") or None
+        source_type = request.args.get("source_type") or None
+        payee_search = (request.args.get("payee_search") or "").strip() or None
+        cheque_no_search = (request.args.get("cheque_no_search") or "").strip() or None
+
+        data = get_payables_audit_log(
+            page=page,
+            start_date=start_date,
+            end_date=end_date,
+            event_type=event_type,
+            source_type=source_type,
+            payee_search=payee_search,
+            cheque_no_search=cheque_no_search,
+        )
+        return jsonify(data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     

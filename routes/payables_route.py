@@ -66,7 +66,12 @@ def issue_payable_cheque_action(payable_id):
 @login_required
 def update_cheque_status_action(cheque_id):
     try:
-        update_payable_cheque_status(cheque_id, request.form.get("status"))
+        update_payable_cheque_status(
+            cheque_id,
+            request.form.get("status"),
+            created_by=session.get("user_id"),
+            created_by_username=session.get("username"),
+        )
         flash("Cheque status updated.", "success")
     except ValueError as exc:
         flash(str(exc), "danger")
