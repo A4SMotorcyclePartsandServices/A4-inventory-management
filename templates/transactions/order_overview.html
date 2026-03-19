@@ -357,6 +357,19 @@
         font-size: 0.95rem;
         color: var(--text-primary);
         margin-bottom: 3px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .po-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+        margin-bottom: 0.25rem;
+        min-width: 0;
     }
 
     .po-vendor {
@@ -432,6 +445,19 @@
         background: var(--po-cancelled-soft);
         color: var(--po-cancelled);
         border: 1px solid var(--po-cancelled-border);
+    }
+
+    .badge-for-approval,
+    .badge-revisions,
+    .badge-pending,
+    .badge-partial,
+    .badge-completed,
+    .badge-cancelled {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        flex-shrink: 0;
+        line-height: 1.2;
     }
 
     .empty-state {
@@ -708,10 +734,11 @@
     }
 
     .history-notes {
-        color: var(--text-primary);
+        color: #f4c430;
         font-size: 0.82rem;
         margin-top: 6px;
         white-space: pre-wrap;
+        font-weight: 700;
     }
 
     .btn-close-white {
@@ -1142,7 +1169,7 @@
                 data-po-status-label="For Approval"
                 onclick="openOrderDetails({{ order.id }})"
             >
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-for-approval">For Approval</span>
                 </div>
@@ -1177,7 +1204,7 @@
                 data-po-status-label="For Revisions"
                 onclick="openOrderDetails({{ order.id }})"
             >
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-revisions">For Revisions</span>
                 </div>
@@ -1212,7 +1239,7 @@
                 data-po-status-label="Approved"
                 onclick="openOrderDetails({{ order.id }})"
             >
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-pending">Approved</span>
                 </div>
@@ -1247,7 +1274,7 @@
                 data-po-status-label="Partial Delivery"
                 onclick="openOrderDetails({{ order.id }})"
             >
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number">{{ order.po_number }}</div>
                     <span class="badge-partial">Partial Delivery</span>
                 </div>
@@ -1781,7 +1808,7 @@ function renderPoSearchResultCard(match) {
     return `
         <div class="col-md-4">
             <div class="po-box status-${escapeHtml(match.statusKey)}" onclick="openOrderDetails(${Number(match.id)})">
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number">${escapeHtml(match.poNumber)}</div>
                     ${renderStatusBadgeByKey(match.statusKey, match.statusLabel)}
                 </div>
@@ -1866,7 +1893,7 @@ function renderArchiveMonthCard(match) {
     return `
         <div class="col-md-3">
             <div class="po-box status-${escapeHtml(match.statusKey)}" onclick="openOrderDetails(${Number(match.id)})">
-                <div class="d-flex justify-content-between align-items-start mb-1">
+                <div class="po-card-header">
                     <div class="po-number" style="font-size:0.85rem;">${escapeHtml(match.poNumber)}</div>
                     ${renderStatusBadgeByKey(match.statusKey, match.statusLabel)}
                 </div>
@@ -2075,11 +2102,11 @@ async function openOrderDetails(poId) {
         document.getElementById('modalItemsSummary').innerHTML = isPartialDelivery ? `
             <div class="po-summary-grid">
                 <div class="po-summary-card">
-                    <span class="po-summary-title">PO Total</span>
+                    <span class="po-summary-title">Total PO</span>
                     <span class="po-summary-value">${escapeHtml(formatMoney(data.po.total_amount || 0))}</span>
                 </div>
                 <div class="po-summary-card delivered">
-                    <span class="po-summary-title">Delivered Value</span>
+                    <span class="po-summary-title">Delivered Amount</span>
                     <span class="po-summary-value">${escapeHtml(formatMoney(deliveredValueTotal))}</span>
                 </div>
                 <div class="po-summary-card remaining">
@@ -2142,7 +2169,7 @@ function renderApprovalHistory(actions) {
         <li>
             <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
             <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
-            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+            ${action.notes ? `<div class="history-notes">Notes: ${escapeHtml(action.notes)}</div>` : ''}
         </li>
     `).join('');
 }
@@ -2229,7 +2256,7 @@ function renderApprovalHistory(actions) {
         <li>
             <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
             <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
-            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+            ${action.notes ? `<div class="history-notes">Notes: ${escapeHtml(action.notes)}</div>` : ''}
             ${renderHistoryRevisionItems(action.revision_items || [])}
         </li>
     `).join('');
@@ -2310,7 +2337,7 @@ function renderApprovalHistory(actions) {
         <li>
             <div class="history-title">${escapeHtml(String(action.action_type || '').replaceAll('_', ' '))}</div>
             <div class="history-meta">${escapeHtml(action.action_by_username || 'System')} • ${escapeHtml(action.action_at || '')}</div>
-            ${action.notes ? `<div class="history-notes">${escapeHtml(action.notes)}</div>` : ''}
+            ${action.notes ? `<div class="history-notes">Notes: ${escapeHtml(action.notes)}</div>` : ''}
             ${renderHistoryRevisionItems(action.revision_items || [])}
             ${renderHistoryChangeEntries(action.change_entries || [])}
         </li>

@@ -373,10 +373,11 @@
     }
 
     .timeline-notes {
-        color: var(--text-primary);
+        color: #f4c430;
         font-size: 0.9rem;
         white-space: pre-wrap;
         margin-bottom: 12px;
+        font-weight: 700;
     }
 
     .change-block {
@@ -680,11 +681,11 @@
         {% if is_partial_delivery %}
         <div class="review-summary-grid">
             <div class="review-summary-card">
-                <span class="review-summary-title">PO Total</span>
+                <span class="review-summary-title">Total PO</span>
                 <span class="review-summary-value">{{ "%.2f"|format(po.total_amount or 0) }}</span>
             </div>
             <div class="review-summary-card delivered">
-                <span class="review-summary-title">Delivered Value</span>
+                <span class="review-summary-title">Delivered Amount</span>
                 <span class="review-summary-value">{{ "%.2f"|format(summary.delivered) }}</span>
             </div>
             <div class="review-summary-card remaining">
@@ -751,7 +752,7 @@
                 </div>
                 <div class="timeline-body">
                     {% if action.notes %}
-                    <div class="timeline-notes">{{ action.notes }}</div>
+                    <div class="timeline-notes">Notes: {{ action.notes }}</div>
                     {% endif %}
 
                     {% if action.revision_items %}

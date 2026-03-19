@@ -649,11 +649,11 @@
 {% if is_partial_delivery %}
 <div class="summary-grid">
     <div class="summary-card">
-        <span class="summary-label">PO Total</span>
+        <span class="summary-label">Total PO</span>
         <span class="summary-value">{{ "%.2f"|format(po.total_amount) }}</span>
     </div>
     <div class="summary-card delivered">
-        <span class="summary-label">Delivered Value</span>
+        <span class="summary-label">Delivered Amount</span>
         <span class="summary-value">{{ "%.2f"|format(totals.delivered) }}</span>
     </div>
     <div class="summary-card remaining">

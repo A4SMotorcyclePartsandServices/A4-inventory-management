@@ -593,6 +593,66 @@
         border-radius: 12px;
         background: #13161e;
         padding: 13px 14px;
+        position: relative;
+    }
+
+    .refund-history-entry {
+        display: block;
+        text-align: left;
+    }
+
+    .refund-history-main {
+        min-width: 0;
+        width: 100%;
+        padding: 0 92px 0 0;
+    }
+
+    .refund-history-number {
+        color: #ff4d5a;
+        font-size: 1rem;
+        font-weight: 800;
+        line-height: 1.25;
+    }
+
+    .refund-history-meta {
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 0.84rem;
+    }
+
+    .refund-history-link {
+        margin-top: 10px;
+        color: #2ec5ff;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        word-break: break-word;
+    }
+
+    .refund-history-reason {
+        margin-top: 10px;
+        color: #f4c430;
+        font-size: 0.98rem;
+        font-weight: 700;
+        line-height: 1.4;
+    }
+
+    .refund-history-notes {
+        margin-top: 8px;
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    .refund-history-amount {
+        color: #ff4d5a;
+        font-size: 1.05rem;
+        font-weight: 800;
+        font-family: 'Courier New', monospace;
+        white-space: nowrap;
+        position: absolute;
+        top: 13px;
+        right: 14px;
     }
 
     .empty-history {
@@ -645,6 +705,16 @@
         .refund-form-grid,
         .exchange-summary {
             grid-template-columns: 1fr;
+        }
+
+        .refund-history-main {
+            padding-right: 0;
+        }
+
+        .refund-history-amount {
+            position: static;
+            display: block;
+            margin-top: 10px;
         }
 
         .refund-action-bar,
@@ -1086,7 +1156,7 @@ function renderRefundDetail(data) {
                     </div>
                     <div class="detail-meta-row">
                         <div class="detail-subtitle">
-                            <span class="detail-meta-label">Payment:</span>
+                            <span class="detail-meta-label">Payment Method:</span>
                             <span class="detail-meta-value">${escapeHtml(data.payment_method_name || '-')}</span>
                         </div>
                         <div class="detail-subtitle">
@@ -1100,11 +1170,11 @@ function renderRefundDetail(data) {
 
             <div class="summary-grid">
                 <div class="summary-box">
-                    <div class="summary-label">Sale Total</div>
+                    <div class="summary-label">Total Sale</div>
                     <div class="summary-value">${refundMoney(data.total_amount)}</div>
                 </div>
                 <div class="summary-box">
-                    <div class="summary-label">Refunded So Far</div>
+                    <div class="summary-label">Amount Refunded</div>
                     <div class="summary-value text-danger">${refundMoney(data.total_refunded)}</div>
                 </div>
                 <div class="summary-box">
@@ -1124,9 +1194,9 @@ function renderRefundDetail(data) {
                         <thead>
                             <tr>
                                 <th>Item</th>
-                                <th class="text-center">Sold</th>
-                                <th class="text-center">Refunded</th>
-                                <th class="text-center">Remaining</th>
+                                <th class="text-center">Quantity</th>
+                                <th class="text-center">Refunded Qty</th>
+                                <th class="text-center">Remaining Qty</th>
                                 <th class="text-end">Unit Price</th>
                                 <th class="text-end">Refund Qty</th>
                             </tr>
@@ -1244,15 +1314,15 @@ function renderRefundDetail(data) {
                 <div class="history-list">
                     ${(data.refund_history || []).length ? data.refund_history.map(refund => `
                         <div class="history-item">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <div class="fw-bold text-danger">${escapeHtml(refund.refund_number || 'Refund')}</div>
-                                    <div class="panel-meta">${escapeHtml(refund.refund_date_display || '')} · ${escapeHtml(refund.refunded_by_username || 'System')}</div>
-                                    ${refund.exchange_number ? `<div class="small text-info mt-1">Exchange ${escapeHtml(refund.exchange_number)} · Replacement OR ${escapeHtml(refund.replacement_sales_number || '-')}</div>` : ''}
-                                    <div class="mt-1 text-white">${escapeHtml(refund.reason || '')}</div>
-                                    ${refund.notes ? `<div class="small text-info mt-1">${escapeHtml(refund.notes)}</div>` : ''}
+                            <div class="refund-history-entry">
+                                <div class="refund-history-main">
+                                    <div class="refund-history-number">${escapeHtml(refund.refund_number || 'Refund')}</div>
+                                    <div class="refund-history-meta">${escapeHtml(refund.refund_date_display || '')} · ${escapeHtml(refund.refunded_by_username || 'System')}</div>
+                                    ${refund.exchange_number ? `<div class="refund-history-link">Exchange ${escapeHtml(refund.exchange_number)} · Replacement OR ${escapeHtml(refund.replacement_sales_number || '-')}</div>` : ''}
+                                    <div class="refund-history-reason">Reason: ${escapeHtml(refund.reason || '')}</div>
+                                    ${refund.notes ? `<div class="refund-history-notes">Notes: ${escapeHtml(refund.notes)}</div>` : ''}
                                 </div>
-                                <div class="fw-bold text-danger">${refundMoney(refund.refund_amount)}</div>
+                                <div class="refund-history-amount">${refundMoney(refund.refund_amount)}</div>
                             </div>
                         </div>
                     `).join('') : '<div class="empty-history">No refunds recorded for this sale.</div>'}

@@ -1,6 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 
-from auth.utils import admin_required, login_required
+from auth.utils import login_required
 from services.payables_service import (
     build_payables_report_context,
     create_manual_payable,
@@ -81,7 +81,7 @@ def update_cheque_status_action(cheque_id):
 
 
 @payables_bp.route("/reports/payables")
-@admin_required
+@login_required
 def payables_report():
     try:
         context = build_payables_report_context(
