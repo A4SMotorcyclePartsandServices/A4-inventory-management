@@ -1331,7 +1331,7 @@ function submitRefundForSelectedSale() {
 
         const difference = Number((getCurrentReplacementTotal() - getCurrentRefundSelectionTotal()).toFixed(2));
         const adjustmentText = difference > 0
-            ? `Customer top-up required: ${refundMoney(difference)}.`
+            ? `Customer additional payment required: ${refundMoney(difference)}.`
             : difference < 0
             ? `Shop cash out required: ${refundMoney(Math.abs(difference))}.`
             : 'This is an even exchange.';

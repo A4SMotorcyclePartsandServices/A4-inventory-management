@@ -448,12 +448,12 @@
         <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Motor Shop Logo" class="shop-logo">
         <div>
             <div class="shop-name">A4s Motorcycle Shop & Services</div>
-            <div class="shop-tagline">Customer Debt Statement</div>
+            <div class="shop-tagline">Customer Account Statement</div>
         </div>
     </div>
     <div class="stmt-title">
         <h2>Statement of Account</h2>
-        <p>Statement Date: <strong>{{ data.summary.statement_date }}</strong></p>
+        <p>Statement as of: <strong>{{ data.summary.statement_date }}</strong></p>
     </div>
 </div>
 
@@ -475,11 +475,11 @@
 
     <div class="summary-grid">
         <div class="summary-card">
-            <label>Active Utang</label>
+            <label>Outstanding Transactions</label>
             <div class="value">{{ data.summary.active_sale_count }}</div>
         </div>
         <div class="summary-card paid">
-            <label>Total Paid on Active Utang</label>
+            <label>Total Paid Amount</label>
             <div class="value">P{{ "%.2f"|format(data.summary.total_paid) }}</div>
         </div>
         <div class="summary-card remaining">
@@ -489,16 +489,16 @@
     </div>
 </div>
 
-<div class="section-title">Active Utang</div>
+<div class="section-title">Outstanding Transactions</div>
 {% if data.active_sales %}
 <table class="statement-table">
     <thead>
         <tr class="sale-row">
-            <th>Receipt</th>
+            <th>Reference/OR No.</th>
             <th>Date</th>
             <th>Vehicle</th>
-            <th class="text-right">Amount</th>
-            <th class="text-right">Paid</th>
+            <th class="text-right">Total Amount</th>
+            <th class="text-right">Paid Amount</th>
             <th class="text-right">Balance</th>
         </tr>
     </thead>
@@ -580,14 +580,14 @@
 <p class="no-payments">No active utang found for this customer.</p>
 {% endif %}
 
-<div class="section-title">Payment History for Active Utang</div>
+<div class="section-title">Payment History for Outstanding Transaction</div>
 {% if data.payments %}
 <table class="statement-table">
     <thead>
         <tr>
             <th>Date Paid</th>
-            <th>Receipt</th>
-            <th>Method</th>
+            <th>Receipt/OR No.</th>
+            <th>Payment Method</th>
             <th>Reference</th>
             <th class="text-right">Amount</th>
             <th>Staff</th>
@@ -610,16 +610,16 @@
 <p class="no-payments">No payments recorded yet.</p>
 {% endif %}
 
-<div class="section-title">Running Balance Ledger</div>
+<div class="section-title">Outstanding Balance</div>
 {% if data.ledger %}
 <table class="statement-table">
     <thead>
         <tr>
             <th>Date</th>
             <th>Description</th>
-            <th>Reference</th>
-            <th class="text-right">Debt Added</th>
-            <th class="text-right">Payment</th>
+            <th>Receipt/OR No.</th>
+            <th class="text-right">Total Amount</th>
+            <th class="text-right">Paid Amount</th>
             <th class="text-right">Running Balance</th>
         </tr>
     </thead>

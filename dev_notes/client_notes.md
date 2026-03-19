@@ -109,3 +109,44 @@ Future upgrade: move to Redis or DB
 - basically just cheque monitoring for cheque made and alerting user of due cheques
 - PDF report for this. cheques issued this month and stuff as report
 - user has access to this page but the pdf report is only for admin
+
+## Client meeting March 19, 2026
+
+## PO Page
+- Change modal table headers. PO Total to Total PO, Delivered Value to Delivered Amount
+- Show history notes. instead of plainly displaying the notes, add Reason: {notes}. use red font
+- Completed delivery chip displays weirdly in laptop
+- new scenario. per box or per plastic items. as per discussion, this will diverge wherein we will have to record the item's price per box. basically say oil costs 300 a piece, per box contains 12 pieces. we need to make sure the system records that per box is 12 pieces so that means we have 36 oil incoming and their price is still 300 unless edited in est cost in the order page. then the box costs say 10,000. that one will diverge towards the payables page where the po cheque system lives. items quantity that will arrive will come from number of boxes times items per box. 
+- box scenario we have to think about it but i have an idea. start from PO give option to choose from by box or by quantity. make per box require est cost. not auto calculated input needed from user. save it. when in receive we need new inputs to accomodate items received by box. basically at this point the shop has the box and can count before entering it into the system. let us leverage that. after receiving, use the user's inputted box amount as the payable for cheque issuance in payables page then we have a auto calculation wherein the price of the box and the items inside will determine the cost per piece. formula is amount of one box divided by the qty of items inside that box
+
+## Order Page
+- change vendor on items database saving. instead of overwriting, make it add the vendor. then in order page, when a certain vendor is selected, pull out items the shop usually orders then recommend 5 of them. chips form. for easy selection
+
+## Cash Ledger page
+- Change hard delete to soft delete. make it recycle bin style, make the deleted data able to come back, we have to record who deleted data, auto clear recycle bin every month
+
+## Refund Feature
+- expand search to accomodate by item search and by date
+- Payment change to payment method
+- Change sale total to total sale
+- Change sold to quantity
+- Refunded so to amount refunded
+- Refunded to refunded qty
+- Remaining to remaining qty
+- change Sale Refund auto genrating format from RF-021384-0319 - 021384 - Patrick Jacob Latade to RF-OR NO.-Date - customer name
+- change exchange refund from RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032) to RF-89032-0319 - Patrick Jacob Latade (EX-89032)
+- change exchange replacement from EX-89032 — Patrick Jacob Latade (EX-89032) to SW-89032-current month and day — Patrick Jacob Latade (SW-89032)
+- change the RF auto generation to remove the OR No. in the middle RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032)
+- change category autofill
+- from exchange refund to exchange/refund
+- from exchange replacement to exchange/replacement
+
+## Payables Feature
+- change button name from new manual payable to create payable
+- due date is same as cheque date. change that
+- PDF add cleared cheques. add all cheques of all statuses and arrange data from closest to cheque data to farthest
+- Generate PDF should be accessible by staff
+- Collapse the cheque history. only show due cheques this month. hide other cheques not until it is lazy loaded?
+
+## Base page
+- change the notifications system. client requested for it to not be timed and for it to be closed when user presses on it. when user presses it, redirect user to where the error led them. for example they were creating a sale, when they submit and an error pops up, higlight that error so they know where they went wrong
