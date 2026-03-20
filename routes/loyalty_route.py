@@ -4,6 +4,7 @@ from services.loyalty_service import (
     get_all_programs,
     create_program,
     toggle_program,
+    extend_program_period,
     get_customer_eligibility,
     get_customer_earn_only,
     redeem_reward,
@@ -74,7 +75,7 @@ def toggle_program_route(program_id):
         toggle_program(program_id, is_active)
         conn = get_db()
         row = conn.execute(
-            "SELECT name, is_active FROM loyalty_programs WHERE id = %s",
+            "SELECT name, is_active, period_end FROM loyalty_programs WHERE id = %s",
             (program_id,)
         ).fetchone()
         conn.close()
@@ -87,6 +88,28 @@ def toggle_program_route(program_id):
         })
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@loyalty_bp.route("/api/loyalty/programs/<int:program_id>/extend", methods=["POST"])
+def extend_program_route(program_id):
+    user_id, role = _require_login()
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    if role != "admin":
+        return jsonify({"error": "Admin only."}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        updated = extend_program_period(program_id, data.get("period_end"))
+        return jsonify({
+            "status": "success",
+            "program": updated,
+            "message": f"{updated['name']} was extended to {updated['period_end']}."
+        })
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

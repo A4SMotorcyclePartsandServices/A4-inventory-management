@@ -86,6 +86,52 @@
         border-top-left-radius: 0;
         border-top-right-radius: 0;
     }
+    .vendor-recommendations {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .vendor-recommendations-label {
+        color: #d1d5db;
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    .vendor-recommendations-meta {
+        color: #9ca3af;
+        font-size: 0.82rem;
+        margin-bottom: 10px;
+    }
+    .vendor-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .vendor-chip {
+        border: 1px solid rgba(103, 194, 228, 0.4);
+        background: rgba(103, 194, 228, 0.12);
+        color: #e5f6fd;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.85rem;
+        line-height: 1.1;
+        transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    }
+    .vendor-chip:hover {
+        background: rgba(103, 194, 228, 0.2);
+        border-color: rgba(103, 194, 228, 0.7);
+        color: #fff;
+    }
+    .vendor-chip.is-added {
+        opacity: 0.55;
+        cursor: default;
+    }
+    .vendor-chip-empty {
+        color: #7d8590;
+        font-size: 0.88rem;
+    }
     #newVendorModal .modal-dialog {
         margin-top: 7.5rem;
     }
@@ -173,6 +219,11 @@
                 <div class="mb-3">
                     <label class="form-label text">Notes</label>
                     <textarea id="po_notes" class="form-control bg-dark text-white border-secondary" rows="3"></textarea>
+                </div>
+                <div id="vendorRecommendations" class="vendor-recommendations" style="display:none;">
+                    <div class="vendor-recommendations-label">Suggested Items</div>
+                    <div id="vendorRecommendationsMeta" class="vendor-recommendations-meta"></div>
+                    <div id="vendorRecommendationChips" class="vendor-chip-list"></div>
                 </div>
             </div>
 
@@ -278,6 +329,10 @@ const clearVendorBtn = document.getElementById('clearVendorBtn');
 const notesInput = document.getElementById('po_notes');
 const statusBadge = document.getElementById('poStatusBadge');
 const submitOrderBtn = document.getElementById('submitOrderBtn');
+const vendorRecommendations = document.getElementById('vendorRecommendations');
+const vendorRecommendationsMeta = document.getElementById('vendorRecommendationsMeta');
+const vendorRecommendationChips = document.getElementById('vendorRecommendationChips');
+let vendorRecommendationItems = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
@@ -362,6 +417,7 @@ function selectVendor(vendor) {
     vendorSelectedCard.dataset.email = vendor.email || '';
     vendorSelectedCard.style.display = 'block';
     vendorSelect.classList.remove('border-danger');
+    loadVendorRecommendations(vendor.id, vendor.vendor_name || '');
 }
 
 function clearVendorSelection() {
@@ -373,6 +429,96 @@ function clearVendorSelection() {
     vendorSelectedCard.dataset.contactNo = '';
     vendorSelectedCard.dataset.email = '';
     vendorSelectedCard.style.display = 'none';
+    vendorRecommendationItems = [];
+    renderVendorRecommendations();
+}
+
+function renderVendorRecommendations() {
+    const vendorName = vendorSelectedName.textContent.trim();
+
+    if (!vendorSelect.value || vendorSelect.value === NEW_VENDOR_OPTION) {
+        vendorRecommendations.style.display = 'none';
+        vendorRecommendationsMeta.textContent = '';
+        vendorRecommendationChips.innerHTML = '';
+        return;
+    }
+
+    vendorRecommendations.style.display = 'block';
+    vendorRecommendationsMeta.textContent = vendorName
+        ? `Usually ordered from ${vendorName}`
+        : 'Usually ordered from this vendor';
+
+    if (!vendorRecommendationItems.length) {
+        vendorRecommendationChips.innerHTML = '<div class="vendor-chip-empty">No order history yet for this vendor.</div>';
+        return;
+    }
+
+    vendorRecommendationChips.innerHTML = vendorRecommendationItems.map(item => {
+        const alreadyAdded = orderItems.some(orderItem => orderItem.id === item.id);
+        const pendingText = Number(item.pending_stock || 0) > 0 ? ` | +${item.pending_stock} incoming` : '';
+        const countLabel = Number(item.vendor_order_count || 0) === 1 ? '1 past PO' : `${item.vendor_order_count || 0} past POs`;
+        return `
+            <button
+                type="button"
+                class="vendor-chip ${alreadyAdded ? 'is-added' : ''}"
+                onclick="addRecommendedItem(${item.id})"
+                ${alreadyAdded ? 'disabled' : ''}
+                title="${escapeHtml(`${countLabel}${pendingText}`)}"
+            >
+                ${escapeHtml(item.name)}
+            </button>
+        `;
+    }).join('');
+}
+
+async function loadVendorRecommendations(vendorId, vendorName = '') {
+    if (!vendorId) {
+        vendorRecommendationItems = [];
+        renderVendorRecommendations();
+        return;
+    }
+
+    const requestedVendorId = String(vendorId);
+    vendorRecommendations.style.display = 'block';
+    vendorRecommendationsMeta.textContent = vendorName
+        ? `Loading usual items from ${vendorName}...`
+        : 'Loading usual items...';
+    vendorRecommendationChips.innerHTML = '<div class="vendor-chip-empty">Loading suggestions...</div>';
+
+    try {
+        const response = await fetch(`/api/vendors/${encodeURIComponent(vendorId)}/recommended-items?limit=5`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load vendor recommendations.');
+        }
+
+        if (String(vendorSelect.value) !== requestedVendorId) {
+            return;
+        }
+
+        vendorRecommendationItems = Array.isArray(data.items) ? data.items : [];
+        renderVendorRecommendations();
+    } catch (error) {
+        if (String(vendorSelect.value) !== requestedVendorId) {
+            return;
+        }
+
+        vendorRecommendationItems = [];
+        vendorRecommendations.style.display = 'block';
+        vendorRecommendationsMeta.textContent = vendorName
+            ? `Suggested items for ${vendorName}`
+            : 'Suggested items';
+        vendorRecommendationChips.innerHTML = '<div class="vendor-chip-empty">Could not load suggestions right now.</div>';
+    }
+}
+
+function addRecommendedItem(itemId) {
+    const item = vendorRecommendationItems.find(entry => entry.id === itemId);
+    if (!item) {
+        return;
+    }
+    addItemToOrder(item);
 }
 
 function openNewVendorModal(prefill = '') {
@@ -583,6 +729,7 @@ function addItemToOrder(item) {
 
     itemSearch.value = '';
     searchResults.style.display = 'none';
+    renderVendorRecommendations();
 }
 
 function renderTable() {
@@ -622,7 +769,11 @@ function renderTable() {
 
 function updateQty(index, val) { orderItems[index].qty = parseInt(val, 10); }
 function updateCost(index, val) { orderItems[index].cost = parseFloat(val); }
-function removeItem(index) { orderItems.splice(index, 1); renderTable(); }
+function removeItem(index) {
+    orderItems.splice(index, 1);
+    renderTable();
+    renderVendorRecommendations();
+}
 
 function showOrderAlert(message, type) {
     if (window.A4Flash?.show) {

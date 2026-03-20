@@ -3,7 +3,7 @@ import io
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
 from db.database import get_db
 from auth.utils import admin_required, login_required
-from services.inventory_service import get_unique_categories
+from services.inventory_service import get_unique_categories, get_vendor_recommended_items
 from utils.formatters import format_date
 from services.transactions_service import (
     add_item_to_db,
@@ -237,6 +237,17 @@ def refund_sale_search_api():
 @login_required
 def create_order_page():
     return render_template("transactions/order.html", vendors=_get_active_vendors())
+
+
+@transaction_bp.route("/api/vendors/<int:vendor_id>/recommended-items")
+@login_required
+def vendor_recommended_items_api(vendor_id):
+    try:
+        limit = request.args.get("limit", 5)
+        rows = get_vendor_recommended_items(vendor_id=vendor_id, limit=limit)
+        return jsonify({"items": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @transaction_bp.route("/transaction/order/save", methods=["POST"])

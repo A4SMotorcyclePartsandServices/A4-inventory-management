@@ -11,6 +11,9 @@
 - [X] ~~*change the RF auto generation to remove the OR No. in the middle RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032)*~~ [2026-03-20]
 - [X] ~~*from exchange refund to exchange/refund*~~ [2026-03-20]
 - [X] ~~*from exchange replacement to exchange/replacement*~~ [2026-03-20]
+- [X] ~~*change vendor on items database saving. instead of overwriting, make it add the vendor. then in order page, when a certain vendor is selected, pull out items the shop usually orders then recommend 5 of them. chips form. for easy selection*~~ [2026-03-20]
+- [X] ~~*Make Loyalty Program Extensible*~~ [2026-03-20]
+- [X] ~~*bug in loyalty program status not updating*~~ [2026-03-20]
 
 ## Notes
 new PO workflow may bode well for Payables page. check first the workflow before making the payables page

@@ -5,6 +5,17 @@ from db.database import get_db
 from utils.formatters import format_date
 
 
+def _expire_elapsed_programs(conn):
+    conn.execute(
+        """
+        UPDATE loyalty_programs
+        SET is_active = 0
+        WHERE is_active = 1
+          AND period_end < CURRENT_DATE
+        """
+    )
+
+
 def _to_bool_int(value, default=False):
     if value is None:
         return 1 if default else 0
@@ -82,12 +93,14 @@ def _normalize_point_rules(raw_rules):
 
 def get_all_programs(branch_id=None, include_rules=True):
     conn = get_db()
+    _expire_elapsed_programs(conn)
 
     if branch_id is not None:
         rows = conn.execute(
             """
             SELECT
                 lp.*,
+                CASE WHEN lp.period_end < CURRENT_DATE THEN 1 ELSE 0 END AS is_expired,
                 CASE lp.program_type
                     WHEN 'SERVICE' THEN sv.name
                     WHEN 'ITEM' THEN it.name
@@ -106,6 +119,7 @@ def get_all_programs(branch_id=None, include_rules=True):
             """
             SELECT
                 lp.*,
+                CASE WHEN lp.period_end < CURRENT_DATE THEN 1 ELSE 0 END AS is_expired,
                 CASE lp.program_type
                     WHEN 'SERVICE' THEN sv.name
                     WHEN 'ITEM' THEN it.name
@@ -125,19 +139,23 @@ def get_all_programs(branch_id=None, include_rules=True):
         rule_rows = conn.execute(
             """
             SELECT
-                id,
-                program_id,
-                rule_name,
-                points,
-                service_id,
-                item_id,
-                requires_any_item,
-                requires_any_service,
-                priority,
-                stop_on_match,
-                is_active
-            FROM loyalty_point_rules
-            WHERE program_id = ANY(%s)
+                lpr.id,
+                lpr.program_id,
+                lpr.rule_name,
+                lpr.points,
+                lpr.service_id,
+                lpr.item_id,
+                lpr.requires_any_item,
+                lpr.requires_any_service,
+                lpr.priority,
+                lpr.stop_on_match,
+                lpr.is_active,
+                sv.name AS service_name,
+                it.name AS item_name
+            FROM loyalty_point_rules lpr
+            LEFT JOIN services sv ON sv.id = lpr.service_id
+            LEFT JOIN items it ON it.id = lpr.item_id
+            WHERE lpr.program_id = ANY(%s)
             ORDER BY priority ASC, id ASC
             """,
             (program_ids,),
@@ -349,14 +367,93 @@ def create_program(data, user_id):
 def toggle_program(program_id, is_active):
     conn = get_db()
     try:
+        _expire_elapsed_programs(conn)
+
+        row = conn.execute(
+            """
+            SELECT id, name, period_end, is_active
+            FROM loyalty_programs
+            WHERE id = %s
+            """,
+            (program_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Loyalty program not found.")
+
+        if is_active and row["period_end"] and row["period_end"] < date.today():
+            conn.execute(
+                "UPDATE loyalty_programs SET is_active = 0 WHERE id = %s",
+                (program_id,),
+            )
+            conn.commit()
+            raise ValueError("Expired loyalty programs cannot be reactivated.")
+
         cursor = conn.execute(
             "UPDATE loyalty_programs SET is_active = %s WHERE id = %s",
             (1 if is_active else 0, program_id),
         )
-        if cursor.rowcount == 0:
-            raise ValueError("Loyalty program not found.")
         conn.commit()
         return cursor.rowcount
+    finally:
+        conn.close()
+
+
+def extend_program_period(program_id, new_period_end):
+    conn = get_db()
+    try:
+        _expire_elapsed_programs(conn)
+
+        row = conn.execute(
+            """
+            SELECT id, name, period_start, period_end, is_active
+            FROM loyalty_programs
+            WHERE id = %s
+            """,
+            (program_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Loyalty program not found.")
+
+        if not new_period_end:
+            raise ValueError("New period end date is required.")
+
+        try:
+            new_end_date = datetime.strptime(str(new_period_end), "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            raise ValueError("New period end date must be a valid YYYY-MM-DD date.")
+
+        current_start = row["period_start"]
+        current_end = row["period_end"]
+        today = date.today()
+
+        if current_end and current_end < today:
+            raise ValueError("Expired loyalty programs can no longer be extended.")
+        if current_start and new_end_date <= current_start:
+            raise ValueError("New period end must be after the fixed period start date.")
+        if current_end and new_end_date < current_end:
+            raise ValueError("Period end can only be extended, not shortened.")
+        if current_end and new_end_date == current_end:
+            raise ValueError("Choose a later end date to extend this program.")
+
+        conn.execute(
+            """
+            UPDATE loyalty_programs
+            SET period_end = %s
+            WHERE id = %s
+            """,
+            (new_end_date, program_id),
+        )
+        conn.commit()
+
+        refreshed = conn.execute(
+            """
+            SELECT id, name, period_start, period_end
+            FROM loyalty_programs
+            WHERE id = %s
+            """,
+            (program_id,),
+        ).fetchone()
+        return dict(refreshed)
     finally:
         conn.close()
 

@@ -60,55 +60,55 @@ Future upgrade: move to Redis or DB
 ## March 15, 2026 client notes
 
 ## PO Page
-- PO Page change Approval History to PO History both sides
-- Base.html change Stock in to Stock in (PO)
-- PO Page change ready to receive to Approved PO's
-- PO Page modal add price and total
-- Vendor info in print PDF in PO page modal please insert data
-- PO Page change Partial to Partial Delivery
-- PO Page partial modal print pdf add comparison between ordered quantity and qty delivered with inline notes telling how many will still arrive. also include price in calculation both inline and total price column rename to total price (delivered)
-- Delivery date discrepancy appearing here again. we need a more robust way of tracking this
-- PO Page Completed to Completed Delivery
-- Cancel to Cancelled PO's
-- PO page change it to dropdown
+- [X] ~~*PO Page change Approval History to PO History both sides*~~ [2026-03-20]
+- [X] ~~*Base.html change Stock in to Stock in (PO)*~~ [2026-03-20]
+- [X] ~~*PO Page change ready to receive to Approved PO's*~~ [2026-03-20]
+- [X] ~~*PO Page modal add price and total*~~ [2026-03-20]
+- [X] ~~*Vendor info in print PDF in PO page modal please insert data*~~ [2026-03-20]
+- [X] ~~*PO Page change Partial to Partial Delivery*~~ [2026-03-20]
+- [X] ~~*PO Page partial modal print pdf add comparison between ordered quantity and qty delivered with inline notes telling how many will still arrive. also include price in calculation both inline and total price column rename to total price (delivered)*~~ [2026-03-20]
+- [X] ~~*Delivery date discrepancy appearing here again. we need a more robust way of tracking this*~~ [2026-03-20]
+- [X] ~~*PO Page Completed to Completed Delivery*~~ [2026-03-20]
+- [X] ~~*Cancel to Cancelled PO's*~~ [2026-03-20]
+- [X] ~~*PO page change it to dropdown*~~ [2026-03-20]
 
 ## OUT Page
-- when a redemption is redeemed block price input
-- customer modal do not require vehicle make it only required
-- NEW FEATURE. QUICK SALE basically free form customer name, only record the item sale. restrictions less than 100 pesos only are the items that can be sold. Quick sale default view
+- [X] ~~*when a redemption is redeemed block price input*~~ [2026-03-20]
+- [X] ~~*customer modal do not require vehicle make it only required*~~ [2026-03-20]
+- [X] ~~*NEW FEATURE. QUICK SALE basically free form customer name, only record the item sale. restrictions less than 100 pesos only are the items that can be sold. Quick sale default view*~~ [2026-03-20]
 
 ## Loyalty Program
 - Analytics on which customer availed the most within the loyalty program's
-- Make Loyalty Program Extensible
-- bug in loyalty program status not updating
+- [X] ~~*Make Loyalty Program Extensible*~~ [2026-03-20]
+- [X] ~~*bug in loyalty program status not updating*~~ [2026-03-20]
 
 ## Debt Feature
-- Debt feature pdf printing of all current debt
-- format is customer name, OR no, total amount, paid amount, balance 
+- [X] ~~*Debt feature pdf printing of all current debt*~~ [2026-03-20]
+- [X] ~~*format is customer name, OR no, total amount, paid amount, balance*~~ [2026-03-20]
 
 ## Cash Ledger
-- Categories for cash in :Petty Cash, From Gcash Account, From Bank Account, For Payables, Others (REQUIRE DESCRIPTION)
-- Categories for cash out: Other Expenses
-- Cash ledger page mechanic payout automation. for mechanics with quota top up applied, make the description use mechanic name plus quota top up
+- [X] ~~*Categories for cash in :Petty Cash, From Gcash Account, From Bank Account, For Payables, Others (REQUIRE DESCRIPTION)*~~ [2026-03-20]
+- [X] ~~*Categories for cash out: Other Expenses*~~ [2026-03-20]
+- [X] ~~*Cash ledger page mechanic payout automation. for mechanics with quota top up applied, make the description use mechanic name plus quota top up*~~ [2026-03-20]
 
 ## Refund Feature
-- 7 days no return
-- we have to reverse the sale
-- touch the cash ledger page, make an automated cash out
-- touch the inventory return the item
-- admin panel sales and audit tab touch for data update
+- [X] ~~*7 days no return*~~ [2026-03-20]
+- [X] ~~*we have to reverse the sale*~~ [2026-03-20]
+- [X] ~~*touch the cash ledger page, make an automated cash out*~~ [2026-03-20]
+- [X] ~~*touch the inventory return the item*~~ [2026-03-20]
+- [X] ~~*admin panel sales and audit tab touch for data update*~~ [2026-03-20]
 
 ## Payables Feature
-- Supplier and Rental Payment
-- PO page on Delivered items only
-- Include partial and completed deliveries. extract PO number, Supplier name, date of PO when it was created, total amount for completed total amount for delivered for partial deliveries. get this data automatically
-- Then manual entry for issuing cheque. possible input boxes Fill in date of cheque, cheque number, cheque amount
-- Issuing a cheque for PO order and manual entries for other cheque related needs
-- Issuing a cheque for manual entries for things like rental same input as above but extra payee input and description input
-- PO based payment
-- basically just cheque monitoring for cheque made and alerting user of due cheques
-- PDF report for this. cheques issued this month and stuff as report
-- user has access to this page but the pdf report is only for admin
+- [X] ~~*Supplier and Rental Payment*~~ [2026-03-20]
+- [X] ~~*PO page on Delivered items only*~~ [2026-03-20]
+- [X] ~~*Include partial and completed deliveries. extract PO number, Supplier name, date of PO when it was created, total amount for completed total amount for delivered for partial deliveries. get this data automatically*~~ [2026-03-20]
+- [X] ~~*Then manual entry for issuing cheque. possible input boxes Fill in date of cheque, cheque number, cheque amount*~~ [2026-03-20]
+- [X] ~~*Issuing a cheque for PO order and manual entries for other cheque related needs*~~ [2026-03-20]
+- [X] ~~*Issuing a cheque for manual entries for things like rental same input as above but extra payee input and description input*~~ [2026-03-20]
+- [X] ~~*PO based payment*~~ [2026-03-20]
+- [X] ~~*basically just cheque monitoring for cheque made and alerting user of due cheques*~~ [2026-03-20]
+- [X] ~~*PDF report for this. cheques issued this month and stuff as report*~~ [2026-03-20]
+- [X] ~~*user has access to this page but the pdf report is only for admin*~~ [2026-03-20]
 
 ## Client meeting March 19, 2026
 
@@ -117,10 +117,10 @@ Future upgrade: move to Redis or DB
 - [X] ~~*Show history notes. instead of plainly displaying the notes, add Reason: {notes}. use red font*~~ [2026-03-19]
 - [X] ~~*Completed delivery chip displays weirdly in laptop*~~ [2026-03-19]
 - new scenario. per box or per plastic items. as per discussion, this will diverge wherein we will have to record the item's price per box. basically say oil costs 300 a piece, per box contains 12 pieces. we need to make sure the system records that per box is 12 pieces so that means we have 36 oil incoming and their price is still 300 unless edited in est cost in the order page. then the box costs say 10,000. that one will diverge towards the payables page where the po cheque system lives. items quantity that will arrive will come from number of boxes times items per box. 
-- box scenario we have to think about it but i have an idea. start from PO give option to choose from by box or by quantity. make per box require est cost. not auto calculated input needed from user. save it. when in receive we need new inputs to accomodate items received by box. basically at this point the shop has the box and can count before entering it into the system. let us leverage that. after receiving, use the user's inputted box amount as the payable for cheque issuance in payables page then we have a auto calculation wherein the price of the box and the items inside will determine the cost per piece. formula is amount of one box divided by the qty of items inside that box
+- box scenario we have to think about it but i have an idea. start from PO creation via order.html page. give option to choose from by box or by quantity after selecting an item. make per box require est cost input. not auto calculated input needed from user. save it. when in receive we need new inputs to accomodate items received by box. basically at this point the shop has the box and can count before entering it into the system. let us leverage that. after receiving, use the user's inputted box amount as the payable for cheque issuance in payables page then we have a auto calculation wherein the price of the box and the items inside will determine the cost per piece. formula is amount of one box divided by the qty of items inside that box
 
 ## Order Page
-- change vendor on items database saving. instead of overwriting, make it add the vendor. then in order page, when a certain vendor is selected, pull out items the shop usually orders then recommend 5 of them. chips form. for easy selection
+- [X] ~~*change vendor on items database saving. instead of overwriting, make it add the vendor. then in order page, when a certain vendor is selected, pull out items the shop usually orders then recommend 5 of them. chips form. for easy selection*~~ [2026-03-20]
 
 ## Cash Ledger page
 - Change hard delete to soft delete. make it recycle bin style, make the deleted data able to come back, we have to record who deleted data, auto clear recycle bin every month

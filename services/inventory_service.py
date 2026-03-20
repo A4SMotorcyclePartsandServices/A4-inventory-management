@@ -117,6 +117,75 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
 
     return results
 
+def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-01-18"):
+    conn = get_db()
+    try:
+        try:
+            vendor_id = int(vendor_id)
+        except (TypeError, ValueError):
+            return []
+
+        try:
+            limit = max(1, min(int(limit), 20))
+        except (TypeError, ValueError):
+            limit = 5
+
+        rows = conn.execute(
+            """
+            SELECT
+                i.id,
+                i.name,
+                i.cost_per_piece,
+                COUNT(DISTINCT po.id) AS vendor_order_count,
+                COALESCE(SUM(pi.quantity_ordered), 0) AS vendor_total_qty,
+                MAX(po.created_at) AS last_ordered_at
+            FROM purchase_orders po
+            JOIN po_items pi ON pi.po_id = po.id
+            JOIN items i ON i.id = pi.item_id
+            WHERE po.vendor_id = %s
+              AND po.status <> 'CANCELLED'
+            GROUP BY i.id, i.name, i.cost_per_piece
+            ORDER BY
+                COUNT(DISTINCT po.id) DESC,
+                COALESCE(SUM(pi.quantity_ordered), 0) DESC,
+                MAX(po.created_at) DESC,
+                i.name ASC
+            LIMIT %s
+            """,
+            (vendor_id, limit),
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        all_stock = get_items_with_stock(snapshot_date)
+        stock_map = {s["id"]: s["current_stock"] for s in all_stock}
+
+        pending_rows = conn.execute(
+            """
+            SELECT
+                pi.item_id,
+                SUM(pi.quantity_ordered - pi.quantity_received) AS pending_stock
+            FROM po_items pi
+            JOIN purchase_orders po ON po.id = pi.po_id
+            WHERE po.status IN ('PENDING', 'PARTIAL')
+              AND pi.quantity_ordered > pi.quantity_received
+            GROUP BY pi.item_id
+            """
+        ).fetchall()
+        pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
+
+        results = []
+        for row in rows:
+            item = dict(row)
+            item["current_stock"] = stock_map.get(row["id"], 0)
+            item["pending_stock"] = pending_map.get(row["id"], 0)
+            results.append(item)
+
+        return results
+    finally:
+        conn.close()
+
 def get_unique_categories():
     conn = get_db()
     # DISTINCT ensures we don't get "Oil" five times if there are 5 oil items
