@@ -610,9 +610,10 @@ def _normalize_db_timestamp(raw_value=None):
     return now_obj.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _build_refund_number(conn, sales_number, sale_id):
+def _build_refund_number(conn, sales_number, sale_id, reference_time=None):
     or_number = str(sales_number or sale_id).strip()
-    stamp = datetime.now().strftime("%m%d")
+    stamp_source = reference_time or datetime.now()
+    stamp = stamp_source.strftime("%m%d")
     base_number = f"RF-{or_number}-{stamp}"
 
     existing_count_row = conn.execute(
@@ -659,7 +660,7 @@ def _get_cash_payment_method_id(conn):
 
 def _build_exchange_number(conn, sales_number, sale_id):
     or_number = str(sales_number or sale_id).strip()
-    base_number = f"EX-{or_number}"
+    base_number = f"SW-{or_number}"
 
     existing_count_row = conn.execute(
         """
@@ -667,6 +668,28 @@ def _build_exchange_number(conn, sales_number, sale_id):
         FROM sale_exchanges
         WHERE exchange_number = %s
            OR exchange_number LIKE %s
+        """,
+        (base_number, f"{base_number}-%"),
+    ).fetchone()
+
+    existing_count = int(existing_count_row["existing_count"] or 0)
+    if existing_count <= 0:
+        return base_number
+    return f"{base_number}-{existing_count + 1}"
+
+
+def _build_exchange_replacement_sales_number(conn, sales_number, sale_id, reference_time=None):
+    or_number = str(sales_number or sale_id).strip()
+    stamp_source = reference_time or datetime.now()
+    stamp = stamp_source.strftime("%m%d")
+    base_number = f"SW-{or_number}-{stamp}"
+
+    existing_count_row = conn.execute(
+        """
+        SELECT COUNT(*) AS existing_count
+        FROM sales
+        WHERE sales_number = %s
+           OR sales_number LIKE %s
         """,
         (base_number, f"{base_number}-%"),
     ).fetchone()
@@ -810,6 +833,12 @@ def _create_exchange_replacement_sale(
     replacement_amount = round(replacement_quantity * unit_price, 2)
     cash_payment_method_id = _get_cash_payment_method_id(conn)
     original_sale_label = original_sale["sales_number"] or f"#{original_sale['id']}"
+    replacement_sales_number = _build_exchange_replacement_sales_number(
+        conn,
+        original_sale["sales_number"],
+        original_sale["id"],
+        reference_time=datetime.strptime(refund_time, "%Y-%m-%d %H:%M:%S"),
+    )
     exchange_notes = f"Exchange replacement linked to {original_sale_label} via {exchange_number}. Reason: {reason}"
     if notes:
         exchange_notes += f" | {notes}"
@@ -834,7 +863,7 @@ def _create_exchange_replacement_sale(
         RETURNING id
         """,
         (
-            exchange_number,
+            replacement_sales_number,
             original_sale["customer_name"],
             original_sale["customer_id"],
             original_sale["vehicle_id"],
@@ -885,7 +914,7 @@ def _create_exchange_replacement_sale(
 
     return {
         "replacement_sale_id": replacement_sale_id,
-        "replacement_sales_number": exchange_number,
+        "replacement_sales_number": replacement_sales_number,
         "replacement_item_name": replacement_item_row["name"],
         "replacement_quantity": replacement_quantity,
         "replacement_unit_price": unit_price,
@@ -1077,8 +1106,42 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
         search_text = str(query or "").strip()
         if search_text:
             like = f"%{search_text}%"
-            conditions.append("(s.sales_number ILIKE %s OR s.customer_name ILIKE %s)")
-            params.extend([like, like])
+            digit_only_search = "".join(ch for ch in search_text if ch.isdigit())
+            normalized_date_search = search_text.replace("-", "/").replace(".", "/")
+            conditions.append(
+                """
+                (
+                    s.sales_number ILIKE %s
+                    OR s.customer_name ILIKE %s
+                    OR EXISTS (
+                        SELECT 1
+                        FROM sales_items si_search
+                        JOIN items i_search ON i_search.id = si_search.item_id
+                        WHERE si_search.sale_id = s.id
+                          AND i_search.name ILIKE %s
+                    )
+                    OR to_char(s.transaction_date, 'YYYY-MM-DD') ILIKE %s
+                    OR to_char(s.transaction_date, 'MM/DD/YYYY') ILIKE %s
+                    OR to_char(s.transaction_date, 'Mon DD, YYYY') ILIKE %s
+                    OR to_char(s.transaction_date, 'Month DD, YYYY') ILIKE %s
+                    OR (
+                        %s <> ''
+                        AND regexp_replace(to_char(s.transaction_date, 'MMDDYYYY'), '[^0-9]', '', 'g') LIKE %s
+                    )
+                )
+                """
+            )
+            params.extend([
+                like,
+                like,
+                like,
+                f"%{normalized_date_search}%",
+                f"%{normalized_date_search}%",
+                like,
+                like,
+                digit_only_search,
+                f"%{digit_only_search}%",
+            ])
 
         if days:
             try:
@@ -1284,7 +1347,12 @@ def record_sale_refund(sale_id, data, user_id, username):
         if not refund_lines:
             raise ValueError("Select at least one item quantity to refund.")
 
-        refund_number = _build_refund_number(conn, sale["sales_number"], sale_id)
+        refund_number = _build_refund_number(
+            conn,
+            sale["sales_number"],
+            sale_id,
+            reference_time=datetime.strptime(refund_time, "%Y-%m-%d %H:%M:%S"),
+        )
         refund_result = _insert_sale_refund(
             conn=conn,
             sale_id=sale_id,

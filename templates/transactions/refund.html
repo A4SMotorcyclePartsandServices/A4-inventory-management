@@ -518,6 +518,7 @@
         background: #13161e;
         padding: 10px 12px;
         color: var(--text-primary);
+        position: relative;
     }
 
     .replacement-result:hover {
@@ -527,10 +528,88 @@
 
     .replacement-selected {
         margin-top: 12px;
-        border: 1px solid var(--border-soft);
-        border-radius: 12px;
-        background: #13161e;
-        padding: 12px 14px;
+        min-height: 88px;
+        display: block;
+    }
+
+    .replacement-selected.replacement-result.active {
+        border-color: rgba(193,18,31,0.45);
+        background: rgba(193,18,31,0.12);
+        box-shadow: inset 0 0 0 1px rgba(193,18,31,0.18);
+    }
+
+    .replacement-card {
+        width: 100%;
+    }
+
+    .replacement-card-copy {
+        min-width: 0;
+        padding-right: 38px;
+    }
+
+    .replacement-card-title {
+        color: var(--text-primary);
+        font-size: 1rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .replacement-card-meta {
+        color: #b9c1d1;
+        font-size: 0.9rem;
+        line-height: 1.35;
+        margin-top: 4px;
+    }
+
+    .replacement-card-meta strong {
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .replacement-selected.active .replacement-card-title {
+        color: #fff;
+    }
+
+    .replacement-selected.active .replacement-card-meta {
+        color: #f7c7cc;
+    }
+
+    .replacement-selected-empty {
+        width: 100%;
+        min-height: 88px;
+        display: flex;
+        align-items: center;
+    }
+
+    .replacement-clear-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 32px;
+        height: 32px;
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 999px;
+        background: transparent;
+        color: #c9d1df;
+        padding: 0;
+        font-size: 0.95rem;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+    }
+
+    .replacement-clear-btn:hover {
+        border-color: rgba(255,255,255,0.4);
+        color: #fff;
+        background: rgba(255,255,255,0.06);
+    }
+
+    .replacement-selected.active .replacement-clear-btn {
+        border-color: rgba(255,255,255,0.3);
+        color: #ffe2e6;
     }
 
     .exchange-summary {
@@ -740,7 +819,7 @@
             <div class="form-section-divider accent">
                 <i class="bi bi-search"></i> Find Sale
             </div>
-            <div class="search-note">Search by receipt number or customer name, then open the sale you want to refund.</div>
+            <div class="search-note">Search by receipt number, customer name, item on the sale, or sale date, then open the sale you want to refund.</div>
 
             <div class="search-bar">
                 <div class="search-input-wrap">
@@ -751,7 +830,7 @@
                         type="text"
                         id="refund-search-input"
                         class="form-control search-input"
-                        placeholder="Search receipt # or customer name"
+                        placeholder="Search receipt #, customer, item, or date"
                     >
                     <button type="button" class="search-clear-link" id="refund-clear-btn">
                         Clear
@@ -767,7 +846,7 @@
                 <button type="button" class="filter-chip" id="has-refundable-toggle">Has Refundable Items</button>
             </div>
 
-            <div class="panel-meta mt-3" id="refund-search-summary">Search for a receipt # or customer name to begin.</div>
+            <div class="panel-meta mt-3" id="refund-search-summary">Search for a receipt #, customer name, item, or sale date to begin.</div>
             <div class="result-list" id="refund-search-results">
                 <div class="text-muted small">No sales are loaded automatically on this page.</div>
             </div>
@@ -919,18 +998,22 @@ function renderReplacementSelectedCard() {
     const el = document.getElementById('replacementSelectedCard');
     if (!el) return;
     if (!selectedReplacementItem) {
-        el.innerHTML = '<div class="panel-meta">No replacement item selected.</div>';
+        el.className = 'replacement-selected replacement-result';
+        el.innerHTML = '<div class="replacement-selected-empty"><div class="panel-meta">No replacement item selected.</div></div>';
         return;
     }
 
+    el.className = 'replacement-selected replacement-result active';
     el.innerHTML = `
-        <div class="d-flex justify-content-between align-items-start gap-3">
-            <div>
-                <div class="fw-semibold text-white">${escapeHtml(selectedReplacementItem.name)}</div>
-                <div class="panel-meta">Current stock: ${escapeHtml(String(selectedReplacementItem.current_stock || 0))}</div>
-                <div class="panel-meta">Current price: ${refundMoney(selectedReplacementItem.a4s_selling_price || 0)}</div>
+        <div class="replacement-card">
+            <div class="replacement-card-copy">
+                <div class="replacement-card-title">${escapeHtml(selectedReplacementItem.name)}</div>
+                <div class="replacement-card-meta">Stock: <strong>${escapeHtml(String(selectedReplacementItem.current_stock || 0))}</strong></div>
+                <div class="replacement-card-meta">Price: <strong>${refundMoney(selectedReplacementItem.a4s_selling_price || 0)}</strong></div>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearReplacementSelection()">Clear</button>
+            <button type="button" class="replacement-clear-btn" onclick="clearReplacementSelection()" aria-label="Clear selected replacement item">
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
     `;
 }
@@ -1018,7 +1101,7 @@ function resetRefundSearchState() {
     refundSearchPerformed = false;
     refundSearchRows = [];
     selectedRefundSaleId = null;
-    document.getElementById('refund-search-summary').textContent = 'Search for a receipt # or customer name to begin.';
+    document.getElementById('refund-search-summary').textContent = 'Search for a receipt #, customer name, item, or sale date to begin.';
     document.getElementById('refund-search-results').innerHTML = '<div class="text-muted small">No sales are loaded automatically on this page.</div>';
     document.getElementById('refund-detail-panel').innerHTML = refundEmptyDetailMarkup();
 }
@@ -1078,7 +1161,7 @@ function loadRefundSearch(autoSelectFirst = false) {
                         <div>
                             <div class="sale-result-title">OR NO. ${escapeHtml(row.sales_number || '-')}</div>
                             <div class="sale-result-sub">${escapeHtml(row.customer_name || 'Walk-in')}</div>
-                            ${row.is_exchange_replacement ? `<div class="sale-result-flag"><i class="bi bi-arrow-left-right"></i> Exchange Replacement</div>` : ''}
+                            ${row.is_exchange_replacement ? `<div class="sale-result-flag"><i class="bi bi-arrow-left-right"></i> Exchange/Replacement</div>` : ''}
                         </div>
                         <span class="refund-state ${refundStateClass(row.refund_state)}">${escapeHtml(row.refund_state)}</span>
                     </div>
@@ -1114,7 +1197,7 @@ function renderRefundDetail(data) {
     detailEl.innerHTML = `
         <div class="detail-shell">
             ${!data.can_refund ? `<div class="warning-banner"><strong>Refund blocked.</strong> ${escapeHtml(data.refund_block_reason || 'Refund is not available for this sale.')}</div>` : ''}
-            ${data.exchange_number ? `<div class="exchange-banner"><strong>Exchange replacement sale.</strong> This OR was created from exchange ${escapeHtml(data.exchange_number)} and is linked back to original OR ${escapeHtml(data.original_sales_number || '-')}.</div>` : ''}
+            ${data.exchange_number ? `<div class="exchange-banner"><strong>Exchange/Replacement sale.</strong> This OR was created from exchange ${escapeHtml(data.exchange_number)} and is linked back to original OR ${escapeHtml(data.original_sales_number || '-')}.</div>` : ''}
 
             <div class="detail-header">
                 <div class="detail-heading">

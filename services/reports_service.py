@@ -551,7 +551,7 @@ def get_sales_report_by_date(report_date):
             "refund_date": format_date(row["refund_date"], show_time=True),
             "refunded_by_username": row["refunded_by_username"] or "System",
             "items": refund_items_by_id.get(row["id"], []),
-            "report_label": "Exchange Refund" if row["exchange_number"] else "Refund",
+            "report_label": "Exchange/Refund" if row["exchange_number"] else "Refund",
             "exchange_number": row["exchange_number"] or "",
         }
         for row in refund_rows
@@ -580,7 +580,7 @@ def get_sales_report_by_date(report_date):
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products":         items_by_sale.get(sale_id, []),
                 "services":         services_by_sale.get(sale_id, []),
-                "report_label":     "Exchange Replacement" if sale["exchange_number"] else "Sale",
+                "report_label":     "Exchange/Replacement" if sale["exchange_number"] else "Sale",
                 "exchange_number":  sale["exchange_number"] or "",
             })
             total_gross += total_amount
@@ -784,7 +784,7 @@ def get_sales_report_by_range(start_date, end_date):
             "refund_date": format_date(row["refund_date"], show_time=True),
             "refunded_by_username": row["refunded_by_username"] or "System",
             "items": refund_items_by_id.get(row["id"], []),
-            "report_label": "Exchange Refund" if row["exchange_number"] else "Refund",
+            "report_label": "Exchange/Refund" if row["exchange_number"] else "Refund",
             "exchange_number": row["exchange_number"] or "",
         }
         for row in refund_rows
@@ -813,7 +813,7 @@ def get_sales_report_by_range(start_date, end_date):
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products":         items_by_sale.get(sale_id, []),
                 "services":         services_by_sale.get(sale_id, []),
-                "report_label":     "Exchange Replacement" if sale["exchange_number"] else "Sale",
+                "report_label":     "Exchange/Replacement" if sale["exchange_number"] else "Sale",
                 "exchange_number":  sale["exchange_number"] or "",
             })
             total_gross += total_amount

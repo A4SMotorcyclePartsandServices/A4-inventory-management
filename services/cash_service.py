@@ -1,6 +1,7 @@
 from db.database import get_db
 from utils.formatters import format_date
 from datetime import date as date_today
+import re
 
 # --- CATEGORIES ---
 CASH_IN_CATEGORIES  = ['Petty Cash', 'From Gcash Account', 'From Bank Account', 'For Payables', 'Others']
@@ -16,6 +17,26 @@ PHYSICAL_CASH_CATEGORIES = ('Cash',)
 def _money(value):
     """Normalize DB numeric/decimal values to float for calculations and JSON."""
     return round(float(value or 0), 2)
+
+
+def _display_refund_label(refund_number):
+    label = (refund_number or "").strip()
+    return re.sub(r"^(RF-\d+-\d{4})-\d+$", r"\1", label)
+
+
+def _display_exchange_refund_label(refund_number):
+    label = _display_refund_label(refund_number)
+    if label.startswith("RF-"):
+        return "EX-" + label[3:]
+    return label
+
+
+def _refund_parenthetical_label(refund_number, exchange_refund=False):
+    label = _display_exchange_refund_label(refund_number) if exchange_refund else _display_refund_label(refund_number)
+    match = re.match(r"^((?:RF|EX)-\d+)-\d{4}$", label)
+    if match:
+        return match.group(1)
+    return label
 
 
 # ─────────────────────────────────────────────
@@ -169,7 +190,7 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
         unified.append({
             'entry_type':  'CASH_IN',
             'amount':      _money(row['amount']),
-            'category':    'Exchange Replacement' if row['exchange_number'] else 'Cash Sale',
+            'category':    'Exchange/Replacement' if row['exchange_number'] else 'Cash Sale',
             'description': f"{row['sales_number']} — {customer}" + (f" ({row['exchange_number']})" if row['exchange_number'] else ""),
             'created_at':  format_date(row['created_at'], show_time=True),
             'recorded_by': row['recorded_by'] or '—',
@@ -192,12 +213,21 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
 
     for row in refund_rows:
         customer = row['customer_name'] or 'Walk-in'
-        label = row['refund_number'] or f"Refund #{row['reference_id']}"
+        is_exchange_refund = bool(row['exchange_number'])
+        label = (
+            _display_exchange_refund_label(row['refund_number'])
+            if is_exchange_refund
+            else _display_refund_label(row['refund_number'])
+        ) or f"Refund #{row['reference_id']}"
+        refund_reference = _refund_parenthetical_label(
+            row['refund_number'],
+            exchange_refund=is_exchange_refund,
+        )
         unified.append({
             'entry_type':  'CASH_OUT',
             'amount':      _money(row['amount']),
-            'category':    'Exchange Refund' if row['exchange_number'] else 'Sale Refund',
-            'description': f"{label} - {row['sales_number'] or 'Sale'} - {customer}" + (f" ({row['exchange_number']})" if row['exchange_number'] else ""),
+            'category':    'Exchange/Refund' if is_exchange_refund else 'Sale Refund',
+            'description': f"{label} - {customer}" + (f" ({refund_reference})" if is_exchange_refund and refund_reference else ""),
             'created_at':  format_date(row['created_at'], show_time=True),
             'recorded_by': row['recorded_by'] or '-',
             'source':      'refund',

@@ -1637,7 +1637,6 @@ function populateSaleDetails(data, saleID, displayNum) {
             <span class="badge bg-dark border border-secondary text-info">${escapeHtml(data.payment_method_name || 'N/A')}</span>
         </div>
         <div class="mt-1 d-flex flex-wrap align-items-center gap-2">
-            <span>Sale: ${formatPeso(data.total_amount)}</span>
             ${Number(data.total_refunded || 0) > 0 ? `<span class="text-danger">Refunded: ${formatPeso(data.total_refunded)}</span><span class="text-warning">Net: ${formatPeso(data.net_amount)}</span>` : ''}
         </div>
     `;
