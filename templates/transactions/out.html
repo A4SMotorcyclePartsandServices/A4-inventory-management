@@ -775,33 +775,9 @@ function debounce(func, delay) {
 }
 
 function showAlert(message, type = 'danger') {
-    const icons = {
-        warning: 'bi-exclamation-triangle-fill',
-        danger:  'bi-x-circle-fill',
-        success: 'bi-check-circle-fill',
-        info:    'bi-info-circle-fill'
-    };
-
-    const container = document.getElementById('flash-container');
-    const alertEl = document.createElement('div');
-    alertEl.className = `alert alert-${type} shadow-lg flash-alert`;
-    alertEl.innerHTML = `
-        <div class="flash-content">
-            <div class="flash-icon flash-icon-${type}">
-                <i class="bi ${icons[type] || icons.danger}"></i>
-            </div>
-            <div class="flash-text">${message}</div>
-        </div>
-        <div class="flash-progress"></div>
-    `;
-
-    container.appendChild(alertEl);
-    requestAnimationFrame(() => alertEl.classList.add('show'));
-    setTimeout(() => {
-        alertEl.classList.remove('show');
-        alertEl.classList.add('hide');
-        setTimeout(() => alertEl.remove(), 350);
-    }, 4000);
+    if (window.A4Flash?.show) {
+        return window.A4Flash.show(message, type, { replace: true });
+    }
 }
 
 /* =========================================================

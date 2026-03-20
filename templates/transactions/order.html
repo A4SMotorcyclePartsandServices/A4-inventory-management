@@ -625,33 +625,9 @@ function updateCost(index, val) { orderItems[index].cost = parseFloat(val); }
 function removeItem(index) { orderItems.splice(index, 1); renderTable(); }
 
 function showOrderAlert(message, type) {
-    const icons = {
-        warning: 'bi-exclamation-triangle-fill',
-        danger: 'bi-x-circle-fill',
-        success: 'bi-check-circle-fill',
-        info: 'bi-info-circle-fill'
-    };
-
-    const container = document.getElementById('flash-container');
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} shadow-lg flash-alert`;
-    alert.innerHTML = `
-        <div class="flash-content">
-            <div class="flash-icon flash-icon-${type}">
-                <i class="bi ${icons[type] || icons.info}"></i>
-            </div>
-            <div class="flash-text">${message}</div>
-        </div>
-        <div class="flash-progress"></div>
-    `;
-
-    container.appendChild(alert);
-    requestAnimationFrame(() => alert.classList.add('show'));
-    setTimeout(() => {
-        alert.classList.remove('show');
-        alert.classList.add('hide');
-        setTimeout(() => alert.remove(), 350);
-    }, 4000);
+    if (window.A4Flash?.show) {
+        return window.A4Flash.show(message, type || 'info', { replace: true });
+    }
 }
 
 function renderRevisionTracker(approval) {

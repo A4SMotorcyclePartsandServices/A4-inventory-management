@@ -193,9 +193,12 @@
         }
 
         .note {
-            color: #777;
+            margin-top: 6px;
             font-size: 0.75rem;
-            margin-top: 3px;
+            color: red;
+            font-weight: bold;
+            line-height: 1.45;
+            white-space: pre-wrap;
         }
 
         .sale-breakdown {
@@ -508,7 +511,7 @@
             <td>
                 <strong>{{ sale.sales_number or ('Sale #' ~ sale.id) }}</strong>
                 {% if sale.notes %}
-                <div class="note">{{ sale.notes }}</div>
+                <div class="note">Notes: {{ sale.notes }}</div>
                 {% endif %}
             </td>
             <td>{{ sale.transaction_date_display }}</td>

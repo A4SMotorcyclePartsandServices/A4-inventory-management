@@ -73,39 +73,9 @@
 
 <script>
 function showToastFlash(message, type = 'warning') {
-    const icons = {
-        success: 'bi-check-circle-fill',
-        danger: 'bi-x-circle-fill',
-        warning: 'bi-exclamation-triangle-fill',
-        info: 'bi-info-circle-fill',
-    };
-
-    const container = document.getElementById('flash-container');
-    if (!container) {
-        return;
+    if (window.A4Flash?.show) {
+        return window.A4Flash.show(message, type || 'warning', { replace: true });
     }
-
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} shadow-lg flash-alert`;
-    alert.innerHTML = `
-        <div class="flash-content">
-            <div class="flash-icon flash-icon-${type}">
-                <i class="bi ${icons[type] || icons.info}"></i>
-            </div>
-            <div class="flash-text">${message}</div>
-        </div>
-        <div class="flash-progress"></div>`;
-
-    container.appendChild(alert);
-    requestAnimationFrame(() => {
-        alert.classList.add('show');
-    });
-
-    setTimeout(() => {
-        alert.classList.remove('show');
-        alert.classList.add('hide');
-        setTimeout(() => alert.remove(), 350);
-    }, 4000);
 }
 
 function checkOverReceive(input) {

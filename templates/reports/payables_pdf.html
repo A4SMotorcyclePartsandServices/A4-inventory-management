@@ -174,6 +174,15 @@
             line-height: 1.45;
         }
 
+        .notes-cell {
+            margin-top: 6px;
+            font-size: 12px;
+            color: red;
+            font-weight: bold;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+
         .badge {
             display: inline-block;
             padding: 3px 10px;
@@ -224,7 +233,7 @@
 
     <div class="summary-grid">
         <div class="summary-box">
-            <div class="summary-box-title">Total Issued Cheques</div>
+            <div class="summary-box-title">Total Cheques</div>
             <div class="summary-box-body">{{ report["items"]|length }}</div>
         </div>
         <div class="summary-box">
@@ -237,8 +246,7 @@
     <table>
         <thead>
             <tr>
-                <th class="cell-center">Cheque Date</th>
-                <th class="cell-center">Due Date</th>
+                <th class="cell-center">Cheque / Due Date</th>
                 <th>Cheque No. / Status</th>
                 <th>Payee / Vendor</th>
                 <th>Description / PO No.</th>
@@ -249,7 +257,6 @@
             {% for item in report["items"] %}
             <tr>
                 <td class="cell-center">{{ item.cheque_date }}</td>
-                <td class="cell-center">{{ item.due_date }}</td>
                 <td>
                     <strong>{{ item.cheque_no }}</strong>
                     <div class="cell-submeta">
@@ -263,7 +270,11 @@
                     </div>
                 </td>
                 <td>
-                    {{ item.description or '-' }}
+                    {% if item.source_type == 'MANUAL' and item.description %}
+                        <div class="notes-cell">Notes: {{ item.description }}</div>
+                    {% else %}
+                        {{ item.description or '-' }}
+                    {% endif %}
                     <div class="cell-submeta">
                         {% if item.po_number_snapshot %}
                             PO No.: {{ item.po_number_snapshot }}
@@ -273,10 +284,10 @@
                         {% if item.delivery_received_at_snapshot and item.delivery_received_at_snapshot != '-' %}
                             <br>Delivery: {{ item.delivery_received_at_snapshot }}
                         {% endif %}
-                        {% if item.notes %}
-                            <br>Notes: {{ item.notes }}
-                        {% endif %}
                     </div>
+                    {% if item.notes %}
+                        <div class="notes-cell">Notes: {{ item.notes }}</div>
+                    {% endif %}
                 </td>
                 <td class="cell-right">₱{{ "{:,.2f}".format(item.cheque_amount) }}</td>
             </tr>

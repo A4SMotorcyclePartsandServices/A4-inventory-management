@@ -10,6 +10,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/inventory.ico') }}">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
     <style>
         :root {
@@ -760,6 +761,7 @@
             border: 1px solid rgba(255,255,255,0.05);
             border-left-width: 3px !important;
             overflow: hidden;
+            color: #f8f9fa;
 
             opacity: 0;
             transform: translateX(30px);
@@ -802,7 +804,39 @@
             width: 100%;
             background: currentColor;
             transform-origin: left;
-            animation: flashCountdown 4s linear forwards;
+            animation: flashCountdown var(--flash-duration, 4s) linear forwards;
+        }
+
+        .flash-alert.no-progress .flash-progress {
+            display: none;
+        }
+
+        .flash-dismiss {
+            border: 0;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            padding: 0;
+            margin-left: auto;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s ease, color 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .flash-dismiss:hover,
+        .flash-dismiss:focus {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+
+        .flash-dismiss i {
+            font-size: 1rem;
+            line-height: 1;
+            margin: 0;
         }
 
         .flash-content {
@@ -832,11 +866,33 @@
         .flash-text {
             line-height: 1.4;
             padding-top: 4px;
+            flex: 1;
+        }
+
+        .flash-alert.is-clickable {
+            cursor: pointer;
+        }
+
+        .flash-target-highlight {
+            animation: flashTargetHighlight 1.8s ease;
+            box-shadow: 0 0 0 3px rgba(244, 196, 48, 0.35);
+            border-radius: 8px;
         }
 
         @keyframes flashCountdown {
             from { transform: scaleX(1); }
             to { transform: scaleX(0); }
+        }
+
+        @keyframes flashTargetHighlight {
+            0% {
+                box-shadow: 0 0 0 0 rgba(244, 196, 48, 0.55);
+                background-color: rgba(244, 196, 48, 0.18);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(244, 196, 48, 0);
+                background-color: transparent;
+            }
         }
 
         /* ===== Color Variants ===== */
@@ -859,6 +915,42 @@
         .flash-icon-info {
             background: rgba(103, 194, 228, 0.15);
             color: #67c2e4;
+        }
+
+        .swal2-popup.a4-swal-popup {
+            background: #1c1f26;
+            color: var(--text-primary);
+            border: 1px solid var(--border-soft);
+            border-radius: 18px;
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+        }
+
+        .swal2-title.a4-swal-title {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .swal2-html-container.a4-swal-text {
+            color: var(--text-muted);
+        }
+
+        .swal2-confirm.a4-swal-confirm,
+        .swal2-cancel.a4-swal-cancel {
+            border-radius: 999px !important;
+            font-weight: 600;
+            padding: 0.7rem 1.25rem;
+            box-shadow: none !important;
+        }
+
+        .swal2-cancel.a4-swal-cancel {
+            background: rgba(255,255,255,0.08) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+        }
+
+        .swal2-icon.swal2-warning {
+            border-color: rgba(244, 196, 48, 0.45) !important;
+            color: #f4c430 !important;
         }
     </style>
 
@@ -1060,7 +1152,7 @@
                         Export Services CSV
                     </a>
 
-                    <form action="{{ url_for('auth.logout') }}" method="post" class="m-0">
+                    <form id="logoutForm" action="{{ url_for('auth.logout') }}" method="post" class="m-0">
                         <button type="submit" class="dropdown-item profile-action text-danger border-0 bg-transparent w-100 text-start">
                             <i class="bi bi-box-arrow-right me-2"></i>
                             Logout
@@ -1085,7 +1177,18 @@
                 'info': 'bi-info-circle-fill'
             }[category] %}
 
-            <div class="alert alert-{{ category }} shadow-lg flash-alert">
+            {% set flash_auto_close_ms = {
+                'success': 2200,
+                'info': 2500,
+                'warning': 0,
+                'danger': 0
+            }[category] %}
+
+            <div
+                class="alert alert-{{ category }} shadow-lg flash-alert{% if flash_auto_close_ms <= 0 %} no-progress{% endif %}"
+                data-flash-type="{{ category }}"
+                data-flash-message="{{ message|e }}"
+                data-flash-auto-close-ms="{{ flash_auto_close_ms }}">
                 <div class="flash-content">
                     <div class="flash-icon flash-icon-{{ category }}">
                         <i class="bi {{ icon }}"></i>
@@ -1093,6 +1196,9 @@
                     <div class="flash-text">
                         {{ message }}
                     </div>
+                    <button type="button" class="flash-dismiss" aria-label="Close alert">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
                 </div>
                 <div class="flash-progress"></div>
             </div>
@@ -1149,6 +1255,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
 const APP_CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -1361,63 +1468,260 @@ if (window.fetch) {
     };
 }
 
+const FLASH_ICONS = {
+    warning: 'bi-exclamation-triangle-fill',
+    danger: 'bi-x-circle-fill',
+    success: 'bi-check-circle-fill',
+    info: 'bi-info-circle-fill',
+};
+
+function flashContainer() {
+    return document.getElementById('flash-container');
+}
+
+function closeFlashAlert(alertEl) {
+    if (!alertEl) {
+        return;
+    }
+    if (alertEl.dataset.flashTimeoutId) {
+        window.clearTimeout(Number(alertEl.dataset.flashTimeoutId));
+    }
+    alertEl.classList.remove('show');
+    alertEl.classList.add('hide');
+    window.setTimeout(() => {
+        alertEl.remove();
+    }, 350);
+}
+
+function clearDynamicFlashAlerts() {
+    flashContainer()?.querySelectorAll('.flash-alert[data-dynamic="1"]').forEach((alertEl) => {
+        closeFlashAlert(alertEl);
+    });
+}
+
+function focusFlashTarget(targetSelector, highlightClass = 'flash-target-highlight') {
+    if (!targetSelector) {
+        return false;
+    }
+
+    const target = document.querySelector(targetSelector);
+    if (!target) {
+        return false;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (typeof target.focus === 'function') {
+        target.focus({ preventScroll: true });
+    }
+
+    target.classList.remove(highlightClass);
+    void target.offsetWidth;
+    target.classList.add(highlightClass);
+    window.setTimeout(() => target.classList.remove(highlightClass), 1800);
+    return true;
+}
+
+function defaultFlashAutoCloseMs(type) {
+    switch (String(type || '').toLowerCase()) {
+        case 'success':
+            return 2200;
+        case 'info':
+            return 2500;
+        case 'warning':
+        case 'danger':
+        default:
+            return 0;
+    }
+}
+
+function showFlashMessage(message, type = 'info', options = {}) {
+    const container = flashContainer();
+    if (!container) {
+        return null;
+    }
+
+    const text = String(message ?? '').trim();
+    if (!text) {
+        return null;
+    }
+
+    const {
+        autoCloseMs,
+        replace = false,
+        clearExisting = false,
+        targetSelector = null,
+        highlightClass = 'flash-target-highlight',
+        closeOnTargetClick = true,
+    } = options;
+    const resolvedAutoCloseMs = autoCloseMs ?? defaultFlashAutoCloseMs(type);
+
+    if (clearExisting || replace) {
+        clearDynamicFlashAlerts();
+    }
+
+    const duplicate = Array.from(container.querySelectorAll('.flash-alert')).find((alertEl) => (
+        alertEl.dataset.flashType === type
+        && alertEl.dataset.flashMessage === text
+        && (alertEl.dataset.flashTarget || '') === (targetSelector || '')
+    ));
+
+    if (duplicate) {
+        requestAnimationFrame(() => duplicate.classList.add('show'));
+        return duplicate;
+    }
+
+    const alertEl = document.createElement('div');
+    alertEl.className = `alert alert-${type} shadow-lg flash-alert${resolvedAutoCloseMs > 0 ? '' : ' no-progress'}${targetSelector ? ' is-clickable' : ''}`;
+    alertEl.dataset.dynamic = '1';
+    alertEl.dataset.flashType = type;
+    alertEl.dataset.flashMessage = text;
+    alertEl.dataset.flashAutoCloseMs = String(resolvedAutoCloseMs);
+    if (targetSelector) {
+        alertEl.dataset.flashTarget = targetSelector;
+    }
+
+    const progressMarkup = resolvedAutoCloseMs > 0 ? '<div class="flash-progress"></div>' : '<div class="flash-progress" hidden></div>';
+    alertEl.innerHTML = `
+        <div class="flash-content">
+            <div class="flash-icon flash-icon-${type}">
+                <i class="bi ${FLASH_ICONS[type] || FLASH_ICONS.info}"></i>
+            </div>
+            <div class="flash-text"></div>
+            <button type="button" class="flash-dismiss" aria-label="Close alert">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        ${progressMarkup}
+    `;
+    alertEl.querySelector('.flash-text').textContent = text;
+    container.appendChild(alertEl);
+
+    if (resolvedAutoCloseMs > 0) {
+        alertEl.style.setProperty('--flash-duration', `${resolvedAutoCloseMs}ms`);
+        const timeoutId = window.setTimeout(() => closeFlashAlert(alertEl), resolvedAutoCloseMs);
+        alertEl.dataset.flashTimeoutId = String(timeoutId);
+    }
+
+    requestAnimationFrame(() => alertEl.classList.add('show'));
+
+    if (targetSelector) {
+        alertEl.addEventListener('click', (event) => {
+            if (event.target.closest('.flash-dismiss')) {
+                return;
+            }
+            const focused = focusFlashTarget(targetSelector, highlightClass);
+            if (focused && closeOnTargetClick) {
+                closeFlashAlert(alertEl);
+            }
+        });
+    }
+
+    return alertEl;
+}
+
+async function showConfirmDialog(options = {}) {
+    const {
+        title = 'Are you sure?',
+        text = '',
+        icon = 'warning',
+        confirmButtonText = 'Confirm',
+        cancelButtonText = 'Cancel',
+        dangerMode = false,
+    } = options;
+
+    if (window.Swal?.fire) {
+        const result = await window.Swal.fire({
+            title,
+            text,
+            icon,
+            showCancelButton: true,
+            confirmButtonText,
+            cancelButtonText,
+            reverseButtons: true,
+            focusCancel: !dangerMode,
+            confirmButtonColor: dangerMode ? '#c1121f' : '#198754',
+            background: '#1c1f26',
+            color: '#f5f5f5',
+            customClass: {
+                popup: 'a4-swal-popup',
+                title: 'a4-swal-title',
+                htmlContainer: 'a4-swal-text',
+                confirmButton: 'a4-swal-confirm',
+                cancelButton: 'a4-swal-cancel',
+            },
+        });
+        return Boolean(result.isConfirmed);
+    }
+
+    const fallbackMessage = text ? `${title}\n\n${text}` : title;
+    return window.confirm(fallbackMessage);
+}
+
+window.A4Flash = {
+    clearDynamic: clearDynamicFlashAlerts,
+    close: closeFlashAlert,
+    defaultAutoCloseMs: defaultFlashAutoCloseMs,
+    focusTarget: focusFlashTarget,
+    show: showFlashMessage,
+};
+
+window.A4Confirm = {
+    show: showConfirmDialog,
+};
+
 document.addEventListener("DOMContentLoaded", function () {
     appendCsrfTokenToForms();
 
-    const DISPLAY_TIME = 4000; // 4 seconds
-
     document.querySelectorAll('.flash-alert').forEach(function (alert) {
-
-        const progress = alert.querySelector('.flash-progress::after');
-
-        // Trigger slide-in
+        const autoCloseMs = Number(alert.dataset.flashAutoCloseMs || 0);
+        if (autoCloseMs > 0) {
+            alert.style.setProperty('--flash-duration', `${autoCloseMs}ms`);
+            const timeoutId = window.setTimeout(() => closeFlashAlert(alert), autoCloseMs);
+            alert.dataset.flashTimeoutId = String(timeoutId);
+        }
         requestAnimationFrame(() => {
             alert.classList.add('show');
         });
-
-        // Start countdown animation
-        const progressBar = alert.querySelector('.flash-progress::after');
-        alert.querySelector('.flash-progress').style.setProperty('--duration', DISPLAY_TIME + 'ms');
-
-        const progressInner = alert.querySelector('.flash-progress::after');
-        
-        const bar = alert.querySelector('.flash-progress');
-        bar.querySelector('::after');
-
-        // Instead, set animation duration dynamically
-        const progressEl = alert.querySelector('.flash-progress');
-        progressEl.style.setProperty('--flash-duration', DISPLAY_TIME + 'ms');
-        progressEl.querySelector = null;
-
-        const after = alert.querySelector('.flash-progress');
-        after.style.setProperty('--duration', DISPLAY_TIME + 'ms');
-
-        const progressAnim = alert.querySelector('.flash-progress');
-        progressAnim.querySelector;
-
-        alert.querySelector('.flash-progress').style.setProperty('--duration', DISPLAY_TIME + 'ms');
-
-        alert.querySelector('.flash-progress').querySelector = null;
-
-        // Set animation duration properly
-        alert.querySelector('.flash-progress').style.setProperty('--flash-time', DISPLAY_TIME + 'ms');
-
-        alert.querySelector('.flash-progress').style.animationDuration = DISPLAY_TIME + 'ms';
-
-        // Auto remove
-        setTimeout(function () {
-
-            alert.classList.remove('show');
-            alert.classList.add('hide');
-
-            setTimeout(() => {
-                alert.remove();
-            }, 350);
-
-        }, DISPLAY_TIME);
-
     });
+});
 
+document.addEventListener('click', function(event) {
+    const dismissButton = event.target.closest('.flash-dismiss');
+    if (!dismissButton) {
+        return;
+    }
+
+    const alertEl = dismissButton.closest('.flash-alert');
+    if (!alertEl) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    closeFlashAlert(alertEl);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const logoutForm = document.getElementById('logoutForm');
+    if (!logoutForm) {
+        return;
+    }
+
+    logoutForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const confirmed = await showConfirmDialog({
+            title: 'Log out now?',
+            text: 'You will need to sign in again to continue.',
+            icon: 'warning',
+            confirmButtonText: 'Log out',
+            cancelButtonText: 'Stay signed in',
+            dangerMode: false,
+        });
+
+        if (confirmed) {
+            logoutForm.submit();
+        }
+    });
 });
 
 document.addEventListener('DOMContentLoaded', function () {

@@ -143,10 +143,10 @@ Future upgrade: move to Redis or DB
 
 ## Payables Feature
 - [X] ~~*change button name from new manual payable to create payable*~~ [2026-03-19]
-- due date is same as cheque date. change that
-- PDF add cleared cheques. add all cheques of all statuses and arrange data from closest to cheque data to farthest
+- [X] ~~*due date is same as cheque date. change that*~~ [2026-03-20]
+- [X] ~~*PDF add cleared cheques. add all cheques of all statuses and arrange data from closest to cheque data to farthest*~~ [2026-03-20]
 - [X] ~~*Generate PDF should be accessible by staff*~~ [2026-03-19]
-- Collapse the cheque history. only show due cheques this month. hide other cheques not until it is lazy loaded?
+- [X] ~~*Collapse the cheque history. only show due cheques this month. hide other cheques not until it is lazy loaded?*~~ [2026-03-20]
 
 ## Base page
-- change the notifications system. client requested for it to not be timed and for it to be closed when user presses on it. when user presses it, redirect user to where the error led them. for example they were creating a sale, when they submit and an error pops up, higlight that error so they know where they went wrong
+- [X] ~~*change the notifications system. client requested for it to not be timed and for it to be closed when user presses on it. when user presses it, redirect user to where the error led them. for example they were creating a sale, when they submit and an error pops up, higlight that error so they know where they went wrong*~~ [2026-03-20]

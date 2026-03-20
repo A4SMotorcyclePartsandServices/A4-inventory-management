@@ -641,3 +641,82 @@ Operational notes
 - A known watchlist item remains for item-based loyalty programs:
 - refunded item sales do not yet roll back any earned loyalty stamps / points.
 - This was intentionally deferred because item-based loyalty is rare for the client and needs a separate ledger-safe design.
+
+Toast / flash notification system
+- The shared flash / toast system in `base.html` was reworked to reduce missed validation errors during live shop use.
+- Error and blocking warning toasts now stay visible until the user manually closes them.
+- Success and lightweight info toasts now auto-dismiss again after a short delay so routine workflows like sale submission do not get slowed down.
+- Flash messages now use one shared client-side helper instead of several duplicated per-page timer implementations.
+- Dynamic page alerts now replace earlier dynamic alerts from the same flow instead of endlessly stacking in the corner.
+- Flash messages now support optional target focus / highlight behavior so a toast can point the user back to the field or section that needs correction.
+
+SweetAlert2 usage
+- SweetAlert2 was added selectively for confirm / destructive actions, not for routine success toasts.
+- A shared confirm wrapper was introduced so the app can use SweetAlert2 when available and still fall back to native `confirm()` safely.
+- Current SweetAlert2-backed flows include logout confirmation and cash ledger entry deletion.
+- Existing richer Bootstrap-based confirmation modals, such as PO cancel / revision flows and refund confirmation, were left in place instead of being replaced.
+
+## Payables Page Overhaul
+
+Implemented 2026-03-20
+
+Scope
+- Reworked the payables page to reduce heavy initial rendering and make cheque-driven payable work easier to scan during daily operations.
+- Separated active payables from payables history using top-page tabs inspired by the order overview workflow.
+
+Active payables behavior
+- Active payables now default to PO-based and manual-based sections only.
+- Fully issued payables with all cheques cleared are no longer shown in the active sections.
+- Active payables are now filtered by cheque timing:
+- payables with no cheques still remain visible
+- payables with at least one non-cancelled cheque dated in the current month remain visible
+- payables whose cheque dates are only in future months are hidden from the default active view
+- Hidden future-dated payables remain searchable by cheque number, PO number, vendor, or payee.
+
+Ordering / visibility
+- Active payable cards are now ordered by the cheque date closest to the current day.
+- Example behavior:
+- a payable with a cheque dated March 23 appears before one dated March 24 when today is March 20.
+- This ordering applies to both PO-based and manual-based active payables.
+
+Cheque history performance
+- Cheque history is collapsed by default for each payable.
+- The page no longer pre-renders all cheque rows on first load.
+- Cheque history is fetched only when the user opens a specific payable's history.
+- Within that history:
+- issued cheques due this month are shown first
+- cleared / older cheque history stays hidden behind a secondary reveal button
+
+Payables history tab
+- Added a dedicated `Payables History` tab.
+- Payables history is no longer rendered with the main page load.
+- Month summaries for cleared payables are fetched only when the history tab is selected.
+- Actual payable cards for a month are fetched only when that month is expanded.
+- History remains grouped by month, with the current month opened first.
+
+Search behavior
+- Search now spans:
+- cheque number
+- PO number
+- vendor name
+- payee name
+- Search applies across both active payables and payables history.
+- If a search has no active matches but does have cleared-history matches, the page switches to the history tab automatically.
+
+Modal / UI optimization
+- Replaced one issue-cheque modal per payable with one shared reusable issue-cheque modal.
+- The shared modal is populated dynamically with payable id, payee/vendor name, remaining balance, and submit action.
+- This reduces DOM weight significantly when many active payables are visible on the page.
+
+Cheque issuing / status updates
+- Due date and cheque date remain unified for cheque issuance.
+- Cheque status updates still require an actual dropdown change before the update button becomes clickable.
+- SweetAlert2 confirmation remains in place for cheque status changes.
+
+Reporting alignment
+- Payables PDF already remained sorted by cheque date closest to today, so no new PDF sorting change was required in this pass.
+
+Implementation notes
+- Main backend work lives in `services/payables_service.py`.
+- Page/API route updates live in `routes/payables_route.py`.
+- Main UI and lazy-load behavior lives in `templates/transactions/payables.html`.

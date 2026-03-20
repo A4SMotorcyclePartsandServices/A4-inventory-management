@@ -338,9 +338,12 @@
 
         .receipt-item-note {
             display: block;
-            margin-top: 3px;
-            color: #666;
-            font-size: 0.7rem;
+            margin-top: 6px;
+            color: red;
+            font-size: 0.75rem;
+            font-weight: bold;
+            line-height: 1.45;
+            white-space: pre-wrap;
         }
 
         .total-row td {
@@ -690,7 +693,7 @@
                     <td>
                         {{ item.item_name }}
                         {% if item.notes %}
-                        <span class="receipt-item-note">{{ item.notes }}</span>
+                        <span class="receipt-item-note">Notes: {{ item.notes }}</span>
                         {% endif %}
                     </td>
                     <td>{{ item.quantity_received }}</td>

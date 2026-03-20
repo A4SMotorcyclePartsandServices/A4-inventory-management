@@ -863,7 +863,15 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 // Delete entry (admin only)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 async function deleteEntry(entryId, btn) {
-    if (!confirm('Delete this entry? This cannot be undone.')) return;
+    const confirmed = await (window.A4Confirm?.show?.({
+        title: 'Delete this entry?',
+        text: 'This cannot be undone.',
+        icon: 'warning',
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Keep entry',
+        dangerMode: true,
+    }) ?? Promise.resolve(window.confirm('Delete this entry? This cannot be undone.')));
+    if (!confirmed) return;
 
     try {
         const res = await fetch(`/api/cash/delete/${entryId}`, { method: 'DELETE' });
@@ -886,31 +894,9 @@ async function deleteEntry(entryId, btn) {
 // Flash helper (uses base.html flash system)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 function showFlash(message, type) {
-    const icons = {
-        success: 'bi-check-circle-fill',
-        danger:  'bi-x-circle-fill',
-        warning: 'bi-exclamation-triangle-fill',
-    };
-
-    const container = document.getElementById('flash-container');
-    const alert = document.createElement('div');
-    alert.className = `alert alert-${type} shadow-lg flash-alert`;
-    alert.innerHTML = `
-        <div class="flash-content">
-            <div class="flash-icon flash-icon-${type}">
-                <i class="bi ${icons[type] || 'bi-info-circle-fill'}"></i>
-            </div>
-            <div class="flash-text">${message}</div>
-        </div>
-        <div class="flash-progress"></div>`;
-
-    container.appendChild(alert);
-    requestAnimationFrame(() => alert.classList.add('show'));
-
-    setTimeout(() => {
-        alert.classList.remove('show');
-        setTimeout(() => alert.remove(), 350);
-    }, 4000);
+    if (window.A4Flash?.show) {
+        return window.A4Flash.show(message, type || 'info', { replace: true });
+    }
 }
 
 function savePendingFlashForReload(message, type) {

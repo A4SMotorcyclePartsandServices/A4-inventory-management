@@ -632,6 +632,11 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_status ON payable_cheques(status)")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payable_cheques_cheque_no_unique ON payable_cheques(cheque_no)")
     cur.execute("""
+    UPDATE payable_cheques
+    SET due_date = cheque_date
+    WHERE due_date IS DISTINCT FROM cheque_date
+    """)
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS payables_audit_log (
         id                   SERIAL PRIMARY KEY,
         payable_id           INTEGER REFERENCES payables(id) ON DELETE SET NULL,

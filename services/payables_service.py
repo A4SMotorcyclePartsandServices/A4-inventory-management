@@ -429,7 +429,6 @@ def issue_payable_cheque(
     *,
     cheque_no,
     cheque_date,
-    due_date,
     cheque_amount,
     notes=None,
     created_by=None,
@@ -439,12 +438,10 @@ def issue_payable_cheque(
     notes = _clean_text(notes, "Notes", max_length=MAX_NOTES_LENGTH)
     cheque_amount_value = _parse_money(cheque_amount, "Cheque amount")
     cheque_date_value = _parse_iso_date(cheque_date, "Cheque date")
-    due_date_value = _parse_iso_date(due_date, "Due date")
+    due_date_value = cheque_date_value
 
     if cheque_amount_value <= 0:
         raise ValueError("Cheque amount must be greater than zero.")
-    if due_date_value < cheque_date_value:
-        raise ValueError("Due date cannot be earlier than cheque date.")
 
     conn = get_db()
     try:
@@ -625,6 +622,7 @@ def _serialize_cheque_row(row, today_value):
     return {
         "id": int(data["id"]),
         "cheque_no": data["cheque_no"] or "-",
+        "cheque_no_raw": data["cheque_no"] or "",
         "cheque_date": format_date(cheque_date_value),
         "due_date": format_date(due_date_value),
         "cheque_amount": _normalize_money(data["cheque_amount"]),
@@ -635,89 +633,237 @@ def _serialize_cheque_row(row, today_value):
     }
 
 
-def get_payables_page_context():
+def _serialize_payable_summary_row(row):
+    amount_due = _normalize_money(row["amount_due"])
+    issued_amount = _normalize_money(row["issued_amount"])
+    remaining_balance = max(0.0, amount_due - issued_amount)
+    total_cheque_count = int(row.get("total_cheque_count") or 0)
+    cleared_cheque_count = int(row.get("cleared_cheque_count") or 0)
+    uncleared_cheque_count = int(row.get("uncleared_cheque_count") or 0)
+    current_month_cheque_count = int(row.get("current_month_cheque_count") or 0)
+    due_this_month_count = int(row.get("due_this_month_count") or 0)
+    due_soon_count = int(row.get("due_soon_cheque_count") or 0)
+    due_today_count = int(row.get("due_today_cheque_count") or 0)
+    latest_cheque_status = row.get("latest_cheque_status") or "-"
+    nearest_cheque_date = row.get("nearest_cheque_date")
+    nearest_cheque_distance = row.get("nearest_cheque_distance")
+    status = row["status"] or PAYABLE_STATUS_OPEN
+    is_fully_cleared = bool(
+        str(status).strip().upper() == PAYABLE_STATUS_FULLY_ISSUED
+        and total_cheque_count > 0
+        and uncleared_cheque_count == 0
+        and cleared_cheque_count == total_cheque_count
+    )
+
+    return {
+        "id": int(row["id"]),
+        "source_type": row["source_type"],
+        "po_id": row["po_id"],
+        "po_receipt_id": row["po_receipt_id"],
+        "po_number_snapshot": row["po_number_snapshot"] or "-",
+        "vendor_name_snapshot": row["vendor_name_snapshot"] or "",
+        "po_created_at_snapshot": format_date(row["po_created_at_snapshot"]),
+        "delivery_received_at_snapshot": format_date(row["delivery_received_at_snapshot"], show_time=True),
+        "payee_name": row["payee_name"] or "-",
+        "description": row["description"] or "",
+        "reference_no": row["reference_no"] or "",
+        "amount_due": amount_due,
+        "issued_amount": issued_amount,
+        "remaining_balance": remaining_balance,
+        "status": status,
+        "latest_due_date": format_date(row["latest_due_date"]),
+        "latest_cheque_status": latest_cheque_status,
+        "nearest_cheque_date": format_date(nearest_cheque_date),
+        "nearest_cheque_distance": int(nearest_cheque_distance) if nearest_cheque_distance is not None else None,
+        "created_at": format_date(row["created_at"], show_time=True),
+        "cheque_count": total_cheque_count,
+        "cleared_cheque_count": cleared_cheque_count,
+        "uncleared_cheque_count": uncleared_cheque_count,
+        "current_month_cheque_count": current_month_cheque_count,
+        "due_this_month_count": due_this_month_count,
+        "due_soon_count": due_soon_count,
+        "due_today_count": due_today_count,
+        "is_fully_cleared": is_fully_cleared,
+    }
+
+
+def _payable_history_anchor(row):
+    for field_name in ("latest_due_date", "delivery_received_at_snapshot", "created_at"):
+        value = row.get(field_name)
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if value:
+            raw_value = str(value).strip()
+            for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    parsed = datetime.strptime(raw_value, fmt)
+                    return parsed.date()
+                except ValueError:
+                    continue
+    return date.today()
+
+
+def _get_payable_summary_rows(search_query=None):
     today_value = date.today()
+    month_start = today_value.replace(day=1)
+    if month_start.month == 12:
+        next_month_start = month_start.replace(year=month_start.year + 1, month=1, day=1)
+    else:
+        next_month_start = month_start.replace(month=month_start.month + 1, day=1)
+
+    query_value = str(search_query or "").strip()
     conn = get_db()
     try:
+        conditions = []
+        aggregate_params = [
+            list(ACTIVE_CHEQUE_STATUSES),
+            CHEQUE_STATUS_CANCELLED,
+            today_value.isoformat(),
+            today_value.isoformat(),
+            CHEQUE_STATUS_CANCELLED,
+            today_value.isoformat(),
+            CHEQUE_STATUS_CANCELLED,
+            month_start.isoformat(),
+            next_month_start.isoformat(),
+            CHEQUE_STATUS_ISSUED,
+            today_value.isoformat(),
+            CHEQUE_STATUS_ISSUED,
+            today_value.isoformat(),
+            (today_value + timedelta(days=7)).isoformat(),
+            CHEQUE_STATUS_ISSUED,
+            month_start.isoformat(),
+            next_month_start.isoformat(),
+            CHEQUE_STATUS_CLEARED,
+            CHEQUE_STATUS_CLEARED,
+        ]
+        search_params = []
+
+        if query_value:
+            conditions.append(
+                """
+                (
+                    p.payee_name ILIKE %s ESCAPE '\\'
+                    OR COALESCE(p.vendor_name_snapshot, '') ILIKE %s ESCAPE '\\'
+                    OR COALESCE(p.po_number_snapshot, '') ILIKE %s ESCAPE '\\'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM payable_cheques pc_search
+                        WHERE pc_search.payable_id = p.id
+                          AND pc_search.cheque_no ILIKE %s ESCAPE '\\'
+                    )
+                )
+                """
+            )
+            like_value = f"%{_escape_like(query_value)}%"
+            search_params.extend([like_value, like_value, like_value, like_value])
+
+        where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         payable_rows = conn.execute(
-            """
+            f"""
             SELECT
                 p.*,
                 COALESCE(SUM(CASE WHEN pc.status = ANY(%s) THEN pc.cheque_amount ELSE 0 END), 0) AS issued_amount,
-                MAX(pc.due_date) AS latest_due_date
+                MAX(pc.due_date) AS latest_due_date,
+                (
+                    SELECT pc_nearest.due_date
+                    FROM payable_cheques pc_nearest
+                    WHERE pc_nearest.payable_id = p.id
+                      AND pc_nearest.status <> %s
+                    ORDER BY ABS(pc_nearest.due_date - %s) ASC, pc_nearest.due_date ASC, pc_nearest.id ASC
+                    LIMIT 1
+                ) AS nearest_cheque_date,
+                (
+                    SELECT ABS(pc_nearest.due_date - %s)
+                    FROM payable_cheques pc_nearest
+                    WHERE pc_nearest.payable_id = p.id
+                      AND pc_nearest.status <> %s
+                    ORDER BY ABS(pc_nearest.due_date - %s) ASC, pc_nearest.due_date ASC, pc_nearest.id ASC
+                    LIMIT 1
+                ) AS nearest_cheque_distance,
+                COUNT(pc.id) AS total_cheque_count,
+                COUNT(CASE WHEN pc.status <> %s AND pc.due_date >= %s AND pc.due_date < %s THEN 1 END) AS current_month_cheque_count,
+                COUNT(CASE WHEN pc.status = %s AND pc.due_date = %s THEN 1 END) AS due_today_cheque_count,
+                COUNT(CASE WHEN pc.status = %s AND pc.due_date > %s AND pc.due_date <= %s THEN 1 END) AS due_soon_cheque_count,
+                COUNT(CASE WHEN pc.status = %s AND pc.due_date >= %s AND pc.due_date < %s THEN 1 END) AS due_this_month_count,
+                COUNT(CASE WHEN pc.status = %s THEN 1 END) AS cleared_cheque_count,
+                COUNT(CASE WHEN pc.id IS NOT NULL AND pc.status <> %s THEN 1 END) AS uncleared_cheque_count,
+                (
+                    SELECT pc_latest.status
+                    FROM payable_cheques pc_latest
+                    WHERE pc_latest.payable_id = p.id
+                    ORDER BY pc_latest.created_at DESC, pc_latest.id DESC
+                    LIMIT 1
+                ) AS latest_cheque_status
             FROM payables p
             LEFT JOIN payable_cheques pc ON pc.payable_id = p.id
+            {where_sql}
             GROUP BY p.id
             ORDER BY
                 COALESCE(p.delivery_received_at_snapshot, p.created_at) DESC,
                 p.id DESC
             """,
-            (list(ACTIVE_CHEQUE_STATUSES),),
-        ).fetchall()
-
-        cheque_rows = conn.execute(
-            """
-            SELECT
-                pc.*,
-                p.payee_name
-            FROM payable_cheques pc
-            JOIN payables p ON p.id = pc.payable_id
-            ORDER BY pc.created_at DESC, pc.id DESC
-            """
+            aggregate_params + search_params,
         ).fetchall()
     finally:
         conn.close()
 
-    cheques_by_payable = {}
-    for row in cheque_rows:
-        cheques_by_payable.setdefault(int(row["payable_id"]), []).append(_serialize_cheque_row(row, today_value))
+    return payable_rows
+
+
+def get_payables_page_context(search_query=None):
+    payable_rows = _get_payable_summary_rows(search_query=search_query)
+    query_value = str(search_query or "").strip()
 
     po_based_payables = []
     manual_payables = []
+    history_total_count = 0
     total_remaining = 0.0
     open_count = 0
     due_soon_count = 0
     due_today_count = 0
 
     for row in payable_rows:
-        issued_amount = _normalize_money(row["issued_amount"])
-        amount_due = _normalize_money(row["amount_due"])
-        remaining_balance = max(0.0, amount_due - issued_amount)
-        cheque_history = cheques_by_payable.get(int(row["id"]), [])
-        latest_cheque_status = cheque_history[0]["status"] if cheque_history else "-"
-
-        payable_data = {
-            "id": int(row["id"]),
-            "source_type": row["source_type"],
-            "po_id": row["po_id"],
-            "po_receipt_id": row["po_receipt_id"],
-            "po_number_snapshot": row["po_number_snapshot"] or "-",
-            "vendor_name_snapshot": row["vendor_name_snapshot"] or "",
-            "po_created_at_snapshot": format_date(row["po_created_at_snapshot"]),
-            "delivery_received_at_snapshot": format_date(row["delivery_received_at_snapshot"], show_time=True),
-            "payee_name": row["payee_name"] or "-",
-            "description": row["description"] or "",
-            "reference_no": row["reference_no"] or "",
-            "amount_due": amount_due,
-            "issued_amount": issued_amount,
-            "remaining_balance": remaining_balance,
-            "status": row["status"] or PAYABLE_STATUS_OPEN,
-            "latest_due_date": format_date(row["latest_due_date"]),
-            "latest_cheque_status": latest_cheque_status,
-            "created_at": format_date(row["created_at"], show_time=True),
-            "cheques": cheque_history,
-        }
-
-        total_remaining += remaining_balance
-        if payable_data["status"] in {PAYABLE_STATUS_OPEN, PAYABLE_STATUS_PARTIAL}:
-            open_count += 1
-        due_soon_count += sum(1 for cheque in cheque_history if cheque["is_due_soon"])
-        due_today_count += sum(1 for cheque in cheque_history if cheque["is_due_today"])
-
-        if row["source_type"] == "PO_DELIVERY":
-            po_based_payables.append(payable_data)
+        payable_data = _serialize_payable_summary_row(row)
+        if payable_data["is_fully_cleared"]:
+            history_total_count += 1
         else:
-            manual_payables.append(payable_data)
+            should_show_in_active = bool(
+                payable_data["cheque_count"] == 0
+                or payable_data["current_month_cheque_count"] > 0
+                or query_value
+            )
+            if not should_show_in_active:
+                continue
+
+            total_remaining += payable_data["remaining_balance"]
+            if payable_data["status"] in {PAYABLE_STATUS_OPEN, PAYABLE_STATUS_PARTIAL}:
+                open_count += 1
+            due_soon_count += payable_data["due_soon_count"]
+            due_today_count += payable_data["due_today_count"]
+
+            if row["source_type"] == "PO_DELIVERY":
+                po_based_payables.append(payable_data)
+            else:
+                manual_payables.append(payable_data)
+
+    def _active_sort_key(payable):
+        distance = payable.get("nearest_cheque_distance")
+        nearest_date = payable.get("nearest_cheque_date") or ""
+        has_cheque = int(payable.get("cheque_count") or 0) > 0
+        created_at = payable.get("created_at") or ""
+        fallback_id = int(payable.get("id") or 0)
+        return (
+            0 if has_cheque and distance is not None else 1,
+            distance if distance is not None else 10**9,
+            nearest_date,
+            created_at,
+            -fallback_id,
+        )
+
+    po_based_payables.sort(key=_active_sort_key)
+    manual_payables.sort(key=_active_sort_key)
 
     return {
         "summary": {
@@ -728,7 +874,148 @@ def get_payables_page_context():
         },
         "po_based_payables": po_based_payables,
         "manual_payables": manual_payables,
-        "today": today_value.isoformat(),
+        "active_total_count": len(po_based_payables) + len(manual_payables),
+        "history_total_count": history_total_count,
+        "search_query": query_value,
+        "today": date.today().isoformat(),
+    }
+
+
+def get_payables_history_month_summaries(search_query=None):
+    rows = _get_payable_summary_rows(search_query=search_query)
+    current_month_key = date.today().strftime("%Y-%m")
+    groups_map = {}
+
+    for row in rows:
+        payable_data = _serialize_payable_summary_row(row)
+        if not payable_data["is_fully_cleared"]:
+            continue
+        anchor_date = _payable_history_anchor(row)
+        month_key = anchor_date.strftime("%Y-%m")
+        group = groups_map.setdefault(
+            month_key,
+            {
+                "key": month_key,
+                "label": anchor_date.strftime("%B %Y"),
+                "sort_date": anchor_date.replace(day=1),
+                "payable_count": 0,
+                "is_current_month": month_key == current_month_key,
+            },
+        )
+        group["payable_count"] += 1
+
+    groups = sorted(groups_map.values(), key=lambda item: item["sort_date"], reverse=True)
+    for group in groups:
+        del group["sort_date"]
+
+    return {
+        "groups": groups,
+        "total_count": sum(group["payable_count"] for group in groups),
+        "current_month_key": current_month_key,
+    }
+
+
+def get_payables_history_by_month(month_key, search_query=None):
+    normalized_month_key = str(month_key or "").strip()
+    try:
+        month_anchor = datetime.strptime(normalized_month_key, "%Y-%m").date()
+    except ValueError:
+        raise ValueError("Invalid payables history month.")
+
+    rows = _get_payable_summary_rows(search_query=search_query)
+    payables = []
+    for row in rows:
+        payable_data = _serialize_payable_summary_row(row)
+        if not payable_data["is_fully_cleared"]:
+            continue
+        if _payable_history_anchor(row).strftime("%Y-%m") != normalized_month_key:
+            continue
+        payables.append(payable_data)
+
+    payables.sort(
+        key=lambda item: (
+            item["latest_due_date"] or "",
+            item["created_at"] or "",
+            item["id"],
+        ),
+        reverse=True,
+    )
+
+    return {
+        "month_key": normalized_month_key,
+        "month_label": month_anchor.strftime("%B %Y"),
+        "payables": payables,
+        "payable_count": len(payables),
+    }
+
+
+def get_payable_cheque_history(payable_id):
+    today_value = date.today()
+    month_start = today_value.replace(day=1)
+    if month_start.month == 12:
+        next_month_start = month_start.replace(year=month_start.year + 1, month=1, day=1)
+    else:
+        next_month_start = month_start.replace(month=month_start.month + 1, day=1)
+
+    conn = get_db()
+    try:
+        payable = conn.execute(
+            """
+            SELECT id, payee_name, source_type, po_number_snapshot
+            FROM payables
+            WHERE id = %s
+            """,
+            (int(payable_id),),
+        ).fetchone()
+        if not payable:
+            raise ValueError("Payable record not found.")
+
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM payable_cheques
+            WHERE payable_id = %s
+            ORDER BY due_date ASC, id ASC
+            """,
+            (int(payable_id),),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    current_month_due = []
+    other_history = []
+    for row in rows:
+        serialized = _serialize_cheque_row(row, today_value)
+        due_date_value = row["due_date"]
+        due_date_obj = due_date_value if isinstance(due_date_value, date) else None
+        if not due_date_obj:
+            try:
+                due_date_obj = datetime.strptime(str(due_date_value), "%Y-%m-%d").date()
+            except ValueError:
+                due_date_obj = None
+
+        is_current_month_due = bool(
+            due_date_obj
+            and month_start <= due_date_obj < next_month_start
+            and str(row["status"] or "").strip().upper() == CHEQUE_STATUS_ISSUED
+        )
+        if is_current_month_due:
+            current_month_due.append(serialized)
+        else:
+            other_history.append(serialized)
+
+    return {
+        "payable_id": int(payable["id"]),
+        "payee_name": payable["payee_name"] or "-",
+        "source_type": payable["source_type"] or "MANUAL",
+        "po_number_snapshot": payable["po_number_snapshot"] or "",
+        "current_month_due": current_month_due,
+        "other_history": other_history,
+        "counts": {
+            "current_month_due": len(current_month_due),
+            "other_history": len(other_history),
+            "total": len(current_month_due) + len(other_history),
+        },
     }
 
 
@@ -766,9 +1053,9 @@ def build_payables_report_context(start_date=None, end_date=None):
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
             WHERE pc.cheque_date BETWEEN %s AND %s
-            ORDER BY pc.cheque_date DESC, pc.id DESC
+            ORDER BY ABS(pc.cheque_date - %s) ASC, pc.cheque_date ASC, pc.id ASC
             """,
-            (start_value, end_value),
+            (start_value, end_value, today_value.isoformat()),
         ).fetchall()
     finally:
         conn.close()
@@ -782,7 +1069,6 @@ def build_payables_report_context(start_date=None, end_date=None):
             "id": int(row["id"]),
             "cheque_no": row["cheque_no"] or "-",
             "cheque_date": format_date(row["cheque_date"]),
-            "due_date": format_date(row["due_date"]),
             "cheque_amount": amount,
             "status": row["status"] or CHEQUE_STATUS_ISSUED,
             "payee_name": row["payee_name"] or "-",
