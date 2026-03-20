@@ -126,20 +126,19 @@ Future upgrade: move to Redis or DB
 - Change hard delete to soft delete. make it recycle bin style, make the deleted data able to come back, we have to record who deleted data, auto clear recycle bin every month
 
 ## Refund Feature
-- expand search to accomodate by item search and by date
 - [X] ~~*Payment change to payment method*~~ [2026-03-19]
 - [X] ~~*Change sale total to total sale*~~ [2026-03-19]
 - [X] ~~*Change sold to quantity*~~ [2026-03-19]
 - [X] ~~*Refunded so to amount refunded*~~ [2026-03-19]
 - [X] ~~*Refunded to refunded qty*~~ [2026-03-19]
 - [X] ~~*Remaining to remaining qty*~~ [2026-03-19]
-- change Sale Refund auto genrating format from RF-021384-0319 - 021384 - Patrick Jacob Latade to RF-OR NO.-Date - customer name
-- change exchange refund from RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032) to RF-89032-0319 - Patrick Jacob Latade (EX-89032)
-- change exchange replacement from EX-89032 — Patrick Jacob Latade (EX-89032) to SW-89032-current month and day — Patrick Jacob Latade (SW-89032)
-- change the RF auto generation to remove the OR No. in the middle RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032)
-- change category autofill
-- from exchange refund to exchange/refund
-- from exchange replacement to exchange/replacement
+- [X] ~~*expand search to accomodate by item search and by date*~~ [2026-03-20]
+- [X] ~~*change Sale Refund auto generating format from RF-021384-0319 - 021384 - Patrick Jacob Latade to RF-OR NO.-Date - customer name*~~ [2026-03-20]
+- [X] ~~*change exchange refund from RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032) to RF-89032-0319 - Patrick Jacob Latade (EX-89032)*~~ [2026-03-20]
+- [X] ~~*change exchange replacement from EX-89032 — Patrick Jacob Latade (EX-89032) to SW-89032-current month and day — Patrick Jacob Latade (SW-89032)*~~ [2026-03-20]
+- [X] ~~*change the RF auto generation to remove the OR No. in the middle RF-89032-0319 - 89032 - Patrick Jacob Latade (EX-89032)*~~ [2026-03-20]
+- [X] ~~*from exchange refund to exchange/refund*~~ [2026-03-20]
+- [X] ~~*from exchange replacement to exchange/replacement*~~ [2026-03-20]
 
 ## Payables Feature
 - [X] ~~*change button name from new manual payable to create payable*~~ [2026-03-19]
