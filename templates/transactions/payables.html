@@ -138,6 +138,9 @@
     .payable-po-number {
         color: var(--accent);
     }
+    .payable-cheque-number {
+        color: var(--accent);
+    }
     .payable-meta {
         color: var(--text-muted);
         font-size: 0.77rem;
@@ -238,6 +241,15 @@
         gap: 10px;
         margin-top: 4px;
     }
+    .cheque-due-flag {
+        font-weight: 800;
+    }
+    .cheque-due-flag.today {
+        color: #f87171;
+    }
+    .cheque-due-flag.soon {
+        color: #f4c430;
+    }
     .cheque-row-notes {
         color: var(--text-muted);
         font-size: 0.8rem;
@@ -314,9 +326,13 @@
     .payables-filters {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
-        align-items: end;
+        gap: 12px;
+        align-items: flex-end;
         margin-bottom: 24px;
+        padding: 12px 16px;
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: var(--bg-card);
     }
     .payables-filters .form-label {
         font-size: 0.68rem;
@@ -324,11 +340,71 @@
         text-transform: uppercase;
         color: var(--text-muted);
         font-weight: 700;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+    }
+    .payables-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+        min-width: max-content;
+        flex: 0 0 auto;
+    }
+    .payables-status-toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .payables-status-option {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .payables-status-chip {
+        min-height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.25rem 0.8rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: #161922;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+        transition: all 0.18s ease;
+    }
+    .payables-status-chip.status-open {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.35);
+    }
+    .payables-status-chip.status-partial {
+        color: #f4c430;
+        border-color: rgba(244, 196, 48, 0.35);
+    }
+    .payables-status-chip.status-fully-issued {
+        color: #4ade80;
+        border-color: rgba(74, 222, 128, 0.35);
+    }
+    .payables-status-option:checked + .payables-status-chip.status-open {
+        background: rgba(220, 53, 69, 0.15);
+        color: #ff8a95;
+    }
+    .payables-status-option:checked + .payables-status-chip.status-partial {
+        background: rgba(255, 193, 7, 0.15);
+        color: #ffd86b;
+    }
+    .payables-status-option:checked + .payables-status-chip.status-fully-issued {
+        background: rgba(40, 167, 69, 0.15);
+        color: #7ee2a8;
     }
     .payables-search-wrap {
+        display: flex;
+        flex-direction: column;
         min-width: min(420px, 100%);
-        flex: 1 1 320px;
+        flex: 1 1 auto;
     }
     .payables-toggle-wrap {
         display: flex;
@@ -421,6 +497,30 @@
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        align-items: center;
+        margin-left: auto;
+    }
+    .payables-reset-btn {
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid var(--border-soft);
+        background: #161922;
+        color: var(--text-muted);
+        transition: all 0.18s ease;
+    }
+    .payables-reset-btn:hover {
+        color: var(--text-primary);
+        border-color: rgba(255, 255, 255, 0.14);
+        background: #1a1e28;
+    }
+    @media (max-width: 991.98px) {
+        .payables-filter-actions {
+            margin-left: 0;
+        }
     }
     .payables-filter-result {
         margin-bottom: 18px;
@@ -533,50 +633,6 @@
     </div>
 </div>
 
-<form class="payables-filters" method="get" action="{{ url_for('payables.payables_page') }}">
-    <div class="payables-search-wrap">
-        <label class="form-label" for="payablesSearchInput">Search Payables</label>
-        <div class="input-group">
-            <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input
-                id="payablesSearchInput"
-                type="text"
-                class="form-control"
-                name="q"
-                value="{{ search_query }}"
-                placeholder="Search cheque no., PO no., vendor, or payee">
-        </div>
-    </div>
-    <div class="payables-filter-actions">
-        <button type="submit" class="btn btn-danger">
-            <i class="bi bi-funnel-fill me-1"></i> Apply
-        </button>
-        {% if search_query %}
-        <a href="{{ url_for('payables.payables_page') }}" class="btn btn-outline-light">Reset</a>
-        {% endif %}
-    </div>
-</form>
-
-{% if search_query %}
-<div class="payables-filter-result">
-    Search applies to both active payables and payables history for <strong>{{ search_query }}</strong>.
-</div>
-{% endif %}
-
-<div class="payables-tabs">
-    <button type="button" class="payables-tab active" data-payables-tab="active">
-        <i class="bi bi-journal-check"></i>
-        <span>Active Payables</span>
-        <span class="payables-tab-count">{{ active_total_count }}</span>
-    </button>
-    <button type="button" class="payables-tab" data-payables-tab="history">
-        <i class="bi bi-clock-history"></i>
-        <span>Payables History</span>
-        <span class="payables-tab-count" id="payablesHistoryCount">{{ history_total_count }}</span>
-    </button>
-</div>
-
-<div class="payables-panel active" id="panel-active-payables">
 <div class="section-block">
     <div class="section-header">
         <div>
@@ -602,11 +658,73 @@
     </form>
 </div>
 
+<form class="payables-filters" method="get" action="{{ url_for('payables.payables_page') }}">
+    <div class="payables-search-wrap">
+        <label class="form-label" for="payablesSearchInput">Search Payables</label>
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input
+                id="payablesSearchInput"
+                type="text"
+                class="form-control"
+                name="q"
+                value="{{ search_query }}"
+                placeholder="Search cheque no., PO no., vendor, or payee">
+        </div>
+    </div>
+    <div class="payables-filter-group">
+        <div class="payables-status-toggles" aria-label="Payable status filters">
+            {% for status_option in payable_status_filter_options %}
+            <input
+                class="payables-status-option"
+                type="checkbox"
+                name="status"
+                value="{{ status_option }}"
+                id="payablesStatus{{ loop.index }}"
+                {{ 'checked' if status_option in selected_statuses else '' }}>
+            <label class="payables-status-chip status-{{ status_option|lower|replace('_', '-') }}" for="payablesStatus{{ loop.index }}">{{ status_option.replace('_', ' ') }}</label>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="payables-filter-actions">
+        <button type="submit" class="btn btn-danger">
+            <i class="bi bi-funnel-fill me-1"></i> Apply
+        </button>
+        {% if search_query or has_status_filter %}
+        <a href="{{ url_for('payables.payables_page') }}" class="payables-reset-btn" aria-label="Reset filters" title="Reset filters">
+            <i class="bi bi-x-lg"></i>
+        </a>
+        {% endif %}
+    </div>
+</form>
+
+{% if search_query or has_status_filter %}
+<div class="payables-filter-result">
+    Search applies to both active payables and payables history{% if search_query %} for <strong>{{ search_query }}</strong>{% endif %}, with status filter:
+    <strong>{% if selected_statuses %}{% for status_option in selected_statuses %}{{ status_option.replace('_', ' ') }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}All statuses{% endif %}</strong>.
+</div>
+{% endif %}
+
+<div class="payables-tabs">
+    <button type="button" class="payables-tab active" data-payables-tab="active">
+        <i class="bi bi-journal-check"></i>
+        <span>Active Payables</span>
+        <span class="payables-tab-count">{{ active_total_count }}</span>
+    </button>
+    <button type="button" class="payables-tab" data-payables-tab="history">
+        <i class="bi bi-clock-history"></i>
+        <span>Payables History</span>
+        <span class="payables-tab-count" id="payablesHistoryCount">{{ history_total_count }}</span>
+    </button>
+</div>
+
+<div class="payables-panel active" id="panel-active-payables">
+
 <div class="section-block">
     <div class="section-header">
         <div>
             <h2 class="section-title" style="color: var(--accent);">PO-Based Payables</h2>
-            <div class="section-note">One payable per delivery batch from the new PO receipt workflow.</div>
+            <div class="section-note">One payable per delivery batch.</div>
         </div>
     </div>
 
@@ -813,12 +931,12 @@
                             <label class="form-label">Cheque / Due Date</label>
                             <input type="date" name="cheque_date" class="form-control" value="{{ today }}" required>
                         </div>
-                        <div class="col-md-6 order-md-4">
+                        <div class="col-md-6 order-2 order-md-4">
                             <label class="form-label">Cheque Amount</label>
                             <input type="number" step="0.01" min="0.01" name="cheque_amount" class="form-control cheque-amount-input" required>
                             <div class="inline-warning cheque-amount-warning">Cheque amount cannot go over the remaining balance.</div>
                         </div>
-                        <div class="col-md-6 order-md-3">
+                        <div class="col-md-6 order-1 order-md-3">
                             <label class="form-label">Remaining Balance</label>
                             <input type="text" id="sharedIssueChequeRemaining" class="form-control" value="₱0.00" disabled>
                         </div>
@@ -842,7 +960,7 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title">Payables History</h2>
-                <div class="section-note">Fully issued payables with cleared cheques, grouped by month and loaded only when opened.</div>
+                <div class="section-note">Fully issued payables with cleared cheques, grouped by month.</div>
             </div>
         </div>
         <div id="payablesHistoryContent">
@@ -893,6 +1011,7 @@
 <script>
 const PAYABLE_CHEQUE_STATUS_OPTIONS = ['ISSUED', 'CLEARED', 'CANCELLED', 'BOUNCED'];
 const CURRENT_PAYABLE_SEARCH_QUERY = {{ (search_query or '')|tojson }};
+const CURRENT_PAYABLE_STATUS_FILTERS = {{ (selected_statuses or [])|tojson }};
 const ACTIVE_PAYABLE_TOTAL = {{ active_total_count|int }};
 const HISTORY_PAYABLE_TOTAL = {{ history_total_count|int }};
 
@@ -911,15 +1030,15 @@ function renderChequeHistoryRow(cheque) {
     const status = String(cheque.status || 'ISSUED').toUpperCase();
     const notesMarkup = cheque.notes ? `<div class="cheque-row-notes">${escapeHtml(cheque.notes)}</div>` : '';
     const dueFlags = [
-        cheque.is_due_today ? '<span class="text-info fw-bold">Due today</span>' : '',
-        (!cheque.is_due_today && cheque.is_due_soon) ? '<span class="text-warning fw-bold">Due within 7 days</span>' : '',
+        cheque.is_due_today ? '<span class="cheque-due-flag today">Due today</span>' : '',
+        (!cheque.is_due_today && cheque.is_due_soon) ? '<span class="cheque-due-flag soon">Due within 7 days</span>' : '',
     ].filter(Boolean).join('');
 
     return `
         <div class="cheque-row">
             <div class="cheque-row-head">
                 <div>
-                    <div class="payable-title">Cheque #${escapeHtml(cheque.cheque_no || '-')} • ${escapeHtml(formatPayableCurrency(cheque.cheque_amount))}</div>
+                    <div class="payable-title"><span class="payable-cheque-number">Cheque #${escapeHtml(cheque.cheque_no || '-')}</span> • ${escapeHtml(formatPayableCurrency(cheque.cheque_amount))}</div>
                     <div class="cheque-row-meta">
                         <span>Cheque / Due Date: ${escapeHtml(cheque.cheque_date || '-')}</span>
                         ${dueFlags}
@@ -1104,6 +1223,7 @@ async function loadPayablesHistoryMonthIfNeeded(bodyEl) {
         if (CURRENT_PAYABLE_SEARCH_QUERY) {
             params.set('q', CURRENT_PAYABLE_SEARCH_QUERY);
         }
+        CURRENT_PAYABLE_STATUS_FILTERS.forEach((status) => params.append('status', status));
         const response = await fetch(`/api/payables/history/month?${params.toString()}`);
         const data = await response.json();
         if (!response.ok) {
@@ -1161,6 +1281,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (CURRENT_PAYABLE_SEARCH_QUERY) {
                 params.set('q', CURRENT_PAYABLE_SEARCH_QUERY);
             }
+            CURRENT_PAYABLE_STATUS_FILTERS.forEach((status) => params.append('status', status));
             const response = await fetch(`/api/payables/history/summary?${params.toString()}`);
             const data = await response.json();
             if (!response.ok) {
@@ -1265,14 +1386,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.issue-cheque-form').forEach((form) => {
         const amountInput = form.querySelector('.cheque-amount-input');
         const warningEl = form.querySelector('.cheque-amount-warning');
-        const remainingBalance = Number.parseFloat(form.getAttribute('data-remaining-balance') || '0');
         const submitBtn = form.querySelector('button[type="submit"]');
 
-        if (!amountInput || !warningEl || !Number.isFinite(remainingBalance)) {
+        if (!amountInput || !warningEl) {
             return;
         }
 
+        const getRemainingBalance = () => {
+            const parsed = Number.parseFloat(form.getAttribute('data-remaining-balance') || '0');
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
         const syncAmountState = () => {
+            const remainingBalance = getRemainingBalance();
             const parsed = Number.parseFloat(amountInput.value || '0');
             if (!Number.isFinite(parsed)) {
                 warningEl.classList.remove('is-visible');
@@ -1294,6 +1420,7 @@ document.addEventListener('DOMContentLoaded', function () {
         amountInput.addEventListener('change', syncAmountState);
 
         form.addEventListener('submit', (event) => {
+            const remainingBalance = getRemainingBalance();
             const parsed = Number.parseFloat(amountInput.value || '0');
             if (!Number.isFinite(parsed) || parsed <= 0 || parsed > remainingBalance) {
                 event.preventDefault();

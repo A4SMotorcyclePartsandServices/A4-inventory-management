@@ -19,7 +19,10 @@ payables_bp = Blueprint("payables", __name__)
 @payables_bp.route("/transaction/payables")
 @login_required
 def payables_page():
-    context = get_payables_page_context(search_query=request.args.get("q"))
+    context = get_payables_page_context(
+        search_query=request.args.get("q"),
+        statuses=request.args.getlist("status"),
+    )
     return render_template("transactions/payables.html", **context)
 
 
@@ -36,7 +39,12 @@ def payable_cheque_history_api(payable_id):
 @login_required
 def payables_history_summary_api():
     try:
-        return jsonify(get_payables_history_month_summaries(search_query=request.args.get("q")))
+        return jsonify(
+            get_payables_history_month_summaries(
+                search_query=request.args.get("q"),
+                statuses=request.args.getlist("status"),
+            )
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -49,6 +57,7 @@ def payables_history_month_api():
             get_payables_history_by_month(
                 month_key=request.args.get("month"),
                 search_query=request.args.get("q"),
+                statuses=request.args.getlist("status"),
             )
         )
     except ValueError as exc:

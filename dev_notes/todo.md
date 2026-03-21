@@ -6,7 +6,7 @@
 - [ ] Admin page Sales tab: print formatting (view + print)
 - [ ] System tracking for all actions (audit improvements)
 - [ ] Database enforcement to prevent duplicate records
-- [ ] Payabales Page
+- [X] ~~*Payabales Page*~~ [2026-03-21]
 - [X] ~~*Centralize vendor data (currently in item table and purchase_orders)*~~ [2026-03-15]
 
 ## Inventory / Transaction Improvements
