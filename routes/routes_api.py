@@ -4,7 +4,7 @@ from auth.utils import admin_required
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
-@dashboard_api.route("/dashboard/stock-movement")
+@dashboard_api.route("/items-analytics/stock-movement")
 @admin_required
 def stock_movement():
     days = request.args.get("days", default=30, type=int)
@@ -32,7 +32,7 @@ def stock_movement():
         "values": [row["net_change"] for row in rows]
     }
 
-@dashboard_api.route("/dashboard/item-movement")
+@dashboard_api.route("/items-analytics/item-movement")
 @admin_required
 def item_movement():
     item_id = request.args.get("item_id", type=int)
@@ -63,7 +63,7 @@ def item_movement():
         "values": [row["net_change"] for row in rows]
     }
 
-@dashboard_api.route("/dashboard/top-items")
+@dashboard_api.route("/items-analytics/top-items")
 @admin_required
 def top_items_chart():
     days = request.args.get("days", default=30, type=int)

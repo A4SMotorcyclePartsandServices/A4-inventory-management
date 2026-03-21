@@ -34,6 +34,7 @@ from services.analytics_service import (
     get_dead_stock,
     get_low_stock_items
 )
+from services.sales_analytics_service import get_sales_analytics_snapshot
 
 # ------------------------
 # Importers (CSV handling)
@@ -201,11 +202,11 @@ def search_items_api():
 # ============================================================
 # Analytics / reporting views
 # ============================================================
-@app.route("/dashboard")
+@app.route("/items-analytics")
 @admin_required
-def dashboard():
+def items_analytics():
     """
-    High-level KPIs used for management overview.
+    Inventory and item analytics overview.
     """
     (
         total_items,
@@ -216,7 +217,7 @@ def dashboard():
     ) = get_dashboard_stats()
 
     return render_template(
-        "dashboard.html",
+        "items_analytics.html",
         total_items=total_items,
         total_stock=total_stock,
         low_stock_count=low_stock_count,
@@ -231,7 +232,41 @@ def analytics():
     Fast-moving items (last 30 days).
     """
     hot_items = get_hot_items()
-    return render_template("analytics.html", hot_items=hot_items)
+    return render_template("fastmoving.html", hot_items=hot_items)
+
+
+@app.route("/sales-analytics")
+@admin_required
+def sales_analytics():
+    """
+    Sales-focused analytics deep dive.
+    """
+    today = date.today()
+    default_start = today - timedelta(days=29)
+
+    start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
+    end_date = (request.args.get("end_date") or today.isoformat()).strip()
+
+    try:
+        start_obj = date.fromisoformat(start_date)
+        end_obj = date.fromisoformat(end_date)
+    except ValueError:
+        start_obj = default_start
+        end_obj = today
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    start_date = start_obj.isoformat()
+    end_date = end_obj.isoformat()
+    analytics_data = get_sales_analytics_snapshot(start_date, end_date)
+
+    return render_template(
+        "sales_analytics.html",
+        analytics=analytics_data,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 @app.route("/dead-stock")

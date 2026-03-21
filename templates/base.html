@@ -1027,8 +1027,11 @@
                 {% if session.get('role') == 'admin' %}
                 <div class="nav-group admin-section">
                     <div class="nav-group-title">Admin</div>
-                    <a href="/dashboard" class="{% if 'dashboard' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-speedometer2"></i> Dashboard
+                    <a href="/sales-analytics" class="{% if 'sales-analytics' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-graph-up"></i> Sales Analytics
+                    </a>
+                    <a href="/items-analytics" class="{% if 'items-analytics' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-speedometer2"></i> Item Analytics
                     </a>
                     <a href="{{ url_for('auth.manage_users') }}"
                     class="{% if 'users' in request.path %}active-link{% endif %}">

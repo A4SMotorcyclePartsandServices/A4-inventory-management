@@ -1,0 +1,704 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+    }
+
+    .page-title {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .page-subtitle {
+        color: var(--text-muted);
+        font-size: 0.86rem;
+        margin-top: 5px;
+        max-width: 760px;
+    }
+
+    .analytics-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1.25rem;
+        margin-bottom: 1.4rem;
+        padding: 1.2rem 1.25rem;
+        border-radius: 12px;
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+    }
+
+    .analytics-hero h2 {
+        margin: 0 0 0.25rem;
+        color: var(--text-primary);
+        font-size: 1.2rem;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+
+    .analytics-hero p {
+        margin: 0;
+        color: var(--text-muted);
+        max-width: 700px;
+        line-height: 1.55;
+        font-size: 0.88rem;
+    }
+
+    .range-form {
+        display: grid;
+        grid-template-columns: minmax(240px, 300px) auto;
+        gap: 0.75rem;
+        align-items: end;
+    }
+
+    .range-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.42rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(230, 57, 70, 0.1);
+        color: #e63946;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 800;
+        margin-bottom: 0.6rem;
+        border: 1px solid rgba(230, 57, 70, 0.22);
+    }
+
+    .kpi-card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        border-left: 4px solid #e63946;
+        border-radius: 10px;
+        padding: 1.15rem 1.2rem 1rem;
+        height: 100%;
+        box-shadow: none;
+    }
+
+    .kpi-label {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+        font-weight: 700;
+    }
+
+    .kpi-value {
+        color: var(--text-primary);
+        font-size: 1.9rem;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+    }
+
+    .kpi-note {
+        margin-top: 0.65rem;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+    }
+
+    .panel-card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        height: 100%;
+        box-shadow: none;
+    }
+
+    .panel-card h3 {
+        margin: 0 0 0.3rem;
+        font-size: 1rem;
+        color: #e63946;
+        font-weight: 700;
+    }
+
+    .panel-meta {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        margin-bottom: 1rem;
+        line-height: 1.55;
+    }
+
+    .chart-wrap {
+        position: relative;
+        height: 320px;
+        padding-top: 0.2rem;
+    }
+
+    .chart-wrap.chart-wrap-sm {
+        height: 280px;
+    }
+
+    .table-dark {
+        background: transparent;
+    }
+
+    .table {
+        table-layout: auto;
+    }
+
+    .table-dark th,
+    .table-dark td {
+        border-color: var(--border-soft);
+    }
+
+    .section-title {
+        margin: 1.7rem 0 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+
+    .section-title h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text-primary);
+    }
+
+    .insight-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.48rem 0.78rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: #adb5bd;
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-weight: 700;
+    }
+
+    .empty-table {
+        color: var(--text-muted);
+        text-align: center;
+        padding: 1.3rem 0.5rem !important;
+    }
+
+    .table thead th {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+    }
+
+    .table tbody td {
+        white-space: normal !important;
+        font-size: 0.9rem;
+    }
+
+    .table tbody tr:hover {
+        background: rgba(193,18,31,0.04) !important;
+    }
+
+    @media (max-width: 991px) {
+        .analytics-hero {
+            flex-direction: column;
+        }
+
+        .range-form {
+            width: 100%;
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Sales Analytics</h1>
+        <div class="page-subtitle">Power BI-style sales reporting surface for realized revenue, refund pressure, payment behavior, and top contributors.</div>
+    </div>
+</div>
+
+<div class="analytics-hero">
+    <div>
+        <div class="range-chip">
+            <i class="bi bi-graph-up-arrow"></i>
+            Sales Analytics
+        </div>
+        <div class="text-uppercase small fw-bold mb-2" style="letter-spacing: 0.16em; color: #adb5bd;">Revenue performance overview</div>
+        <h2>Sales deep dive</h2>
+        <p>Track realized sales, refund impact, payment mix, and who is driving revenue for the selected range.</p>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">Paid Sales: {{ analytics.summary.paid_transactions }}</span>
+            <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">Partial: {{ analytics.summary.partial_transactions }}</span>
+            <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">Unresolved: {{ analytics.summary.unresolved_transactions }}</span>
+        </div>
+    </div>
+
+    <form method="GET" action="/sales-analytics" class="range-form">
+        <div>
+            <label for="sales-analytics-range" class="form-label">Date range</label>
+            <input
+                type="text"
+                id="sales-analytics-range"
+                class="form-control"
+                value="{{ start_date }} to {{ end_date }}"
+                placeholder="Select date range"
+            >
+            <input type="hidden" name="start_date" id="sales-analytics-start" value="{{ start_date }}">
+            <input type="hidden" name="end_date" id="sales-analytics-end" value="{{ end_date }}">
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-funnel me-1"></i> Apply Range
+        </button>
+    </form>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #e63946;">
+            <div class="kpi-label">Gross Sales</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.gross_sales) }}</div>
+            <div class="kpi-note">{{ analytics.summary.paid_transactions }} paid sale{{ '' if analytics.summary.paid_transactions == 1 else 's' }} contributed to realized sales.</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #4cc9f0;">
+            <div class="kpi-label">Net Sales</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.net_sales) }}</div>
+            <div class="kpi-note">Paid sales + debt collected - refunds</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #ffca3a;">
+            <div class="kpi-label">Refunds</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.total_refunds) }}</div>
+            <div class="kpi-note">Recorded refund amount in range</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #4cc9f0;">
+            <div class="kpi-label">Debt Collected</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.total_debt_collected) }}</div>
+            <div class="kpi-note">Payments collected from prior utang</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #e63946;">
+            <div class="kpi-label">Transactions</div>
+            <div class="kpi-value">{{ analytics.summary.total_transactions }}</div>
+            <div class="kpi-note">All sales created in range</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-2">
+        <div class="kpi-card" style="border-left-color: #ffca3a;">
+            <div class="kpi-label">Average Sale</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.average_sale_value) }}</div>
+            <div class="kpi-note">Based on paid sales only</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="panel-card">
+            <h3>Sales trend</h3>
+            <div class="panel-meta">Daily paid sales, paid transaction count, and refund activity in one view.</div>
+            <div class="chart-wrap">
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="panel-card">
+            <h3>Revenue mix</h3>
+            <div class="panel-meta">How much of realized revenue came from items vs services.</div>
+            <div class="chart-wrap chart-wrap-sm">
+                <canvas id="revenueMixChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-6">
+        <div class="panel-card">
+            <h3>Payment status mix</h3>
+            <div class="panel-meta">Count of sales by status across the selected date range.</div>
+            <div class="chart-wrap chart-wrap-sm">
+                <canvas id="statusBreakdownChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="panel-card">
+            <h3>Payment method mix</h3>
+            <div class="panel-meta">Realized paid sales grouped by payment method.</div>
+            <div class="chart-wrap chart-wrap-sm">
+                <canvas id="paymentMethodChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section-title">
+    <h3>Performance tables</h3>
+    <div class="insight-pill">
+        <i class="bi bi-lightning-charge"></i>
+        Top contributors in the selected range
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-4">
+        <div class="panel-card">
+            <h3>Top items</h3>
+            <div class="panel-meta">Paid item sales sorted by quantity sold.</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle text-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Qty</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if analytics.tables.top_items %}
+                            {% for row in analytics.tables.top_items %}
+                            <tr>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.quantity_sold }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="empty-table">No paid item sales in this range.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="panel-card">
+            <h3>Top services</h3>
+            <div class="panel-meta">Paid service revenue sorted by total earned.</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle text-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Count</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if analytics.tables.top_services %}
+                            {% for row in analytics.tables.top_services %}
+                            <tr>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.times_sold }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="empty-table">No paid service sales in this range.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="panel-card">
+            <h3>Top customers</h3>
+            <div class="panel-meta">Paid sales grouped by customer display name.</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle text-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Sales</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if analytics.tables.top_customers %}
+                            {% for row in analytics.tables.top_customers %}
+                            <tr>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.sale_count }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="empty-table">No paid customer sales in this range.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section-title">
+    <h3>Supporting breakdowns</h3>
+    <div class="insight-pill">
+        <i class="bi bi-bar-chart-steps"></i>
+        Context behind the KPI totals
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-xl-6">
+        <div class="panel-card">
+            <h3>Payment status details</h3>
+            <div class="panel-meta">Counts and booked amounts by sale status.</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle text-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Count</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in analytics.tables.status_breakdown %}
+                        <tr>
+                            <td>{{ row.status }}</td>
+                            <td>{{ row.sale_count }}</td>
+                            <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="panel-card">
+            <h3>Payment method details</h3>
+            <div class="panel-meta">Paid-sale amounts grouped by payment method.</div>
+            <div class="table-responsive">
+                <table class="table table-dark table-striped align-middle text-center mb-0">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Paid Sales</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if analytics.tables.payment_methods %}
+                            {% for row in analytics.tables.payment_methods %}
+                            <tr>
+                                <td>{{ row.payment_method }}</td>
+                                <td>{{ row.sale_count }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="3" class="empty-table">No paid sales in this range.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const salesCharts = {{ analytics.charts | tojson }};
+
+const sharedChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+        mode: 'index',
+        intersect: false,
+    },
+    plugins: {
+        legend: {
+            labels: {
+                color: '#d1d5db',
+            },
+        },
+    },
+    scales: {
+        y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            ticks: { color: '#9ca3af' },
+        },
+        x: {
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#9ca3af' },
+        },
+    },
+};
+
+new Chart(document.getElementById('salesTrendChart'), {
+    type: 'line',
+    data: {
+        labels: salesCharts.sales_trend.labels,
+        datasets: [
+            {
+                label: 'Gross Sales',
+                data: salesCharts.sales_trend.gross_sales,
+                borderColor: '#e63946',
+                backgroundColor: 'rgba(230, 57, 70, 0.1)',
+                fill: true,
+                tension: 0.3,
+                yAxisID: 'y',
+            },
+            {
+                label: 'Paid Transactions',
+                data: salesCharts.sales_trend.paid_transactions,
+                borderColor: '#4cc9f0',
+                backgroundColor: 'rgba(76, 201, 240, 0.1)',
+                tension: 0.28,
+                fill: false,
+                yAxisID: 'y1',
+            },
+            {
+                label: 'Refunds',
+                data: salesCharts.sales_trend.refunds,
+                borderColor: '#ffca3a',
+                backgroundColor: 'rgba(255, 202, 58, 0.1)',
+                tension: 0.28,
+                fill: false,
+                yAxisID: 'y',
+            },
+        ],
+    },
+    options: {
+        ...sharedChartOptions,
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: { color: 'rgba(255,255,255,0.08)' },
+                ticks: { color: '#9ca3af' },
+            },
+            y1: {
+                beginAtZero: true,
+                position: 'right',
+                grid: { drawOnChartArea: false },
+                ticks: { color: '#9ca3af', precision: 0 },
+            },
+            x: sharedChartOptions.scales.x,
+        },
+    },
+});
+
+new Chart(document.getElementById('revenueMixChart'), {
+    type: 'doughnut',
+    data: {
+        labels: salesCharts.revenue_mix.labels,
+        datasets: [{
+            data: salesCharts.revenue_mix.amounts,
+            backgroundColor: ['#e63946', '#4cc9f0'],
+            borderColor: '#11151c',
+            borderWidth: 2,
+        }],
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: { color: '#d1d5db' },
+            },
+        },
+    },
+});
+
+new Chart(document.getElementById('statusBreakdownChart'), {
+    type: 'bar',
+    data: {
+        labels: salesCharts.status_breakdown.labels,
+        datasets: [{
+            label: 'Sale Count',
+            data: salesCharts.status_breakdown.counts,
+            backgroundColor: ['#4cc9f0', '#ffca3a', '#e63946'],
+            borderRadius: 10,
+        }],
+    },
+    options: sharedChartOptions,
+});
+
+new Chart(document.getElementById('paymentMethodChart'), {
+    type: 'bar',
+    data: {
+        labels: salesCharts.payment_methods.labels,
+        datasets: [{
+            label: 'Paid Sales Amount',
+            data: salesCharts.payment_methods.amounts,
+            backgroundColor: '#e63946',
+            borderRadius: 10,
+        }],
+    },
+    options: sharedChartOptions,
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const rangeInput = document.getElementById('sales-analytics-range');
+    const startHidden = document.getElementById('sales-analytics-start');
+    const endHidden = document.getElementById('sales-analytics-end');
+
+    if (!rangeInput || !startHidden || !endHidden || typeof flatpickr !== 'function') {
+        return;
+    }
+
+    flatpickr(rangeInput, {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        defaultDate: [startHidden.value, endHidden.value],
+        onChange: function(selectedDates) {
+            const fmt = (value) => {
+                const year = value.getFullYear();
+                const month = String(value.getMonth() + 1).padStart(2, '0');
+                const day = String(value.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            if (selectedDates.length === 1) {
+                startHidden.value = fmt(selectedDates[0]);
+                endHidden.value = fmt(selectedDates[0]);
+            } else if (selectedDates.length === 2) {
+                startHidden.value = fmt(selectedDates[0]);
+                endHidden.value = fmt(selectedDates[1]);
+            }
+        },
+    });
+});
+</script>
+{% endblock %}

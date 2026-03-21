@@ -32,6 +32,9 @@
   - 51–99
   - 100+
 
+## Dashboard
+- [ ] Dashboard page
+
 ## Security / Deployment
 
 - [ ] Protect against SQL injection

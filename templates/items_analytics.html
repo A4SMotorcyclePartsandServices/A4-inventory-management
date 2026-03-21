@@ -138,7 +138,7 @@ let stockChart, itemChart, topItemsChart;
 let selectedDays = 30;
 
 function loadChart(days) {
-    fetch(`/dashboard/stock-movement?days=${days}`)
+    fetch(`/items-analytics/stock-movement?days=${days}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("stockChart").getContext("2d");
@@ -162,7 +162,7 @@ function loadChart(days) {
 }
 
 function loadItemChart(itemId, days = 30) {
-    fetch(`/dashboard/item-movement?item_id=${itemId}&days=${days}`)
+    fetch(`/items-analytics/item-movement?item_id=${itemId}&days=${days}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("itemChart").getContext("2d");
@@ -184,7 +184,7 @@ function loadItemChart(itemId, days = 30) {
 }
 
 function loadTopItemsChart(days = 30) {
-    fetch(`/dashboard/top-items?days=${days}`)
+    fetch(`/items-analytics/top-items?days=${days}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("topItemsChart").getContext("2d");
