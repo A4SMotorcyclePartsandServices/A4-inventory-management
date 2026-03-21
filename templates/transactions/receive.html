@@ -1,5 +1,138 @@
 {% extends "base.html" %}
 
+{% block styles %}
+<style>
+    .receive-card {
+        background-color: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+    }
+    .receive-card .card-header {
+        background: linear-gradient(180deg, rgba(10, 10, 10, 0.98) 0%, rgba(17, 17, 17, 0.98) 100%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .receive-table-shell {
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
+        overflow: hidden;
+        background: linear-gradient(180deg, rgba(30, 34, 42, 0.95) 0%, rgba(24, 27, 34, 0.98) 100%);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+    .receive-table {
+        width: 100%;
+        margin-bottom: 0;
+        table-layout: fixed;
+    }
+    .receive-table th,
+    .receive-table td {
+        vertical-align: middle;
+    }
+    .receive-table thead th {
+        background-color: #e63946;
+        color: #fff;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 14px 12px;
+        line-height: 1.2;
+        font-size: 0.84rem;
+        letter-spacing: 0.04em;
+        white-space: normal;
+    }
+    .receive-table tbody td {
+        padding: 14px 12px;
+        border-color: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.02);
+    }
+    .receive-table tbody tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.035);
+    }
+    .receive-table tbody tr:hover td {
+        background: rgba(230, 57, 70, 0.08);
+    }
+    .receive-col-item {
+        width: 31%;
+    }
+    .receive-col-mode {
+        width: 10%;
+    }
+    .receive-col-ordered,
+    .receive-col-received {
+        width: 10%;
+    }
+    .receive-col-arrived,
+    .receive-col-counted {
+        width: 19.5%;
+    }
+    .receive-item-name {
+        color: #f3f4f6;
+        font-weight: 700;
+        line-height: 1.25;
+        word-break: break-word;
+    }
+    .receive-pack-meta {
+        color: #9ca3af;
+        font-size: 0.82rem;
+    }
+    .receive-box-hint {
+        color: #67c2e4;
+        font-size: 0.8rem;
+        margin-top: 6px;
+        display: block;
+    }
+    .receive-table .form-control {
+        min-height: 48px;
+        border-radius: 10px;
+    }
+    .receive-metric {
+        font-weight: 700;
+        color: #f9fafb;
+    }
+    .receive-metric.is-info {
+        color: #7dd3fc;
+    }
+    .receive-subhint {
+        font-size: 0.8rem;
+        line-height: 1.25;
+    }
+    .over-receive-note {
+        border-left: 3px solid rgba(245, 158, 11, 0.8);
+        padding-left: 10px;
+    }
+    @media (max-width: 1440px) {
+        .receive-table thead th {
+            font-size: 0.78rem;
+            padding: 12px 10px;
+        }
+        .receive-table tbody td {
+            padding: 12px 10px;
+        }
+        .receive-col-item {
+            width: 29%;
+        }
+        .receive-col-mode {
+            width: 10%;
+        }
+        .receive-col-ordered,
+        .receive-col-received {
+            width: 10%;
+        }
+        .receive-col-arrived,
+        .receive-col-counted {
+            width: 20.5%;
+        }
+    }
+    @media (max-width: 1200px) {
+        .receive-table-shell {
+            overflow-x: auto;
+        }
+        .receive-table {
+            min-width: 1040px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -7,60 +140,94 @@
         <a href="/transaction/orders/list" class="btn btn-outline-secondary">Cancel</a>
     </div>
 
-    <div class="card bg-dark text-white border-secondary">
+    <div class="card receive-card bg-dark text-white border-secondary">
         <div class="card-header border-secondary bg-black">
             <h5 class="mb-0">Vendor: {{ po.vendor_name }}</h5>
         </div>
         <div class="card-body">
-            <table class="table table-dark table-hover">
-                <thead>
-                    <tr>
-                        <th>Item Description</th>
-                        <th class="text-center">Ordered</th>
-                        <th class="text-center">Already Received</th>
-                        <th class="text-center" width="220">Arrived Today</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in items %}
-                    {% set remaining = item.quantity_ordered - item.quantity_received %}
-                    <tr class="item-row"
-                        data-item-id="{{ item.item_id }}"
-                        data-remaining="{{ remaining }}">
-                        <td>
-                            <div class="fw-bold">{{ item.name }}</div>
-                            {% if item.pack_size %}
-                            <small class="text-muted">Pack size: {{ item.pack_size }}</small>
-                            {% endif %}
-                            <!-- Notes field: hidden by default, appears only on over-receive -->
-                            <div class="over-receive-note mt-2" style="display:none;">
-                                <input type="text"
-                                    class="form-control form-control-sm bg-black text-white border-warning note-input"
-                                    placeholder="Required: reason for over-receive (e.g. vendor promo)"
-                                    maxlength="255">
-                                <small class="text-warning mt-1 d-block">
-                                    <i class="fas fa-exclamation-triangle"></i> Over-receive detected — reason is required.
-                                </small>
-                            </div>
-                        </td>
-                        <td class="text-center fs-5">{{ item.quantity_ordered }}</td>
-                        <td class="text-center text-info">{{ item.quantity_received }}</td>
-                        <td>
-                            <input type="number"
-                                class="form-control form-control-lg bg-black text-white border-danger text-center qty-input"
-                                value="{{ remaining }}"
-                                min="0"
-                                oninput="checkOverReceive(this)">
-                            {% if remaining > 0 %}
-                            <small class="text-center d-block text-warning mt-1">Pending: {{ remaining }}</small>
-                            {% else %}
-                            <small class="text-center d-block text-success mt-1">Fully Received</small>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="receive-table-shell">
+                <table class="table table-dark table-hover receive-table">
+                    <thead>
+                        <tr>
+                            <th class="receive-col-item">Item Description</th>
+                            <th class="text-center receive-col-mode">Mode</th>
+                            <th class="text-center receive-col-ordered">Ordered</th>
+                            <th class="text-center receive-col-received">Already Received</th>
+                            <th class="text-center receive-col-arrived">Arrived Today</th>
+                            <th class="text-center receive-col-counted">Total Counted Pieces</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        {% set remaining = item.quantity_ordered - item.quantity_received %}
+                        <tr class="item-row"
+                            data-item-id="{{ item.item_id }}"
+                            data-remaining="{{ remaining }}"
+                            data-purchase-mode="{{ item.purchase_mode or 'PIECE' }}"
+                            data-unit-cost="{{ item.unit_cost or 0 }}">
+                            <td>
+                                <div class="receive-item-name">{{ item.name }}</div>
+                                {% if item.pack_size %}
+                                <div class="receive-pack-meta">Pack size: {{ item.pack_size }}</div>
+                                {% endif %}
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                <span class="receive-box-hint">Receive by boxes. Count all actual pieces delivered today.</span>
+                                {% endif %}
+                                <div class="over-receive-note mt-2" style="display:none;">
+                                    <input type="text"
+                                        class="form-control form-control-sm bg-black text-white border-warning note-input"
+                                        placeholder="Required: reason for over-receive (e.g. vendor promo)"
+                                        maxlength="255">
+                                    <small class="text-warning mt-1 d-block">
+                                        <i class="fas fa-exclamation-triangle"></i> Over-receive detected and will be logged as bonus stock.
+                                    </small>
+                                </div>
+                            </td>
+                            <td class="text-center align-middle">
+                                <span class="badge {% if (item.purchase_mode or 'PIECE') == 'BOX' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                    {% if (item.purchase_mode or 'PIECE') == 'BOX' %}Per Box{% else %}Per Piece{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <div class="receive-metric">{{ item.quantity_ordered }}</div>
+                            </td>
+                            <td class="text-center">
+                                <div class="receive-metric is-info">{{ item.quantity_received }}</div>
+                            </td>
+                            <td>
+                                <input type="number"
+                                    class="form-control form-control-lg bg-black text-white border-danger text-center qty-input"
+                                    value="{{ remaining }}"
+                                    min="0"
+                                    oninput="checkOverReceive(this)">
+                                {% if remaining > 0 %}
+                                <small class="text-center d-block text-warning mt-1 receive-subhint">Pending: {{ remaining }}</small>
+                                {% else %}
+                                <small class="text-center d-block text-success mt-1 receive-subhint">Fully Received</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                <input type="number"
+                                    class="form-control form-control-lg bg-black text-white border-info text-center stock-qty-input"
+                                    value=""
+                                    min="0"
+                                    placeholder="Required">
+                                <small class="text-center d-block text-info mt-1 receive-subhint">Required for box-based receiving</small>
+                                {% else %}
+                                <input type="number"
+                                    class="form-control form-control-lg bg-black text-white border-secondary text-center stock-qty-input"
+                                    value="{{ remaining }}"
+                                    min="0"
+                                    readonly>
+                                <small class="text-center d-block text-muted mt-1 receive-subhint">Matches arrived qty for piece mode</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
 
             <div class="d-grid mt-4">
                 <button onclick="submitReception()" class="btn btn-danger btn-lg">
@@ -84,6 +251,8 @@ function checkOverReceive(input) {
     const qty = parseInt(input.value) || 0;
     const noteDiv = row.querySelector('.over-receive-note');
     const noteInput = row.querySelector('.note-input');
+    const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
+    const stockQtyInput = row.querySelector('.stock-qty-input');
 
     if (qty > remaining) {
         noteDiv.style.display = 'block';
@@ -97,6 +266,10 @@ function checkOverReceive(input) {
         input.classList.remove('border-warning');
         input.classList.add('border-danger');
     }
+
+    if (purchaseMode !== 'BOX' && stockQtyInput) {
+        stockQtyInput.value = qty > 0 ? qty : 0;
+    }
 }
 
 async function submitReception() {
@@ -107,11 +280,13 @@ async function submitReception() {
     rows.forEach(row => {
         const itemId = row.getAttribute('data-item-id');
         const remaining = parseInt(row.dataset.remaining);
+        const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
         const qtyReceived = parseInt(row.querySelector('.qty-input').value) || 0;
+        const stockQtyInput = row.querySelector('.stock-qty-input');
+        const stockQtyReceived = parseInt(stockQtyInput?.value) || 0;
         const noteInput = row.querySelector('.note-input');
         const notes = noteInput ? noteInput.value.trim() : '';
 
-        // Client-side guard: over-receive without notes
         if (qtyReceived > remaining && !notes) {
             noteInput.classList.add('border-danger');
             noteInput.focus();
@@ -119,15 +294,23 @@ async function submitReception() {
             return;
         }
 
+        if (purchaseMode === 'BOX' && qtyReceived > 0 && stockQtyReceived <= 0) {
+            stockQtyInput.classList.add('border-danger');
+            stockQtyInput.focus();
+            hasError = true;
+            return;
+        }
+
         items.push({
             item_id: itemId,
             qty_received: qtyReceived,
+            stock_quantity_received: purchaseMode === 'BOX' ? stockQtyReceived : qtyReceived,
             notes: notes
         });
     });
 
     if (hasError) {
-        showToastFlash("Please fill in the reason for all over-received items.", "warning");
+        showToastFlash("Please complete all required over-receive notes and counted-piece fields.", "warning");
         return;
     }
 

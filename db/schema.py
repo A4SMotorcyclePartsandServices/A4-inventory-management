@@ -279,8 +279,28 @@ def init_db():
         item_id             INTEGER NOT NULL REFERENCES items(id),
         quantity_ordered    INTEGER NOT NULL,
         quantity_received   INTEGER DEFAULT 0,
-        unit_cost           NUMERIC(12,2)
+        unit_cost           NUMERIC(12,2),
+        purchase_mode       TEXT NOT NULL DEFAULT 'PIECE'
     )
+    """)
+    cur.execute("ALTER TABLE po_items ADD COLUMN IF NOT EXISTS purchase_mode TEXT NOT NULL DEFAULT 'PIECE'")
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE po_items DROP CONSTRAINT IF EXISTS po_items_purchase_mode_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE po_items
+            ADD CONSTRAINT po_items_purchase_mode_check
+            CHECK (purchase_mode IN ('PIECE', 'BOX'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
     """)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS po_receipts (
@@ -302,9 +322,43 @@ def init_db():
         quantity_received   INTEGER NOT NULL CHECK(quantity_received > 0),
         unit_cost           NUMERIC(12,2) NOT NULL DEFAULT 0,
         line_total          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        purchase_mode       TEXT NOT NULL DEFAULT 'PIECE',
+        stock_quantity_received INTEGER NOT NULL DEFAULT 0,
+        effective_piece_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
         is_over_receive     INTEGER NOT NULL DEFAULT 0,
         notes               TEXT
     )
+    """)
+    cur.execute("ALTER TABLE po_receipt_items ADD COLUMN IF NOT EXISTS purchase_mode TEXT NOT NULL DEFAULT 'PIECE'")
+    cur.execute("ALTER TABLE po_receipt_items ADD COLUMN IF NOT EXISTS stock_quantity_received INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE po_receipt_items ADD COLUMN IF NOT EXISTS effective_piece_cost NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("""
+    UPDATE po_receipt_items
+    SET stock_quantity_received = quantity_received
+    WHERE stock_quantity_received = 0
+    """)
+    cur.execute("""
+    UPDATE po_receipt_items
+    SET effective_piece_cost = unit_cost
+    WHERE effective_piece_cost = 0
+    """)
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE po_receipt_items DROP CONSTRAINT IF EXISTS po_receipt_items_purchase_mode_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE po_receipt_items
+            ADD CONSTRAINT po_receipt_items_purchase_mode_check
+            CHECK (purchase_mode IN ('PIECE', 'BOX'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipts_po_id_received_at ON po_receipts(po_id, received_at DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_po_receipt_items_receipt_id ON po_receipt_items(receipt_id)")

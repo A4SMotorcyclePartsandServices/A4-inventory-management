@@ -639,6 +639,14 @@
         white-space: normal;
     }
 
+    .purchase-mode-note {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: #facc15;
+        font-weight: 700;
+        white-space: normal;
+    }
+
     @media (max-width: 767px) {
         .po-summary-grid {
             grid-template-columns: 1fr;
@@ -935,6 +943,14 @@
         min-width: 280px;
         min-height: 74px;
         resize: vertical;
+    }
+
+    .revision-item-mode {
+        margin-top: 4px;
+        font-size: 0.76rem;
+        color: #facc15;
+        font-weight: 700;
+        line-height: 1.2;
     }
 
     .revision-modal-meta {
@@ -1933,8 +1949,12 @@ function renderReceiptHistory(receipts) {
                             ${item.notes ? `<div class="delivery-history-item-note">${escapeHtml(item.notes)}</div>` : ''}
                         </div>
                         <div class="delivery-history-item-values">
-                            <div>Qty: ${escapeHtml(String(item.quantity_received ?? 0))}</div>
-                            <div>Price: ${escapeHtml(formatMoney(item.unit_cost || 0))}</div>
+                            <div>${String(item.purchase_mode || 'PIECE').toUpperCase() === 'BOX'
+                                ? `Boxes: ${escapeHtml(String(item.quantity_received ?? 0))} | Counted Pieces: ${escapeHtml(String(item.stock_quantity_received ?? 0))}`
+                                : `Qty: ${escapeHtml(String(item.quantity_received ?? 0))}`}</div>
+                            <div>${String(item.purchase_mode || 'PIECE').toUpperCase() === 'BOX'
+                                ? `Box Cost: ${escapeHtml(formatMoney(item.unit_cost || 0))} | Piece Cost: ${escapeHtml(formatMoney(item.effective_piece_cost || 0))}`
+                                : `Price: ${escapeHtml(formatMoney(item.unit_cost || 0))}`}</div>
                             <div>Total: ${escapeHtml(formatMoney(item.line_total || 0))}</div>
                         </div>
                     </div>
@@ -1985,7 +2005,7 @@ async function openOrderDetails(poId) {
         renderAdminActions(data.permissions, currentPoStatus);
         document.getElementById('modalItemsHeaderRow').innerHTML = isPartialDelivery ? `
             <th>Item</th>
-            <th class="text-end">Price</th>
+            <th class="text-end">Unit Cost</th>
             <th class="text-center">Ordered Qty</th>
             <th class="text-end">Ordered Total</th>
             <th class="text-center">Delivered Qty</th>
@@ -1994,7 +2014,7 @@ async function openOrderDetails(poId) {
             <th class="text-end">Remaining Balance</th>
         ` : `
             <th>Item</th>
-            <th class="text-end" id="modalPriceHeader">Price</th>
+            <th class="text-end" id="modalPriceHeader">Unit Cost</th>
             <th class="text-end" id="modalTotalHeader">Total</th>
             <th class="text-center" id="modalOrderedHeader">Ordered</th>
             <th class="text-center" id="modalReceivedHeader">Received</th>
@@ -2055,6 +2075,10 @@ async function openOrderDetails(poId) {
             const deliveredSubtotal = deliveredQty * unitCost;
             const remainingQty = Math.max(orderedQty - deliveredQty, 0);
             const remainingBalance = remainingQty * unitCost;
+            const purchaseMode = String(item.purchase_mode || 'PIECE').toUpperCase();
+            const orderedQtyLabel = formatOrderedUnitCount(orderedQty, purchaseMode);
+            const deliveredQtyLabel = formatOrderedUnitCount(deliveredQty, purchaseMode);
+            const remainingQtyLabel = formatOrderedUnitCount(remainingQty, purchaseMode);
             deliveredValueTotal += deliveredSubtotal;
             remainingBalanceTotal += remainingBalance;
 
@@ -2063,21 +2087,22 @@ async function openOrderDetails(poId) {
                     <tr>
                         <td>
                             ${escapeHtml(item.name)}
+                            <div class="purchase-mode-note">${escapeHtml(`Ordered as ${formatPurchaseMode(purchaseMode)}.`)}</div>
                             <div class="partial-note">
-                                ${escapeHtml(`${deliveredQty} of ${orderedQty} delivered. ${remainingQty} still expected.`)}
+                                ${escapeHtml(`${deliveredQtyLabel} delivered out of ${orderedQtyLabel}. ${remainingQtyLabel} still expected.`)}
                             </div>
                         </td>
                         <td class="text-end">${escapeHtml(formatMoney(unitCost))}</td>
                         <td class="text-center">
-                            <span class="qty-badge">${escapeHtml(String(orderedQty))}</span>
+                            <span class="qty-badge">${escapeHtml(orderedQtyLabel)}</span>
                         </td>
                         <td class="text-end">${escapeHtml(formatMoney(orderedSubtotal))}</td>
                         <td class="text-center">
-                            <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(deliveredQty))}</span>
+                            <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(deliveredQtyLabel)}</span>
                         </td>
                         <td class="text-end">${escapeHtml(formatMoney(deliveredSubtotal))}</td>
                         <td class="text-center">
-                            <span class="qty-badge">${escapeHtml(String(remainingQty))}</span>
+                            <span class="qty-badge">${escapeHtml(remainingQtyLabel)}</span>
                         </td>
                         <td class="text-end">${escapeHtml(formatMoney(remainingBalance))}</td>
                     </tr>
@@ -2086,14 +2111,17 @@ async function openOrderDetails(poId) {
 
             return `
                 <tr>
-                    <td>${escapeHtml(item.name)}</td>
+                    <td>
+                        ${escapeHtml(item.name)}
+                        <div class="purchase-mode-note">${escapeHtml(`Ordered as ${formatPurchaseMode(purchaseMode)}.`)}</div>
+                    </td>
                     <td class="text-end">${escapeHtml(formatMoney(unitCost))}</td>
                     <td class="text-end">${escapeHtml(formatMoney(orderedSubtotal))}</td>
                     <td class="text-center">
-                        <span class="qty-badge">${escapeHtml(String(orderedQty))}</span>
+                        <span class="qty-badge">${escapeHtml(orderedQtyLabel)}</span>
                     </td>
                     <td class="text-center">
-                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(String(deliveredQty))}</span>
+                        <span class="qty-badge ${isFullyReceived ? 'received' : ''}">${escapeHtml(deliveredQtyLabel)}</span>
                     </td>
                 </tr>
             `;
@@ -2176,6 +2204,15 @@ function renderApprovalHistory(actions) {
 
 function formatHistoryCount(count) {
     return count === 1 ? '1 entry' : `${count} entries`;
+}
+
+function formatPurchaseMode(mode) {
+    return String(mode || 'PIECE').toUpperCase() === 'BOX' ? 'box-based' : 'piece-based';
+}
+
+function formatOrderedUnitCount(qty, mode) {
+    const normalizedMode = String(mode || 'PIECE').toUpperCase();
+    return normalizedMode === 'BOX' ? `${qty} box(es)` : `${qty} pcs`;
 }
 
 function renderAdminActions(permissions, currentPoStatus) {
@@ -2312,9 +2349,12 @@ function renderRevisionItemsPreview(items) {
 
     return items.map(item => `
         <tr>
-            <td>${escapeHtml(item.name || '-')}</td>
-            <td class="text-center">${escapeHtml(String(item.quantity_ordered ?? 0))}</td>
-            <td class="text-center">${escapeHtml(String(item.quantity_received ?? 0))}</td>
+            <td>
+                <div>${escapeHtml(item.name || '-')}</div>
+                <div class="revision-item-mode">Ordered as ${escapeHtml(formatPurchaseMode(item.purchase_mode || 'PIECE'))}</div>
+            </td>
+            <td class="text-center">${escapeHtml(formatOrderedUnitCount(Number(item.quantity_ordered ?? 0), item.purchase_mode || 'PIECE'))}</td>
+            <td class="text-center">${escapeHtml(formatOrderedUnitCount(Number(item.quantity_received ?? 0), item.purchase_mode || 'PIECE'))}</td>
             <td>
                 <textarea
                     class="form-control revision-item-note"

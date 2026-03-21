@@ -96,7 +96,20 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
     pending_rows = conn.execute("""
         SELECT
             pi.item_id,
-            SUM(pi.quantity_ordered - pi.quantity_received) AS pending_stock
+            SUM(
+                CASE
+                    WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'PIECE'
+                    THEN pi.quantity_ordered - pi.quantity_received
+                    ELSE 0
+                END
+            ) AS pending_stock,
+            SUM(
+                CASE
+                    WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'BOX'
+                    THEN pi.quantity_ordered - pi.quantity_received
+                    ELSE 0
+                END
+            ) AS pending_box_quantity
         FROM po_items pi
         JOIN purchase_orders po ON po.id = pi.po_id
         WHERE po.status IN ('PENDING', 'PARTIAL')
@@ -104,6 +117,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
         GROUP BY pi.item_id
     """).fetchall()
     pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
+    pending_box_map = {row["item_id"]: row["pending_box_quantity"] for row in pending_rows}
 
     conn.close()
 
@@ -113,6 +127,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
         d = dict(row)
         d["current_stock"] = stock_map.get(row["id"], 0)
         d["pending_stock"] = pending_map.get(row["id"], 0)
+        d["pending_box_quantity"] = pending_box_map.get(row["id"], 0)
         results.append(d)
 
     return results
@@ -165,7 +180,20 @@ def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-01-18")
             """
             SELECT
                 pi.item_id,
-                SUM(pi.quantity_ordered - pi.quantity_received) AS pending_stock
+                SUM(
+                    CASE
+                        WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'PIECE'
+                        THEN pi.quantity_ordered - pi.quantity_received
+                        ELSE 0
+                    END
+                ) AS pending_stock,
+                SUM(
+                    CASE
+                        WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'BOX'
+                        THEN pi.quantity_ordered - pi.quantity_received
+                        ELSE 0
+                    END
+                ) AS pending_box_quantity
             FROM po_items pi
             JOIN purchase_orders po ON po.id = pi.po_id
             WHERE po.status IN ('PENDING', 'PARTIAL')
@@ -174,12 +202,14 @@ def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-01-18")
             """
         ).fetchall()
         pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
+        pending_box_map = {row["item_id"]: row["pending_box_quantity"] for row in pending_rows}
 
         results = []
         for row in rows:
             item = dict(row)
             item["current_stock"] = stock_map.get(row["id"], 0)
             item["pending_stock"] = pending_map.get(row["id"], 0)
+            item["pending_box_quantity"] = pending_box_map.get(row["id"], 0)
             results.append(item)
 
         return results

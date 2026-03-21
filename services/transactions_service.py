@@ -1574,6 +1574,13 @@ def _coerce_nonnegative_float(value, field_name):
     return parsed
 
 
+def _normalize_po_purchase_mode(value):
+    mode = str(value or "PIECE").strip().upper()
+    if mode not in {"PIECE", "BOX"}:
+        raise ValueError("Purchase mode must be either piece-based or box-based.")
+    return mode
+
+
 def _normalize_po_payload(data):
     payload = data or {}
     raw_vendor_id = payload.get("vendor_id")
@@ -1602,12 +1609,15 @@ def _normalize_po_payload(data):
             raise ValueError("Duplicate items are not allowed in the same purchase order.")
         seen_item_ids.add(item_id)
 
+        purchase_mode = _normalize_po_purchase_mode(item.get("purchase_mode"))
+
         normalized_items.append(
             {
                 "item_id": item_id,
                 "name": str(item.get("name") or "").strip() or None,
                 "qty": _coerce_positive_int(item.get("qty"), "Quantity"),
                 "cost": _coerce_nonnegative_float(item.get("cost"), "Unit cost"),
+                "purchase_mode": purchase_mode,
             }
         )
 
@@ -1653,6 +1663,7 @@ def _build_po_approval_metadata(po_row, items):
                 "item_id": int(item["item_id"]),
                 "qty": int(item["quantity_ordered"]),
                 "cost": float(item["unit_cost"]),
+                "purchase_mode": _normalize_po_purchase_mode(item.get("purchase_mode")),
             }
             for item in items
         ],
@@ -1678,6 +1689,7 @@ def _get_po_items(conn, po_id):
             pi.*,
             i.name,
             i.pack_size,
+            i.cost_per_piece,
             COALESCE((
                 SELECT SUM(
                     CASE
@@ -1694,9 +1706,20 @@ def _get_po_items(conn, po_id):
                 FROM po_items other_pi
                 JOIN purchase_orders other_po ON other_po.id = other_pi.po_id
                 WHERE other_pi.item_id = pi.item_id
+                  AND COALESCE(other_pi.purchase_mode, 'PIECE') = 'PIECE'
                   AND other_po.status IN ('PENDING', 'PARTIAL')
                   AND other_pi.quantity_ordered > other_pi.quantity_received
             ), 0) AS pending_stock
+            ,
+            COALESCE((
+                SELECT SUM(other_pi.quantity_ordered - other_pi.quantity_received)
+                FROM po_items other_pi
+                JOIN purchase_orders other_po ON other_po.id = other_pi.po_id
+                WHERE other_pi.item_id = pi.item_id
+                  AND COALESCE(other_pi.purchase_mode, 'PIECE') = 'BOX'
+                  AND other_po.status IN ('PENDING', 'PARTIAL')
+                  AND other_pi.quantity_ordered > other_pi.quantity_received
+            ), 0) AS pending_box_quantity
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
@@ -1776,10 +1799,10 @@ def _replace_po_items_and_order_transactions(conn, po_id, items, user_id, userna
 
         conn.execute(
             """
-            INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO po_items (po_id, item_id, quantity_ordered, unit_cost, purchase_mode)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (po_id, item["item_id"], qty, cost),
+            (po_id, item["item_id"], qty, cost, item["purchase_mode"]),
         )
 
         add_transaction(
@@ -1892,6 +1915,17 @@ def _build_po_change_entries(previous_po, previous_items, normalized_payload):
                     "change_label": "Unit cost set",
                 }
             )
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": next_item.get("name") or f"Item #{item_id}",
+                    "field_name": "purchase_mode",
+                    "before_value": None,
+                    "after_value": _fmt_change_value(next_item["purchase_mode"]),
+                    "change_label": "Purchase mode set",
+                }
+            )
             continue
 
         previous_qty = int(previous_item["quantity_ordered"] or 0)
@@ -1921,6 +1955,21 @@ def _build_po_change_entries(previous_po, previous_items, normalized_payload):
                     "before_value": _fmt_change_value(previous_cost, value_type="money"),
                     "after_value": _fmt_change_value(next_cost, value_type="money"),
                     "change_label": "Unit cost updated",
+                }
+            )
+
+        previous_mode = _normalize_po_purchase_mode(previous_item.get("purchase_mode"))
+        next_mode = _normalize_po_purchase_mode(next_item.get("purchase_mode"))
+        if previous_mode != next_mode:
+            change_entries.append(
+                {
+                    "change_scope": "ITEM",
+                    "item_id": item_id,
+                    "item_name": previous_item["name"],
+                    "field_name": "purchase_mode",
+                    "before_value": _fmt_change_value(previous_mode),
+                    "after_value": _fmt_change_value(next_mode),
+                    "change_label": "Purchase mode updated",
                 }
             )
 
@@ -2290,7 +2339,8 @@ def get_purchase_order_export_data(po_id):
             i.name,
             pi.quantity_ordered,
             pi.quantity_received,
-            pi.unit_cost
+            pi.unit_cost,
+            COALESCE(pi.purchase_mode, 'PIECE') AS purchase_mode
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
@@ -2345,6 +2395,9 @@ def _get_po_receipt_history(po_id, external_conn=None):
                 pri.quantity_received,
                 pri.unit_cost,
                 pri.line_total,
+                pri.purchase_mode,
+                pri.stock_quantity_received,
+                pri.effective_piece_cost,
                 pri.is_over_receive,
                 pri.notes,
                 i.name AS item_name
@@ -2364,6 +2417,9 @@ def _get_po_receipt_history(po_id, external_conn=None):
                 "quantity_received": int(row["quantity_received"] or 0),
                 "unit_cost": float(row["unit_cost"] or 0),
                 "line_total": float(row["line_total"] or 0),
+                "purchase_mode": _normalize_po_purchase_mode(row.get("purchase_mode")),
+                "stock_quantity_received": int(row["stock_quantity_received"] or 0),
+                "effective_piece_cost": float(row["effective_piece_cost"] or 0),
                 "is_over_receive": int(row["is_over_receive"] or 0),
                 "notes": row["notes"] or "",
             })
@@ -2417,7 +2473,19 @@ def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
 
         return {
             "po": po_data,
-            "items": [dict(item) for item in items],
+            "items": [
+                {
+                    **dict(item),
+                    "quantity_ordered": int(item["quantity_ordered"] or 0),
+                    "quantity_received": int(item["quantity_received"] or 0),
+                    "unit_cost": float(item["unit_cost"] or 0),
+                    "cost_per_piece": float(item["cost_per_piece"] or 0),
+                    "current_stock": int(item["current_stock"] or 0),
+                    "pending_stock": int(item["pending_stock"] or 0),
+                    "purchase_mode": _normalize_po_purchase_mode(item.get("purchase_mode")),
+                }
+                for item in items
+            ],
             "receipt_history": [
                 {
                     **receipt,
@@ -2781,7 +2849,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 continue
 
             po_item = conn.execute("""
-                SELECT quantity_ordered, quantity_received, unit_cost
+                SELECT quantity_ordered, quantity_received, unit_cost, purchase_mode
                 FROM po_items
                 WHERE po_id = %s AND item_id = %s
             """, (po_id, item_id)).fetchone()
@@ -2793,6 +2861,25 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             qty_ordered = po_item['quantity_ordered']
             remaining = qty_ordered - already_received
             unit_cost = po_item['unit_cost']
+            purchase_mode = _normalize_po_purchase_mode(po_item.get("purchase_mode"))
+
+            stock_qty_in = qty_in
+            effective_piece_cost = float(unit_cost or 0)
+            receive_note_suffix = ""
+
+            if purchase_mode == "BOX":
+                total_counted_pieces = int(entry.get("stock_quantity_received") or 0)
+                if total_counted_pieces <= 0:
+                    raise ValueError("Box-based receipts require the total counted pieces received today.")
+                stock_qty_in = total_counted_pieces
+                line_total = round(float(unit_cost or 0) * qty_in, 2)
+                effective_piece_cost = round(line_total / total_counted_pieces, 2)
+                receive_note_suffix = (
+                    f"Box receipt: {qty_in} box(es), {total_counted_pieces} total counted piece(s), "
+                    f"box cost {float(unit_cost or 0):.2f}, effective piece cost {effective_piece_cost:.2f}."
+                )
+            else:
+                line_total = round(float(unit_cost or 0) * qty_in, 2)
 
             # Cost self-correction
             item_row = conn.execute(
@@ -2800,18 +2887,21 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             ).fetchone()
             current_master_cost = float(item_row["cost_per_piece"] or 0)
 
-            if float(unit_cost) != current_master_cost:
+            if effective_piece_cost != current_master_cost:
                 conn.execute(
                     "UPDATE items SET cost_per_piece = %s WHERE id = %s",
-                    (unit_cost, item_id)
+                    (effective_piece_cost, item_id)
                 )
                 add_transaction(
                     item_id=item_id, quantity=0, transaction_type='IN',
                     user_id=user_id, user_name=username,
                     reference_id=po_id, reference_type='PURCHASE_ORDER',
-                    change_reason='COST_PER_PIECE_UPDATED', unit_price=unit_cost,
+                    change_reason='COST_PER_PIECE_UPDATED', unit_price=effective_piece_cost,
                     transaction_date=clean_time, external_conn=conn,
-                    notes=f"Cost updated from {current_master_cost:.2f} to {float(unit_cost):.2f} via PO receive"
+                    notes=(
+                        f"Cost updated from {current_master_cost:.2f} to {effective_piece_cost:.2f} via PO receive. "
+                        f"{receive_note_suffix}".strip()
+                    )
                 )
 
             is_over_receive = qty_in > remaining
@@ -2820,33 +2910,51 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             if is_over_receive and not item_notes:
                 raise ValueError(f"A reason note is required for over-receiving item ID {item_id}.")
 
+            ordered_stock_qty = stock_qty_in
+            bonus_stock_qty = 0
+            if is_over_receive:
+                if purchase_mode == "BOX":
+                    if remaining > 0 and qty_in > 0:
+                        ordered_stock_qty = round(stock_qty_in * (remaining / qty_in))
+                        ordered_stock_qty = max(0, min(stock_qty_in, ordered_stock_qty))
+                    else:
+                        ordered_stock_qty = 0
+                    bonus_stock_qty = max(stock_qty_in - ordered_stock_qty, 0)
+                else:
+                    ordered_stock_qty = max(remaining, 0)
+                    bonus_stock_qty = max(qty_in - max(remaining, 0), 0)
+
             if is_over_receive:
                 if remaining > 0:
                     add_transaction(
-                        item_id=item_id, quantity=remaining, transaction_type='IN',
+                        item_id=item_id, quantity=ordered_stock_qty, transaction_type='IN',
                         user_id=user_id, user_name=username,
                         reference_id=po_id, reference_type='PURCHASE_ORDER',
-                        change_reason='PO_ARRIVAL', unit_price=unit_cost,
-                        transaction_date=clean_time, external_conn=conn
+                        change_reason='PO_ARRIVAL', unit_price=effective_piece_cost,
+                        transaction_date=clean_time, external_conn=conn,
+                        notes=receive_note_suffix or None,
                     )
-                excess = qty_in - remaining
-                add_transaction(
-                    item_id=item_id, quantity=excess, transaction_type='IN',
-                    user_id=user_id, user_name=username,
-                    reference_id=po_id, reference_type='PURCHASE_ORDER',
-                    change_reason='BONUS_STOCK', unit_price=unit_cost,
-                    transaction_date=clean_time, external_conn=conn,
-                    notes=item_notes
-                )
+                if bonus_stock_qty > 0:
+                    add_transaction(
+                        item_id=item_id,
+                        quantity=bonus_stock_qty,
+                        transaction_type='IN',
+                        user_id=user_id, user_name=username,
+                        reference_id=po_id, reference_type='PURCHASE_ORDER',
+                        change_reason='BONUS_STOCK', unit_price=effective_piece_cost,
+                        transaction_date=clean_time, external_conn=conn,
+                        notes=" ".join(part for part in [item_notes, receive_note_suffix] if part).strip()
+                    )
             else:
                 will_still_have_remaining = (already_received + qty_in) < qty_ordered
                 arrival_reason = 'PARTIAL_ARRIVAL' if will_still_have_remaining else 'PO_ARRIVAL'
                 add_transaction(
-                    item_id=item_id, quantity=qty_in, transaction_type='IN',
+                    item_id=item_id, quantity=stock_qty_in, transaction_type='IN',
                     user_id=user_id, user_name=username,
                     reference_id=po_id, reference_type='PURCHASE_ORDER',
-                    change_reason=arrival_reason, unit_price=unit_cost,
-                    transaction_date=clean_time, external_conn=conn
+                    change_reason=arrival_reason, unit_price=effective_piece_cost,
+                    transaction_date=clean_time, external_conn=conn,
+                    notes=receive_note_suffix or None,
                 )
 
             conn.execute("""
@@ -2868,9 +2976,12 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 "item_id": item_id,
                 "quantity_received": qty_in,
                 "unit_cost": float(unit_cost or 0),
-                "line_total": round(float(unit_cost or 0) * qty_in, 2),
+                "line_total": line_total,
+                "purchase_mode": purchase_mode,
+                "stock_quantity_received": stock_qty_in,
+                "effective_piece_cost": effective_piece_cost,
                 "is_over_receive": 1 if is_over_receive else 0,
-                "notes": item_notes,
+                "notes": " ".join(part for part in [item_notes, receive_note_suffix] if part).strip(),
             })
 
         if not received_any:
@@ -2890,9 +3001,10 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             conn.execute(
                 """
                 INSERT INTO po_receipt_items (
-                    receipt_id, po_id, item_id, quantity_received, unit_cost, line_total, is_over_receive, notes
+                    receipt_id, po_id, item_id, quantity_received, unit_cost, line_total,
+                    purchase_mode, stock_quantity_received, effective_piece_cost, is_over_receive, notes
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     receipt_id,
@@ -2901,6 +3013,9 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                     receipt_entry["quantity_received"],
                     receipt_entry["unit_cost"],
                     receipt_entry["line_total"],
+                    receipt_entry["purchase_mode"],
+                    receipt_entry["stock_quantity_received"],
+                    receipt_entry["effective_piece_cost"],
                     receipt_entry["is_over_receive"],
                     receipt_entry["notes"] or None,
                 ),
@@ -2946,6 +3061,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
     items = conn.execute("""
         SELECT i.name, pi.quantity_ordered,
             pi.unit_cost AS unit_price,
+            COALESCE(pi.purchase_mode, 'PIECE') AS purchase_mode,
             (pi.quantity_ordered * pi.unit_cost) AS subtotal
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
@@ -3028,13 +3144,13 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 entries = [
                     {
                         "item_name": item.get("item_name") or "Unknown Item",
-                        "quantity": int(item.get("quantity_received") or 0),
-                        "unit_cost": float(item.get("unit_cost") or 0),
+                        "quantity": int(item.get("stock_quantity_received") or 0),
+                        "unit_cost": float(item.get("effective_piece_cost") or 0),
                         "subtotal": float(item.get("line_total") or 0),
                         "notes": item.get("notes") or "",
                     }
                     for item in matched_receipt.get("items", [])
-                    if int(item.get("quantity_received") or 0) > 0
+                    if int(item.get("stock_quantity_received") or 0) > 0
                 ]
             return {
                 **base,
@@ -3137,8 +3253,9 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                         total_amount += float(item.get("line_total") or 0)
                         snapshot_items.append({
                             "name": item.get("item_name") or "Unknown Item",
-                            "quantity_ordered": int(item.get("quantity_received") or 0),
-                            "unit_price": float(item.get("unit_cost") or 0),
+                            "quantity_ordered": int(item.get("stock_quantity_received") or 0),
+                            "unit_price": float(item.get("effective_piece_cost") or 0),
+                            "purchase_mode": item.get("purchase_mode") or "PIECE",
                             "subtotal": float(item.get("line_total") or 0),
                         })
                 else:
@@ -3211,6 +3328,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 "name": item['name'],
                 "quantity_ordered": item['quantity_ordered'],
                 "unit_price": float(item['unit_price']),
+                "purchase_mode": item['purchase_mode'],
                 "subtotal": float(item['subtotal'])
             }
             for item in items

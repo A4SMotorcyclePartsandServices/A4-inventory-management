@@ -771,3 +771,73 @@ Implementation notes
 Assumptions made
 - The `Deleted` tab is admin-only.
 - The 30-day permanent purge runs on cash-ledger activity rather than through a dedicated scheduler / cron job.
+
+## Box-Based PO / Receive / Review / Export Pass
+
+Implemented 2026-03-21
+
+Scope
+- Added support for PO lines that can be ordered either `piece-based` or `box-based`.
+- Updated the order page, receive page, PO overview/review surfaces, printable PO PDF, and PO CSV export so staff can clearly see how an item was ordered.
+
+PO creation behavior
+- `templates/transactions/order.html` now lets staff choose `Per Piece` or `Per Box` for each PO line.
+- `Unit Est. Cost` now keeps its unit meaning:
+- for piece-based lines, it is the estimated cost per piece
+- for box-based lines, it is the estimated cost per box
+- Line totals are computed separately in real time instead of overwriting the unit cost input.
+- The order table now shows a prominent `Overall Total` row below the selected item lines.
+- Pending incoming reminders on the order page now distinguish:
+- exact pending pieces for piece-based open POs
+- pending box count for box-based open POs, with a note that actual pieces are counted during receiving
+
+Data model
+- `po_items` now stores `purchase_mode` with values:
+- `PIECE`
+- `BOX`
+- `po_receipt_items` now stores:
+- `purchase_mode`
+- `stock_quantity_received`
+- `effective_piece_cost`
+- This allows one PO line to be financially tracked by box while inventory still lands as counted pieces.
+
+Receive behavior
+- Piece-based receiving remains the same:
+- received quantity is the stock quantity inserted
+- unit cost is compared directly against `items.cost_per_piece`
+- Box-based receiving now requires the actual counted pieces received today.
+- For box-based receipts:
+- `quantity_received` = number of boxes received for PO progress
+- `stock_quantity_received` = actual counted pieces inserted into inventory
+- payable value still comes from `box count x box cost`
+- `effective_piece_cost` is derived from `total box value / total counted pieces`
+- `items.cost_per_piece` is updated using that derived piece cost when the PO receipt is accepted
+
+Important system behavior notes
+- Box-based open POs do **not** contribute fake piece quantities to pending incoming stock, because the actual piece count is unknown until receiving.
+- Instead, the order page warns with pending box counts such as `3 box(es) pending`.
+- The PO overview modal, full review page, revision modals, and printable outputs now surface whether a line was ordered as `piece-based` or `box-based`.
+- Ordered / received / remaining quantity displays across PO review surfaces now show units:
+- piece-based lines show `pcs`
+- box-based lines show `box(es)`
+- Printable PO PDF and PO CSV export now carry those same unit-aware quantity labels.
+- When a box-based item is over-received and the boxes are uneven, the system uses the actual total counted pieces for stock / cost correction, but the split between `ordered arrival` and `bonus stock` pieces is proportionally estimated because staff currently enters one combined counted-piece total for that receipt.
+- This means:
+- inventory and cost-per-piece stay grounded in the real counted quantity
+- the audit split between ordered vs bonus stock is still best-effort for uneven mixed-box over-receives
+
+Review / revision UX
+- Purchase mode reminders were made more prominent in PO admin views so admins can quickly see whether a quantity is in `pcs` or `box(es)`.
+- The revision-request modal on the review page was aligned to the same design and behavior as the order overview page revision modal.
+
+Implementation notes
+- Schema updates live in `db/schema.py`.
+- PO create / edit / receive / export behavior lives in `services/transactions_service.py`.
+- Pending-stock search/recommendation behavior lives in `services/inventory_service.py`.
+- PO PDF route shaping lives in `routes/reports_route.py`.
+- PO CSV export lives in `routes/transaction_route.py`.
+- Main order page UI lives in `templates/transactions/order.html`.
+- Receive page UI lives in `templates/transactions/receive.html`.
+- PO overview modal UI lives in `templates/transactions/order_overview.html`.
+- Admin full review UI lives in `templates/order/review.html`.
+- Printable PO PDF lives in `templates/reports/purchase_order_pdf.html`.

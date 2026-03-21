@@ -259,6 +259,14 @@
         white-space: normal;
     }
 
+    .purchase-mode-note {
+        margin-top: 6px;
+        font-size: 0.76rem;
+        color: #facc15;
+        font-weight: 700;
+        white-space: normal;
+    }
+
     .delivery-history-list {
         display: grid;
         gap: 12px;
@@ -471,6 +479,41 @@
         border-color: var(--po-cancelled-border);
     }
 
+    .modal-meta-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--accent);
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 600;
+    }
+
+    .table-po-items {
+        --bs-table-hover-bg: rgba(255,255,255,0.03);
+        --bs-table-hover-color: var(--text-primary);
+    }
+
+    .table-po-items thead th {
+        background: #13161e;
+        color: var(--accent);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 700;
+        border-color: var(--border-soft);
+        padding: 10px 14px;
+    }
+
+    .table-po-items tbody td {
+        color: var(--text-primary);
+        background: transparent !important;
+        font-size: 0.88rem;
+        padding: 10px 14px;
+        vertical-align: middle;
+        border-color: var(--border-soft);
+    }
+
     .action-helper {
         font-size: 0.82rem;
         color: var(--text-muted);
@@ -543,6 +586,46 @@
         min-width: 280px;
         min-height: 74px;
         resize: vertical;
+    }
+
+    .review-revision-item-mode {
+        margin-top: 4px;
+        font-size: 0.76rem;
+        color: #facc15;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .revision-modal-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+        margin-bottom: 10px;
+    }
+
+    .revision-count-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--po-revisions);
+        background: var(--po-revisions-soft);
+        border: 1px solid var(--po-revisions-border);
+    }
+
+    .revision-scaffold-note {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px dashed var(--po-revisions-border);
+        background: rgba(234, 88, 12, 0.08);
+        color: var(--text-muted);
+        font-size: 0.82rem;
     }
 </style>
 {% endblock %}
@@ -627,7 +710,7 @@
                 <thead>
                     <tr>
                         <th>Item</th>
-                        <th>Price</th>
+                        <th>Unit Cost</th>
                         {% if is_partial_delivery %}
                         <th>Ordered Qty</th>
                         <th>Ordered Total</th>
@@ -656,22 +739,31 @@
                     <tr>
                         <td>
                             {{ item.name }}
+                            <div class="purchase-mode-note">
+                                Ordered as {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box-based{% else %}piece-based{% endif %}.
+                            </div>
                             {% if is_partial_delivery %}
-                            <div class="review-inline-note">{{ delivered_qty }} of {{ ordered_qty }} delivered. {{ remaining_qty }} still expected.</div>
+                            <div class="review-inline-note">
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                {{ delivered_qty }} box(es) delivered out of {{ ordered_qty }} box(es). {{ remaining_qty }} box(es) still expected.
+                                {% else %}
+                                {{ delivered_qty }} pcs delivered out of {{ ordered_qty }} pcs. {{ remaining_qty }} pcs still expected.
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </td>
                         <td>{{ "%.2f"|format(unit_cost) }}</td>
                         {% if is_partial_delivery %}
-                        <td>{{ ordered_qty }}</td>
+                        <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ ordered_qty }} box(es){% else %}{{ ordered_qty }} pcs{% endif %}</td>
                         <td>{{ "%.2f"|format(ordered_total) }}</td>
-                        <td>{{ delivered_qty }}</td>
+                        <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ delivered_qty }} box(es){% else %}{{ delivered_qty }} pcs{% endif %}</td>
                         <td>{{ "%.2f"|format(delivered_total) }}</td>
-                        <td>{{ remaining_qty }}</td>
+                        <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ remaining_qty }} box(es){% else %}{{ remaining_qty }} pcs{% endif %}</td>
                         <td>{{ "%.2f"|format(remaining_balance) }}</td>
                         {% else %}
                         <td>{{ "%.2f"|format(ordered_total) }}</td>
-                        <td>{{ ordered_qty }}</td>
-                        <td>{{ delivered_qty }}</td>
+                        <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ ordered_qty }} box(es){% else %}{{ ordered_qty }} pcs{% endif %}</td>
+                        <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ delivered_qty }} box(es){% else %}{{ delivered_qty }} pcs{% endif %}</td>
                         {% endif %}
                     </tr>
                     {% endfor %}
@@ -726,8 +818,20 @@
                             {% endif %}
                         </div>
                         <div class="delivery-history-item-values">
-                            <div>Qty: {{ item.quantity_received }}</div>
-                            <div>Price: {{ "%.2f"|format(item.unit_cost or 0) }}</div>
+                            <div>
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                Boxes: {{ item.quantity_received }} | Counted Pieces: {{ item.stock_quantity_received }}
+                                {% else %}
+                                Qty: {{ item.quantity_received }}
+                                {% endif %}
+                            </div>
+                            <div>
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                Box Cost: {{ "%.2f"|format(item.unit_cost or 0) }} | Piece Cost: {{ "%.2f"|format(item.effective_piece_cost or 0) }}
+                                {% else %}
+                                Price: {{ "%.2f"|format(item.unit_cost or 0) }}
+                                {% endif %}
+                            </div>
                             <div>Total: {{ "%.2f"|format(item.line_total or 0) }}</div>
                         </div>
                     </div>
@@ -840,6 +944,14 @@ function collectReviewRevisionItems() {
         .filter(Boolean);
 }
 
+function updateReviewRevisionItemCount() {
+    const count = collectReviewRevisionItems().length;
+    const pill = document.getElementById('reviewRevisionItemCount');
+    if (pill) {
+        pill.innerText = count === 1 ? '1 item marked' : `${count} items marked`;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     const reviewShell = document.getElementById('reviewShell');
     const reviewPoId = Number.parseInt(reviewShell?.dataset.poId || '', 10);
@@ -871,6 +983,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.review-revision-item-note').forEach((input) => {
             input.value = '';
         });
+        updateReviewRevisionItemCount();
         reviewRevisionsModal?.show();
     });
 
@@ -927,53 +1040,64 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <div class="modal fade action-modal" id="reviewRevisionsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header border-bottom-0">
-                <h5 class="modal-title">Revise Purchase Order</h5>
+            <div class="modal-header">
+                <h5 class="modal-title mb-0">Request Revisions</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="action-helper">
-                    Add a summary note or item-specific revision notes for anything the requester needs to change.
+                    Add an optional summary note, then write item-level revision notes only for the lines that need changes.
                 </div>
-                <label class="review-meta-label" for="reviewRevisionsNotesInput">Summary Notes</label>
-                <textarea id="reviewRevisionsNotesInput" class="form-control action-textarea" placeholder="Explain the revisions needed"></textarea>
-                <div id="reviewRevisionsNotesError" class="action-error">Add a summary note or at least one item revision.</div>
+                <label class="modal-meta-label" for="reviewRevisionsNotesInput">Notes</label>
+                <textarea id="reviewRevisionsNotesInput" class="form-control action-textarea" placeholder="Optional summary for the requester"></textarea>
+
+                <div class="revision-modal-meta">
+                    <span class="modal-meta-label mb-0">Item Revisions</span>
+                    <span class="revision-count-pill" id="reviewRevisionItemCount">0 items marked</span>
+                </div>
 
                 <div class="revision-items-preview">
-                    <table class="table">
+                    <table class="table table-po-items">
                         <thead>
                             <tr>
                                 <th>Item</th>
-                                <th>Ordered</th>
-                                <th>Received</th>
+                                <th class="text-center">Ordered</th>
+                                <th class="text-center">Received</th>
                                 <th>Revision Note</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in items %}
                             <tr>
-                                <td>{{ item.name }}</td>
-                                <td>{{ item.quantity_ordered }}</td>
-                                <td>{{ item.quantity_received }}</td>
+                                <td>
+                                    <div>{{ item.name }}</div>
+                                    <div class="review-revision-item-mode">Ordered as {{ 'box-based' if (item.purchase_mode or 'PIECE') == 'BOX' else 'piece-based' }}</div>
+                                </td>
+                                <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ item.quantity_ordered }} box(es){% else %}{{ item.quantity_ordered }} pcs{% endif %}</td>
+                                <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ item.quantity_received }} box(es){% else %}{{ item.quantity_received }} pcs{% endif %}</td>
                                 <td>
                                     <textarea
                                         class="form-control review-revision-item-note"
                                         data-revision-item-id="{{ item.item_id }}"
                                         data-revision-item-name="{{ item.name }}"
-                                        placeholder="Describe what needs to change for this item"></textarea>
+                                        placeholder="Describe what needs to change for this item"
+                                        oninput="updateReviewRevisionItemCount()"></textarea>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
+                <div class="revision-scaffold-note">Leave an item blank if it does not need changes.</div>
+                <div id="reviewRevisionsNotesError" class="action-error">Add a summary note or at least one item revision.</div>
             </div>
-            <div class="modal-footer border-top-0">
+            <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back</button>
                 <button type="button" class="btn btn-warning" id="reviewConfirmRevisionsBtn">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Submit Revision Request
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Send for Revisions
                 </button>
             </div>
         </div>

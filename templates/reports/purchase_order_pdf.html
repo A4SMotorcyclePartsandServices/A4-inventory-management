@@ -575,7 +575,7 @@
             <tr>
                 <th class="col-item-no">Item No.</th>
                 <th class="col-desc">Item Description</th>
-                <th class="col-unit">Unit Price</th>
+                <th class="col-unit">Unit Cost</th>
                 <th class="col-qty">Ordered Qty</th>
                 <th class="col-total">Ordered Total</th>
                 <th class="col-qty">Delivered Qty</th>
@@ -588,7 +588,7 @@
                 <th class="col-item-no">Item No.</th>
                 <th class="col-desc">Item Description</th>
                 <th class="col-qty">Qty.</th>
-                <th class="col-unit">Unit Price</th>
+                <th class="col-unit">Unit Cost</th>
                 <th class="col-total">Total Price</th>
             </tr>
             {% endif %}
@@ -609,21 +609,28 @@
                 <td class="center">{{ item.item_no }}</td>
                 <td>
                     {{ item.name }}
-                    <div class="partial-note">{{ delivered_qty }} of {{ ordered_qty }} delivered. {{ remaining_qty }} still expected.</div>
+                    <div class="partial-note">Ordered as {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box{% else %}piece{% endif %}-based.</div>
+                    <div class="partial-note">
+                        {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                        {{ delivered_qty }} box(es) delivered out of {{ ordered_qty }} box(es). {{ remaining_qty }} box(es) still expected.
+                        {% else %}
+                        {{ delivered_qty }} pcs delivered out of {{ ordered_qty }} pcs. {{ remaining_qty }} pcs still expected.
+                        {% endif %}
+                    </div>
                 </td>
                 <td class="right money">{{ "%.2f"|format(unit_cost) }}</td>
-                <td class="center">{{ ordered_qty }}</td>
+                <td class="center">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ ordered_qty }} box(es){% else %}{{ ordered_qty }} pcs{% endif %}</td>
                 <td class="right money">{{ "%.2f"|format(ordered_total) }}</td>
-                <td class="center">{{ delivered_qty }}</td>
+                <td class="center">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ delivered_qty }} box(es){% else %}{{ delivered_qty }} pcs{% endif %}</td>
                 <td class="right money">{{ "%.2f"|format(delivered_total) }}</td>
-                <td class="center">{{ remaining_qty }}</td>
+                <td class="center">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ remaining_qty }} box(es){% else %}{{ remaining_qty }} pcs{% endif %}</td>
                 <td class="right money">{{ "%.2f"|format(remaining_balance) }}</td>
             </tr>
             {% else %}
             <tr>
                 <td class="center">{{ item.item_no }}</td>
                 <td>{{ item.name }}</td>
-                <td class="center">{{ ordered_qty }}</td>
+                <td class="center">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ ordered_qty }} box(es){% else %}{{ ordered_qty }} pcs{% endif %}</td>
                 <td class="right money">{{ "%.2f"|format(unit_cost) }}</td>
                 <td class="right money">{{ "%.2f"|format(ordered_total) }}</td>
             </tr>
@@ -683,7 +690,7 @@
                 <tr>
                     <th>Item</th>
                     <th>Qty</th>
-                    <th>Price</th>
+                    <th>Cost</th>
                     <th>Total</th>
                 </tr>
             </thead>
@@ -692,11 +699,14 @@
                 <tr>
                     <td>
                         {{ item.item_name }}
+                        {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                        <span class="receipt-item-note">Boxes: {{ item.quantity_received }} | Counted Pieces: {{ item.stock_quantity_received }} | Piece Cost: {{ "%.2f"|format(item.effective_piece_cost or 0) }}</span>
+                        {% endif %}
                         {% if item.notes %}
                         <span class="receipt-item-note">Notes: {{ item.notes }}</span>
                         {% endif %}
                     </td>
-                    <td>{{ item.quantity_received }}</td>
+                    <td>{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{{ item.quantity_received }} box(es){% else %}{{ item.quantity_received }} pcs{% endif %}</td>
                     <td class="right money">{{ "%.2f"|format(item.unit_cost or 0) }}</td>
                     <td class="right money">{{ "%.2f"|format(item.line_total or 0) }}</td>
                 </tr>

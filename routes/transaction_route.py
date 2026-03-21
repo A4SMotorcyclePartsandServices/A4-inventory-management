@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify, Response
 from db.database import get_db
 from auth.utils import admin_required, login_required
@@ -437,7 +438,7 @@ def export_purchase_order_csv(po_id):
     writer.writerow(["Received At", format_date(po_data.get("received_at"), show_time=True)])
     writer.writerow(["Total Amount", f"{float(po_data.get('total_amount') or 0):.2f}"])
     writer.writerow([])
-    writer.writerow(["Item", "Qty Ordered", "Qty Received", "Unit Cost", "Subtotal"])
+    writer.writerow(["Item", "Purchase Mode", "Qty Ordered", "Qty Received", "Unit Cost", "Subtotal"])
 
     total_qty_ordered = 0
     total_qty_received = 0
@@ -448,15 +449,20 @@ def export_purchase_order_csv(po_id):
         qty_ordered = int(item.get("quantity_ordered") or 0)
         qty_received = int(item.get("quantity_received") or 0)
         unit_cost = float(item.get("unit_cost") or 0)
+        purchase_mode = str(item.get("purchase_mode") or "PIECE").strip().upper()
         subtotal = qty_ordered * unit_cost
         total_qty_ordered += qty_ordered
         total_qty_received += qty_received
         grand_total += subtotal
 
+        ordered_label = f"{qty_ordered} box(es)" if purchase_mode == "BOX" else f"{qty_ordered} pcs"
+        received_label = f"{qty_received} box(es)" if purchase_mode == "BOX" else f"{qty_received} pcs"
+
         writer.writerow([
             item.get("name") or "",
-            qty_ordered,
-            qty_received,
+            "Box-based" if purchase_mode == "BOX" else "Piece-based",
+            ordered_label,
+            received_label,
             f"{unit_cost:.2f}",
             f"{subtotal:.2f}",
         ])
@@ -464,8 +470,9 @@ def export_purchase_order_csv(po_id):
     writer.writerow([])
     writer.writerow([
         "TOTAL",
-        total_qty_ordered,
-        total_qty_received,
+        "",
+        "",
+        "",
         "",
         f"{grand_total:.2f}",
     ])

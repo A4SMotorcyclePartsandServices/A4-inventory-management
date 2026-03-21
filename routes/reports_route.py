@@ -56,6 +56,7 @@ def purchase_order_report(po_id):
             "quantity_ordered": qty_ordered,
             "quantity_received": int(item.get("quantity_received") or 0),
             "unit_cost": unit_cost,
+            "purchase_mode": item.get("purchase_mode") or "PIECE",
             "subtotal": qty_ordered * unit_cost,
         })
 
