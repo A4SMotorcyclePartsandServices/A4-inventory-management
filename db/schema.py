@@ -577,9 +577,17 @@ def init_db():
         reference_type  TEXT NOT NULL DEFAULT 'MANUAL',
         reference_id    INTEGER,
         user_id         INTEGER REFERENCES users(id),
-        created_at      TIMESTAMP DEFAULT NOW()
+        created_at      TIMESTAMP DEFAULT NOW(),
+        is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
+        deleted_at      TIMESTAMP,
+        deleted_by      INTEGER REFERENCES users(id)
     )
     """)
+    cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE")
+    cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP")
+    cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES users(id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_created ON cash_entries(branch_id, created_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_deleted ON cash_entries(branch_id, is_deleted, deleted_at DESC)")
 
     # 22. PAYABLES TABLES
     cur.execute("""

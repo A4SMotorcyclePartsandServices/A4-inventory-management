@@ -1,6 +1,6 @@
 from db.database import get_db
 from utils.formatters import format_date
-from datetime import date as date_today
+from datetime import date as date_today, timedelta
 import re
 
 # --- CATEGORIES ---
@@ -143,11 +143,14 @@ def _get_sale_refunds_cash(conn, branch_id=1, date_from=None, date_to=None):
     return conn.execute(query, params).fetchall()
 
 
-def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_type=None):
+def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_type=None, deleted_state='active'):
     """
     [Sources 3 & 4] Manual petty cash entries.
     Supports optional entry_type filter ('CASH_IN' or 'CASH_OUT').
     """
+    if deleted_state not in {'active', 'deleted', 'all'}:
+        raise ValueError("Invalid deleted state.")
+
     params = [branch_id]
     query = """
         SELECT
@@ -157,21 +160,31 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
             ce.category,
             ce.description,
             ce.created_at,
-            u.username AS recorded_by
+            ce.deleted_at,
+            u.username AS recorded_by,
+            du.username AS deleted_by_username
         FROM cash_entries ce
         LEFT JOIN users u ON u.id = ce.user_id
+        LEFT JOIN users du ON du.id = ce.deleted_by
         WHERE ce.branch_id = %s
         AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
     """
+
+    if deleted_state == 'active':
+        query += " AND COALESCE(ce.is_deleted, FALSE) = FALSE"
+    elif deleted_state == 'deleted':
+        query += " AND COALESCE(ce.is_deleted, FALSE) = TRUE"
 
     if entry_type:
         query += " AND ce.entry_type = %s"
         params.append(entry_type)
     if date_from:
-        query += " AND DATE(ce.created_at) >= %s"
+        date_column = "ce.deleted_at" if deleted_state == 'deleted' else "ce.created_at"
+        query += f" AND DATE({date_column}) >= %s"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(ce.created_at) <= %s"
+        date_column = "ce.deleted_at" if deleted_state == 'deleted' else "ce.created_at"
+        query += f" AND DATE({date_column}) <= %s"
         params.append(date_to)
 
     return conn.execute(query, params).fetchall()
@@ -247,6 +260,16 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
             '_raw_date':   row['created_at'] or '',
         })
 
+    manual_offset = len(unified) - len(manual_rows)
+    for index, row in enumerate(manual_rows):
+        if not row['deleted_at']:
+            continue
+        entry = unified[manual_offset + index]
+        entry['deleted_at'] = format_date(row['deleted_at'], show_time=True)
+        entry['deleted_by'] = row['deleted_by_username'] or '-'
+        entry['purge_at'] = format_date(row['deleted_at'] + timedelta(days=30), show_time=True)
+        entry['_raw_date'] = row['deleted_at']
+
     unified.sort(key=lambda x: x['_raw_date'], reverse=True)
 
     for row in unified:
@@ -269,7 +292,7 @@ def get_cash_summary(branch_id=1):
     sales_rows  = _get_sales_cash(conn, branch_id)
     debt_rows   = _get_debt_cash_payments(conn, branch_id)
     refund_rows = _get_sale_refunds_cash(conn, branch_id)
-    manual_rows = _get_manual_entries(conn, branch_id)
+    manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
     conn.close()
 
     total_in  = 0.0
@@ -297,7 +320,7 @@ def get_cash_summary(branch_id=1):
     }
 
 
-def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date=None):
+def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date=None, ledger_view='active'):
     """
     Total number of unified ledger rows matching the given filters.
     Used by the route to calculate total_pages before fetching the page slice.
@@ -310,7 +333,11 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
     conn = get_db()
 
     # Sales and debt are always CASH_IN — skip them entirely if filtering for CASH_OUT
-    if entry_type == 'CASH_OUT':
+    if ledger_view == 'deleted':
+        sales_rows = []
+        debt_rows = []
+        refund_rows = []
+    elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
@@ -319,14 +346,15 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
 
-    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
+    deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
+    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
     return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(manual_rows)
 
 
 def get_cash_entries(branch_id=1, limit=None, offset=None,
-                    entry_type=None, start_date=None, end_date=None):
+                    entry_type=None, start_date=None, end_date=None, ledger_view='active'):
     """
     Unified ledger with optional pagination and filtering.
 
@@ -339,7 +367,11 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
     conn = get_db()
 
     # Sales and debt are always CASH_IN — skip entirely if filtering for CASH_OUT
-    if entry_type == 'CASH_OUT':
+    if ledger_view == 'deleted':
+        sales_rows = []
+        debt_rows = []
+        refund_rows = []
+    elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
@@ -348,7 +380,8 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
 
-    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type)
+    deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
+    manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
     unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)
@@ -409,6 +442,7 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND entry_type = 'CASH_OUT'
           AND category = 'Mechanic Payout'
           AND reference_type = 'MECHANIC_PAYOUT'
+          AND COALESCE(is_deleted, FALSE) = FALSE
           AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
           AND reference_id IS NOT NULL
     """, [branch_id] + normalized_dates).fetchall()
@@ -422,6 +456,7 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND entry_type = 'CASH_OUT'
           AND category = 'Mechanic Payout'
           AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+          AND COALESCE(is_deleted, FALSE) = FALSE
           AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
     """, [branch_id] + normalized_dates).fetchall()
     conn.close()
@@ -522,9 +557,9 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
         conn.close()
 
 
-def delete_cash_entry(entry_id, branch_id=1):
+def delete_cash_entry(entry_id, user_id, branch_id=1):
     """
-    Hard deletes a manual cash entry.
+    Soft deletes a manual cash entry.
     reference_type in ('MANUAL', 'MECHANIC_PAYOUT') guard means sales and debt rows
     can never be deleted through this path even if called directly.
     Admin-only enforced at route level.
@@ -532,14 +567,76 @@ def delete_cash_entry(entry_id, branch_id=1):
     conn = get_db()
     try:
         result = conn.execute("""
-            DELETE FROM cash_entries
-            WHERE id = %s AND branch_id = %s AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
-        """, (entry_id, branch_id))
+            UPDATE cash_entries
+            SET is_deleted = TRUE,
+                deleted_at = NOW(),
+                deleted_by = %s
+            WHERE id = %s
+              AND branch_id = %s
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+              AND COALESCE(is_deleted, FALSE) = FALSE
+        """, (user_id, entry_id, branch_id))
 
         if result.rowcount == 0:
             raise ValueError("Entry not found or cannot be deleted.")
 
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def restore_cash_entry(entry_id, branch_id=1):
+    """
+    Restores a soft-deleted manual cash entry back into the active ledger.
+    """
+    conn = get_db()
+    try:
+        result = conn.execute("""
+            UPDATE cash_entries
+            SET is_deleted = FALSE,
+                deleted_at = NULL,
+                deleted_by = NULL
+            WHERE id = %s
+              AND branch_id = %s
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+              AND COALESCE(is_deleted, FALSE) = TRUE
+        """, (entry_id, branch_id))
+
+        if result.rowcount == 0:
+            raise ValueError("Deleted entry not found or cannot be restored.")
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def purge_deleted_cash_entries(branch_id=None):
+    """
+    Permanently removes soft-deleted cash entries after 30 days.
+    """
+    conn = get_db()
+    try:
+        params = []
+        query = """
+            DELETE FROM cash_entries
+            WHERE COALESCE(is_deleted, FALSE) = TRUE
+              AND deleted_at IS NOT NULL
+              AND deleted_at < (NOW() - INTERVAL '30 days')
+        """
+
+        if branch_id is not None:
+            query += " AND branch_id = %s"
+            params.append(branch_id)
+
+        result = conn.execute(query, params)
+        conn.commit()
+        return result.rowcount
     except Exception:
         conn.rollback()
         raise
@@ -560,7 +657,7 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1):
     sales_rows  = _get_sales_cash(conn, branch_id, date_from, date_to)
     debt_rows   = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
     refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
-    manual_rows = _get_manual_entries(conn, branch_id, date_from, date_to)
+    manual_rows = _get_manual_entries(conn, branch_id, date_from, date_to, deleted_state='active')
     conn.close()
 
     unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)

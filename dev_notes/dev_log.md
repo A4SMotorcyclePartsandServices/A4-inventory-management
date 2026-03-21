@@ -720,3 +720,54 @@ Implementation notes
 - Main backend work lives in `services/payables_service.py`.
 - Page/API route updates live in `routes/payables_route.py`.
 - Main UI and lazy-load behavior lives in `templates/transactions/payables.html`.
+
+## Cash Ledger Soft Delete / Recycle Bin
+
+Implemented 2026-03-21
+
+Scope
+- Replaced hard delete behavior for manual cash ledger entries with a soft delete flow.
+- Added a recycle-bin style `Deleted` view so removed cash ledger entries remain recoverable for 30 days.
+
+Current behavior
+- Deleting a manual cash ledger entry no longer removes the row immediately from `cash_entries`.
+- Delete now marks the row as deleted and records:
+- `is_deleted`
+- `deleted_at`
+- `deleted_by`
+- Soft-deleted entries are excluded from:
+- the active cash ledger table
+- active cash ledger pagination counts
+- cash on hand / summary calculations
+- Deleted entries are still queryable in a dedicated `Deleted` tab on the cash ledger page.
+- Deleted entries can be restored back into the active ledger by admin users.
+- Restored entries resume affecting cash-on-hand because they become active again.
+
+Deleted tab behavior
+- The `Deleted` tab is visible to admins only.
+- The deleted view shows:
+- original entry details
+- who recorded the entry
+- who deleted the entry
+- when the entry was deleted
+- Deleted entries remain filterable by cash in / cash out and date range.
+- In deleted mode, date filters apply against `deleted_at` rather than original `created_at`.
+
+Purge behavior
+- Soft-deleted cash ledger rows are permanently removed after 30 days.
+- Purge is currently triggered opportunistically whenever the cash ledger page or its related APIs are hit.
+- This keeps the recycle-bin window correct without adding a separate scheduler yet.
+
+Mechanic payout handling
+- Deleted `Mechanic Payout` cash entries no longer count as already-paid payouts.
+- This prevents a deleted payout row from blocking the mechanic payout reminder / pending payout logic.
+
+Implementation notes
+- Schema changes live in `db/schema.py`.
+- Soft-delete / restore / purge logic lives in `services/cash_service.py`.
+- Cash ledger route and API updates live in `routes/cash_route.py`.
+- Deleted tab UI and restore action live in `templates/cash/cash_ledger.html`.
+
+Assumptions made
+- The `Deleted` tab is admin-only.
+- The 30-day permanent purge runs on cash-ledger activity rather than through a dedicated scheduler / cron job.

@@ -334,7 +334,21 @@
     </div>
 </div>
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+    <a class="btn btn-sm {% if selected_view == 'active' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+       href="{{ url_for('cash.cash_ledger', view='active', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}">
+        <i class="bi bi-journal-text me-1"></i> Active Ledger
+    </a>
+    {% if session.get('role') == 'admin' %}
+    <a class="btn btn-sm {% if selected_view == 'deleted' %}btn-warning{% else %}btn-outline-warning{% endif %}"
+       href="{{ url_for('cash.cash_ledger', view='deleted', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}">
+        <i class="bi bi-trash3 me-1"></i> Deleted
+    </a>
+    {% endif %}
+</div>
+
 <!-- Ã¢â€â‚¬Ã¢â€â‚¬ Summary Cards Ã¢â€â‚¬Ã¢â€â‚¬ -->
+{% if selected_view == 'active' %}
 {% if overdue_payout_total > 0 %}
 <div class="reminder-panel mb-4">
     <div class="reminder-header">
@@ -382,6 +396,7 @@
     </div>
 </div>
 {% endif %}
+{% endif %}
 
 <div class="row g-3 mb-4">
 
@@ -416,6 +431,7 @@
 
 </div>
 
+{% if selected_view == 'active' %}
 {% if pending_payouts %}
 <!-- Ã¢â€â‚¬Ã¢â€â‚¬ Pending Mechanic Payouts Panel Ã¢â€â‚¬Ã¢â€â‚¬ -->
 <div class="pending-payouts-panel mb-4">
@@ -451,11 +467,13 @@
     </div>
 </div>
 {% endif %}
+{% endif %}
 
 <!-- Ã¢â€â‚¬Ã¢â€â‚¬ Main Layout: Form + Table Ã¢â€â‚¬Ã¢â€â‚¬ -->
 <div class="row g-4">
 
     <!-- ADD ENTRY FORM -->
+    {% if selected_view == 'active' %}
     <div class="col-lg-4">
         <div class="card p-4">
 
@@ -511,16 +529,17 @@
 
         </div>
     </div>
+    {% endif %}
 
     <!-- LEDGER TABLE -->
-    <div class="col-lg-8" id="ledger-section">
+    <div class="{% if selected_view == 'active' %}col-lg-8{% else %}col-12{% endif %}" id="ledger-section">
         <div class="card p-4">
 
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                     <h6 class="fw-bold mb-0" id="ledger-title-anchor">
-                        <i class="bi bi-journal-text me-2" style="color: var(--accent);"></i>
-                        Ledger
+                        <i class="bi {% if selected_view == 'deleted' %}bi-trash3{% else %}bi-journal-text{% endif %} me-2" style="color: var(--accent);"></i>
+                        {% if selected_view == 'deleted' %}Deleted Entries{% else %}Ledger{% endif %}
                     </h6>
                     <span class="small" id="entry-count">
                         {% if total_entries %}
@@ -579,7 +598,12 @@
                             <th>Description</th>
                             <th class="text-end">Amount</th>
                             <th>Recorded By</th>
+                            {% if selected_view == 'deleted' %}
+                            <th>Deleted By</th>
+                            <th class="ledger-date-col">Deleted At</th>
+                            {% else %}
                             <th class="ledger-date-col">Date</th>
+                            {% endif %}
                             {% if session.get('role') == 'admin' %}
                             <th style="width:50px;"></th>
                             {% endif %}
@@ -608,10 +632,21 @@
                                 &#8369;{{ "{:,.2f}".format(entry.amount) }}
                             </td>
                             <td class="small">{{ entry.recorded_by or '—' }}</td>
+                            {% if selected_view == 'deleted' %}
+                            <td class="small">{{ entry.deleted_by or '—' }}</td>
+                            <td class="small date-cell">{{ entry.deleted_at or '—' }}</td>
+                            {% else %}
                             <td class="small date-cell">{{ entry.created_at }}</td>
+                            {% endif %}
                             {% if session.get('role') == 'admin' %}
                             <td>
-                                {% if entry.source == 'manual' and entry.id %}
+                                {% if selected_view == 'deleted' and entry.source == 'manual' and entry.id %}
+                                <button class="btn btn-sm btn-outline-warning"
+                                        onclick="restoreEntry({{ entry.id }}, this)"
+                                        title="Restore entry">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                                {% elif entry.source == 'manual' and entry.id %}
                                 <button class="btn btn-sm btn-outline-danger delete-btn"
                                         onclick="deleteEntry({{ entry.id }}, this)">
                                     <i class="bi bi-trash3"></i>
@@ -623,7 +658,11 @@
                         {% else %}
                         <tr id="empty-row">
                             <td colspan="{% if session.get('role') == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">
+                                {% if selected_view == 'deleted' %}
+                                No deleted cash entries.
+                                {% else %}
                                 No entries yet. Record the first cash movement above.
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -636,20 +675,20 @@
                 <ul class="pagination pagination-sm justify-content-end mb-0 ledger-pagination" id="ledger-pagination-list">
                     <li class="page-item {% if page <= 1 %}disabled{% endif %}">
                         <a class="page-link"
-                           href="{{ url_for('cash.cash_ledger', page=page - 1 if page > 1 else 1, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           href="{{ url_for('cash.cash_ledger', page=page - 1 if page > 1 else 1, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
                            data-page="{{ page - 1 if page > 1 else 1 }}"
                            aria-label="Previous page">Previous</a>
                     </li>
                     {% for page_number in range(1, total_pages + 1) %}
                     <li class="page-item {% if page_number == page %}active{% endif %}">
                         <a class="page-link"
-                           href="{{ url_for('cash.cash_ledger', page=page_number, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           href="{{ url_for('cash.cash_ledger', page=page_number, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
                            data-page="{{ page_number }}">{{ page_number }}</a>
                     </li>
                     {% endfor %}
                     <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
                         <a class="page-link"
-                           href="{{ url_for('cash.cash_ledger', page=page + 1 if page < total_pages else total_pages, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                           href="{{ url_for('cash.cash_ledger', page=page + 1 if page < total_pages else total_pages, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
                            data-page="{{ page + 1 if page < total_pages else total_pages }}"
                            aria-label="Next page">Next</a>
                     </li>
@@ -669,6 +708,7 @@
 const CASH_LEDGER_PENDING_FLASH_KEY = 'cash-ledger-pending-flash';
 const CASH_LEDGER_TODAY = {{ today | tojson }};
 const TODAY_FOR_INPUT = CASH_LEDGER_TODAY;
+const LEDGER_VIEW = {{ selected_view | tojson }};
 const LEDGER_SELECTED_TYPE = {{ selected_type | tojson }};
 const LEDGER_SELECTED_START_DATE = {{ selected_start_date | tojson }};
 const LEDGER_SELECTED_END_DATE = {{ selected_end_date | tojson }};
@@ -725,6 +765,7 @@ function updateDescriptionFieldState() {
     }
 }
 
+if (LEDGER_VIEW === 'active') {
 document.getElementById('entry-category').addEventListener('change', () => {
     const category = document.getElementById('entry-category').value;
     if (category !== 'Mechanic Payout') {
@@ -779,15 +820,19 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
 populateCategories('CASH_IN');
 setPayoutDate(TODAY_FOR_INPUT);
 showPayoutDateIfNeeded();
-    showPendingFlashAfterReload();
-    initializeLedgerFilters();
-    initializeLedgerPagination();
+}
+showPendingFlashAfterReload();
+initializeLedgerFilters();
+initializeLedgerPagination();
+if (LEDGER_VIEW === 'active') {
     initializePendingPayoutRows();
+}
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Submit new entry
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+if (LEDGER_VIEW === 'active') {
 document.getElementById('submit-entry-btn').addEventListener('click', async () => {
     const entry_type  = document.querySelector('input[name="entry_type"]:checked').value;
     const amount      = parseFloat(document.getElementById('entry-amount').value);
@@ -857,6 +902,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i> Add Entry';
     }
 });
+}
 
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -864,13 +910,13 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 async function deleteEntry(entryId, btn) {
     const confirmed = await (window.A4Confirm?.show?.({
-        title: 'Delete this entry?',
-        text: 'This cannot be undone.',
+        title: 'Move this entry to deleted?',
+        text: 'It will leave the active ledger and stay in Deleted for 30 days.',
         icon: 'warning',
-        confirmButtonText: 'Delete',
+        confirmButtonText: 'Move to Deleted',
         cancelButtonText: 'Keep entry',
         dangerMode: true,
-    }) ?? Promise.resolve(window.confirm('Delete this entry? This cannot be undone.')));
+    }) ?? Promise.resolve(window.confirm('Move this entry to Deleted? It will stay there for 30 days.')));
     if (!confirmed) return;
 
     try {
@@ -878,12 +924,37 @@ async function deleteEntry(entryId, btn) {
         const data = await res.json();
 
         if (data.status === 'success') {
-            savePendingFlashForReload('Entry deleted.', 'success');
+            savePendingFlashForReload('Entry moved to Deleted.', 'success');
             location.reload();
         } else {
             showFlash(data.message || 'Failed to delete entry.', 'danger');
         }
 
+    } catch (err) {
+        showFlash('Network error. Please try again.', 'danger');
+    }
+}
+
+async function restoreEntry(entryId) {
+    const confirmed = await (window.A4Confirm?.show?.({
+        title: 'Restore this entry?',
+        text: 'It will appear in the active ledger again and count toward cash on hand.',
+        icon: 'question',
+        confirmButtonText: 'Restore',
+        cancelButtonText: 'Keep in Deleted',
+    }) ?? Promise.resolve(window.confirm('Restore this entry back to the active ledger?')));
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch(`/api/cash/restore/${entryId}`, { method: 'POST' });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            savePendingFlashForReload('Entry restored.', 'success');
+            location.reload();
+        } else {
+            showFlash(data.message || 'Failed to restore entry.', 'danger');
+        }
     } catch (err) {
         showFlash('Network error. Please try again.', 'danger');
     }
@@ -1077,6 +1148,8 @@ function buildLedgerQueryParams(page, includePage) {
     const params = new URLSearchParams();
     const safePage = Number.isFinite(page) && page > 0 ? page : 1;
 
+    params.set('view', LEDGER_VIEW);
+
     if (includePage || safePage > 1) {
         params.set('page', String(safePage));
     }
@@ -1114,13 +1187,14 @@ function renderLedgerEntryCount(startEntry, endEntry, totalEntries) {
 function renderLedgerRows(entries) {
     const tbody = document.getElementById('ledger-body');
     if (!tbody) return;
+    const isDeletedView = LEDGER_VIEW === 'deleted';
+    const columnCount = LEDGER_CAN_DELETE ? 7 : 6;
 
     if (!entries.length) {
-        const emptyCols = LEDGER_CAN_DELETE ? 7 : 6;
         tbody.innerHTML = `
             <tr id="empty-row">
-                <td colspan="${emptyCols}" class="text-center text-muted py-4">
-                    No entries yet. Record the first cash movement above.
+                <td colspan="${columnCount}" class="text-center text-muted py-4">
+                    ${isDeletedView ? 'No deleted cash entries.' : 'No entries yet. Record the first cash movement above.'}
                 </td>
             </tr>`;
         return;
@@ -1136,21 +1210,34 @@ function renderLedgerRows(entries) {
         const category = escapeHtml(entry.category || '—');
         const recordedBy = escapeHtml(entry.recorded_by || '—');
         const createdAt = escapeHtml(entry.created_at || '—');
+        const deletedBy = escapeHtml(entry.deleted_by || '—');
+        const deletedAt = escapeHtml(entry.deleted_at || '—');
         const entryTypeBadge = isCashIn
             ? '<span class="type-badge badge-in"><i class="bi bi-arrow-down-circle me-1"></i>Cash In</span>'
             : '<span class="type-badge badge-out"><i class="bi bi-arrow-up-circle me-1"></i>Cash Out</span>';
         const amountClass = isCashIn ? 'entry-amount-in' : 'entry-amount-out';
         const canDeleteThisRow = LEDGER_CAN_DELETE && entry.source === 'manual' && Number.isFinite(Number(entry.id));
-        const deleteCell = LEDGER_CAN_DELETE
+        const actionCell = LEDGER_CAN_DELETE
             ? (canDeleteThisRow
-                ? `<td>
+                ? (isDeletedView
+                    ? `<td>
+                        <button class="btn btn-sm btn-outline-warning"
+                                onclick="restoreEntry(${Number(entry.id)})"
+                                title="Restore entry">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </td>`
+                    : `<td>
                         <button class="btn btn-sm btn-outline-danger delete-btn"
                                 onclick="deleteEntry(${Number(entry.id)}, this)">
                             <i class="bi bi-trash3"></i>
                         </button>
-                    </td>`
+                    </td>`)
                 : '<td></td>')
             : '';
+        const dateCells = isDeletedView
+            ? `<td class="small">${deletedBy}</td><td class="small date-cell">${deletedAt}</td>`
+            : `<td class="small date-cell">${createdAt}</td>`;
 
         return `
             <tr>
@@ -1159,8 +1246,8 @@ function renderLedgerRows(entries) {
                 <td class="small">${description}</td>
                 <td class="text-end fw-semibold ${amountClass}">&#8369;${amountValue}</td>
                 <td class="small">${recordedBy}</td>
-                <td class="small date-cell">${createdAt}</td>
-                ${deleteCell}
+                ${dateCells}
+                ${actionCell}
             </tr>`;
     }).join('');
 }

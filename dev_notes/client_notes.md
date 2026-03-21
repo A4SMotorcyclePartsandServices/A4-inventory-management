@@ -123,7 +123,8 @@ Future upgrade: move to Redis or DB
 - [X] ~~*change vendor on items database saving. instead of overwriting, make it add the vendor. then in order page, when a certain vendor is selected, pull out items the shop usually orders then recommend 5 of them. chips form. for easy selection*~~ [2026-03-20]
 
 ## Cash Ledger page
-- Change hard delete to soft delete. make it recycle bin style, make the deleted data able to come back, we have to record who deleted data, auto clear recycle bin every month
+- [X] ~~*Change hard delete to soft delete. make it recycle bin style, make the deleted data able to come back, we have to record who deleted data, auto clear recycle bin every month*~~ [2026-03-21]
+- for meeting tomorrow, ask client if they want staff to access deleted history. we can even make it similar to PO wherein restoring a deleted entry needs admin approval
 
 ## Refund Feature
 - [X] ~~*Payment change to payment method*~~ [2026-03-19]
