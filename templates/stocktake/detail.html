@@ -1,0 +1,895 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    :root {
+        --stocktake-side-panel-width: 340px;
+        --stocktake-shell-gap: 1.25rem;
+    }
+
+    .stocktake-page {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .stocktake-draft-controls {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+    }
+
+    .stocktake-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+    }
+
+    .stocktake-shell {
+        display: grid;
+        grid-template-columns: var(--stocktake-side-panel-width) 1fr;
+        gap: var(--stocktake-shell-gap);
+        align-items: start;
+    }
+
+    .stocktake-main-column {
+        display: grid;
+        gap: 1rem;
+        align-content: start;
+    }
+
+    .stocktake-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
+    .stocktake-panel.pad {
+        padding: 1.2rem;
+    }
+
+    .stocktake-meta {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .stocktake-meta-row {
+        display: grid;
+        gap: 0.25rem;
+    }
+
+    .stocktake-meta-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 700;
+    }
+
+    .stocktake-meta-value {
+        font-size: 0.96rem;
+        color: var(--text-primary);
+        word-break: break-word;
+    }
+
+    .stocktake-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        padding: 0.38rem 0.8rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .stocktake-status.draft { background: rgba(255, 193, 7, 0.16); color: #facc15; }
+    .stocktake-status.confirmed { background: rgba(25, 135, 84, 0.16); color: #4ade80; }
+    .stocktake-status.cancelled { background: rgba(220, 53, 69, 0.16); color: #f87171; }
+
+    .stocktake-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.9rem;
+    }
+
+    .summary-card {
+        padding: 1rem;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.03);
+    }
+
+    .summary-card .kicker {
+        display: block;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 0.45rem;
+    }
+
+    .summary-card .value {
+        font-size: 1.35rem;
+        font-weight: 800;
+    }
+
+    .stocktake-note {
+        background: rgba(250, 204, 21, 0.12);
+        border: 1px solid rgba(250, 204, 21, 0.34);
+        border-radius: 14px;
+        padding: 0.95rem 1rem;
+        color: #fde68a;
+        font-size: 0.92rem;
+    }
+
+    .search-box {
+        position: relative;
+        width: 100%;
+    }
+
+    .stocktake-add-bar {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+        padding: 0.8rem 1rem;
+        display: grid;
+        gap: 0.55rem;
+        width: 100%;
+        margin-left: 0;
+    }
+
+    .stocktake-search-help {
+        color: #facc15 !important;
+        margin: 0;
+    }
+
+    .stocktake-add-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .stocktake-add-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .stocktake-add-title i {
+        margin-right: 0.45rem;
+    }
+
+    .stocktake-add-input-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .search-results {
+        position: absolute;
+        inset: calc(100% + 6px) 0 auto 0;
+        z-index: 20;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        max-height: 280px;
+        overflow-y: auto;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.35);
+        display: none;
+    }
+
+    .search-result {
+        width: 100%;
+        text-align: left;
+        padding: 0.8rem 0.95rem;
+        background: transparent;
+        border: 0;
+        color: var(--text-primary);
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .search-result:last-child {
+        border-bottom: 0;
+    }
+
+    .search-result:hover {
+        background: rgba(193,18,31,0.12);
+    }
+
+    .result-meta {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+    }
+
+    .variance-cell {
+        font-weight: 700;
+    }
+
+    .variance-cell.variance-pos { color: #4ade80 !important; }
+    .variance-cell.variance-neg { color: #f87171 !important; }
+    .variance-cell.variance-zero { color: var(--text-muted) !important; }
+
+    .stocktake-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+
+    .stocktake-export-btn {
+        padding: 0.35rem 0.55rem;
+        line-height: 1;
+    }
+
+    .stocktake-export-btn i {
+        font-size: 1.05rem;
+    }
+
+    .stocktake-panel-tools {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        flex-wrap: wrap;
+    }
+
+    .draft-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border-radius: 999px;
+        padding: 0.45rem 0.85rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+    }
+
+    .draft-state.clean {
+        background: rgba(25, 135, 84, 0.14);
+        color: #4ade80;
+    }
+
+    .draft-state.dirty {
+        background: rgba(245, 158, 11, 0.14);
+        color: #facc15;
+    }
+
+    .stocktake-cancel-btn {
+        background: #dc3545;
+        border-color: #dc3545;
+        color: #ffffff;
+    }
+
+    .stocktake-cancel-btn:hover,
+    .stocktake-cancel-btn:focus {
+        background: #bb2d3b;
+        border-color: #bb2d3b;
+        color: #ffffff;
+    }
+
+    #saveDraftBtn:disabled {
+        background: #4b5563;
+        border-color: #4b5563;
+        color: #d1d5db;
+        cursor: not-allowed;
+        box-shadow: none;
+        opacity: 1;
+    }
+
+    .stocktake-no-adjustment {
+        color: #60a5fa;
+        font-weight: 600;
+    }
+
+    @media (max-width: 992px) {
+        .stocktake-draft-controls {
+            justify-content: flex-start;
+        }
+
+        .stocktake-panel-tools {
+            justify-content: flex-start;
+        }
+
+        .stocktake-add-header,
+        .stocktake-add-input-row {
+            grid-template-columns: 1fr;
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .stocktake-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .stocktake-add-bar {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stocktake-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stocktake-page">
+    <div>
+        <a href="{{ url_for('stocktake.stocktake_list') }}" class="btn btn-outline-light btn-sm mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Back to Sessions
+        </a>
+        <div class="stocktake-title-row mb-1">
+            <h2 class="mb-0">Stocktake {{ stocktake.session_number }}</h2>
+            {% if current_user and current_user.role == 'admin' %}
+            <a href="{{ url_for('stocktake.stocktake_csv', session_id=stocktake.id) }}" class="btn btn-sm btn-outline-success stocktake-export-btn" title="Download CSV">
+                <i class="bi bi-filetype-csv"></i>
+            </a>
+            {% endif %}
+            <a href="{{ url_for('stocktake.stocktake_report', session_id=stocktake.id) }}" target="_blank" class="btn btn-sm btn-outline-danger stocktake-export-btn" title="Open printable PDF view">
+                <i class="bi bi-filetype-pdf"></i>
+            </a>
+        </div>
+        <p class="text-muted mb-0">Review counted stock, save draft changes, and confirm variance adjustments when ready.</p>
+    </div>
+    <div class="stocktake-note">
+        <i class="bi bi-info-circle me-2"></i>{{ partial_stocktake_label }}
+    </div>
+
+    <div class="stocktake-summary-grid" id="summaryCards">
+        <div class="summary-card">
+            <span class="kicker">Items Counted</span>
+            <div class="value" id="summaryItemCount">{{ stocktake.summary.item_count }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="kicker">Variance Items</span>
+            <div class="value text-warning" id="summaryVarianceItemCount">{{ stocktake.summary.variance_item_count }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="kicker">Shortage Items</span>
+            <div class="value text-danger" id="summaryShortageItemCount">{{ stocktake.summary.shortage_item_count }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="kicker">Overage Items</span>
+            <div class="value text-success" id="summaryOverageItemCount">{{ stocktake.summary.overage_item_count }}</div>
+        </div>
+    </div>
+    <div class="stocktake-shell">
+        <div class="stocktake-panel pad">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Session Info</h5>
+                <span class="stocktake-status {{ stocktake.status|lower }}" id="sessionStatus">{{ stocktake.status }}</span>
+            </div>
+
+            <div class="stocktake-meta">
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Session Number</div>
+                    <div class="stocktake-meta-value" id="sessionNumber">{{ stocktake.session_number }}</div>
+                </div>
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Count Scope</div>
+                    <div class="stocktake-meta-value" id="sessionScope">{{ stocktake.count_scope }}</div>
+                </div>
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Created</div>
+                    <div class="stocktake-meta-value" id="sessionCreated">
+                        {{ stocktake.created_at_display }} by {{ stocktake.created_by_username or "System" }}
+                    </div>
+                </div>
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Confirmed</div>
+                    <div class="stocktake-meta-value" id="sessionConfirmed">
+                        {{ stocktake.confirmed_at_display }}{% if stocktake.confirmed_by_username and stocktake.confirmed_at_display != '-' %} by {{ stocktake.confirmed_by_username }}{% endif %}
+                    </div>
+                </div>
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Cancelled</div>
+                    <div class="stocktake-meta-value" id="sessionCancelled">
+                        {{ stocktake.cancelled_at_display }}{% if stocktake.cancelled_by_username and stocktake.cancelled_at_display != '-' %} by {{ stocktake.cancelled_by_username }}{% endif %}
+                    </div>
+                </div>
+                <div class="stocktake-meta-row">
+                    <div class="stocktake-meta-label">Notes</div>
+                    <div class="stocktake-meta-value" id="sessionNotes">{{ stocktake.notes or "No notes" }}</div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="stocktake-main-column">
+            {% if stocktake.status == 'DRAFT' %}
+            <div class="stocktake-add-bar">
+                <div class="stocktake-add-header">
+                    <h5 class="stocktake-add-title text-warning">
+                        <i class="bi bi-search"></i>Search and add an item to this stocktake.
+                    </h5>
+                </div>
+                <div class="stocktake-add-input-row">
+                    <div class="search-box">
+                        <input type="text" id="itemSearchInput" class="form-control" placeholder="Search item name or description">
+                        <div class="search-results" id="itemSearchResults"></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="stocktake-panel pad">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Counted Items</h5>
+                <div class="stocktake-panel-tools">
+                    <span class="text-warning" id="tableCountLabel">{{ stocktake.summary.item_count }} line(s)</span>
+                    {% if stocktake.status == 'DRAFT' %}
+                    <div class="stocktake-draft-controls">
+                        <span class="draft-state clean" id="draftStateBadge">
+                            <i class="bi bi-check-circle"></i><span id="draftStateText">All changes saved</span>
+                        </span>
+                        <button type="button" class="btn btn-primary" id="saveDraftBtn" disabled>
+                            <i class="bi bi-save me-1"></i>Save Draft
+                        </button>
+                        <button type="button" class="btn btn-success" id="confirmSessionBtn">
+                            <i class="bi bi-check2-circle me-1"></i>Confirm Session
+                        </button>
+                        <button type="button" class="btn stocktake-cancel-btn" id="cancelSessionBtn">
+                            <i class="bi bi-x-circle me-1"></i>Cancel Session
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-dark align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>System Stock</th>
+                            <th>Counted Stock</th>
+                            <th>Variance</th>
+                            <th>Notes</th>
+                            <th>Adjustment</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stocktakeItemsBody"></tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const stocktakeSessionId = {{ stocktake.id|tojson }};
+let stocktakeSession = {{ stocktake|tojson }};
+let searchDebounce = null;
+let hasUnsavedChanges = false;
+const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
+
+function varianceClass(value) {
+    const num = Number(value || 0);
+    if (num > 0) return 'variance-pos';
+    if (num < 0) return 'variance-neg';
+    return 'variance-zero';
+}
+
+function varianceLabel(value) {
+    const num = Number(value || 0);
+    if (num > 0) return `+${num}`;
+    return `${num}`;
+}
+
+function sessionIsEditable() {
+    return String(stocktakeSession.status || '').toUpperCase() === 'DRAFT';
+}
+
+function setDirtyState(isDirty) {
+    hasUnsavedChanges = Boolean(isDirty);
+    const badge = document.getElementById('draftStateBadge');
+    const text = document.getElementById('draftStateText');
+    const saveBtn = document.getElementById('saveDraftBtn');
+    if (!badge || !text) return;
+
+    badge.className = `draft-state ${hasUnsavedChanges ? 'dirty' : 'clean'}`;
+    badge.innerHTML = hasUnsavedChanges
+        ? '<i class="bi bi-exclamation-circle"></i><span id="draftStateText">Unsaved changes</span>'
+        : '<i class="bi bi-check-circle"></i><span id="draftStateText">All changes saved</span>';
+
+    if (saveBtn) {
+        saveBtn.disabled = !hasUnsavedChanges;
+    }
+}
+
+function renderSessionMeta() {
+    document.getElementById('sessionStatus').textContent = stocktakeSession.status;
+    document.getElementById('sessionStatus').className = `stocktake-status ${String(stocktakeSession.status || '').toLowerCase()}`;
+    document.getElementById('sessionNumber').textContent = stocktakeSession.session_number || '-';
+    document.getElementById('sessionScope').textContent = stocktakeSession.count_scope || 'PARTIAL';
+    document.getElementById('sessionCreated').textContent = `${stocktakeSession.created_at_display || '-'} by ${stocktakeSession.created_by_username || 'System'}`;
+    document.getElementById('sessionConfirmed').textContent = stocktakeSession.confirmed_at_display && stocktakeSession.confirmed_at_display !== '-'
+        ? `${stocktakeSession.confirmed_at_display} by ${stocktakeSession.confirmed_by_username || 'System'}`
+        : '-';
+    document.getElementById('sessionCancelled').textContent = stocktakeSession.cancelled_at_display && stocktakeSession.cancelled_at_display !== '-'
+        ? `${stocktakeSession.cancelled_at_display} by ${stocktakeSession.cancelled_by_username || 'System'}`
+        : '-';
+    document.getElementById('sessionNotes').textContent = stocktakeSession.notes || 'No notes';
+
+    const summary = stocktakeSession.summary || {};
+    document.getElementById('summaryItemCount').textContent = summary.item_count || 0;
+    document.getElementById('summaryVarianceItemCount').textContent = summary.variance_item_count || 0;
+    document.getElementById('summaryShortageItemCount').textContent = summary.shortage_item_count || 0;
+    document.getElementById('summaryOverageItemCount').textContent = summary.overage_item_count || 0;
+    document.getElementById('tableCountLabel').textContent = `${summary.item_count || 0} line(s)`;
+
+    const confirmBtn = document.getElementById('confirmSessionBtn');
+    const cancelBtn = document.getElementById('cancelSessionBtn');
+    if (confirmBtn) confirmBtn.style.display = sessionIsEditable() ? '' : 'none';
+    if (cancelBtn) cancelBtn.style.display = sessionIsEditable() ? '' : 'none';
+
+    const searchInput = document.getElementById('itemSearchInput');
+    if (searchInput) {
+        searchInput.disabled = !sessionIsEditable();
+    }
+
+    if (!sessionIsEditable()) {
+        setDirtyState(false);
+    }
+}
+
+function renderItemsTable() {
+    const tbody = document.getElementById('stocktakeItemsBody');
+    const items = Array.isArray(stocktakeSession.items) ? stocktakeSession.items : [];
+    const editable = sessionIsEditable();
+
+    if (!items.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    No items have been added to this stocktake session yet.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    tbody.innerHTML = items.map((item) => `
+        <tr data-item-id="${item.item_id}">
+            <td>
+                <div class="fw-bold">${escapeHtml(item.name || 'Unknown Item')}</div>
+                <div class="small text-muted">${escapeHtml(item.category || '')}</div>
+            </td>
+            <td class="fw-bold">${Number(item.system_stock || 0)}</td>
+            <td>
+                ${editable
+                    ? `<input type="number" class="form-control form-control-sm counted-stock-input" min="0" step="1" value="${item.counted_stock == null ? '' : Number(item.counted_stock)}">`
+                    : `<span class="fw-bold">${item.counted_stock == null ? '-' : Number(item.counted_stock)}</span>`}
+            </td>
+            <td class="variance-cell ${varianceClass(item.variance)}">${varianceLabel(item.variance || 0)}</td>
+            <td>
+                ${editable
+                    ? `<input type="text" class="form-control form-control-sm item-note-input" value="${escapeHtml(item.notes || '')}" placeholder="Optional note">`
+                    : `<span class="small text-muted">${escapeHtml(item.notes || '-')}</span>`}
+            </td>
+            <td>
+                <div class="small ${item.adjustment_type === 'IN' ? 'text-success' : item.adjustment_type === 'OUT' ? 'text-danger' : 'stocktake-no-adjustment'}">
+                    ${item.adjustment_quantity > 0 ? `${escapeHtml(item.adjustment_type)} ${Number(item.adjustment_quantity)}` : 'No adjustment'}
+                </div>
+            </td>
+            <td>
+                ${editable ? `
+                    <div class="d-flex flex-wrap gap-2 justify-content-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">Remove</button>
+                    </div>
+                ` : `
+                    <span class="small ${item.is_applied ? 'text-success' : 'text-muted'}">
+                        ${item.is_applied ? 'Applied' : 'Locked'}
+                    </span>
+                `}
+            </td>
+        </tr>
+    `).join('');
+}
+
+function renderSearchResults(items) {
+    const container = document.getElementById('itemSearchResults');
+    if (!container) return;
+    if (!items.length) {
+        container.innerHTML = `<div class="p-3 text-muted small">No matching items found.</div>`;
+        container.style.display = 'block';
+        return;
+    }
+
+    container.innerHTML = items.map((item) => `
+        <button type="button" class="search-result" data-item-id="${item.id}">
+            <div class="fw-bold">${escapeHtml(item.name || '')}</div>
+            <div class="result-meta">Stock: ${Number(item.current_stock || 0)}${item.category ? ` · ${escapeHtml(item.category)}` : ''}</div>
+        </button>
+    `).join('');
+    container.style.display = 'block';
+}
+
+async function fetchSearchResults(query) {
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to search items.');
+    }
+    return Array.isArray(data.items) ? data.items : [];
+}
+
+async function addItemToSession(itemId) {
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to add item.');
+    }
+    stocktakeSession = data.session;
+    renderSessionMeta();
+    renderItemsTable();
+    A4Flash.show('Item added to stocktake session.', 'success', { replace: true, autoCloseMs: 2200 });
+}
+
+async function saveItemRow(itemId, countedStock, notes) {
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items/${itemId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ counted_stock: countedStock === '' ? null : Number(countedStock), notes }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to save stocktake item.');
+    }
+    stocktakeSession = data.session;
+    renderSessionMeta();
+    renderItemsTable();
+    A4Flash.show('Stocktake item updated.', 'success', { replace: true, autoCloseMs: 2200 });
+}
+
+async function removeItemRow(itemId) {
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items/${itemId}/delete`, {
+        method: 'POST',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to remove stocktake item.');
+    }
+    stocktakeSession = data.session;
+    renderSessionMeta();
+    renderItemsTable();
+    A4Flash.show('Stocktake item removed.', 'success', { replace: true, autoCloseMs: 2200 });
+}
+
+function collectDraftItems() {
+    return Array.from(document.querySelectorAll('#stocktakeItemsBody tr[data-item-id]')).map((row) => {
+        const countedStock = row.querySelector('.counted-stock-input')?.value ?? '';
+        const notes = row.querySelector('.item-note-input')?.value ?? '';
+        return {
+            item_id: Number(row.dataset.itemId),
+            counted_stock: countedStock === '' ? null : Number(countedStock),
+            notes,
+        };
+    });
+}
+
+async function saveDraft() {
+    const items = collectDraftItems();
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/save-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to save stocktake draft.');
+    }
+    stocktakeSession = data.session;
+    setDirtyState(false);
+    window.location.href = stocktakeListUrl;
+}
+
+function updateVariancePreview(row) {
+    if (!row) return;
+    const countedInput = row.querySelector('.counted-stock-input');
+    const varianceCell = row.querySelector('.variance-cell');
+    if (!countedInput || !varianceCell) return;
+
+    const itemId = Number(row.dataset.itemId);
+    const item = (stocktakeSession.items || []).find((entry) => Number(entry.item_id) === itemId);
+    if (!item) return;
+
+    const rawValue = countedInput.value;
+    let variance = 0;
+    if (rawValue !== '') {
+        const countedStock = Number(rawValue);
+        variance = countedStock - Number(item.system_stock || 0);
+    }
+
+    varianceCell.textContent = varianceLabel(variance);
+    varianceCell.className = `variance-cell ${varianceClass(variance)}`;
+}
+
+async function confirmSession() {
+    const confirmed = await A4Confirm.show({
+        title: 'Confirm stocktake session?',
+        text: 'This will apply variance adjustments for the items in this session and lock it from further edits.',
+        confirmButtonText: 'Confirm Session',
+        cancelButtonText: 'Keep Draft',
+        dangerMode: false,
+    });
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/confirm`, {
+        method: 'POST',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to confirm stocktake session.');
+    }
+    stocktakeSession = data.session;
+    renderSessionMeta();
+    renderItemsTable();
+    A4Flash.show('Stocktake session confirmed and adjustments applied.', 'success', { replace: true, autoCloseMs: 2600 });
+}
+
+async function cancelSession() {
+    const confirmed = await A4Confirm.show({
+        title: 'Cancel this stocktake session?',
+        text: 'Cancelled sessions are kept for audit history and can no longer be edited or confirmed.',
+        confirmButtonText: 'Cancel Session',
+        cancelButtonText: 'Keep Draft',
+        dangerMode: true,
+    });
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/stocktake/${stocktakeSessionId}/cancel`, {
+        method: 'POST',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to cancel stocktake session.');
+    }
+    stocktakeSession = data.session;
+    renderSessionMeta();
+    renderItemsTable();
+    A4Flash.show('Stocktake session cancelled.', 'warning', { replace: true });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    renderSessionMeta();
+    renderItemsTable();
+
+    const searchInput = document.getElementById('itemSearchInput');
+    const resultsBox = document.getElementById('itemSearchResults');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function () {
+            const query = searchInput.value.trim();
+            clearTimeout(searchDebounce);
+
+            if (query.length < 2) {
+                resultsBox.style.display = 'none';
+                resultsBox.innerHTML = '';
+                return;
+            }
+
+            searchDebounce = setTimeout(async () => {
+                try {
+                    const items = await fetchSearchResults(query);
+                    renderSearchResults(items);
+                } catch (error) {
+                    A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
+                }
+            }, 220);
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('.search-box')) {
+                resultsBox.style.display = 'none';
+            }
+        });
+    }
+
+    if (resultsBox) {
+        resultsBox.addEventListener('click', async function (event) {
+            const button = event.target.closest('.search-result');
+            if (!button) return;
+
+            try {
+                await addItemToSession(Number(button.dataset.itemId));
+                resultsBox.style.display = 'none';
+                resultsBox.innerHTML = '';
+                if (searchInput) searchInput.value = '';
+            } catch (error) {
+                A4Flash.show(error.message || 'Failed to add item.', 'danger', { replace: true });
+            }
+        });
+    }
+
+    document.getElementById('stocktakeItemsBody').addEventListener('click', async function (event) {
+        const row = event.target.closest('tr[data-item-id]');
+        if (!row) return;
+        const itemId = Number(row.dataset.itemId);
+
+        if (event.target.closest('.remove-item-btn')) {
+            const confirmed = await A4Confirm.show({
+                title: 'Remove this item?',
+                text: 'This will remove the item from the current stocktake draft.',
+                confirmButtonText: 'Remove Item',
+                cancelButtonText: 'Keep Item',
+                dangerMode: true,
+            });
+            if (!confirmed) return;
+
+            try {
+                await removeItemRow(itemId);
+            } catch (error) {
+                A4Flash.show(error.message || 'Failed to remove stocktake item.', 'danger', { replace: true });
+            }
+        }
+    });
+
+    document.getElementById('stocktakeItemsBody').addEventListener('input', function (event) {
+        const row = event.target.closest('tr[data-item-id]');
+        if (!row) return;
+        if (event.target.classList.contains('counted-stock-input')) {
+            updateVariancePreview(row);
+        }
+        if (
+            event.target.classList.contains('counted-stock-input')
+            || event.target.classList.contains('item-note-input')
+        ) {
+            setDirtyState(true);
+        }
+    });
+
+    document.getElementById('saveDraftBtn')?.addEventListener('click', async function () {
+        try {
+            await saveDraft();
+        } catch (error) {
+            A4Flash.show(error.message || 'Failed to save stocktake draft.', 'danger', { replace: true });
+        }
+    });
+
+    document.getElementById('confirmSessionBtn')?.addEventListener('click', async function () {
+        try {
+            await confirmSession();
+        } catch (error) {
+            A4Flash.show(error.message || 'Failed to confirm stocktake session.', 'danger', { replace: true });
+        }
+    });
+
+    document.getElementById('cancelSessionBtn')?.addEventListener('click', async function () {
+        try {
+            await cancelSession();
+        } catch (error) {
+            A4Flash.show(error.message || 'Failed to cancel stocktake session.', 'danger', { replace: true });
+        }
+    });
+
+    window.addEventListener('beforeunload', function (event) {
+        if (!sessionIsEditable() || !hasUnsavedChanges) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    setDirtyState(false);
+});
+</script>
+{% endblock %}

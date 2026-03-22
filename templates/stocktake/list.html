@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Variance{% endblock %}
+
+{% block styles %}
+<style>
+    .stocktake-card {
+        padding: 1.5rem;
+    }
+
+    .stocktake-grid {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 1.25rem;
+    }
+
+    .stocktake-note {
+        background: rgba(250, 204, 21, 0.12);
+        border: 1px solid rgba(250, 204, 21, 0.34);
+        border-radius: 14px;
+        padding: 0.95rem 1rem;
+        color: #fde68a;
+        font-size: 0.92rem;
+    }
+
+    .stocktake-form-card,
+    .stocktake-table-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+
+    .stocktake-form-card {
+        padding: 1.25rem;
+        height: fit-content;
+    }
+
+    .stocktake-table-card {
+        padding: 1rem;
+    }
+
+    .stocktake-table-card .table {
+        table-layout: auto;
+        width: 100%;
+    }
+
+    .stocktake-table-card .table th,
+    .stocktake-table-card .table td {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        vertical-align: top !important;
+    }
+
+    .stocktake-table-card .table td {
+        padding-top: 0.9rem;
+        padding-bottom: 0.9rem;
+    }
+
+    .stocktake-table-card .table thead th:nth-child(1) { width: 20%; }
+    .stocktake-table-card .table thead th:nth-child(2) { width: 12%; }
+    .stocktake-table-card .table thead th:nth-child(3) { width: 12%; }
+    .stocktake-table-card .table thead th:nth-child(4) { width: 9%; }
+    .stocktake-table-card .table thead th:nth-child(5) { width: 14%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 21%; }
+    .stocktake-table-card .table thead th:nth-child(7) { width: 12%; }
+
+    .stocktake-created {
+        min-width: 170px;
+        text-align: left !important;
+    }
+
+    .stocktake-created-user {
+        color: #7dd3fc !important;
+        font-weight: 600;
+    }
+
+    .stocktake-session-cell {
+        min-width: 150px;
+        text-align: left !important;
+    }
+
+    .stocktake-table-card .table td:nth-child(2),
+    .stocktake-table-card .table td:nth-child(3),
+    .stocktake-table-card .table td:nth-child(4),
+    .stocktake-table-card .table td:nth-child(5),
+    .stocktake-table-card .table td:nth-child(7) {
+        vertical-align: middle !important;
+    }
+
+    .stocktake-action-cell {
+        text-align: center !important;
+        min-width: 110px;
+    }
+
+    .stocktake-cell-stack,
+    .stocktake-cell-center {
+        min-height: 52px;
+        display: flex;
+    }
+
+    .stocktake-cell-stack {
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.18rem;
+    }
+
+    .stocktake-cell-center {
+        align-items: center;
+        justify-content: center;
+    }
+
+    .stocktake-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        padding: 0.35rem 0.75rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .stocktake-status.draft { background: rgba(255, 193, 7, 0.16); color: #facc15; }
+    .stocktake-status.confirmed { background: rgba(25, 135, 84, 0.16); color: #4ade80; }
+    .stocktake-status.cancelled { background: rgba(220, 53, 69, 0.16); color: #f87171; }
+
+    .stocktake-summary {
+        color: var(--text-muted);
+        font-size: 0.88rem;
+    }
+
+    .stocktake-form-card .form-text {
+        color: #facc15 !important;
+    }
+
+    @media (max-width: 992px) {
+        .stocktake-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stocktake-card">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h2 class="mb-1">Stock Variance</h2>
+            <p class="text-muted mb-0">Create stocktake sessions, count selected items, and confirm ledger-backed variance adjustments.</p>
+        </div>
+    </div>
+
+    <div class="stocktake-note mb-4">
+        <i class="bi bi-info-circle me-2"></i>{{ partial_stocktake_label }}
+    </div>
+
+    <div class="stocktake-grid">
+        <div class="stocktake-form-card">
+            <h5 class="mb-3">New Stocktake Session</h5>
+            <form method="POST" action="{{ url_for('stocktake.create_stocktake') }}">
+                <div class="mb-3">
+                    <label class="form-label">Count Scope</label>
+                    <select class="form-select" name="count_scope">
+                        <option value="PARTIAL" selected>Partial</option>
+                        <option value="FULL">Full</option>
+                        <option value="CATEGORY">Category</option>
+                        <option value="VENDOR">Vendor</option>
+                    </select>
+                    <div class="form-text text-muted">Use notes to specify the exact category or vendor when needed.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" name="notes" rows="4" placeholder="Optional notes for this counting session"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-plus-circle me-1"></i>Create Session
+                </button>
+            </form>
+        </div>
+
+        <div class="stocktake-table-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Sessions</h5>
+                <span class="stocktake-summary">{{ sessions|length }} session(s)</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-dark align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Session</th>
+                            <th>Status</th>
+                            <th>Scope</th>
+                            <th>Items</th>
+                            <th>Variance Items</th>
+                            <th>Created</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stocktake in sessions %}
+                        <tr>
+                            <td class="stocktake-session-cell">
+                                <div class="stocktake-cell-stack">
+                                    <div class="fw-bold">{{ stocktake.session_number }}</div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="stocktake-cell-center">
+                                    <span class="stocktake-status {{ stocktake.status|lower }}">{{ stocktake.status }}</span>
+                                </div>
+                            </td>
+                            <td><div class="stocktake-cell-center">{{ stocktake.count_scope }}</div></td>
+                            <td><div class="stocktake-cell-center fw-bold">{{ stocktake.item_count }}</div></td>
+                            <td>
+                                <div class="stocktake-cell-center fw-bold {% if stocktake.variance_item_count > 0 %}text-warning{% endif %}">
+                                    {{ stocktake.variance_item_count }}
+                                </div>
+                            </td>
+                            <td class="stocktake-created">
+                                <div class="stocktake-cell-stack">
+                                    <div>{{ stocktake.created_at_display }}</div>
+                                    <div class="small stocktake-created-user">{{ stocktake.created_by_username or "System" }}</div>
+                                </div>
+                            </td>
+                            <td class="stocktake-action-cell">
+                                <div class="stocktake-cell-center">
+                                    <a href="{{ url_for('stocktake.stocktake_detail', session_id=stocktake.id) }}" class="btn btn-sm btn-outline-light">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Open
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No stocktake sessions yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

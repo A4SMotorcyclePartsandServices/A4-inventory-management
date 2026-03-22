@@ -872,6 +872,113 @@ def init_db():
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_approval_resubmission_changes_request ON approval_resubmission_changes(approval_request_id, approval_action_id)")
 
+    # 27. STOCKTAKE SESSIONS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stocktake_sessions (
+        id                    SERIAL PRIMARY KEY,
+        session_number        TEXT NOT NULL UNIQUE,
+        status                TEXT NOT NULL DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'CONFIRMED', 'CANCELLED')),
+        count_scope           TEXT NOT NULL DEFAULT 'PARTIAL',
+        notes                 TEXT,
+        item_count            INTEGER NOT NULL DEFAULT 0,
+        variance_item_count   INTEGER NOT NULL DEFAULT 0,
+        created_by            INTEGER REFERENCES users(id),
+        created_by_username   TEXT,
+        created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
+        confirmed_by          INTEGER REFERENCES users(id),
+        confirmed_by_username TEXT,
+        confirmed_at          TIMESTAMP,
+        cancelled_by          INTEGER REFERENCES users(id),
+        cancelled_by_username TEXT,
+        cancelled_at          TIMESTAMP
+    )
+    """)
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS session_number TEXT")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'DRAFT'")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS count_scope TEXT NOT NULL DEFAULT 'PARTIAL'")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS notes TEXT")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS item_count INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS variance_item_count INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS created_by_username TEXT")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS confirmed_by INTEGER REFERENCES users(id)")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS confirmed_by_username TEXT")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS cancelled_by INTEGER REFERENCES users(id)")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS cancelled_by_username TEXT")
+    cur.execute("ALTER TABLE stocktake_sessions ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP")
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE stocktake_sessions DROP CONSTRAINT IF EXISTS stocktake_sessions_status_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE stocktake_sessions
+            ADD CONSTRAINT stocktake_sessions_status_check
+            CHECK (status IN ('DRAFT', 'CONFIRMED', 'CANCELLED'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_stocktake_sessions_number_unique ON stocktake_sessions(LOWER(session_number))")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_sessions_status_created ON stocktake_sessions(status, created_at DESC)")
+
+    # 28. STOCKTAKE ITEMS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stocktake_items (
+        id                     SERIAL PRIMARY KEY,
+        session_id             INTEGER NOT NULL REFERENCES stocktake_sessions(id) ON DELETE CASCADE,
+        item_id                INTEGER NOT NULL REFERENCES items(id),
+        system_stock           INTEGER NOT NULL DEFAULT 0,
+        counted_stock          INTEGER,
+        variance               INTEGER NOT NULL DEFAULT 0,
+        adjustment_type        TEXT CHECK(adjustment_type IN ('IN', 'OUT')),
+        adjustment_quantity    INTEGER NOT NULL DEFAULT 0,
+        is_applied             INTEGER NOT NULL DEFAULT 0,
+        applied_transaction_id INTEGER,
+        notes                  TEXT,
+        created_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (session_id, item_id)
+    )
+    """)
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS system_stock INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS counted_stock INTEGER")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS variance INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS adjustment_type TEXT")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS adjustment_quantity INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS is_applied INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS applied_transaction_id INTEGER")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS notes TEXT")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE stocktake_items DROP CONSTRAINT IF EXISTS stocktake_items_adjustment_type_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE stocktake_items
+            ADD CONSTRAINT stocktake_items_adjustment_type_check
+            CHECK (adjustment_type IN ('IN', 'OUT') OR adjustment_type IS NULL);
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_items_item ON stocktake_items(item_id)")
+
     # --- SEEDING ---
 
     # 1. Seed Services (Only if empty)

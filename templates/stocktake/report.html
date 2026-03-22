@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stocktake Report - {{ stocktake["session_number"] }}</title>
+    <style>
+        :root {
+            --accent: #c1121f;
+            --ink: #1a1a1a;
+            --muted: #666;
+            --line: #d7d7d7;
+            --soft: #f5f5f5;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--ink);
+            background: #fff;
+            padding: 24px 26px;
+            max-width: 980px;
+            margin-inline: auto;
+            font-size: 13px;
+        }
+
+        .print-bar {
+            text-align: center;
+            padding-bottom: 16px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #ececec;
+        }
+
+        .print-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 24px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .brand {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .brand img {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+        }
+
+        .brand-title {
+            font-size: 1.08rem;
+            font-weight: 900;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .brand-subtitle {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .status-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 5px 12px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .status-pill.draft { background: #fef3c7; color: #92400e; }
+        .status-pill.confirmed { background: #dcfce7; color: #166534; }
+        .status-pill.cancelled { background: #fee2e2; color: #991b1b; }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 22px;
+            margin-bottom: 16px;
+        }
+
+        .meta-card,
+        .summary-card {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--soft);
+            padding: 12px 14px;
+        }
+
+        .meta-label {
+            display: block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .meta-value {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .summary-card .value {
+            font-size: 1.15rem;
+            font-weight: 800;
+        }
+
+        .note-banner {
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 11px 13px;
+            margin-bottom: 18px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th, td {
+            border: 1px solid var(--line);
+            padding: 8px 7px;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #f3f4f6;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+
+        td:nth-child(2),
+        td:nth-child(3),
+        td:nth-child(4),
+        td:nth-child(6) {
+            text-align: center;
+        }
+
+        .variance-pos { color: #166534; font-weight: 800; }
+        .variance-neg { color: #991b1b; font-weight: 800; }
+        .variance-zero { color: #6b7280; font-weight: 800; }
+
+        .footer {
+            margin-top: 18px;
+            padding-top: 10px;
+            border-top: 1px solid #ececec;
+            display: flex;
+            justify-content: flex-end;
+            color: #777;
+            font-size: 0.72rem;
+        }
+
+        @media print {
+            .print-bar { display: none; }
+            body { padding: 8px 10px; max-width: none; }
+            .meta-grid,
+            .summary-grid {
+                break-inside: avoid;
+            }
+            tr, td, th {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            thead { display: table-header-group; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-bar">
+        <button class="print-btn" onclick="window.print()">Print Stocktake Report</button>
+    </div>
+
+    <div class="header">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Logo">
+            <div>
+                <div class="brand-title">A4S Motorcycle Shop & Services</div>
+                <div class="brand-subtitle">Stock Variance / Stocktake Report</div>
+            </div>
+        </div>
+        <div>
+            <span class="status-pill {{ stocktake['status']|lower }}">{{ stocktake["status"] }}</span>
+        </div>
+    </div>
+
+    <div class="meta-grid">
+        <div class="meta-card">
+            <span class="meta-label">Session Number</span>
+            <div class="meta-value">{{ stocktake["session_number"] }}</div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Count Scope</span>
+            <div class="meta-value">{{ stocktake["count_scope"] }}</div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Created</span>
+            <div class="meta-value">{{ stocktake["created_at_display"] }} by {{ stocktake["created_by_username"] or 'System' }}</div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Confirmed</span>
+            <div class="meta-value">
+                {% if stocktake["confirmed_at_display"] != '-' %}
+                    {{ stocktake["confirmed_at_display"] }} by {{ stocktake["confirmed_by_username"] or 'System' }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Cancelled</span>
+            <div class="meta-value">
+                {% if stocktake["cancelled_at_display"] != '-' %}
+                    {{ stocktake["cancelled_at_display"] }} by {{ stocktake["cancelled_by_username"] or 'System' }}
+                {% else %}
+                    -
+                {% endif %}
+            </div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Notes</span>
+            <div class="meta-value">{{ stocktake["notes"] or 'No notes' }}</div>
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <span class="meta-label">Items Counted</span>
+            <div class="value">{{ stocktake["summary"]["item_count"] }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="meta-label">Variance Items</span>
+            <div class="value">{{ stocktake["summary"]["variance_item_count"] }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="meta-label">Shortage Items</span>
+            <div class="value">{{ stocktake["summary"]["shortage_item_count"] }}</div>
+        </div>
+        <div class="summary-card">
+            <span class="meta-label">Overage Items</span>
+            <div class="value">{{ stocktake["summary"]["overage_item_count"] }}</div>
+        </div>
+    </div>
+
+    <div class="note-banner">{{ partial_stocktake_label }}</div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 28%;">Item</th>
+                <th style="width: 12%;">System Stock</th>
+                <th style="width: 12%;">Counted Stock</th>
+                <th style="width: 12%;">Variance</th>
+                <th style="width: 22%;">Notes</th>
+                <th style="width: 14%;">Adjustment</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in stocktake["items"] %}
+            <tr>
+                <td>
+                    <div style="font-weight: 700;">{{ item.name }}</div>
+                    <div style="font-size: 0.78rem; color: #666;">{{ item.category or '-' }}</div>
+                </td>
+                <td>{{ item.system_stock }}</td>
+                <td>{{ item.counted_stock if item.counted_stock is not none else '-' }}</td>
+                <td class="{% if item.variance > 0 %}variance-pos{% elif item.variance < 0 %}variance-neg{% else %}variance-zero{% endif %}">
+                    {% if item.variance > 0 %}+{% endif %}{{ item.variance }}
+                </td>
+                <td>{{ item.notes or '-' }}</td>
+                <td>
+                    {% if item.adjustment_quantity > 0 %}
+                        {{ item.adjustment_type }} {{ item.adjustment_quantity }}
+                    {% else %}
+                        No adjustment
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align:center; color:#666;">No counted items were recorded for this stocktake session.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">This is a system-generated stocktake report.</div>
+</body>
+</html>

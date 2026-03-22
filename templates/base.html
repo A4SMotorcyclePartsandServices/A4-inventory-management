@@ -1012,6 +1012,14 @@
                 </div>
 
                 <div class="nav-group">
+                    <div class="nav-group-title">Inventory Control</div>
+                    <a href="{{ url_for('stocktake.stocktake_list') }}"
+                    class="{% if 'stocktake' in request.path %}active-link{% endif %}">
+                        <i class="bi bi-clipboard2-check"></i> Stock Variance
+                    </a>
+                </div>
+
+                <div class="nav-group">
                     <div class="nav-group-title">Insights</div>
                     <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">
                         <i class="bi bi-fire"></i> Hot Items

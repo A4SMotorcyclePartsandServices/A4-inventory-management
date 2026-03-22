@@ -39,3 +39,11 @@
 
 - [ ] Protect against SQL injection
 - [ ] Prepare env vars before deployment
+
+## Variance Page
+- [ ] CSV import for count sheets
+- [ ] Batch count entry for faster physical inventory encoding
+- [ ] Warn user if live stock changed after draft session started
+- [ ] Correction session flow for fixing mistakes after confirmation
+- [ ] Printable stocktake reports / PDF polish
+- [ ] Filters by category and vendor for stocktake item selection

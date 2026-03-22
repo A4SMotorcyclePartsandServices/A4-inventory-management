@@ -841,3 +841,197 @@ Implementation notes
 - PO overview modal UI lives in `templates/transactions/order_overview.html`.
 - Admin full review UI lives in `templates/order/review.html`.
 - Printable PO PDF lives in `templates/reports/purchase_order_pdf.html`.
+
+## Stock Variance
+
+Implemented 2026-03-22
+
+Scope
+- Added a dedicated `Stock Variance` / stocktake feature for manual inventory counting and variance correction.
+- Feature is designed around the existing inventory ledger model instead of adding a directly editable stock field.
+- Current scope supports draft sessions, partial item counting, variance review, confirmation, CSV export, and printable report preview.
+
+Core business model
+- A stocktake session represents one counting event.
+- Staff manually add only the items they are physically counting into that session.
+- Each counted item stores:
+- system stock at the time it was added to the session
+- counted stock entered by staff
+- variance between system and physical count
+- notes and adjustment metadata
+- Draft saves do **not** change actual inventory.
+- Actual stock changes only when the session is confirmed.
+
+Why the feature was implemented this way
+- Existing inventory behavior is ledger-based, where stock is derived from transactions instead of edited directly.
+- To preserve auditability, variance correction is applied by posting one adjustment transaction per item on confirmation.
+- This avoids editing history and avoids creating many fake transactions just to force the stock number to match the physical count.
+
+Schema
+- Added `stocktake_sessions` table.
+- Added `stocktake_items` table.
+
+`stocktake_sessions` responsibilities
+- stores one row per counting session
+- stores:
+- `session_number`
+- `status`
+- `count_scope`
+- `notes`
+- `created_by`
+- `created_at`
+- `confirmed_by`
+- `confirmed_at`
+- `cancelled_by`
+- `cancelled_at`
+- `item_count`
+- `variance_item_count`
+
+`stocktake_items` responsibilities
+- stores one row per counted item within a session
+- stores:
+- `session_id`
+- `item_id`
+- `system_stock`
+- `counted_stock`
+- `variance`
+- `adjustment_type`
+- `adjustment_quantity`
+- `is_applied`
+- item-level notes / transaction link metadata
+
+Session numbering / statuses
+- Session numbers are auto-generated in the format:
+- `ST-MMDD-###`
+- Example:
+- `ST-0322-481`
+- Supported statuses:
+- `DRAFT`
+- `CONFIRMED`
+- `CANCELLED`
+
+Current workflow
+- User opens the Stock Variance page and creates a new session.
+- Session starts in `DRAFT`.
+- Default counting behavior is `PARTIAL`, but the UI also allows:
+- `FULL`
+- `CATEGORY`
+- `VENDOR`
+- Notes can be used to specify the exact category or vendor when needed.
+- The session starts empty.
+- Staff search for an item, add it to the session, then enter the physical count.
+- Variance is shown live while typing.
+- User can save the whole session as draft with one `Save Draft` button.
+- Saving draft only updates `stocktake_items`; it does not touch real inventory.
+- On confirmation, the system applies variance adjustments and locks the session.
+
+Partial session rule
+- The feature currently behaves as a partial stocktake workflow.
+- Only items added to the current session are affected by confirmation.
+- Confirming a session does **not** imply that the entire inventory was counted.
+- This is intentionally communicated in the UI with the warning:
+- `This is a partial stocktake. Only items added to this session will be adjusted when confirmed.`
+
+Stock computation used by stocktake
+- For this feature, stock is based on:
+- `SUM(IN) - SUM(OUT)`
+- `ORDER` transactions are intentionally ignored for stocktake counting / variance decisions.
+- `system_stock` is frozen into the draft row when the item is added, so the session preserves what the system believed at count time.
+
+Variance logic
+- Variance is computed as:
+- `counted_stock - system_stock`
+- Positive variance means physical stock is greater than system stock.
+- Negative variance means physical stock is lower than system stock.
+- UI behavior:
+- positive variance is shown in green
+- negative variance is shown in red
+- zero variance is muted
+
+Confirmation / inventory adjustment behavior
+- Confirmation applies one adjustment transaction per item with non-zero variance.
+- If variance is positive:
+- one `IN` transaction is posted
+- If variance is negative:
+- one `OUT` transaction is posted
+- If variance is zero:
+- no inventory adjustment is posted
+
+Audit trail behavior
+- Stocktake adjustments are written into `inventory_transactions`.
+- Current audit metadata:
+- `reference_type = 'STOCKTAKE'`
+- `reference_id = session_id`
+- `change_reason = 'STOCKTAKE_VARIANCE_GAIN'` for positive variance
+- `change_reason = 'STOCKTAKE_VARIANCE_LOSS'` for negative variance
+- This keeps the stock correction aligned with the rest of the transaction ledger and makes the cause of the adjustment visible in audit/history views.
+
+Locking / correction rules
+- Draft sessions are editable.
+- Confirmed sessions are locked and no longer editable.
+- Cancelled sessions are also locked and never apply adjustments.
+- If a user confirms a miscount by mistake, the current design does **not** rewrite that confirmed session.
+- Correction should be done by creating a new stocktake session and applying a new variance from that later count.
+- This preserves audit history instead of silently rewriting it.
+
+Safety guards
+- Confirmation includes a guard to prevent double application of the same session.
+- Session must still be `DRAFT` to confirm.
+- Confirmation logic runs through a controlled backend flow so one session cannot be applied twice accidentally.
+- Draft mode also includes a stock-drift safety check:
+- `system_stock` is frozen per draft line
+- confirmation compares against current live conditions to help detect drift before applying adjustments
+
+Routes / implementation structure
+- New route file:
+- `routes/stocktake_route.py`
+- New service file:
+- `services/stocktake_service.py`
+- New templates folder:
+- `templates/stocktake/`
+- Stock variance navigation entry was added to `base.html`.
+
+Main pages
+- `templates/stocktake/list.html`
+- session list
+- create new stocktake session
+- `templates/stocktake/detail.html`
+- add items by search
+- enter counted stock
+- live variance preview
+- save draft
+- confirm or cancel session
+- `templates/stocktake/report.html`
+- printable report / browser print-to-PDF style preview
+
+Exports / permissions
+- Printable report preview is available from the session detail page.
+- CSV export is also available from the session detail page.
+- CSV export is admin-only:
+- non-admin users do not see the CSV button
+- backend route is also protected for admin only
+
+Detail page UX behavior
+- Draft sessions use one `Save Draft` button for the whole session instead of per-row save buttons.
+- Variance updates in real time while staff type the counted quantity.
+- Unsaved changes are tracked visually through a badge and save-button state.
+- `Save Draft` is gray when disabled and uses the standard system blue when enabled.
+- `Confirm Session` is green.
+- `Cancel Session` is a solid red action.
+- Search / add flow is separated from the item table so staff can build the count list first, then encode the physical counts.
+
+Reporting / summaries
+- Session detail page shows summary cards for:
+- items counted
+- variance items
+- shortage items
+- overage items
+- Session list and reports use stored `item_count` and `variance_item_count` for faster display and export readiness.
+- Printable report includes session metadata, summary totals, and counted item lines.
+
+Current limitations / intended Phase 2 follow-ups
+- CSV import for count sheets is not implemented yet.
+- Batch count entry is not implemented yet.
+- Correction-session workflow after confirmation is not yet formalized in UI.
+- Additional filtering by category / vendor during item selection can still be improved.
+- Report / PDF polish can still be expanded further if client reporting needs grow.

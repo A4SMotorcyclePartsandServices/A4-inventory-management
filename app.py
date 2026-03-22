@@ -57,6 +57,7 @@ from routes.loyalty_route import loyalty_bp
 from routes.notification_route import notification_bp
 from routes.vendor_route import vendor_bp
 from routes.payables_route import payables_bp
+from routes.stocktake_route import stocktake_bp
 
 
 # ============================================================
@@ -133,6 +134,7 @@ app.register_blueprint(loyalty_bp)
 app.register_blueprint(notification_bp)
 app.register_blueprint(vendor_bp)
 app.register_blueprint(payables_bp)
+app.register_blueprint(stocktake_bp)
 
 
 # ============================================================
