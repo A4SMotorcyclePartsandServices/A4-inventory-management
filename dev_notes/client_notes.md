@@ -150,3 +150,19 @@ Future upgrade: move to Redis or DB
 
 ## Base page
 - [X] ~~*change the notifications system. client requested for it to not be timed and for it to be closed when user presses on it. when user presses it, redirect user to where the error led them. for example they were creating a sale, when they submit and an error pops up, higlight that error so they know where they went wrong*~~ [2026-03-20]
+
+
+## Cash Ledger
+- [ ] PDF Reporting per month
+
+## PO Page
+- [ ] Remove over receive feature
+
+## 
+- [ ] Sales print copy existing design. receipt style
+
+## forgot password
+- [ ] admin reset user password
+- [ ] electricity issues please resolve
+- [ ] Sales analytics page check rendering
+- [ ] A4S-lipa.com
