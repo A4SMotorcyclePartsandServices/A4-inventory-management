@@ -513,6 +513,16 @@
         flex-direction: column;
     }
 
+    #orderModal .modal-dialog {
+        max-width: min(860px, 88vw);
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    #orderModal .modal-dialog.is-partial-modal {
+        max-width: min(1120px, 93vw);
+    }
+
     .modal-meta-label {
         font-size: 0.7rem;
         text-transform: uppercase;
@@ -532,6 +542,7 @@
     .table-po-items {
         --bs-table-hover-bg: rgba(255,255,255,0.03);
         --bs-table-hover-color: var(--text-primary);
+        table-layout: auto;
     }
 
     .table-po-items thead th {
@@ -552,6 +563,38 @@
         padding: 10px 14px;
         vertical-align: middle;
         border-color: var(--border-soft);
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    .table-po-items.is-partial th:first-child,
+    .table-po-items.is-partial td:first-child {
+        min-width: 220px;
+    }
+
+    .table-po-items.is-partial th:nth-child(2),
+    .table-po-items.is-partial td:nth-child(2) {
+        min-width: 96px;
+    }
+
+    .table-po-items.is-partial th:nth-child(3),
+    .table-po-items.is-partial td:nth-child(3),
+    .table-po-items.is-partial th:nth-child(5),
+    .table-po-items.is-partial td:nth-child(5),
+    .table-po-items.is-partial th:nth-child(7),
+    .table-po-items.is-partial td:nth-child(7) {
+        min-width: 108px;
+    }
+
+    .table-po-items.is-partial th:nth-child(4),
+    .table-po-items.is-partial td:nth-child(4),
+    .table-po-items.is-partial th:nth-child(6),
+    .table-po-items.is-partial td:nth-child(6),
+    .table-po-items.is-partial th:nth-child(8),
+    .table-po-items.is-partial td:nth-child(8) {
+        min-width: 120px;
     }
 
     .po-total-summary {
@@ -664,6 +707,7 @@
         font-weight: 600;
         min-width: 42px;
         text-align: center;
+        white-space: nowrap;
     }
 
     .qty-badge.received {
@@ -2002,6 +2046,10 @@ async function openOrderDetails(poId) {
         const currentPoStatus = String(data.po.status || '').toUpperCase();
         const isPartialDelivery = currentPoStatus === 'PARTIAL';
         const isReviewOnlyState = ['COMPLETED', 'CANCELLED'].includes(currentPoStatus);
+        const orderModalDialog = document.querySelector('#orderModal .modal-dialog');
+        orderModalDialog?.classList.toggle('is-partial-modal', isPartialDelivery);
+        const modalItemsTable = document.querySelector('#orderModal .table-po-items');
+        modalItemsTable?.classList.toggle('is-partial', isPartialDelivery);
         renderAdminActions(data.permissions, currentPoStatus);
         document.getElementById('modalItemsHeaderRow').innerHTML = isPartialDelivery ? `
             <th>Item</th>
@@ -2089,7 +2137,8 @@ async function openOrderDetails(poId) {
                             ${escapeHtml(item.name)}
                             <div class="purchase-mode-note">${escapeHtml(`Ordered as ${formatPurchaseMode(purchaseMode)}.`)}</div>
                             <div class="partial-note">
-                                ${escapeHtml(`${deliveredQtyLabel} delivered out of ${orderedQtyLabel}. ${remainingQtyLabel} still expected.`)}
+                                ${escapeHtml(`${deliveredQtyLabel} delivered out of ${orderedQtyLabel}.`)}<br>
+                                ${escapeHtml(`${remainingQtyLabel} still expected.`)}
                             </div>
                         </td>
                         <td class="text-end">${escapeHtml(formatMoney(unitCost))}</td>

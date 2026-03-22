@@ -25,6 +25,34 @@ Daily logic = ₱200 × 3 = ₱600
 
 Need clarification with owner.
 
+- Box-based PO receiving: under-receive is usually safe for automatic cost-per-piece correction, but over-receive is not always safe.
+
+Discussion / future reference:
+- Current box-based receive formula is:
+  `cost_per_piece = (boxes received x box cost) / total counted pieces`
+- This works well when fewer boxes arrive than ordered, because staff is counting actual delivered pieces from real received boxes.
+- Example under-receive:
+  ordered `2 boxes`, received `1 box`, counted `12 pcs`, box cost `600`
+  result = `600 / 12 = 50 per piece`
+- This becomes risky when more boxes arrive than ordered.
+- Example over-receive:
+  ordered `2 boxes`, received `3 boxes`, counted `36 pcs`, box cost `600`
+  current formula would produce `1800 / 36 = 50 per piece`
+- Business problem:
+  that is only correct if all 3 boxes are billable at full cost.
+- If the extra box is free bonus stock, true payable cost is only `1200`, so using all 3 boxes in the cost update would overstate `cost_per_piece`.
+- Payables impact:
+  current payable amount also follows received box count, not ordered box count.
+- Example payable impact:
+  ordered `2 boxes @ 600 = 1200`, received `3 boxes`
+  current payable display becomes `1800`, which is inflated if the 3rd box was free bonus stock.
+- Additional limitation:
+  current receive flow only captures one combined counted-piece total for the entire receipt, so the system cannot precisely split counted pieces between ordered boxes and extra boxes.
+- Safe future rule candidate:
+  allow stock-in for over-received box items, require a note, but do not auto-update `items.cost_per_piece` until billing intent is confirmed.
+- Suggested audit / note message:
+  "Box over-receive detected. Stock accepted, but cost-per-piece should be reviewed because excess boxes may be bonus stock or separately billable."
+
 ## Audit Trail
 
 - Audit tab PO logic may not correctly reflect partial arrivals

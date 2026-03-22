@@ -1610,6 +1610,11 @@ def _normalize_po_payload(data):
         seen_item_ids.add(item_id)
 
         purchase_mode = _normalize_po_purchase_mode(item.get("purchase_mode"))
+        box_cost_confirmed = item.get("box_cost_confirmed")
+        if purchase_mode == "BOX" and box_cost_confirmed is not True:
+            raise ValueError(
+                "Box-based items must use the cost of one box only. Please review the box cost entry and try again."
+            )
 
         normalized_items.append(
             {

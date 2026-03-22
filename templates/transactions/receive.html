@@ -13,56 +13,54 @@
         background: linear-gradient(180deg, rgba(10, 10, 10, 0.98) 0%, rgba(17, 17, 17, 0.98) 100%);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .receive-table-shell {
+    .receive-board {
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: 14px;
         overflow: hidden;
         background: linear-gradient(180deg, rgba(30, 34, 42, 0.95) 0%, rgba(24, 27, 34, 0.98) 100%);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
-    .receive-table {
-        width: 100%;
-        margin-bottom: 0;
-        table-layout: fixed;
+    .receive-grid {
+        display: grid;
+        grid-template-columns: 2.2fr 0.9fr 0.9fr 1fr 1.45fr 1.45fr;
+        gap: 14px;
+        align-items: center;
+        min-width: 0;
     }
-    .receive-table th,
-    .receive-table td {
-        vertical-align: middle;
-    }
-    .receive-table thead th {
+    .receive-grid-header {
         background-color: #e63946;
         color: #fff;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        padding: 14px 12px;
-        line-height: 1.2;
+        padding: 14px 18px;
         font-size: 0.84rem;
         letter-spacing: 0.04em;
-        white-space: normal;
+        line-height: 1.2;
+        text-transform: uppercase;
+        font-weight: 700;
     }
-    .receive-table tbody td {
-        padding: 14px 12px;
-        border-color: rgba(255, 255, 255, 0.05);
+    .receive-grid-header > div {
+        text-align: center;
+    }
+    .receive-card-list {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+    }
+    .receive-item-card {
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 14px;
         background: rgba(255, 255, 255, 0.02);
+        padding: 16px 18px 14px;
+        overflow: hidden;
     }
-    .receive-table tbody tr:nth-child(even) td {
-        background: rgba(255, 255, 255, 0.035);
+    .receive-item-card:hover {
+        background: rgba(230, 57, 70, 0.06);
     }
-    .receive-table tbody tr:hover td {
-        background: rgba(230, 57, 70, 0.08);
+    .receive-main-cell {
+        min-width: 0;
     }
-    .receive-col-item {
-        width: 31%;
-    }
-    .receive-col-mode {
-        width: 10%;
-    }
-    .receive-col-ordered,
-    .receive-col-received {
-        width: 10%;
-    }
-    .receive-col-arrived,
-    .receive-col-counted {
-        width: 19.5%;
+    .receive-item-cell,
+    .receive-main-metric {
+        text-align: center;
     }
     .receive-item-name {
         color: #f3f4f6;
@@ -74,15 +72,31 @@
         color: #9ca3af;
         font-size: 0.82rem;
     }
-    .receive-box-hint {
-        color: #67c2e4;
-        font-size: 0.8rem;
-        margin-top: 6px;
-        display: block;
+    .receive-input-stack {
+        display: grid;
+        grid-template-rows: 20px 48px;
+        gap: 8px;
+        min-width: 0;
     }
-    .receive-table .form-control {
+    .receive-input-label {
+        color: #facc15;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        line-height: 1.15;
+        text-align: center;
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+    .receive-table-input {
         min-height: 48px;
         border-radius: 10px;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
     }
     .receive-metric {
         font-weight: 700;
@@ -91,42 +105,104 @@
     .receive-metric.is-info {
         color: #7dd3fc;
     }
+    .receive-helper-row {
+        display: grid;
+        grid-template-columns: 2.2fr 0.9fr 0.9fr 1fr 1.45fr 1.45fr;
+        gap: 14px;
+        align-items: start;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .receive-helper-block {
+        min-width: 0;
+    }
+    .receive-helper-item {
+        grid-column: 1;
+    }
+    .receive-helper-pending {
+        grid-column: 5;
+    }
+    .receive-helper-preview {
+        grid-column: 6;
+    }
+    .receive-box-hint {
+        color: #67c2e4;
+        font-size: 0.8rem;
+        line-height: 1.2;
+        display: block;
+        text-align: center;
+    }
+    .receive-box-warning {
+        color: #fcd34d;
+        font-size: 0.78rem;
+        line-height: 1.25;
+        display: block;
+        font-weight: 700;
+        word-break: break-word;
+        text-align: center;
+        margin-top: 8px;
+    }
     .receive-subhint {
         font-size: 0.8rem;
         line-height: 1.25;
+        margin: 0;
+        overflow-wrap: anywhere;
+        text-align: center;
+    }
+    .receive-pending {
+        color: #fbbf24;
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-align: center;
+    }
+    .receive-cost-preview {
+        color: #fcd34d;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        text-align: center;
+        margin: 8px 0 0;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    .receive-cost-preview .preview-formula {
+        display: block;
+    }
+    .receive-cost-preview .preview-result {
+        display: block;
+        margin-top: 4px;
+        font-weight: 800;
+        font-size: 0.8rem;
+        color: #fde68a;
+        text-align: center;
+    }
+    .receive-cost-preview.is-placeholder {
+        visibility: hidden;
     }
     .over-receive-note {
         border-left: 3px solid rgba(245, 158, 11, 0.8);
         padding-left: 10px;
+        margin-top: 12px;
     }
     @media (max-width: 1440px) {
-        .receive-table thead th {
+        .receive-grid-header {
             font-size: 0.78rem;
-            padding: 12px 10px;
+            padding: 12px 16px;
         }
-        .receive-table tbody td {
-            padding: 12px 10px;
-        }
-        .receive-col-item {
-            width: 29%;
-        }
-        .receive-col-mode {
-            width: 10%;
-        }
-        .receive-col-ordered,
-        .receive-col-received {
-            width: 10%;
-        }
-        .receive-col-arrived,
-        .receive-col-counted {
-            width: 20.5%;
+        .receive-grid,
+        .receive-helper-row {
+            gap: 12px;
         }
     }
     @media (max-width: 1200px) {
-        .receive-table-shell {
+        .receive-board {
             overflow-x: auto;
         }
-        .receive-table {
+        .receive-grid-header,
+        .receive-card-list {
             min-width: 1040px;
         }
     }
@@ -145,88 +221,114 @@
             <h5 class="mb-0">Vendor: {{ po.vendor_name }}</h5>
         </div>
         <div class="card-body">
-            <div class="receive-table-shell">
-                <table class="table table-dark table-hover receive-table">
-                    <thead>
-                        <tr>
-                            <th class="receive-col-item">Item Description</th>
-                            <th class="text-center receive-col-mode">Mode</th>
-                            <th class="text-center receive-col-ordered">Ordered</th>
-                            <th class="text-center receive-col-received">Already Received</th>
-                            <th class="text-center receive-col-arrived">Arrived Today</th>
-                            <th class="text-center receive-col-counted">Total Counted Pieces</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in items %}
-                        {% set remaining = item.quantity_ordered - item.quantity_received %}
-                        <tr class="item-row"
-                            data-item-id="{{ item.item_id }}"
-                            data-remaining="{{ remaining }}"
-                            data-purchase-mode="{{ item.purchase_mode or 'PIECE' }}"
-                            data-unit-cost="{{ item.unit_cost or 0 }}">
-                            <td>
+            <div class="receive-board">
+                <div class="receive-grid receive-grid-header">
+                    <div>Item Description</div>
+                    <div>Mode</div>
+                    <div>Ordered</div>
+                    <div>Already Received</div>
+                    <div>Received Today</div>
+                    <div>Counted Pieces Today</div>
+                </div>
+
+                <div class="receive-card-list">
+                    {% for item in items %}
+                    {% set remaining = item.quantity_ordered - item.quantity_received %}
+                    <div class="receive-item-card item-row"
+                        data-item-id="{{ item.item_id }}"
+                        data-remaining="{{ remaining }}"
+                        data-purchase-mode="{{ item.purchase_mode or 'PIECE' }}"
+                        data-unit-cost="{{ item.unit_cost or 0 }}">
+
+                        <div class="receive-grid">
+                            <div class="receive-main-cell receive-item-cell">
                                 <div class="receive-item-name">{{ item.name }}</div>
                                 {% if item.pack_size %}
                                 <div class="receive-pack-meta">Pack size: {{ item.pack_size }}</div>
                                 {% endif %}
-                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
-                                <span class="receive-box-hint">Receive by boxes. Count all actual pieces delivered today.</span>
-                                {% endif %}
-                                <div class="over-receive-note mt-2" style="display:none;">
-                                    <input type="text"
-                                        class="form-control form-control-sm bg-black text-white border-warning note-input"
-                                        placeholder="Required: reason for over-receive (e.g. vendor promo)"
-                                        maxlength="255">
-                                    <small class="text-warning mt-1 d-block">
-                                        <i class="fas fa-exclamation-triangle"></i> Over-receive detected and will be logged as bonus stock.
-                                    </small>
-                                </div>
-                            </td>
-                            <td class="text-center align-middle">
+                            </div>
+
+                            <div class="receive-main-cell text-center">
                                 <span class="badge {% if (item.purchase_mode or 'PIECE') == 'BOX' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
                                     {% if (item.purchase_mode or 'PIECE') == 'BOX' %}Per Box{% else %}Per Piece{% endif %}
                                 </span>
-                            </td>
-                            <td class="text-center">
-                                <div class="receive-metric">{{ item.quantity_ordered }}</div>
-                            </td>
-                            <td class="text-center">
-                                <div class="receive-metric is-info">{{ item.quantity_received }}</div>
-                            </td>
-                            <td>
-                                <input type="number"
-                                    class="form-control form-control-lg bg-black text-white border-danger text-center qty-input"
-                                    value="{{ remaining }}"
-                                    min="0"
-                                    oninput="checkOverReceive(this)">
-                                {% if remaining > 0 %}
-                                <small class="text-center d-block text-warning mt-1 receive-subhint">Pending: {{ remaining }}</small>
-                                {% else %}
-                                <small class="text-center d-block text-success mt-1 receive-subhint">Fully Received</small>
-                                {% endif %}
-                            </td>
-                            <td>
+                            </div>
+
+                            <div class="receive-main-cell receive-main-metric">
+                                <div class="receive-metric">{{ item.quantity_ordered }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                            </div>
+
+                            <div class="receive-main-cell receive-main-metric">
+                                <div class="receive-metric is-info">{{ item.quantity_received }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                            </div>
+
+                            <div class="receive-main-cell">
+                                <div class="receive-input-stack">
+                                    <div class="receive-input-label">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Boxes Received Today{% else %}Pieces Received Today{% endif %}</div>
+                                    <input type="number"
+                                        class="form-control form-control-lg receive-table-input bg-black text-white border-danger text-center qty-input"
+                                        value="{{ remaining }}"
+                                        min="0"
+                                        placeholder="{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Enter boxes received{% else %}Enter pieces received{% endif %}"
+                                        oninput="checkOverReceive(this)">
+                                </div>
+                            </div>
+
+                            <div class="receive-main-cell">
+                                <div class="receive-input-stack">
+                                    <div class="receive-input-label">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Total Counted Pieces{% else %}Pieces Added to Stock{% endif %}</div>
+                                    <input type="number"
+                                        class="form-control form-control-lg receive-table-input {% if (item.purchase_mode or 'PIECE') == 'BOX' %}border-info{% else %}border-secondary{% endif %} bg-black text-white text-center stock-qty-input"
+                                        value="{% if (item.purchase_mode or 'PIECE') == 'BOX' %}{% else %}{{ remaining }}{% endif %}"
+                                        min="0"
+                                        {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                        placeholder="Count every piece received today"
+                                        {% else %}
+                                        readonly
+                                        {% endif %}>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="receive-helper-row">
+                            <div class="receive-helper-block receive-helper-item">
                                 {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
-                                <input type="number"
-                                    class="form-control form-control-lg bg-black text-white border-info text-center stock-qty-input"
-                                    value=""
-                                    min="0"
-                                    placeholder="Required">
-                                <small class="text-center d-block text-info mt-1 receive-subhint">Required for box-based receiving</small>
-                                {% else %}
-                                <input type="number"
-                                    class="form-control form-control-lg bg-black text-white border-secondary text-center stock-qty-input"
-                                    value="{{ remaining }}"
-                                    min="0"
-                                    readonly>
-                                <small class="text-center d-block text-muted mt-1 receive-subhint">Matches arrived qty for piece mode</small>
+                                <span class="receive-box-hint">Enter boxes received today.</span>
+                                <span class="receive-box-warning">Count every piece from all boxes today.</span>
                                 {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                            </div>
+
+                            <div class="receive-helper-block receive-helper-pending">
+                                {% if remaining > 0 %}
+                                <div class="receive-pending">Pending: {{ remaining }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                                {% else %}
+                                <div class="text-success receive-subhint">Fully Received</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="receive-helper-block receive-helper-preview">
+                                {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
+                                <div class="text-info receive-subhint">Required for all boxes received today.</div>
+                                <div class="receive-cost-preview">Effective cost per piece will appear here.</div>
+                                {% else %}
+                                <div class="text-muted receive-subhint">Matches arrived qty for piece mode</div>
+                                <div class="receive-cost-preview is-placeholder">preview</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="over-receive-note" style="display:none;">
+                            <input type="text"
+                                class="form-control form-control-sm bg-black text-white border-warning note-input"
+                                placeholder="Required: reason for over-receive (e.g. vendor promo)"
+                                maxlength="255">
+                            <small class="text-warning mt-1 d-block">
+                                <i class="fas fa-exclamation-triangle"></i> Over-receive detected and will be logged as bonus stock.
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
 
             <div class="d-grid mt-4">
@@ -245,10 +347,29 @@ function showToastFlash(message, type = 'warning') {
     }
 }
 
+const RECEIVE_MAX_INPUT = 999999;
+
+function sanitizeReceiveInput(input) {
+    if (!input) {
+        return 0;
+    }
+
+    const raw = String(input.value ?? '');
+    const digitsOnly = raw.replace(/[^\d]/g, '');
+    if (!digitsOnly) {
+        input.value = '';
+        return 0;
+    }
+
+    const numericValue = Math.min(parseInt(digitsOnly, 10) || 0, RECEIVE_MAX_INPUT);
+    input.value = String(numericValue);
+    return numericValue;
+}
+
 function checkOverReceive(input) {
     const row = input.closest('.item-row');
-    const remaining = parseInt(row.dataset.remaining);
-    const qty = parseInt(input.value) || 0;
+    const remaining = parseInt(row.dataset.remaining, 10);
+    const qty = sanitizeReceiveInput(input);
     const noteDiv = row.querySelector('.over-receive-note');
     const noteInput = row.querySelector('.note-input');
     const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
@@ -270,6 +391,36 @@ function checkOverReceive(input) {
     if (purchaseMode !== 'BOX' && stockQtyInput) {
         stockQtyInput.value = qty > 0 ? qty : 0;
     }
+
+    updateReceivePreview(row);
+}
+
+function updateReceivePreview(row) {
+    if (!row) {
+        return;
+    }
+
+    const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
+    const preview = row.querySelector('.receive-cost-preview');
+    if (!preview || purchaseMode !== 'BOX') {
+        return;
+    }
+
+    const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
+    const countedPieces = sanitizeReceiveInput(row.querySelector('.stock-qty-input'));
+    const unitCost = parseFloat(row.dataset.unitCost || '0') || 0;
+
+    if (qtyReceived <= 0 || countedPieces <= 0 || unitCost <= 0) {
+        preview.textContent = 'Effective cost per piece will appear here.';
+        return;
+    }
+
+    const lineTotal = qtyReceived * unitCost;
+    const pieceCost = lineTotal / countedPieces;
+    preview.innerHTML = `
+        <span class="preview-formula">${qtyReceived} box(es) x P${unitCost.toFixed(2)} / ${countedPieces} pcs</span>
+        <span class="preview-result">P${pieceCost.toFixed(2)} per piece</span>
+    `;
 }
 
 async function submitReception() {
@@ -279,11 +430,11 @@ async function submitReception() {
 
     rows.forEach(row => {
         const itemId = row.getAttribute('data-item-id');
-        const remaining = parseInt(row.dataset.remaining);
+        const remaining = parseInt(row.dataset.remaining, 10);
         const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
-        const qtyReceived = parseInt(row.querySelector('.qty-input').value) || 0;
+        const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
         const stockQtyInput = row.querySelector('.stock-qty-input');
-        const stockQtyReceived = parseInt(stockQtyInput?.value) || 0;
+        const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
         const noteInput = row.querySelector('.note-input');
         const notes = noteInput ? noteInput.value.trim() : '';
 
@@ -330,5 +481,14 @@ async function submitReception() {
         showToastFlash(result.message || "Failed to process reception.", "danger");
     }
 }
+
+document.querySelectorAll('.item-row').forEach(row => {
+    updateReceivePreview(row);
+});
+
+document.querySelectorAll('.qty-input, .stock-qty-input').forEach(input => {
+    input.setAttribute('max', String(RECEIVE_MAX_INPUT));
+    input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
+});
 </script>
 {% endblock %}

@@ -90,6 +90,7 @@
     .table-order tbody td {
         padding: 14px 12px;
         border-color: rgba(255, 255, 255, 0.05);
+        vertical-align: top;
     }
     .table-order tbody tr {
         background: rgba(255, 255, 255, 0.02);
@@ -105,19 +106,19 @@
         min-width: 180px;
     }
     .table-order .col-stock-status {
-        width: 16%;
+        width: 15%;
     }
     .table-order .col-purchase-mode {
-        width: 14%;
+        width: 13%;
     }
     .table-order .col-qty {
-        width: 11%;
+        width: 12%;
     }
     .table-order .col-unit-cost {
         width: 14%;
     }
     .table-order .col-line-total {
-        width: 12%;
+        width: 14%;
     }
     .table-order .col-actions {
         width: 64px;
@@ -128,6 +129,35 @@
         line-height: 1.25;
         word-break: break-word;
     }
+    .order-cell-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 96px;
+    }
+    .order-cell-main {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+    }
+    .order-cell-main.is-input {
+        align-items: stretch;
+    }
+    .order-cell-label,
+    .order-cell-label-placeholder {
+        min-height: 16px;
+        text-align: center;
+    }
+    .order-cell-hint,
+    .order-cell-hint-placeholder,
+    .order-cost-warning,
+    .order-line-formula {
+        min-height: 18px;
+    }
+    .order-cell-label-placeholder,
+    .order-cell-hint-placeholder {
+        visibility: hidden;
+    }
     .order-stock-hint {
         color: #67c2e4;
         font-size: 0.78rem;
@@ -136,7 +166,7 @@
         word-break: break-word;
     }
     .order-stock-box-pending {
-        color: #67c2e4;
+        color: #ffc107;
         font-size: 0.78rem;
         font-weight: 700;
         line-height: 1.2;
@@ -148,6 +178,53 @@
         color: #f9fafb;
         font-weight: 700;
         white-space: nowrap;
+    }
+    .order-cell-label {
+        color: #facc15;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+        line-height: 1.15;
+    }
+    .order-cell-hint {
+        color: #fcd34d;
+        font-size: 0.74rem;
+        line-height: 1.15;
+        margin-top: 6px;
+        word-break: break-word;
+    }
+    .order-stock-stack {
+        align-items: center;
+        text-align: center;
+    }
+    .order-stock-stack .order-cell-main {
+        justify-content: center;
+    }
+    .order-cost-warning {
+        color: #f87171;
+        font-size: 0.76rem;
+        line-height: 1.2;
+        margin-top: 6px;
+        display: none;
+        text-align: center;
+    }
+    .order-line-formula {
+        color: #fcd34d;
+        font-size: 0.76rem;
+        line-height: 1.2;
+        margin-top: 4px;
+        white-space: normal;
+        word-break: break-word;
+        text-align: center;
+    }
+    .order-total-stack {
+        align-items: center;
+        text-align: center;
+    }
+    .order-total-stack .order-cell-main {
+        justify-content: center;
     }
     .order-grand-total-row td {
         background: linear-gradient(135deg, rgba(193, 18, 31, 0.2), rgba(193, 18, 31, 0.1)) !important;
@@ -319,22 +396,22 @@
             padding: 12px 10px;
         }
         .table-order .col-item-name {
-            width: 22%;
+            width: 23%;
         }
         .table-order .col-stock-status {
-            width: 16%;
-        }
-        .table-order .col-purchase-mode {
             width: 15%;
         }
+        .table-order .col-purchase-mode {
+            width: 13%;
+        }
         .table-order .col-qty {
-            width: 11%;
+            width: 12%;
         }
         .table-order .col-unit-cost {
             width: 14%;
         }
         .table-order .col-line-total {
-            width: 12%;
+            width: 14%;
         }
     }
     @media (max-width: 1200px) {
@@ -567,6 +644,30 @@ function getLineTotal(item) {
     const qty = Number(item.qty || 0);
     const cost = Number(item.cost || 0);
     return qty * cost;
+}
+
+function getBoxCostWarning(item) {
+    const purchaseMode = normalizePurchaseMode(item.purchase_mode);
+    if (purchaseMode !== 'BOX') {
+        return '';
+    }
+
+    const qty = Number(item.qty || 0);
+    const cost = Number(item.cost || 0);
+    if (qty <= 1 || cost <= 0) {
+        return '';
+    }
+
+    const pieceCost = Number(item.default_piece_cost || 0);
+    if (pieceCost > 0) {
+        const qtyTimesPiece = pieceCost * qty;
+        const diff = Math.abs(cost - qtyTimesPiece);
+        if (diff <= 0.01) {
+            return 'This matches piece cost x boxes. Make sure this is the cost of one box only.';
+        }
+    }
+
+    return '';
 }
 
 function getSelectedVendorDraft() {
@@ -933,46 +1034,95 @@ function renderTable() {
     const rows = orderItems.map((item, index) => {
         const displayName = item.name || item.item_name || 'Unnamed Item';
         const purchaseMode = normalizePurchaseMode(item.purchase_mode);
-        const pendingPieceHtml = Number(item.pending_stock || 0) > 0
-            ? `<div style="color: #ffc107; font-size: 0.78rem;">+${escapeHtml(String(item.pending_stock))} incoming</div>`
-            : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`;
         const pendingBoxQty = Number(item.pending_box_quantity || 0);
-        const pendingBoxHtml = pendingBoxQty > 0
-            ? `<div class="order-stock-box-pending">${escapeHtml(String(pendingBoxQty))} box(es) pending</div>
-               <div class="order-stock-hint">pieces counted on receive</div>`
-            : '';
+        const pendingPieceQty = Number(item.pending_stock || 0);
+        const stockStatusHtml = purchaseMode === 'BOX'
+            ? (pendingBoxQty > 0
+                ? `<div class="order-stock-box-pending">+${escapeHtml(String(pendingBoxQty))} box(es) incoming</div>`
+                : `<div style="color: #666; font-size: 0.78rem;">no box PO pending</div>`)
+            : (pendingPieceQty > 0
+                ? `<div style="color: #ffc107; font-size: 0.78rem;">+${escapeHtml(String(pendingPieceQty))} incoming</div>`
+                : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`);
         const lineTotal = getLineTotal(item);
+        const modeHint = purchaseMode === 'BOX'
+            ? 'Order by box. Cost below is for 1 box.'
+            : 'Order by piece. Cost below is for 1 piece.';
+        const costHint = purchaseMode === 'BOX'
+            ? 'Enter 1-box cost only.'
+            : 'Enter 1-piece cost only.';
 
         return `
             <tr>
-                <td><div class="order-item-name">${escapeHtml(displayName)}</div></td>
                 <td>
-                    <div style="font-size: 0.85rem;">${escapeHtml(String(item.current_stock ?? 0))} on hand</div>
-                    ${pendingPieceHtml}
-                    ${pendingBoxHtml}
-                </td>
-                <td>
-                    <select class="form-select form-select-sm bg-dark text-white"
-                        onchange="updatePurchaseMode(${index}, this.value)">
-                        <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Per Piece</option>
-                        <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Per Box</option>
-                    </select>
-                </td>
-                <td class="align-middle">
-                    <input type="number" class="form-control form-control-sm bg-dark text-white"
-                        value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
+                    <div class="order-cell-stack">
+                        <div class="order-cell-main">
+                            <div class="order-item-name">${escapeHtml(displayName)}</div>
+                        </div>
+                        <div class="order-cell-hint">${escapeHtml(modeHint)}</div>
+                    </div>
                 </td>
                 <td>
-                    <input type="number" class="form-control form-control-sm bg-dark text-white"
-                        value="${Number(item.cost || 0)}" step="0.01" min="0"
-                        placeholder="${purchaseMode === 'BOX' ? 'Enter box cost' : 'Enter piece cost'}"
-                        onchange="updateCost(${index}, this.value)">
-                </td>
-                <td class="align-middle">
-                    <div class="order-line-total">P${lineTotal.toFixed(2)}</div>
+                    <div class="order-cell-stack order-stock-stack">
+                        <div class="order-cell-main">
+                            <div style="font-size: 0.85rem;">${escapeHtml(String(item.current_stock ?? 0))} on hand</div>
+                        </div>
+                        <div>${stockStatusHtml}</div>
+                    </div>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})">&times;</button>
+                    <div class="order-cell-stack">
+                        <div class="order-cell-label-placeholder">mode</div>
+                        <div class="order-cell-main is-input">
+                            <select class="form-select form-select-sm bg-dark text-white"
+                                onchange="updatePurchaseMode(${index}, this.value)">
+                                <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Per Piece</option>
+                                <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Per Box</option>
+                            </select>
+                        </div>
+                        <div class="order-cell-hint-placeholder">helper</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="order-cell-stack">
+                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Boxes to Order' : 'Pieces to Order'}</div>
+                        <div class="order-cell-main is-input">
+                            <input type="number" class="form-control form-control-sm bg-dark text-white"
+                                value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
+                        </div>
+                        <div class="order-cell-hint-placeholder">helper</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="order-cell-stack">
+                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Cost Per Box' : 'Cost Per Piece'}</div>
+                        <div class="order-cell-main is-input">
+                            <input type="number" class="form-control form-control-sm bg-dark text-white"
+                                value="${Number(item.cost || 0)}" step="0.01" min="0"
+                                placeholder="${purchaseMode === 'BOX' ? 'Enter box cost' : 'Enter piece cost'}"
+                                onchange="updateCost(${index}, this.value)">
+                        </div>
+                        ${getBoxCostWarning(item)
+                            ? `<div class="order-cost-warning" style="display:block;">${escapeHtml(getBoxCostWarning(item))}</div>`
+                            : `<div class="order-cell-hint">${escapeHtml(costHint)}</div>`}
+                    </div>
+                </td>
+                <td>
+                    <div class="order-cell-stack order-total-stack">
+                        <div class="order-cell-label-placeholder">total</div>
+                        <div class="order-cell-main">
+                            <div class="order-line-total">P${lineTotal.toFixed(2)}</div>
+                        </div>
+                        <div class="order-line-formula">${escapeHtml(String(item.qty || 0))} ${purchaseMode === 'BOX' ? 'box(es)' : 'pc(s)'} x P${Number(item.cost || 0).toFixed(2)}</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="order-cell-stack">
+                        <div class="order-cell-label-placeholder">action</div>
+                        <div class="order-cell-main">
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})">&times;</button>
+                        </div>
+                        <div class="order-cell-hint-placeholder">helper</div>
+                    </div>
                 </td>
             </tr>
         `;
@@ -1080,13 +1230,33 @@ async function submitOrder() {
         showOrderAlert(`Enter the box cost for ${invalidBoxItem.name}.`, 'warning');
         return;
     }
+    const suspiciousBoxItem = orderItems.find(item => normalizePurchaseMode(item.purchase_mode) === 'BOX' && getBoxCostWarning(item));
+    if (suspiciousBoxItem) {
+        showOrderAlert(`Double-check ${suspiciousBoxItem.name}: box-based items must use the cost of one box only.`, 'warning');
+        return;
+    }
+    const boxItems = orderItems.filter(item => normalizePurchaseMode(item.purchase_mode) === 'BOX');
+    let boxCostConfirmed = false;
+    if (boxItems.length) {
+        const summary = boxItems
+            .map(item => `- ${item.name}: ${Number(item.qty || 0)} box(es) @ P${Number(item.cost || 0).toFixed(2)} per box`)
+            .join('\n');
+        boxCostConfirmed = window.confirm(
+            `Please confirm all box-based lines use the cost of ONE box only.\n\n${summary}\n\nClick OK to continue saving this PO.`
+        );
+        if (!boxCostConfirmed) {
+            showOrderAlert('Review the box-based costs before saving the purchase order.', 'warning');
+            return;
+        }
+    }
 
     const payload = {
         vendor_id: parseInt(vendorSelect.value, 10),
         notes: notesInput.value,
         items: orderItems.map(item => ({
             ...item,
-            purchase_mode: normalizePurchaseMode(item.purchase_mode)
+            purchase_mode: normalizePurchaseMode(item.purchase_mode),
+            box_cost_confirmed: normalizePurchaseMode(item.purchase_mode) !== 'BOX' || boxCostConfirmed
         }))
     };
 
