@@ -166,3 +166,12 @@ Future upgrade: move to Redis or DB
 - [ ] electricity issues please resolve
 - [ ] Sales analytics page check rendering
 - [ ] A4S-lipa.com
+
+## Re upload data to current, March 23
+- [ ] to determine IN, begbal + Received = IN
+- [ ] to determine OUT, begbal + received - sold = OUT  
+
+## Variance Page
+- [ ] Remove adjustment column
+- [ ] Action after confirming session, instead of applied make it updated
+- [ ] edit pdf, for system stock (SS), Counted Stock (CS), Variance (V), extract cost per piece for that item. basically a way for the user to see how much money they are sitting with that stock  
