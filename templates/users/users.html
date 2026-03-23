@@ -291,20 +291,344 @@
         flex: 0 0 auto;
     }
 
-    #saleDetailsModal table {
+    .sale-modal-content {
+        background:
+            radial-gradient(circle at top right, rgba(230, 57, 70, 0.14), transparent 26%),
+            linear-gradient(180deg, #1e1e1e, #161616) !important;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .sale-modal-content .modal-header,
+    .sale-modal-content .modal-footer {
+        background: rgba(255, 255, 255, 0.015);
+    }
+
+    .sale-receipt-shell {
+        padding: 0.35rem;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .sale-receipt {
+        position: relative;
+        border-radius: 16px;
+        padding: 1.25rem;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247, 242, 234, 0.98)),
+            repeating-linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.02) 0,
+                rgba(0, 0, 0, 0.02) 1px,
+                transparent 1px,
+                transparent 28px
+            );
+        color: #1f2937;
+        box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.05);
+    }
+
+    .sale-receipt::before,
+    .sale-receipt::after {
+        content: "";
+        position: absolute;
+        top: 18px;
+        bottom: 18px;
+        width: 10px;
+        background: radial-gradient(circle, rgba(17, 24, 39, 0.12) 0 4px, transparent 4px 100%);
+        background-size: 10px 28px;
+        opacity: 0.7;
+    }
+
+    .sale-receipt::before { left: -5px; }
+    .sale-receipt::after { right: -5px; }
+
+    .sale-receipt-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding-bottom: 0.9rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px dashed rgba(31, 41, 55, 0.2);
+    }
+
+    .sale-receipt-kicker {
+        color: #b91c1c;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+    }
+
+    .sale-receipt-no {
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #111827;
+    }
+
+    .sale-payment-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        border: 1px solid rgba(17, 24, 39, 0.1);
+        background: #111827;
+        color: #fff;
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .sale-payment-pill.sale-payment-cash {
+        background: rgba(22, 101, 52, 0.12);
+        border-color: rgba(22, 101, 52, 0.28);
+        color: #166534;
+    }
+
+    .sale-payment-pill.sale-payment-credit {
+        background: rgba(180, 83, 9, 0.14);
+        border-color: rgba(180, 83, 9, 0.28);
+        color: #b45309;
+    }
+
+    .sale-payment-pill.sale-payment-other {
+        background: rgba(30, 64, 175, 0.1);
+        border-color: rgba(30, 64, 175, 0.22);
+        color: #1d4ed8;
+    }
+
+    .sale-receipt-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-receipt-meta-card {
+        padding: 0.75rem 0.85rem;
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.52);
+    }
+
+    .sale-receipt-meta-label {
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #6b7280;
+        margin-bottom: 0.35rem;
+    }
+
+    .sale-receipt-meta-value {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #111827;
+        overflow-wrap: anywhere;
+    }
+
+    .sale-receipt-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-summary-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid transparent;
+    }
+
+    .sale-summary-chip.total {
+        background: rgba(30, 64, 175, 0.08);
+        color: #1d4ed8;
+        border-color: rgba(30, 64, 175, 0.16);
+    }
+
+    .sale-summary-chip.refund {
+        background: rgba(185, 28, 28, 0.08);
+        color: #b91c1c;
+        border-color: rgba(185, 28, 28, 0.16);
+    }
+
+    .sale-summary-chip.net {
+        background: rgba(146, 64, 14, 0.08);
+        color: #b45309;
+        border-color: rgba(146, 64, 14, 0.18);
+    }
+
+    .sale-receipt-table-wrap {
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.62);
+    }
+
+    .sale-receipt-table {
+        width: 100%;
+        margin-bottom: 0;
         table-layout: auto !important;
     }
 
-    #saleDetailsModal th,
-    #saleDetailsModal td {
+    .sale-receipt-table th,
+    .sale-receipt-table td {
+        padding: 0.8rem 0.85rem;
+        border-bottom: 1px dashed rgba(17, 24, 39, 0.12);
+        vertical-align: top;
         overflow: visible !important;
         text-overflow: clip !important;
+        background: transparent !important;
     }
 
-    #saleDetailsModal td:first-child {
+    .sale-receipt-table thead th {
+        background: rgba(17, 24, 39, 0.04) !important;
+        color: #6b7280;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border-bottom-style: solid;
+    }
+
+    .sale-receipt-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .sale-receipt-table td:first-child {
         white-space: normal !important;
         overflow-wrap: anywhere;
         word-break: break-word;
+    }
+
+    .sale-line-name {
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .sale-line-note {
+        margin-top: 0.22rem;
+        font-size: 0.78rem;
+        color: #6b7280;
+    }
+
+    .sale-line-note.discount {
+        color: #166534;
+        font-weight: 700;
+    }
+
+    .sale-line-note.refund {
+        color: #b91c1c;
+        font-weight: 700;
+    }
+
+    .sale-section-row td {
+        background: rgba(17, 24, 39, 0.05) !important;
+        color: #0f766e;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .sale-total-row td {
+        padding-top: 1rem;
+        border-top: 2px solid rgba(185, 28, 28, 0.18);
+        background: rgba(185, 28, 28, 0.04) !important;
+    }
+
+    .sale-total-label {
+        color: #b91c1c;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .sale-total-amount {
+        color: #b91c1c;
+        font-size: 1.18rem;
+        font-weight: 800;
+    }
+
+    .sale-receipt-refunds {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 2px dashed rgba(17, 24, 39, 0.2);
+    }
+
+    .sale-refund-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        color: #b91c1c;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+
+    .sale-refund-card {
+        padding: 0.85rem 0.95rem;
+        border: 1px solid rgba(185, 28, 28, 0.14);
+        border-radius: 12px;
+        background: rgba(185, 28, 28, 0.04);
+        margin-bottom: 0.6rem;
+    }
+
+    .sale-refund-card:last-child {
+        margin-bottom: 0;
+    }
+
+    .sale-refund-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: flex-start;
+    }
+
+    .sale-refund-number {
+        font-weight: 800;
+        color: #991b1b;
+    }
+
+    .sale-refund-meta,
+    .sale-refund-note {
+        font-size: 0.78rem;
+        color: #6b7280;
+    }
+
+    .sale-refund-note {
+        margin-top: 0.35rem;
+    }
+
+    .sale-refund-amount {
+        font-weight: 800;
+        color: #b91c1c;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 767.98px) {
+        .sale-receipt-meta-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .sale-receipt-top,
+        .sale-refund-head {
+            flex-direction: column;
+        }
     }
 
     .po-movement-card {
@@ -1189,7 +1513,7 @@
                         <option value="FREE_SERVICE">Free Service</option>
                         <option value="FREE_ITEM">Free Item</option>
                         <option value="DISCOUNT_PERCENT">Discount %</option>
-                        <option value="DISCOUNT_AMOUNT">Discount ₱</option>
+                        <option value="DISCOUNT_AMOUNT">Discount &#8369;</option>
                         <option value="RAFFLE_ENTRY">Raffle Entry</option>
                     </select>
                 </div>
@@ -1327,6 +1651,9 @@
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
+                    <a id="saleDetailsPrintBtn" href="#" target="_blank" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-printer me-1"></i>Print
+                    </a>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
@@ -1371,29 +1698,45 @@
         </div>
     </div>
 
-    <!-- SALES MODAL -->
+        <!-- SALES MODAL -->
     <div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark border-secondary text-white sale-modal-content">
                 <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-danger">Sale Details: #<span id="modalSaleID"></span></h5>
+                    <h5 class="modal-title text-danger">
+                        <i class="bi bi-receipt-cutoff me-2"></i>Sale Receipt Details
+                    </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div id="saleDetailsMeta" class="small text-white-50 mb-3"></div>
-                    <table class="table table-dark table-sm">
-                        <thead>
-                            <tr>
-                                <th>Item Name</th>
-                                <th class="text-center">Price (₱)</th>
-                                <th class="text-center">Qty</th>
-                            </tr>
-                        </thead>
-                        <tbody id="saleItemsList"></tbody>
-                    </table>
-                    <div class="border-top border-secondary pt-3 mt-3">
-                        <div class="fw-bold text-warning mb-2">Refund History</div>
-                        <div id="saleRefundHistory" class="mt-3"></div>
+                    <div class="sale-receipt-shell">
+                        <div class="sale-receipt">
+                            <div class="sale-receipt-top">
+                                <div>
+                                    <div class="sale-receipt-kicker">A4 Analytics System</div>
+                                    <div class="sale-receipt-no">Receipt #<span id="modalSaleID"></span></div>
+                                </div>
+                                <div id="saleDetailsPaymentPill" class="sale-payment-pill sale-payment-other">Payment</div>
+                            </div>
+
+                            <div id="saleDetailsMeta" class="sale-receipt-meta-grid"></div>
+                            <div id="saleDetailsSummary" class="sale-receipt-summary"></div>
+
+                            <div class="sale-receipt-table-wrap">
+                                <table class="table table-sm sale-receipt-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Item / Service</th>
+                                            <th class="text-center">Unit Price</th>
+                                            <th class="text-center">Qty</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="saleItemsList"></tbody>
+                                </table>
+                            </div>
+
+                            <div id="saleRefundHistory" class="sale-receipt-refunds"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
@@ -1632,12 +1975,12 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
                 let hasDisc = item.discount_amount && item.discount_amount > 0;
                 let itemLabel = `<div>${escapeHtml(item.name)}</div>`;
                 if(hasDisc) {
-                    itemLabel += `<small class="text-success">Disc: -₱${item.discount_amount.toFixed(2)}</small>`;
+                    itemLabel += `<small class="text-success">Disc: -&#8369;${item.discount_amount.toFixed(2)}</small>`;
                 }
                 
-                let priceDisplay = `<div>₱${parseFloat(item.original_price).toFixed(2)}</div>`;
+                let priceDisplay = `<div>&#8369;${parseFloat(item.original_price).toFixed(2)}</div>`;
                 if(hasDisc) {
-                    priceDisplay += `<div class="text-success fw-bold">₱${parseFloat(item.final_unit_price).toFixed(2)}</div>`;
+                    priceDisplay += `<div class="text-success fw-bold">&#8369;${parseFloat(item.final_unit_price).toFixed(2)}</div>`;
                 }
 
                 list.innerHTML += `
@@ -1656,7 +1999,7 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
                     list.innerHTML += `
                         <tr>
                             <td>${escapeHtml(svc.name)}</td>
-                            <td class="text-center">₱${parseFloat(svc.price).toFixed(2)}</td>
+                            <td class="text-center">&#8369;${parseFloat(svc.price).toFixed(2)}</td>
                             <td class="text-center text-muted">1</td>
                         </tr>`;
                 });
@@ -1678,7 +2021,7 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
                         </span>
                     </td>
                     <td class="pt-3 fw-bold fs-5 text-danger text-center">
-                        ₱${parseFloat(data.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        &#8369;${parseFloat(data.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td></td>
                 </tr>`;
@@ -1686,30 +2029,39 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
 }
 
 function formatPeso(value) {
-    return `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `&#8369;${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function renderRefundHistory(data) {
     const historyEl = document.getElementById('saleRefundHistory');
     const refunds = data.refund_history || [];
     if (!refunds.length) {
-        historyEl.innerHTML = '<div class="small text-white-50">No refunds recorded for this sale.</div>';
+        historyEl.innerHTML = `
+            <div class="sale-refund-title">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                <span>Refund History</span>
+            </div>
+            <div class="sale-refund-note">No refunds recorded for this sale.</div>
+        `;
         return;
     }
 
     historyEl.innerHTML = `
-        <div class="small text-white-50 mb-2">Refund History</div>
-        <div class="list-group list-group-flush">
+        <div class="sale-refund-title">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            <span>Refund History</span>
+        </div>
+        <div>
             ${refunds.map(refund => `
-                <div class="list-group-item bg-dark text-white border-secondary px-0">
-                    <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="sale-refund-card">
+                    <div class="sale-refund-head">
                         <div>
-                            <div class="fw-bold text-danger">${escapeHtml(refund.refund_number || 'Refund')}</div>
-                            <div class="small text-white-50">${escapeHtml(refund.refund_date_display || '')} · ${escapeHtml(refund.refunded_by_username || 'System')}</div>
-                            <div class="small mt-1">${escapeHtml(refund.reason || '')}</div>
-                            ${refund.notes ? `<div class="small text-info mt-1">${escapeHtml(refund.notes)}</div>` : ''}
+                            <div class="sale-refund-number">${escapeHtml(refund.refund_number || 'Refund')}</div>
+                            <div class="sale-refund-meta">${escapeHtml(refund.refund_date_display || '')} - ${escapeHtml(refund.refunded_by_username || 'System')}</div>
+                            <div class="sale-refund-note">${escapeHtml(refund.reason || '')}</div>
+                            ${refund.notes ? `<div class="sale-refund-note" style="color:#1d4ed8;">${escapeHtml(refund.notes)}</div>` : ''}
                         </div>
-                        <div class="fw-bold text-danger">${formatPeso(refund.refund_amount)}</div>
+                        <div class="sale-refund-amount">${formatPeso(refund.refund_amount)}</div>
                     </div>
                 </div>
             `).join('')}
@@ -1721,16 +2073,47 @@ function populateSaleDetails(data, saleID, displayNum) {
     document.getElementById('modalSaleID').innerText = displayNum || data.sales_number || saleID;
 
     const meta = document.getElementById('saleDetailsMeta');
+    const summary = document.getElementById('saleDetailsSummary');
+    const paymentPill = document.getElementById('saleDetailsPaymentPill');
+    const paymentMethod = data.payment_method_name || 'N/A';
+    const paymentToneClass = /cash/i.test(paymentMethod)
+        ? 'sale-payment-cash'
+        : /(utang|debt)/i.test(paymentMethod)
+            ? 'sale-payment-credit'
+            : 'sale-payment-other';
+
+    paymentPill.className = `sale-payment-pill ${paymentToneClass}`;
+    paymentPill.textContent = paymentMethod;
+
     meta.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span>${escapeHtml(data.customer_name || 'Walk-in')}</span>
-            <span>&middot;</span>
-            <span>${escapeHtml(data.transaction_date_display || '')}</span>
-            <span class="badge bg-dark border border-secondary text-info">${escapeHtml(data.payment_method_name || 'N/A')}</span>
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Customer</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(data.customer_name || 'Walk-in')}</div>
         </div>
-        <div class="mt-1 d-flex flex-wrap align-items-center gap-2">
-            ${Number(data.total_refunded || 0) > 0 ? `<span class="text-danger">Refunded: ${formatPeso(data.total_refunded)}</span><span class="text-warning">Net: ${formatPeso(data.net_amount)}</span>` : ''}
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Date</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(data.transaction_date_display || '')}</div>
         </div>
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Status</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(data.status || 'Completed')}</div>
+        </div>
+    `;
+
+    summary.innerHTML = `
+        <div class="sale-summary-chip total">
+            <i class="bi bi-calculator"></i>
+            <span>Total ${formatPeso(data.total_amount)}</span>
+        </div>
+        ${Number(data.total_refunded || 0) > 0 ? `
+        <div class="sale-summary-chip refund">
+            <i class="bi bi-arrow-return-left"></i>
+            <span>Refunded ${formatPeso(data.total_refunded)}</span>
+        </div>
+        <div class="sale-summary-chip net">
+            <i class="bi bi-wallet2"></i>
+            <span>Net ${formatPeso(data.net_amount)}</span>
+        </div>` : ''}
     `;
 
     const list = document.getElementById('saleItemsList');
@@ -1738,55 +2121,44 @@ function populateSaleDetails(data, saleID, displayNum) {
 
     (data.items || []).forEach(item => {
         const hasDisc = Number(item.discount_amount || 0) > 0;
-        let itemLabel = `<div>${escapeHtml(item.name)}</div>`;
+        let itemLabel = `<div class="sale-line-name">${escapeHtml(item.name)}</div>`;
         if (hasDisc) {
-            itemLabel += `<small class="text-success">Disc: -${formatPeso(item.discount_amount)}</small>`;
+            itemLabel += `<div class="sale-line-note discount">Discount applied: -${formatPeso(item.discount_amount)}</div>`;
         }
         if (Number(item.refunded_quantity || 0) > 0) {
-            itemLabel += `<div class="small text-danger">Refunded: ${item.refunded_quantity} / Remaining: ${item.refundable_quantity}</div>`;
+            itemLabel += `<div class="sale-line-note refund">Refunded: ${item.refunded_quantity} / Remaining: ${item.refundable_quantity}</div>`;
         }
 
-        let priceDisplay = `<div>${formatPeso(item.original_price)}</div>`;
+        let priceDisplay = `<div class="sale-line-name">${formatPeso(item.original_price)}</div>`;
         if (hasDisc) {
-            priceDisplay += `<div class="text-success fw-bold">${formatPeso(item.final_unit_price)}</div>`;
+            priceDisplay += `<div class="sale-line-note discount">Final: ${formatPeso(item.final_unit_price)}</div>`;
         }
 
         list.innerHTML += `
             <tr>
                 <td>${itemLabel}</td>
                 <td class="text-center align-middle">${priceDisplay}</td>
-                <td class="text-center align-middle fw-bold text-warning">${item.sold_quantity}</td>
+                <td class="text-center align-middle fw-bold">${item.sold_quantity}</td>
             </tr>`;
     });
 
     if (data.services && data.services.length > 0) {
-        const mechanicLabel = data.mechanic_name ? ` (by ${escapeHtml(data.mechanic_name)})` : '';
-        list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services${mechanicLabel}</td></tr>`;
+        const mechanicLabel = data.mechanic_name ? ` - ${escapeHtml(data.mechanic_name)}` : '';
+        list.innerHTML += `<tr class="sale-section-row"><td colspan="3">Labor & Services${mechanicLabel}</td></tr>`;
         data.services.forEach(svc => {
             list.innerHTML += `
                 <tr>
-                    <td>${escapeHtml(svc.name)}</td>
-                    <td class="text-center">${formatPeso(svc.price)}</td>
-                    <td class="text-center text-muted">1</td>
+                    <td><div class="sale-line-name">${escapeHtml(svc.name)}</div></td>
+                    <td class="text-center"><div class="sale-line-name">${formatPeso(svc.price)}</div></td>
+                    <td class="text-center">1</td>
                 </tr>`;
         });
     }
 
-    const badgeMap = {
-        'Cash': 'bg-success',
-        'Utang': 'bg-warning',
-        'Debt': 'bg-warning text-dark',
-    };
-    const badgeClass = badgeMap[data.payment_method_name] || 'bg-primary';
     list.innerHTML += `
-        <tr class="border-top border-danger">
-            <td class="fw-bold pt-3 text-danger">
-                GRAND TOTAL
-                <span class="badge ${badgeClass} ms-2" style="font-size: 0.65rem; vertical-align: middle;">
-                    ${escapeHtml(data.payment_method_name || 'N/A')}
-                </span>
-            </td>
-            <td class="pt-3 fw-bold fs-5 text-danger text-center">${formatPeso(data.total_amount)}</td>
+        <tr class="sale-total-row">
+            <td class="sale-total-label">Grand Total</td>
+            <td class="sale-total-amount text-center">${formatPeso(data.total_amount)}</td>
             <td></td>
         </tr>`;
 
@@ -1797,7 +2169,11 @@ function viewSaleDetails(saleID, displayNum) {
     document.getElementById('modalSaleID').innerText = displayNum || saleID;
     document.getElementById('saleItemsList').innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
     document.getElementById('saleDetailsMeta').innerHTML = '';
+    document.getElementById('saleDetailsSummary').innerHTML = '';
+    document.getElementById('saleDetailsPaymentPill').className = 'sale-payment-pill sale-payment-other';
+    document.getElementById('saleDetailsPaymentPill').textContent = 'Loading';
     document.getElementById('saleRefundHistory').innerHTML = '';
+    document.getElementById('saleDetailsPrintBtn').href = `/reports/sales-receipt/${encodeURIComponent(saleID)}`;
 
     const myModal = new bootstrap.Modal(document.getElementById('saleDetailsModal'));
     myModal.show();
@@ -1838,7 +2214,7 @@ function viewManualInDetails(auditGroupId) {
                 <div class="mb-3">
                     <div class="text-white fw-bold fs-5">${escapeHtml(data.item_name || 'Unknown Item')}</div>
                     <div class="text-white-50 small mt-1">
-                        <i class="bi bi-clock me-1"></i>${escapeHtml(data.transaction_date || '—')}
+                        <i class="bi bi-clock me-1"></i>${escapeHtml(data.transaction_date || '-')}
                         <span class="ms-3"><i class="bi bi-person me-1"></i>${escapeHtml(data.user_name || 'System')}</span>
                     </div>
                 </div>
@@ -1849,9 +2225,9 @@ function viewManualInDetails(auditGroupId) {
                         <div class="small text-white-50 mb-1">Quantity Received</div>
                         <div class="fw-bold text-warning mb-2">${walkin.quantity}</div>
                         <div class="small text-white-50 mb-1">Unit Cost</div>
-                        <div class="fw-bold text-info mb-2">₱${Number(walkin.unit_cost || 0).toFixed(2)}</div>
+                        <div class="fw-bold text-info mb-2">&#8369;${Number(walkin.unit_cost || 0).toFixed(2)}</div>
                         <div class="small text-white-50 mb-1">Notes</div>
-                        <div class="text-info">${escapeHtml(walkin.notes || '—')}</div>
+                        <div class="text-info">${escapeHtml(walkin.notes || '-')}</div>
                     </div>
                 ` : ''}
 
@@ -1861,14 +2237,14 @@ function viewManualInDetails(auditGroupId) {
                         ${costUpdate.previous_cost != null && costUpdate.updated_cost != null ? `
                             <div class="small text-white-50 mb-1">Cost Per Piece</div>
                             <div class="fw-bold text-warning mb-2">
-                                ₱${Number(costUpdate.previous_cost).toFixed(2)} → ₱${Number(costUpdate.updated_cost).toFixed(2)}
+                                &#8369;${Number(costUpdate.previous_cost).toFixed(2)} -> &#8369;${Number(costUpdate.updated_cost).toFixed(2)}
                             </div>
                         ` : `
                             <div class="small text-white-50 mb-1">Updated Cost</div>
-                            <div class="fw-bold text-warning mb-2">₱${Number(costUpdate.unit_cost || 0).toFixed(2)}</div>
+                            <div class="fw-bold text-warning mb-2">&#8369;${Number(costUpdate.unit_cost || 0).toFixed(2)}</div>
                         `}
                         <div class="small text-white-50 mb-1">Audit Note</div>
-                        <div class="text-info">${escapeHtml(costUpdate.notes || '—')}</div>
+                        <div class="text-info">${escapeHtml(costUpdate.notes || '-')}</div>
                     </div>
                 ` : '<div class="text-muted small">No cost-per-piece update was recorded for this manual stock-in.</div>'}
             `;
@@ -1885,7 +2261,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
     if (transactionType) params.set('transaction_type', transactionType);
     const query = params.toString();
 
-    const formatPeso = (value) => `₱${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatPeso = (value) => `&#8369;${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const renderMovementDetails = (details) => {
         const container = document.getElementById('po-movement-details');
         if (!details || !Array.isArray(details.entries) || details.entries.length === 0) {
@@ -1914,7 +2290,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
                 ? `<div class="small text-white-50">Subtotal</div><div class="fw-bold text-info mb-2">${formatPeso(entry.subtotal)}</div>`
                 : '';
             const costDeltaLine = hasCostDelta
-                ? `<div class="small text-white-50">Cost Per Piece</div><div class="fw-bold text-warning mb-2">${formatPeso(entry.previous_cost)} → ${formatPeso(entry.updated_cost)}</div>`
+                ? `<div class="small text-white-50">Cost Per Piece</div><div class="fw-bold text-warning mb-2">${formatPeso(entry.previous_cost)} -> ${formatPeso(entry.updated_cost)}</div>`
                 : '';
             const notesLine = entry.notes
                 ? `<div class="small text-white-50">Notes</div><div class="text-info">${escapeHtml(entry.notes)}</div>`
@@ -1987,7 +2363,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
             // Other header fields
             document.getElementById('modal-po-number').innerText = data.po_number;
             document.getElementById('modal-po-vendor').innerText = data.vendor_name;
-            document.getElementById('modal-po-total').innerText = formatPeso(data.total_amount || 0);
+            document.getElementById('modal-po-total').innerHTML = formatPeso(data.total_amount || 0);
             renderMovementDetails(data.movement_details);
 
             // Itemized list
@@ -2227,15 +2603,15 @@ function renderAuditTrail(data) {
         const badge   = typeBadge[type] || `<span class="badge rounded-pill bg-secondary audit-badge">${log.transaction_type}</span>`;
         const reason  = log.change_reason
             ? (log.change_reason === 'WALKIN_PURCHASE' ? 'WALK IN PURCHASE' : log.change_reason.replace(/_/g, ' '))
-            : '<span class="text-muted fw-bold">—</span>';
+            : '<span class="text-muted fw-bold">-</span>';
         const summary = log.items_summary
             ? (log.items_summary.length > 40 ? log.items_summary.slice(0, 40) + '...' : log.items_summary)
-            : '—';
+            : '-';
         const notes = log.notes
             ? `<span class="text-info" style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${log.notes}">
                 <i class="bi bi-chat-left-text me-1"></i>${log.notes}
             </span>`
-            : '<span class="text-muted">—</span>';
+            : '<span class="text-muted">-</span>';
 
         let refBtn = '<span class="text-muted">---</span>';
         if (log.reference_type === 'MANUAL_ADJUSTMENT' && log.audit_group_id) {
@@ -2275,7 +2651,7 @@ function renderAuditTrail(data) {
                 <td class="text-center fw-bold">${log.total_qty}</td>
                 <td class="audit-reference-cell">${refBtn}</td>
                 <td class="text-white-50 small audit-notes-cell">${notes}</td>
-                <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '—'}</td>
+                <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '-'}</td>
             </tr>`;
     }).join('');
 }
@@ -2466,7 +2842,7 @@ function renderPayablesAudit(data) {
                         <i class="bi bi-search me-1"></i>${referenceLabel}
                     </button>
                 </td>
-                <td class="text-end fw-bold">${log.amount_snapshot > 0 ? `₱${Number(log.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '<span class="text-muted">—</span>'}</td>
+                <td class="text-end fw-bold">${log.amount_snapshot > 0 ? `&#8369;${Number(log.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '<span class="text-muted">-</span>'}</td>
                 <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${escapeHtml(log.created_by_username || 'System')}</td>
             </tr>
         `;
@@ -2481,8 +2857,8 @@ function viewPayablesAuditDetails(auditId) {
     }
 
     const statusText = data.old_status && data.new_status
-        ? `${escapeHtml(data.old_status)} → ${escapeHtml(data.new_status)}`
-        : (data.new_status ? escapeHtml(data.new_status) : '—');
+        ? `${escapeHtml(data.old_status)} -> ${escapeHtml(data.new_status)}`
+        : (data.new_status ? escapeHtml(data.new_status) : '-');
 
     body.innerHTML = `
         <div class="row g-3">
@@ -2508,15 +2884,15 @@ function viewPayablesAuditDetails(auditId) {
             </div>
             <div class="col-md-6">
                 <div class="small text-white-50 mb-1">Amount</div>
-                <div class="fw-bold text-info">${data.amount_snapshot > 0 ? `₱${Number(data.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</div>
+                <div class="fw-bold text-info">${data.amount_snapshot > 0 ? `&#8369;${Number(data.amount_snapshot).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</div>
             </div>
             <div class="col-md-6">
                 <div class="small text-white-50 mb-1">PO Number</div>
-                <div class="fw-bold">${escapeHtml(data.po_number_snapshot || '—')}</div>
+                <div class="fw-bold">${escapeHtml(data.po_number_snapshot || '-')}</div>
             </div>
             <div class="col-md-6">
                 <div class="small text-white-50 mb-1">Cheque Number</div>
-                <div class="fw-bold">${escapeHtml(data.cheque_no_snapshot || '—')}</div>
+                <div class="fw-bold">${escapeHtml(data.cheque_no_snapshot || '-')}</div>
             </div>
             <div class="col-12">
                 <div class="small text-white-50 mb-1">Status</div>
@@ -2524,7 +2900,7 @@ function viewPayablesAuditDetails(auditId) {
             </div>
             <div class="col-12">
                 <div class="small text-white-50 mb-1">Notes</div>
-                <div class="text-info">${escapeHtml(data.notes || '—')}</div>
+                <div class="text-info">${escapeHtml(data.notes || '-')}</div>
             </div>
         </div>
     `;
@@ -2742,11 +3118,11 @@ function renderSalesAdmin(data) {
     tbody.innerHTML = data.rows.map(sale => `
         <tr>
             <td class="text-white-50 small">${sale.transaction_date}</td>
-            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.sales_number || '—')}</td>
+            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.sales_number || '-')}</td>
             <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.customer_name || 'Walk-in')}</td>
             <td>
                 <span class="badge bg-dark border border-secondary text-info">
-                    ${escapeHtml(sale.payment_method_name || '—')}
+                    ${escapeHtml(sale.payment_method_name || '-')}
                 </span>
             </td>
             <td>
@@ -2754,8 +3130,8 @@ function renderSalesAdmin(data) {
                 ${sale.has_refund ? `<div class="small text-danger mt-1 fw-bold">${escapeHtml(sale.refund_state || 'Refunded')}</div>` : ''}
             </td>
             <td class="fw-bold text-danger">
-                ₱${parseFloat(sale.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
-                ${sale.has_refund ? `<div class="small text-warning fw-semibold">Net: ₱${parseFloat(sale.net_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div><div class="small text-danger">Refunded: ₱${parseFloat(sale.refunded_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div>` : ''}
+                ${formatPeso(parseFloat(sale.total_amount))}
+                ${sale.has_refund ? `<div class="small text-warning fw-semibold">Net: ${formatPeso(parseFloat(sale.net_amount))}</div><div class="small text-danger">Refunded: ${formatPeso(parseFloat(sale.refunded_amount))}</div>` : ''}
             </td>
             <td class="text-center actions-cell">
                 <div class="btn-group">
@@ -2763,7 +3139,7 @@ function renderSalesAdmin(data) {
                             onclick="viewSaleDetails('${sale.id}', '${sale.sales_number}')">
                         <i class="bi bi-eye"></i>
                     </button>
-                    <a href="/print_receipt/${sale.sales_number}" target="_blank"
+                    <a href="/reports/sales-receipt/${sale.id}" target="_blank"
                     class="btn btn-sm btn-outline-warning">
                         <i class="bi bi-printer"></i>
                     </a>
@@ -2785,17 +3161,17 @@ function viewItemCreated(itemId) {
                 return;
             }
 
-            const markup = data.markup ? (parseFloat(data.markup) * 100).toFixed(2) + '%' : '—';
+            const markup = data.markup ? (parseFloat(data.markup) * 100).toFixed(2) + '%' : '-';
             const rows = [
-                ['Category',       data.category       || '—'],
-                ['Description',    data.description    || '—'],
-                ['Pack Size',      data.pack_size      || '—'],
-                ['Vendor Price',   data.vendor_price   != null ? '₱' + parseFloat(data.vendor_price).toFixed(2)   : '—'],
-                ['Cost per Piece', data.cost_per_piece != null ? '₱' + parseFloat(data.cost_per_piece).toFixed(2) : '—'],
-                ['Selling Price',  data.a4s_selling_price != null ? '₱' + parseFloat(data.a4s_selling_price).toFixed(2) : '—'],
+                ['Category',       data.category       || '-'],
+                ['Description',    data.description    || '-'],
+                ['Pack Size',      data.pack_size      || '-'],
+                ['Vendor Price',   data.vendor_price   != null ? '&#8369;' + parseFloat(data.vendor_price).toFixed(2)   : '-'],
+                ['Cost per Piece', data.cost_per_piece != null ? '&#8369;' + parseFloat(data.cost_per_piece).toFixed(2) : '-'],
+                ['Selling Price',  data.a4s_selling_price != null ? '&#8369;' + parseFloat(data.a4s_selling_price).toFixed(2) : '-'],
                 ['Markup',         markup],
-                ['Reorder Level',  data.reorder_level  != null ? data.reorder_level : '—'],
-                ['Vendor',         data.vendor         || '—'],
+                ['Reorder Level',  data.reorder_level  != null ? data.reorder_level : '-'],
+                ['Vendor',         data.vendor         || '-'],
             ].map(([label, value]) => `
                 <tr>
                     <td class="text-white-50 small" style="width:40%">${label}</td>
@@ -2815,17 +3191,15 @@ function renderDebtTable() {
     const tbody = document.getElementById('debt-audit-body');
     const summaryEl = document.getElementById('debt-audit-summary');
 
-    // Apply status filter client-side (data already loaded, no limit on server)
     const filtered = debtActiveFilter === 'all'
         ? debtAllCustomers
         : debtActiveFilter === 'paid'
             ? debtAllCustomers.filter(customer => customer.status === 'paid')
-            : debtAllCustomers.filter(customer => customer.status !== 'paid'); // unpaid = partial + unpaid
+            : debtAllCustomers.filter(customer => customer.status !== 'paid');
 
-    // Summary counts always reflect full grouped dataset, not filtered view
     const totalCount  = debtAllCustomers.length;
     const openCount   = debtAllCustomers.filter(customer => customer.status !== 'paid').length;
-    summaryEl.textContent = `${totalCount} customers · ${openCount} open`;
+    summaryEl.textContent = `${totalCount} customers - ${openCount} open`;
 
     if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>`;
@@ -2835,10 +3209,10 @@ function renderDebtTable() {
     tbody.innerHTML = '';
 
     filtered.forEach(sale => {
-            const debtRecordLabel = sale.receipt_count > 1
-                ? `${sale.receipt_count} receipts`
-                : (sale.latest_sales_number || sale.sale_id || '1 receipt');
-            const customerName = sale.customer_name || 'Walk-in';
+        const debtRecordLabel = sale.receipt_count > 1
+            ? `${sale.receipt_count} receipts`
+            : (sale.latest_sales_number || sale.sale_id || '1 receipt');
+        const customerName = sale.customer_name || 'Walk-in';
 
         const statusBadge = {
             'paid':    `<span class="badge bg-success">PAID IN FULL</span>`,
@@ -2851,14 +3225,10 @@ function renderDebtTable() {
                 <td class="fw-bold">${customerName}</td>
                 <td class="text-warning">${escapeHtml(debtRecordLabel)}</td>
                 <td class="text-white-50 small">${escapeHtml(sale.date)}</td>
-                <td class="text-end">₱${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                <td class="text-end text-success">₱${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                <td class="text-end ${sale.remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">
-                    ₱${sale.remaining.toLocaleString(undefined, {minimumFractionDigits:2})}
-                </td>
-                <td class="text-center">
-                    ${statusBadge}
-                </td>
+                <td class="text-end">&#8369;${sale.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="text-end text-success">&#8369;${sale.total_paid.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="text-end ${sale.remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">&#8369;${sale.remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                <td class="text-center">${statusBadge}</td>
                 <td class="text-center actions-cell">
                     <div class="action-cluster">
                         <button type="button"
@@ -2918,7 +3288,7 @@ function showDebtPaymentsModalForCustomer(customerId, saleReceipt = '', receiptC
             const header = `
                 <div class="mb-3">
                     <div>Customer <span class="fw-semibold text-warning">${escapeHtml(customerName)}</span></div>
-                    <div class="text-white-50 small">${escapeHtml(receiptLabel)} · Running balance ₱${remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                    <div class="text-white-50 small">${escapeHtml(receiptLabel)} - Running balance &#8369;${remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
                 </div>`;
 
             if (!payments.length) {
@@ -2928,11 +3298,11 @@ function showDebtPaymentsModalForCustomer(customerId, saleReceipt = '', receiptC
 
             const rows = payments.map(p => `
                 <tr style="font-size:0.83rem;">
-                    <td class="text-white-50">${escapeHtml(p.paid_at_display || p.paid_at || '—')}</td>
+                    <td class="text-white-50">${escapeHtml(p.paid_at_display || p.paid_at || '-')}</td>
                     <td class="text-warning">${escapeHtml(p.sales_number || `Sale #${p.sale_id}`)}</td>
-                    <td class="fw-bold text-info">₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '—')}</span></td>
-                    <td class="text-white-50">${escapeHtml(p.reference_no || '—')}</td>
+                    <td class="fw-bold text-info">&#8369;${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '-')}</span></td>
+                    <td class="text-white-50">${escapeHtml(p.reference_no || '-')}</td>
                     <td class="text-white-50"><i class="bi bi-person me-1"></i>${escapeHtml(p.paid_by || 'Staff')}</td>
                     <td class="text-white-50 small fst-italic">${escapeHtml(p.notes || '')}</td>
                 </tr>`).join('');
@@ -2975,7 +3345,7 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
             }
 
             const payments = data.payments || [];
-            const receiptNo = data.sales_number || saleReceipt || '—';
+            const receiptNo = data.sales_number || saleReceipt || '-';
             const header = `
                 <div class="mb-3">
                     <div>Receipt # <span class="fw-semibold text-warning">${escapeHtml(receiptNo)}</span></div>
@@ -2989,9 +3359,9 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
             const rows = payments.map(p => `
                 <tr style="font-size:0.83rem;">
                     <td class="text-white-50">${escapeHtml(p.paid_at)}</td>
-                    <td class="fw-bold text-info">₱${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '—')}</span></td>
-                    <td class="text-white-50">${escapeHtml(p.reference_no || '—')}</td>
+                    <td class="fw-bold text-info">&#8369;${parseFloat(p.amount_paid).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+                    <td><span class="badge bg-dark border border-secondary text-info me-2">${escapeHtml(p.payment_method || '-')}</span></td>
+                    <td class="text-white-50">${escapeHtml(p.reference_no || '-')}</td>
                     <td class="text-white-50"><i class="bi bi-person me-1"></i>${escapeHtml(p.paid_by || 'Staff')}</td>
                     <td class="text-white-50 small fst-italic">${escapeHtml(p.notes || '')}</td>
                 </tr>`).join('');
@@ -3115,7 +3485,7 @@ async function loadLoyaltyPrograms() {
 
         tbody.innerHTML = programs.map(p => {
             const formatLoyaltyDate = (value) => {
-                if (!value) return '—';
+                if (!value) return '-';
                 const raw = String(value).trim();
 
                 // Flask/JSON date strings can look like:
@@ -3148,7 +3518,7 @@ async function loadLoyaltyPrograms() {
                 FREE_SERVICE:     'Free Service',
                 FREE_ITEM:        'Free Item',
                 DISCOUNT_PERCENT: `${p.reward_value}% off`,
-                DISCOUNT_AMOUNT:  `₱${parseFloat(p.reward_value).toFixed(2)} off`,
+                DISCOUNT_AMOUNT:  `&#8369;${parseFloat(p.reward_value).toFixed(2)} off`,
                 RAFFLE_ENTRY:     `${parseFloat(p.reward_value || 1).toFixed(0)} raffle entr${parseFloat(p.reward_value || 1).toFixed(0) === '1' ? 'y' : 'ies'}`,
             }[p.reward_type] || p.reward_type;
 
@@ -3373,7 +3743,7 @@ async function toggleLoyaltyProgram(programId, activate) {
     }
 }
 
-// ── Qualifying search (SERVICE or ITEM) ──────────────────────────
+// -- Qualifying search (SERVICE or ITEM) -------------------------
 let lfSearchTimer;
 let lfRuleCounter = 0;
 
@@ -3699,8 +4069,8 @@ function loyaltyRewardTypeChanged() {
     const label = document.getElementById('lf-reward-value-label');
 
     const hints = {
-        FREE_SERVICE:     '(leave 0 — reward is the service itself)',
-        FREE_ITEM:        '(leave 0 — reward is the item itself)',
+        FREE_SERVICE:     '(leave 0 - reward is the service itself)',
+        FREE_ITEM:        '(leave 0 - reward is the item itself)',
         DISCOUNT_PERCENT: '(e.g. 10 = 10% off)',
         DISCOUNT_AMOUNT:  '(peso amount off, e.g. 50)',
         RAFFLE_ENTRY:     '(number of raffle entries to grant, e.g. 1)',
@@ -3708,7 +4078,7 @@ function loyaltyRewardTypeChanged() {
     hint.textContent = hints[type] || '';
 }
 
-// ── Form submission ───────────────────────────────────────────────
+// -- Form submission --------------------------------------------
 async function loyaltySubmitProgram() {
     const errEl = document.getElementById('lf-error');
     const statusEl = document.getElementById('lf-status');
@@ -3833,5 +4203,8 @@ async function loyaltySubmitProgram() {
 loyaltyModesChanged();
 </script>
 {% endblock %}
+
+
+
 
 

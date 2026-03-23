@@ -1,11 +1,13 @@
-from flask import Blueprint, render_template, request, jsonify, session
-from datetime import date as date_today, timedelta
+from flask import Blueprint, render_template, request, jsonify, session, flash, redirect, url_for
+from datetime import date as date_today, datetime, timedelta
 from utils.formatters import format_date
+from auth.utils import login_required
 from auth.utils import admin_required
 from services.cash_service import (
     get_cash_summary,
     get_cash_entries,
     get_cash_entry_count,
+    get_cash_entries_for_report,
     get_already_paid_mechanic_identifiers_for_dates,
     add_cash_entry,
     delete_cash_entry,
@@ -44,11 +46,102 @@ def _get_ledger_view():
     return ledger_view
 
 
+def _parse_iso_date(raw_value):
+    if not raw_value:
+        return None
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise ValueError("Invalid report date.") from exc
+
+
+def _resolve_report_date_range():
+    start_raw = request.args.get("start_date") or None
+    end_raw = request.args.get("end_date") or None
+
+    start_date = _parse_iso_date(start_raw)
+    end_date = _parse_iso_date(end_raw)
+
+    if start_date and not end_date:
+        end_date = start_date
+    elif end_date and not start_date:
+        start_date = end_date
+    elif not start_date and not end_date:
+        today = date_today.today()
+        start_date = today.replace(day=1)
+        if today.month == 12:
+            end_date = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end_date = today.replace(month=today.month + 1, day=1) - timedelta(days=1)
+
+    if start_date > end_date:
+        raise ValueError("Start date cannot be later than end date.")
+
+    return start_date.isoformat(), end_date.isoformat(), start_date, end_date
+
+
+def _build_cash_report_context(branch_id):
+    ledger_view = _get_ledger_view()
+    entry_type = request.args.get("type") or None
+
+    if entry_type not in {"CASH_IN", "CASH_OUT", None}:
+        entry_type = None
+
+    start_date, end_date, start_date_obj, end_date_obj = _resolve_report_date_range()
+    report_data = get_cash_entries_for_report(
+        date_from=start_date,
+        date_to=end_date,
+        branch_id=branch_id,
+        entry_type=entry_type,
+        ledger_view=ledger_view,
+    )
+
+    if start_date == end_date:
+        date_label = format_date(start_date)
+    else:
+        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
+
+    if ledger_view == "deleted":
+        report_title = "Deleted Cash Ledger Report"
+        report_badge = "Deleted Entries Audit"
+    else:
+        report_title = "Cash Ledger Report"
+        report_badge = "Cash Movement Report"
+
+    if entry_type == "CASH_IN":
+        filter_label = "Cash In only"
+        filter_tone = "cash-in"
+    elif entry_type == "CASH_OUT":
+        filter_label = "Cash Out only"
+        filter_tone = "cash-out"
+    else:
+        filter_label = "All entry types"
+        filter_tone = "all"
+
+    return {
+        "report_title": report_title,
+        "report_badge": report_badge,
+        "date_label": date_label,
+        "generated_at": datetime.now().strftime("%b %d, %Y %I:%M %p"),
+        "start_date": start_date,
+        "end_date": end_date,
+        "entry_type": entry_type,
+        "ledger_view": ledger_view,
+        "filter_label": filter_label,
+        "filter_tone": filter_tone,
+        "entries": report_data["entries"],
+        "total_in": report_data["total_in"],
+        "total_out": report_data["total_out"],
+        "net_movement": report_data["cash_on_hand"],
+    }
+
+
 # ─────────────────────────────────────────────
 # PAGE ROUTE
 # ─────────────────────────────────────────────
 
 @cash_bp.route("/cash-ledger")
+@login_required
 def cash_ledger():
     branch_id  = _get_branch_id()
     purge_deleted_cash_entries(branch_id=branch_id)
@@ -176,6 +269,7 @@ def cash_ledger():
 # ─────────────────────────────────────────────
 
 @cash_bp.route("/api/cash/summary")
+@login_required
 def cash_summary_api():
     branch_id = _get_branch_id()
     purge_deleted_cash_entries(branch_id=branch_id)
@@ -184,6 +278,7 @@ def cash_summary_api():
 
 
 @cash_bp.route("/api/cash/entries")
+@login_required
 def cash_entries_api():
     branch_id  = _get_branch_id()
     purge_deleted_cash_entries(branch_id=branch_id)
@@ -207,6 +302,7 @@ def cash_entries_api():
 
 
 @cash_bp.route("/api/cash/ledger")
+@login_required
 def cash_ledger_api():
     branch_id  = _get_branch_id()
     purge_deleted_cash_entries(branch_id=branch_id)
@@ -259,6 +355,7 @@ def cash_ledger_api():
 
 
 @cash_bp.route("/api/cash/add", methods=["POST"])
+@login_required
 def cash_add_api():
     data = request.get_json()
     reference_id = data.get("reference_id")
@@ -286,6 +383,7 @@ def cash_add_api():
 
 
 @cash_bp.route("/api/cash/delete/<int:entry_id>", methods=["DELETE"])
+@login_required
 @admin_required
 def cash_delete_api(entry_id):
     try:
@@ -303,6 +401,7 @@ def cash_delete_api(entry_id):
 
 
 @cash_bp.route("/api/cash/restore/<int:entry_id>", methods=["POST"])
+@login_required
 @admin_required
 def cash_restore_api(entry_id):
     try:
@@ -313,4 +412,15 @@ def cash_restore_api(entry_id):
         return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
         return jsonify({"status": "error", "message": "Server error: " + str(e)}), 500
+
+
+@cash_bp.route("/reports/cash-ledger")
+@login_required
+def cash_ledger_report():
+    try:
+        context = _build_cash_report_context(branch_id=_get_branch_id())
+        return render_template("cash/cash_ledger_pdf.html", report=context)
+    except ValueError as exc:
+        flash(str(exc), "warning")
+        return redirect(url_for("cash.cash_ledger", view=_get_ledger_view()))
 

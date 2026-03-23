@@ -321,6 +321,160 @@
         font-size: 0.8rem;
         font-weight: 600;
     }
+
+    .ledger-view-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    }
+
+    .ledger-view-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        color: var(--text-muted);
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 0.92rem;
+        line-height: 1;
+        transition: all 0.18s ease;
+    }
+
+    .ledger-view-link:hover {
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .ledger-view-link i {
+        font-size: 0.95rem;
+    }
+
+    .ledger-view-link.is-active {
+        color: #fff;
+        background: linear-gradient(135deg, rgba(193, 18, 31, 0.92), rgba(150, 16, 27, 0.92));
+        border-color: rgba(193, 18, 31, 0.95);
+        box-shadow: 0 10px 20px rgba(193, 18, 31, 0.22);
+    }
+
+    .ledger-view-link.is-active i {
+        color: inherit;
+    }
+
+    .ledger-view-link.is-deleted.is-active {
+        background: linear-gradient(135deg, rgba(244, 196, 48, 0.96), rgba(201, 144, 0, 0.92));
+        border-color: rgba(244, 196, 48, 0.95);
+        color: #181818;
+        box-shadow: 0 10px 20px rgba(244, 196, 48, 0.2);
+    }
+
+    .ledger-view-meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .deleted-view-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        border-radius: 18px;
+        border: 1px solid rgba(244, 196, 48, 0.32);
+        background:
+            linear-gradient(135deg, rgba(244, 196, 48, 0.12), rgba(244, 196, 48, 0.04)),
+            var(--bg-card);
+        box-shadow: 0 14px 32px rgba(0, 0, 0, 0.16);
+    }
+
+    .deleted-view-banner-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+        color: #f4c430;
+        font-size: 0.95rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    .deleted-view-banner-title i {
+        font-size: 1rem;
+    }
+
+    .deleted-view-banner-copy {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.88rem;
+    }
+
+    .deleted-view-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(244, 196, 48, 0.16);
+        color: #f4c430;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+    }
+
+    .ledger-card-deleted {
+        border: 1px solid rgba(244, 196, 48, 0.2);
+        background:
+            radial-gradient(circle at top right, rgba(244, 196, 48, 0.07), transparent 28%),
+            var(--bg-card);
+        box-shadow: inset 0 1px 0 rgba(244, 196, 48, 0.06);
+    }
+
+    .ledger-card-deleted .table thead th {
+        color: #ffd24a;
+    }
+
+    .ledger-card-deleted #entry-count {
+        background: rgba(244, 196, 48, 0.1);
+        border-color: rgba(244, 196, 48, 0.22);
+        color: #f7d56d;
+    }
+
+    .ledger-card-deleted .ledger-type-toggle .btn-outline-secondary.active {
+        background: rgba(244, 196, 48, 0.18);
+        border-color: rgba(244, 196, 48, 0.4);
+        color: #ffd24a;
+    }
+
+    .ledger-report-form {
+        margin: 0;
+    }
+
+    @media (max-width: 576px) {
+        .ledger-view-switch {
+            width: 100%;
+            justify-content: stretch;
+        }
+
+        .ledger-view-link {
+            flex: 1;
+            justify-content: center;
+        }
+
+        .deleted-view-banner {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -334,18 +488,46 @@
     </div>
 </div>
 
-<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
-    <a class="btn btn-sm {% if selected_view == 'active' %}btn-primary{% else %}btn-outline-secondary{% endif %}"
-       href="{{ url_for('cash.cash_ledger', view='active', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}">
-        <i class="bi bi-journal-text me-1"></i> Active Ledger
-    </a>
-    {% if session.get('role') == 'admin' %}
-    <a class="btn btn-sm {% if selected_view == 'deleted' %}btn-warning{% else %}btn-outline-warning{% endif %}"
-       href="{{ url_for('cash.cash_ledger', view='deleted', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}">
-        <i class="bi bi-trash3 me-1"></i> Deleted
-    </a>
-    {% endif %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div class="ledger-view-switch" role="tablist" aria-label="Ledger view switcher">
+        <a class="ledger-view-link {% if selected_view == 'active' %}is-active{% endif %}"
+           href="{{ url_for('cash.cash_ledger', view='active', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+           role="tab"
+           aria-selected="{{ 'true' if selected_view == 'active' else 'false' }}">
+            <i class="bi bi-journal-text"></i>
+            <span>Active Ledger</span>
+        </a>
+        {% if session.get('role') == 'admin' %}
+        <a class="ledger-view-link is-deleted {% if selected_view == 'deleted' %}is-active{% endif %}"
+           href="{{ url_for('cash.cash_ledger', view='deleted', type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+           role="tab"
+           aria-selected="{{ 'true' if selected_view == 'deleted' else 'false' }}">
+            <i class="bi bi-trash3"></i>
+            <span>Deleted</span>
+        </a>
+        {% endif %}
+    </div>
+    <div class="ledger-view-meta">
+        {% if selected_view == 'deleted' %}
+        Reviewing soft-deleted entries and restore actions.
+        {% else %}
+        Viewing live cash movements and current cash-on-hand totals.
+        {% endif %}
+    </div>
 </div>
+
+{% if selected_view == 'deleted' %}
+<div class="deleted-view-banner">
+    <div>
+        <div class="deleted-view-banner-title">
+            <i class="bi bi-arrow-counterclockwise"></i>
+            <span>Deleted Ledger Workspace</span>
+        </div>
+        <p class="deleted-view-banner-copy">Review archived entries, confirm who removed them, and restore manual records when needed.</p>
+    </div>
+    <div class="deleted-view-badge">Restore-ready view</div>
+</div>
+{% endif %}
 
 <!-- Ã¢â€â‚¬Ã¢â€â‚¬ Summary Cards Ã¢â€â‚¬Ã¢â€â‚¬ -->
 {% if selected_view == 'active' %}
@@ -533,7 +715,7 @@
 
     <!-- LEDGER TABLE -->
     <div class="{% if selected_view == 'active' %}col-lg-8{% else %}col-12{% endif %}" id="ledger-section">
-        <div class="card p-4">
+        <div class="card p-4 {% if selected_view == 'deleted' %}ledger-card-deleted{% endif %}">
 
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
                 <div class="d-flex align-items-center gap-3 flex-wrap">
@@ -586,6 +768,16 @@
                     <button class="btn btn-sm btn-outline-secondary" id="ledger-clear-filters" type="button" title="Clear filters">
                         <i class="bi bi-x-lg"></i>
                     </button>
+
+                    <form class="ledger-report-form" id="ledger-report-form" method="get" action="{{ url_for('cash.cash_ledger_report') }}" target="_blank">
+                        <input type="hidden" name="view" id="ledger-report-view-hidden" value="{{ selected_view }}">
+                        <input type="hidden" name="type" id="ledger-report-type-hidden" value="{{ selected_type or '' }}">
+                        <input type="hidden" name="start_date" id="ledger-report-start-hidden" value="">
+                        <input type="hidden" name="end_date" id="ledger-report-end-hidden" value="">
+                        <button class="btn btn-sm btn-outline-danger" type="submit">
+                            <i class="bi bi-file-earmark-pdf me-1"></i> Generate PDF
+                        </button>
+                    </form>
                 </div>
             </div>
 
@@ -823,6 +1015,7 @@ showPayoutDateIfNeeded();
 }
 showPendingFlashAfterReload();
 initializeLedgerFilters();
+initializeLedgerReportForm();
 initializeLedgerPagination();
 if (LEDGER_VIEW === 'active') {
     initializePendingPayoutRows();
@@ -1069,6 +1262,35 @@ function initializeLedgerFilters() {
     });
 
     clearBtn.addEventListener('click', clearLedgerFilters);
+}
+
+function initializeLedgerReportForm() {
+    const reportForm = document.getElementById('ledger-report-form');
+    if (!reportForm) return;
+
+    reportForm.addEventListener('submit', () => {
+        const typeHidden = document.getElementById('ledger-report-type-hidden');
+        const startHidden = document.getElementById('ledger-report-start-hidden');
+        const endHidden = document.getElementById('ledger-report-end-hidden');
+        const viewHidden = document.getElementById('ledger-report-view-hidden');
+
+        if (viewHidden) {
+            viewHidden.value = LEDGER_VIEW || 'active';
+        }
+
+        if (typeHidden) {
+            typeHidden.value = ledgerTypeFilter || '';
+        }
+
+        if (ledgerDateFlatpickr && ledgerDateFlatpickr.selectedDates.length === 2) {
+            const [startDate, endDate] = ledgerDateFlatpickr.selectedDates.map(formatDateForQuery);
+            startHidden.value = startDate;
+            endHidden.value = endDate;
+        } else {
+            startHidden.value = '';
+            endHidden.value = '';
+        }
+    });
 }
 
 function initializeLedgerPagination() {

@@ -332,10 +332,14 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
     """
     conn = get_db()
 
-    # Sales and debt are always CASH_IN — skip them entirely if filtering for CASH_OUT
+    # Sales/debt are always CASH_IN. Refunds are always CASH_OUT.
     if ledger_view == 'deleted':
         sales_rows = []
         debt_rows = []
+        refund_rows = []
+    elif entry_type == 'CASH_IN':
+        sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
+        debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
@@ -366,10 +370,14 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
     """
     conn = get_db()
 
-    # Sales and debt are always CASH_IN — skip entirely if filtering for CASH_OUT
+    # Sales/debt are always CASH_IN. Refunds are always CASH_OUT.
     if ledger_view == 'deleted':
         sales_rows = []
         debt_rows = []
+        refund_rows = []
+    elif entry_type == 'CASH_IN':
+        sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
+        debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
@@ -648,16 +656,39 @@ def purge_deleted_cash_entries(branch_id=None):
 # REPORT HELPER
 # ─────────────────────────────────────────────
 
-def get_cash_entries_for_report(date_from, date_to, branch_id=1):
+def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None, ledger_view='active'):
     """
     Full unified ledger for a date range — used by the sales report PDF.
     Sorted oldest first so the PDF reads chronologically.
     """
     conn = get_db()
-    sales_rows  = _get_sales_cash(conn, branch_id, date_from, date_to)
-    debt_rows   = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
-    refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
-    manual_rows = _get_manual_entries(conn, branch_id, date_from, date_to, deleted_state='active')
+
+    if ledger_view == 'deleted':
+        sales_rows = []
+        debt_rows = []
+        refund_rows = []
+    elif entry_type == 'CASH_IN':
+        sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
+        debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
+        refund_rows = []
+    elif entry_type == 'CASH_OUT':
+        sales_rows = []
+        debt_rows = []
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
+    else:
+        sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
+        debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
+
+    deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
+    manual_rows = _get_manual_entries(
+        conn,
+        branch_id,
+        date_from,
+        date_to,
+        entry_type=entry_type,
+        deleted_state=deleted_state,
+    )
     conn.close()
 
     unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)

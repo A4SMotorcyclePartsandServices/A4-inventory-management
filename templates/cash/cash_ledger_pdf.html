@@ -1,0 +1,324 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report.report_title }} - {{ report.date_label }}</title>
+    <style>
+        @page { size: A4; margin: 14mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #111827;
+            font-size: 12.5px;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #111827;
+            color: #fff;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #fff;
+            color: #111827;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+            border-bottom: 3px solid #111827;
+        }
+
+        .header-logo {
+            width: 62px;
+            height: auto;
+        }
+
+        .header-copy {
+            flex: 1;
+            text-align: center;
+            margin-right: 80px;
+        }
+
+        .report-title {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+        }
+
+        .report-date {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 18px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            color: #111827;
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        .meta-strip {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+
+        .report-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
+        }
+
+        .generated-note {
+            font-size: 12px;
+            color: #4b5563;
+        }
+
+        .summary-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .summary-card {
+            flex: 1;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .summary-card-title {
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-bottom: 1px solid #cbd5e1;
+            font-size: 10.5px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        .summary-card-value {
+            padding: 12px;
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .summary-card-value.in { color: #166534; }
+        .summary-card-value.out { color: #b91c1c; }
+        .summary-card-value.net { color: #111827; }
+
+        .filter-strip {
+            margin-bottom: 18px;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fafafa;
+            font-size: 11.5px;
+            color: #374151;
+        }
+
+        .filter-value {
+            font-weight: 800;
+        }
+
+        .filter-value.filter-cash-in {
+            color: #166534;
+        }
+
+        .filter-value.filter-cash-out {
+            color: #b91c1c;
+        }
+
+        .filter-value.filter-all {
+            color: #111827;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th {
+            padding: 9px 8px;
+            border: 1px solid #9ca3af;
+            background: #e5e7eb;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.45px;
+        }
+
+        td {
+            padding: 9px 8px;
+            border: 1px solid #cbd5e1;
+            vertical-align: top;
+            font-size: 12px;
+        }
+
+        .cell-right {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .cell-center {
+            text-align: center;
+        }
+
+        .type-chip {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        .type-chip.in {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+        .type-chip.out {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fca5a5;
+        }
+
+        .muted {
+            color: #6b7280;
+        }
+
+        .empty-state {
+            margin-top: 18px;
+            padding: 22px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        You can print or save this cash ledger report as PDF.
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-copy">
+            <h1 class="report-title">{{ report.report_title }}</h1>
+            <div class="report-date">{{ report.date_label }}</div>
+        </div>
+    </div>
+
+    <div class="meta-strip">
+        <div class="report-badge">{{ report.report_badge }}</div>
+        <div class="generated-note">Generated: {{ report.generated_at }}</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-card-title">Total Cash In</div>
+            <div class="summary-card-value in">P{{ "{:,.2f}".format(report.total_in) }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-card-title">Total Cash Out</div>
+            <div class="summary-card-value out">P{{ "{:,.2f}".format(report.total_out) }}</div>
+        </div>
+        <div class="summary-card">
+            <div class="summary-card-title">Net Movement</div>
+            <div class="summary-card-value net">P{{ "{:,.2f}".format(report.net_movement) }}</div>
+        </div>
+    </div>
+
+    <div class="filter-strip">
+        View: <span class="filter-value">{{ 'Deleted entries' if report.ledger_view == 'deleted' else 'Active ledger' }}</span>
+        | Type filter: <span class="filter-value filter-{{ report.filter_tone }}">{{ report.filter_label }}</span>
+    </div>
+
+    {% if report.entries %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 84px;">Type</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th class="cell-right" style="width: 110px;">Amount</th>
+                <th style="width: 96px;">Recorded By</th>
+                {% if report.ledger_view == 'deleted' %}
+                <th style="width: 96px;">Deleted By</th>
+                <th style="width: 132px;">Deleted At</th>
+                {% else %}
+                <th style="width: 132px;">Date</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in report.entries %}
+            <tr>
+                <td class="cell-center">
+                    <span class="type-chip {{ 'in' if entry.entry_type == 'CASH_IN' else 'out' }}">
+                        {{ 'Cash In' if entry.entry_type == 'CASH_IN' else 'Cash Out' }}
+                    </span>
+                </td>
+                <td>{{ entry.category or '—' }}</td>
+                <td>{{ entry.description or '—' }}</td>
+                <td class="cell-right">P{{ "{:,.2f}".format(entry.amount) }}</td>
+                <td>{{ entry.recorded_by or '—' }}</td>
+                {% if report.ledger_view == 'deleted' %}
+                <td>{{ entry.deleted_by or '—' }}</td>
+                <td>{{ entry.deleted_at or '—' }}</td>
+                {% else %}
+                <td>{{ entry.created_at or '—' }}</td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        No cash ledger entries found for this report range.
+    </div>
+    {% endif %}
+</body>
+</html>

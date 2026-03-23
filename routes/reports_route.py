@@ -11,11 +11,30 @@ from services.reports_service import (
     get_sales_report_by_date,
     get_sales_report_by_range,
 )
-from services.transactions_service import get_purchase_order_export_data
+from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
 from services.cash_service import get_cash_entries_for_report
 from utils.formatters import format_date
 
 reports_bp = Blueprint("reports", __name__)
+
+
+@reports_bp.route("/reports/sales-receipt/<int:sale_id>")
+def sales_receipt_report(sale_id):
+    try:
+        data = get_sale_refund_context(sale_id)
+    except ValueError:
+        return "Sale not found.", 404
+    except Exception as exc:
+        return f"Unable to load sale receipt: {exc}", 500
+
+    if not data:
+        return "Sale not found.", 404
+
+    return render_template(
+        "reports/sales_receipt_pdf.html",
+        sale=data,
+        generated_at=format_date(datetime.now(), show_time=True),
+    )
 
 
 @reports_bp.route("/reports/purchase-order/<int:po_id>")

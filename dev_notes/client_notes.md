@@ -153,13 +153,13 @@ Future upgrade: move to Redis or DB
 
 
 ## Cash Ledger
-- [ ] PDF Reporting per month
+- [X] ~~*PDF Reporting per month*~~ [2026-03-23]
 
 ## PO Page
 - [X] ~~*Remove over receive feature*~~ [2026-03-23]
 
 ## 
-- [ ] Sales print copy existing design. receipt style
+- [X] ~~*Sales print copy existing design. receipt style*~~ [2026-03-23]
 
 ## forgot password
 - [ ] admin reset user password

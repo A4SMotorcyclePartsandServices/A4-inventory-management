@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sale Receipt - {{ sale.sales_number or sale.id }}</title>
+    <style>
+        @page { size: A4; margin: 14mm; }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #111827;
+            background: #f6f1ea;
+            line-height: 1.45;
+            font-size: 13px;
+        }
+
+        .print-bar {
+            background: #111827;
+            color: #fff;
+            padding: 12px 16px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .print-bar button {
+            margin-left: 12px;
+            padding: 8px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+            background: #fff;
+            color: #111827;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .page {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 24px 16px 28px;
+        }
+
+        .receipt-shell {
+            border: 1px solid #d6d3d1;
+            border-radius: 18px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248, 245, 240, 0.98)),
+                repeating-linear-gradient(
+                    to bottom,
+                    rgba(17, 24, 39, 0.02) 0,
+                    rgba(17, 24, 39, 0.02) 1px,
+                    transparent 1px,
+                    transparent 28px
+                );
+            box-shadow: 0 14px 40px rgba(17, 24, 39, 0.08);
+            overflow: hidden;
+        }
+
+        .receipt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 18px;
+            padding: 22px 24px 16px;
+            border-bottom: 2px dashed rgba(17, 24, 39, 0.18);
+        }
+
+        .brand-name {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: #111827;
+            margin: 0;
+        }
+
+        .payment-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid #d1d5db;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            font-size: 11px;
+            white-space: nowrap;
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .payment-pill.cash {
+            background: rgba(22, 163, 74, 0.12);
+            border-color: rgba(22, 163, 74, 0.24);
+            color: #166534;
+        }
+
+        .payment-pill.credit {
+            background: rgba(202, 138, 4, 0.14);
+            border-color: rgba(202, 138, 4, 0.28);
+            color: #a16207;
+        }
+
+        .payment-pill.other {
+            background: rgba(37, 99, 235, 0.10);
+            border-color: rgba(37, 99, 235, 0.20);
+            color: #1d4ed8;
+        }
+
+        .receipt-body {
+            padding: 20px 24px 24px;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .meta-card,
+        .summary-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 12px 14px;
+        }
+
+        .label {
+            display: block;
+            margin-bottom: 4px;
+            color: #6b7280;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+
+        .value {
+            color: #111827;
+            font-size: 15px;
+            font-weight: 700;
+            overflow-wrap: anywhere;
+        }
+
+        .section {
+            margin-top: 18px;
+        }
+
+        .section-title {
+            margin: 0 0 8px;
+            color: #b91c1c;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .receipt-table-wrap {
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.78);
+        }
+
+        .receipt-table thead th {
+            background: #f3f4f6;
+            color: #6b7280;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 11px 12px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+
+        .receipt-table thead th.text-center,
+        .receipt-table tbody td.text-center {
+            text-align: center;
+        }
+
+        .receipt-table thead th.text-right,
+        .receipt-table tbody td.text-right {
+            text-align: right;
+        }
+
+        .receipt-table tbody td {
+            padding: 12px;
+            border-bottom: 1px dashed #e5e7eb;
+            vertical-align: top;
+        }
+
+        .receipt-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .line-name {
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .line-note {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .line-note.discount {
+            color: #166534;
+            font-weight: 700;
+        }
+
+        .line-note.refund {
+            color: #b91c1c;
+            font-weight: 700;
+        }
+
+        .table-total-row td {
+            background: rgba(185, 28, 28, 0.05);
+            border-top: 2px solid rgba(185, 28, 28, 0.18);
+            font-weight: 800;
+        }
+
+        .table-total-label {
+            color: #b91c1c;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .table-total-amount {
+            color: #b91c1c;
+            font-size: 24px;
+            font-weight: 800;
+        }
+
+        .refund-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .refund-card {
+            border: 1px solid rgba(185, 28, 28, 0.18);
+            border-radius: 12px;
+            background: rgba(185, 28, 28, 0.04);
+            padding: 12px 14px;
+            page-break-inside: avoid;
+        }
+
+        .refund-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+        }
+
+        .refund-number {
+            color: #991b1b;
+            font-weight: 800;
+            font-size: 18px;
+        }
+
+        .refund-meta,
+        .refund-note {
+            color: #6b7280;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .refund-amount {
+            color: #b91c1c;
+            font-size: 24px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            padding: 14px;
+            border: 1px dashed #d1d5db;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.7);
+            color: #6b7280;
+        }
+
+        .footer-note {
+            margin-top: 16px;
+            color: #6b7280;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 12px;
+        }
+
+        @media print {
+            .print-bar { display: none; }
+            .page { padding: 0; }
+            .receipt-shell { box-shadow: none; }
+            body { background: #fff; }
+        }
+
+        @media (max-width: 720px) {
+            .receipt-header,
+            .refund-head,
+            .footer-note {
+                flex-direction: column;
+            }
+
+            .meta-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-bar">
+        You can print or save this sales receipt as PDF.
+        <button type="button" onclick="window.print()">Save as PDF / Print</button>
+    </div>
+
+    {% set payment_name = sale.payment_method_name or 'Payment' %}
+    {% set payment_lower = payment_name|lower %}
+    {% set sale_items = sale.get('items', []) %}
+    {% set sale_services = sale.get('services', []) %}
+    {% set refund_history = sale.get('refund_history', []) %}
+    {% if 'cash' in payment_lower %}
+        {% set payment_class = 'cash' %}
+    {% elif 'utang' in payment_lower or 'debt' in payment_lower %}
+        {% set payment_class = 'credit' %}
+    {% else %}
+        {% set payment_class = 'other' %}
+    {% endif %}
+
+    <div class="page">
+        <div class="receipt-shell">
+            <div class="receipt-header">
+                <div class="brand">
+                    <div>
+                        <h1 class="brand-name">Receipt #{{ sale.sales_number or sale.id }}</h1>
+                    </div>
+                </div>
+                <div class="payment-pill {{ payment_class }}">{{ payment_name }}</div>
+            </div>
+
+            <div class="receipt-body">
+                <div class="meta-grid">
+                    <div class="meta-card">
+                        <span class="label">Customer</span>
+                        <div class="value">{{ sale.customer_name or 'Walk-in' }}</div>
+                    </div>
+                    <div class="meta-card">
+                        <span class="label">Transaction Date</span>
+                        <div class="value">{{ sale.transaction_date_display or '-' }}</div>
+                    </div>
+                    <div class="meta-card">
+                        <span class="label">Status</span>
+                        <div class="value">{{ sale.status or '-' }}</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2 class="section-title">Items and Services</h2>
+                    <div class="receipt-table-wrap">
+                        <table class="receipt-table">
+                            <thead>
+                                <tr>
+                                    <th>Item / Service</th>
+                                    <th class="text-center">Unit Price</th>
+                                    <th class="text-center">Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in sale_items %}
+                                <tr>
+                                    <td>
+                                        <div class="line-name">{{ item.name }}</div>
+                                        {% if item.discount_amount %}
+                                        <div class="line-note discount">Discount applied: -&#8369;{{ '%.2f'|format(item.discount_amount) }}</div>
+                                        {% endif %}
+                                        {% if item.refunded_quantity %}
+                                        <div class="line-note refund">Refunded: {{ item.refunded_quantity }} / Remaining: {{ item.refundable_quantity }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="line-name">&#8369;{{ '%.2f'|format(item.original_price or 0) }}</div>
+                                        {% if item.discount_amount %}
+                                        <div class="line-note discount">Final: &#8369;{{ '%.2f'|format(item.final_unit_price or 0) }}</div>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center"><div class="line-name">{{ item.sold_quantity or 0 }}</div></td>
+                                </tr>
+                                {% endfor %}
+
+                                {% for svc in sale_services %}
+                                <tr>
+                                    <td>
+                                        <div class="line-name">{{ svc.name }}</div>
+                                        <div class="line-note">Service</div>
+                                    </td>
+                                    <td class="text-center"><div class="line-name">&#8369;{{ '%.2f'|format(svc.price or 0) }}</div></td>
+                                    <td class="text-center"><div class="line-name">1</div></td>
+                                </tr>
+                                {% endfor %}
+
+                                {% if not sale_items and not sale_services %}
+                                <tr>
+                                    <td colspan="3" class="text-center">No line items recorded for this sale.</td>
+                                </tr>
+                                {% endif %}
+
+                                <tr class="table-total-row">
+                                    <td colspan="2" class="table-total-label text-right">Grand Total</td>
+                                    <td class="table-total-amount text-center">&#8369;{{ '%.2f'|format(sale.total_amount or 0) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2 class="section-title">Refund History</h2>
+                    {% if refund_history %}
+                    <div class="refund-list">
+                        {% for refund in refund_history %}
+                        <div class="refund-card">
+                            <div class="refund-head">
+                                <div>
+                                    <div class="refund-number">{{ refund.refund_number or 'Refund' }}</div>
+                                    <div class="refund-meta">{{ refund.refund_date_display or '-' }} by {{ refund.refunded_by_username or 'System' }}</div>
+                                    <div class="refund-note">{{ refund.reason or 'No reason provided.' }}</div>
+                                    {% if refund.notes %}
+                                    <div class="refund-note" style="color:#1d4ed8;">{{ refund.notes }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="refund-amount">&#8369;{{ '%.2f'|format(refund.refund_amount or 0) }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="empty-state">No refunds recorded for this sale.</div>
+                    {% endif %}
+                </div>
+
+                <div class="footer-note">
+                    <span>Generated: {{ generated_at }}</span>
+                    <span>This is a system-generated sales receipt report.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
