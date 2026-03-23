@@ -156,7 +156,7 @@ Future upgrade: move to Redis or DB
 - [ ] PDF Reporting per month
 
 ## PO Page
-- [ ] Remove over receive feature
+- [X] ~~*Remove over receive feature*~~ [2026-03-23]
 
 ## 
 - [ ] Sales print copy existing design. receipt style

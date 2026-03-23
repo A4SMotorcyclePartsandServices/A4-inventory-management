@@ -32,16 +32,9 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
     The Universal Ledger Entry.
     Handles logging and stock updates.
 
-    ENFORCEMENT: BONUS_STOCK transactions require a notes value.
-    Enforced here at service level — cannot be bypassed via API.
-
     NOTE (future branches): when branch_id is added, pass it here.
     Do not hardcode branch assumptions.
     """
-    if change_reason == 'BONUS_STOCK':
-        if not notes or not str(notes).strip():
-            raise ValueError("A reason note is required for over-receive (BONUS_STOCK) transactions.")
-
     conn = external_conn if external_conn else get_db()
 
     if transaction_date:
@@ -2403,7 +2396,6 @@ def _get_po_receipt_history(po_id, external_conn=None):
                 pri.purchase_mode,
                 pri.stock_quantity_received,
                 pri.effective_piece_cost,
-                pri.is_over_receive,
                 pri.notes,
                 i.name AS item_name
             FROM po_receipt_items pri
@@ -2425,7 +2417,6 @@ def _get_po_receipt_history(po_id, external_conn=None):
                 "purchase_mode": _normalize_po_purchase_mode(row.get("purchase_mode")),
                 "stock_quantity_received": int(row["stock_quantity_received"] or 0),
                 "effective_piece_cost": float(row["effective_piece_cost"] or 0),
-                "is_over_receive": int(row["is_over_receive"] or 0),
                 "notes": row["notes"] or "",
             })
 
@@ -2827,7 +2818,7 @@ def request_po_revisions(po_id, admin_user_id, notes, revision_items=None):
 def receive_purchase_order(po_id, received_items, user_id, username):
     """
     Processes stock reception for a PO.
-    Handles cost correction, over-receive splitting, and PO status update.
+    Handles cost correction and PO status update.
     Raises ValueError for business logic errors.
     NOTE (future branches): add branch_id when ready.
     """
@@ -2848,7 +2839,6 @@ def receive_purchase_order(po_id, received_items, user_id, username):
         for entry in received_items:
             item_id = entry['item_id']
             qty_in = int(entry['qty_received'])
-            item_notes = entry.get('notes', '').strip()
 
             if qty_in <= 0:
                 continue
@@ -2867,6 +2857,11 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             remaining = qty_ordered - already_received
             unit_cost = po_item['unit_cost']
             purchase_mode = _normalize_po_purchase_mode(po_item.get("purchase_mode"))
+
+            if remaining <= 0:
+                raise ValueError(f"Item ID {item_id} is already fully received.")
+            if qty_in > remaining:
+                raise ValueError(f"Cannot receive more than the remaining PO quantity for item ID {item_id}.")
 
             stock_qty_in = qty_in
             effective_piece_cost = float(unit_cost or 0)
@@ -2909,58 +2904,17 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                     )
                 )
 
-            is_over_receive = qty_in > remaining
             received_any = True
-
-            if is_over_receive and not item_notes:
-                raise ValueError(f"A reason note is required for over-receiving item ID {item_id}.")
-
-            ordered_stock_qty = stock_qty_in
-            bonus_stock_qty = 0
-            if is_over_receive:
-                if purchase_mode == "BOX":
-                    if remaining > 0 and qty_in > 0:
-                        ordered_stock_qty = round(stock_qty_in * (remaining / qty_in))
-                        ordered_stock_qty = max(0, min(stock_qty_in, ordered_stock_qty))
-                    else:
-                        ordered_stock_qty = 0
-                    bonus_stock_qty = max(stock_qty_in - ordered_stock_qty, 0)
-                else:
-                    ordered_stock_qty = max(remaining, 0)
-                    bonus_stock_qty = max(qty_in - max(remaining, 0), 0)
-
-            if is_over_receive:
-                if remaining > 0:
-                    add_transaction(
-                        item_id=item_id, quantity=ordered_stock_qty, transaction_type='IN',
-                        user_id=user_id, user_name=username,
-                        reference_id=po_id, reference_type='PURCHASE_ORDER',
-                        change_reason='PO_ARRIVAL', unit_price=effective_piece_cost,
-                        transaction_date=clean_time, external_conn=conn,
-                        notes=receive_note_suffix or None,
-                    )
-                if bonus_stock_qty > 0:
-                    add_transaction(
-                        item_id=item_id,
-                        quantity=bonus_stock_qty,
-                        transaction_type='IN',
-                        user_id=user_id, user_name=username,
-                        reference_id=po_id, reference_type='PURCHASE_ORDER',
-                        change_reason='BONUS_STOCK', unit_price=effective_piece_cost,
-                        transaction_date=clean_time, external_conn=conn,
-                        notes=" ".join(part for part in [item_notes, receive_note_suffix] if part).strip()
-                    )
-            else:
-                will_still_have_remaining = (already_received + qty_in) < qty_ordered
-                arrival_reason = 'PARTIAL_ARRIVAL' if will_still_have_remaining else 'PO_ARRIVAL'
-                add_transaction(
-                    item_id=item_id, quantity=stock_qty_in, transaction_type='IN',
-                    user_id=user_id, user_name=username,
-                    reference_id=po_id, reference_type='PURCHASE_ORDER',
-                    change_reason=arrival_reason, unit_price=effective_piece_cost,
-                    transaction_date=clean_time, external_conn=conn,
-                    notes=receive_note_suffix or None,
-                )
+            will_still_have_remaining = (already_received + qty_in) < qty_ordered
+            arrival_reason = 'PARTIAL_ARRIVAL' if will_still_have_remaining else 'PO_ARRIVAL'
+            add_transaction(
+                item_id=item_id, quantity=stock_qty_in, transaction_type='IN',
+                user_id=user_id, user_name=username,
+                reference_id=po_id, reference_type='PURCHASE_ORDER',
+                change_reason=arrival_reason, unit_price=effective_piece_cost,
+                transaction_date=clean_time, external_conn=conn,
+                notes=receive_note_suffix or None,
+            )
 
             conn.execute("""
                 UPDATE po_items
@@ -2985,8 +2939,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 "purchase_mode": purchase_mode,
                 "stock_quantity_received": stock_qty_in,
                 "effective_piece_cost": effective_piece_cost,
-                "is_over_receive": 1 if is_over_receive else 0,
-                "notes": " ".join(part for part in [item_notes, receive_note_suffix] if part).strip(),
+                "notes": receive_note_suffix.strip(),
             })
 
         if not received_any:
@@ -3007,9 +2960,9 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 """
                 INSERT INTO po_receipt_items (
                     receipt_id, po_id, item_id, quantity_received, unit_cost, line_total,
-                    purchase_mode, stock_quantity_received, effective_piece_cost, is_over_receive, notes
+                    purchase_mode, stock_quantity_received, effective_piece_cost, notes
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     receipt_id,
@@ -3021,7 +2974,6 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                     receipt_entry["purchase_mode"],
                     receipt_entry["stock_quantity_received"],
                     receipt_entry["effective_piece_cost"],
-                    receipt_entry["is_over_receive"],
                     receipt_entry["notes"] or None,
                 ),
             )
@@ -3083,8 +3035,6 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
             return "Partial Delivery", "bg-warning text-dark"
         if reason_normalized == "PO_ARRIVAL":
             return "Completed Delivery", "bg-success"
-        if reason_normalized == "BONUS_STOCK":
-            return "Bonus Stock", "bg-info text-dark"
         if reason_normalized == "COST_PER_PIECE_UPDATED":
             return "Cost Updated", "bg-warning text-dark"
         if reason_normalized == "ORDER_PLACEMENT":
@@ -3163,26 +3113,6 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 "accent": "success" if reason_normalized == "PO_ARRIVAL" else "warning",
                 "summary": "This audit row represents the quantity received for this PO receipt event.",
                 "entries": entries,
-            }
-
-        if reason_normalized == "BONUS_STOCK":
-            return {
-                **base,
-                "title": "Bonus Stock",
-                "accent": "primary",
-                "summary": "This audit row records extra stock received beyond the ordered quantity.",
-                "context_note": "The receipt batch below still shows the full PO delivery snapshot for the same timestamp.",
-                "entries": [
-                    {
-                        "item_name": row["name"] or "Unknown Item",
-                        "quantity": int(row["quantity"] or 0),
-                        "unit_cost": float(row["unit_price"] or 0),
-                        "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
-                        "notes": row["notes"] or "",
-                    }
-                    for row in movement_rows
-                    if str(row["change_reason"] or "").strip().upper() == "BONUS_STOCK"
-                ],
             }
 
         if reason_normalized == "COST_PER_PIECE_UPDATED":

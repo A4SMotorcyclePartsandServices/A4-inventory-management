@@ -1035,3 +1035,29 @@ Current limitations / intended Phase 2 follow-ups
 - Correction-session workflow after confirmation is not yet formalized in UI.
 - Additional filtering by category / vendor during item selection can still be improved.
 - Report / PDF polish can still be expanded further if client reporting needs grow.
+
+2026-03-23
+
+PO over-receive removal
+- Removed the PO over-receive feature from the receive workflow.
+- PO receiving now hard-blocks any quantity above the remaining ordered balance.
+- Receive page no longer shows the over-receive note / bonus-stock UI.
+
+Backend receive rules
+- `receive_purchase_order()` now rejects over-receive submissions at service level even if the frontend is bypassed.
+- Removed the `BONUS_STOCK` receive branch and the ordered-vs-bonus stock split logic.
+- PO receipt processing now only creates normal `PARTIAL_ARRIVAL` or `PO_ARRIVAL` inventory movements.
+
+Audit / receipt history cleanup
+- Removed over-receive-specific receipt serialization from PO receipt history shaping.
+- Removed `BONUS_STOCK` movement rendering from PO detail / audit movement views.
+- New PO receipts no longer store an over-receive flag.
+
+Database cleanup
+- Dropped the legacy `po_receipt_items.is_over_receive` column from schema/init path.
+- Added startup cleanup for test-era over-receive batches:
+- delete legacy `BONUS_STOCK` inventory rows
+- delete linked PO-delivery payables and payable audit rows for those batches
+- delete affected receipt batches
+- recompute `po_items.quantity_received`
+- recompute affected PO `status` and `received_at`

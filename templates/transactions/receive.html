@@ -182,11 +182,6 @@
     .receive-cost-preview.is-placeholder {
         visibility: hidden;
     }
-    .over-receive-note {
-        border-left: 3px solid rgba(245, 158, 11, 0.8);
-        padding-left: 10px;
-        margin-top: 12px;
-    }
     @media (max-width: 1440px) {
         .receive-grid-header {
             font-size: 0.78rem;
@@ -269,8 +264,9 @@
                                         class="form-control form-control-lg receive-table-input bg-black text-white border-danger text-center qty-input"
                                         value="{{ remaining }}"
                                         min="0"
+                                        max="{{ remaining }}"
                                         placeholder="{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Enter boxes received{% else %}Enter pieces received{% endif %}"
-                                        oninput="checkOverReceive(this)">
+                                        oninput="syncReceiveRow(this)">
                                 </div>
                             </div>
 
@@ -317,15 +313,6 @@
                             </div>
                         </div>
 
-                        <div class="over-receive-note" style="display:none;">
-                            <input type="text"
-                                class="form-control form-control-sm bg-black text-white border-warning note-input"
-                                placeholder="Required: reason for over-receive (e.g. vendor promo)"
-                                maxlength="255">
-                            <small class="text-warning mt-1 d-block">
-                                <i class="fas fa-exclamation-triangle"></i> Over-receive detected and will be logged as bonus stock.
-                            </small>
-                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -366,27 +353,20 @@ function sanitizeReceiveInput(input) {
     return numericValue;
 }
 
-function checkOverReceive(input) {
+function syncReceiveRow(input) {
     const row = input.closest('.item-row');
     const remaining = parseInt(row.dataset.remaining, 10);
-    const qty = sanitizeReceiveInput(input);
-    const noteDiv = row.querySelector('.over-receive-note');
-    const noteInput = row.querySelector('.note-input');
+    let qty = sanitizeReceiveInput(input);
     const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
     const stockQtyInput = row.querySelector('.stock-qty-input');
 
     if (qty > remaining) {
-        noteDiv.style.display = 'block';
-        noteInput.required = true;
-        input.classList.remove('border-danger');
-        input.classList.add('border-warning');
-    } else {
-        noteDiv.style.display = 'none';
-        noteInput.required = false;
-        noteInput.value = '';
-        input.classList.remove('border-warning');
-        input.classList.add('border-danger');
+        qty = remaining;
+        input.value = String(remaining);
+        showToastFlash("Cannot receive more than the pending PO quantity.", "warning");
     }
+    input.classList.remove('border-warning');
+    input.classList.add('border-danger');
 
     if (purchaseMode !== 'BOX' && stockQtyInput) {
         stockQtyInput.value = qty > 0 ? qty : 0;
@@ -435,12 +415,10 @@ async function submitReception() {
         const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
         const stockQtyInput = row.querySelector('.stock-qty-input');
         const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
-        const noteInput = row.querySelector('.note-input');
-        const notes = noteInput ? noteInput.value.trim() : '';
 
-        if (qtyReceived > remaining && !notes) {
-            noteInput.classList.add('border-danger');
-            noteInput.focus();
+        if (qtyReceived > remaining) {
+            row.querySelector('.qty-input').classList.add('border-danger');
+            row.querySelector('.qty-input').focus();
             hasError = true;
             return;
         }
@@ -455,13 +433,12 @@ async function submitReception() {
         items.push({
             item_id: itemId,
             qty_received: qtyReceived,
-            stock_quantity_received: purchaseMode === 'BOX' ? stockQtyReceived : qtyReceived,
-            notes: notes
+            stock_quantity_received: purchaseMode === 'BOX' ? stockQtyReceived : qtyReceived
         });
     });
 
     if (hasError) {
-        showToastFlash("Please complete all required over-receive notes and counted-piece fields.", "warning");
+        showToastFlash("Please review the received quantity and counted-piece fields.", "warning");
         return;
     }
 
@@ -486,7 +463,11 @@ document.querySelectorAll('.item-row').forEach(row => {
     updateReceivePreview(row);
 });
 
-document.querySelectorAll('.qty-input, .stock-qty-input').forEach(input => {
+document.querySelectorAll('.qty-input').forEach(input => {
+    input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
+});
+
+document.querySelectorAll('.stock-qty-input').forEach(input => {
     input.setAttribute('max', String(RECEIVE_MAX_INPUT));
     input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
 });

@@ -123,7 +123,7 @@ def init_db():
     # 9. INVENTORY TRANSACTIONS
     # reference_id replaces sale_id (The "Universal Key")
     # reference_type tells us if reference_id points to a Sale, PO, or Swap
-    # change_reason is machine-readable code (BONUS_STOCK, PO_ARRIVAL, etc.)
+    # change_reason is machine-readable code (PO_ARRIVAL, PARTIAL_ARRIVAL, etc.)
     # notes is the free-text field staff fills in to explain why
     cur.execute("""
     CREATE TABLE IF NOT EXISTS inventory_transactions (
@@ -325,7 +325,6 @@ def init_db():
         purchase_mode       TEXT NOT NULL DEFAULT 'PIECE',
         stock_quantity_received INTEGER NOT NULL DEFAULT 0,
         effective_piece_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
-        is_over_receive     INTEGER NOT NULL DEFAULT 0,
         notes               TEXT
     )
     """)
@@ -724,6 +723,94 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_source_type ON payables_audit_log(source_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_payable_id ON payables_audit_log(payable_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_audit_cheque_id ON payables_audit_log(cheque_id)")
+    cur.execute("""
+    CREATE TEMP TABLE legacy_po_cleanup_batches AS
+    SELECT DISTINCT
+        reference_id AS po_id,
+        transaction_date
+    FROM inventory_transactions
+    WHERE reference_type = 'PURCHASE_ORDER'
+      AND transaction_type = 'IN'
+      AND change_reason = 'BONUS_STOCK'
+    """)
+    cur.execute("""
+    CREATE TEMP TABLE legacy_po_cleanup_receipts AS
+    SELECT DISTINCT pr.id, pr.po_id, pr.received_at
+    FROM po_receipts pr
+    JOIN legacy_po_cleanup_batches b
+      ON b.po_id = pr.po_id
+     AND b.transaction_date = pr.received_at
+    """)
+    cur.execute("""
+    CREATE TEMP TABLE legacy_po_cleanup_payables AS
+    SELECT DISTINCT p.id
+    FROM payables p
+    JOIN legacy_po_cleanup_receipts r ON r.id = p.po_receipt_id
+    """)
+    cur.execute("""
+    DELETE FROM payables_audit_log
+    WHERE payable_id IN (SELECT id FROM legacy_po_cleanup_payables)
+       OR po_receipt_id IN (SELECT id FROM legacy_po_cleanup_receipts)
+    """)
+    cur.execute("""
+    DELETE FROM payables
+    WHERE id IN (SELECT id FROM legacy_po_cleanup_payables)
+    """)
+    cur.execute("""
+    DELETE FROM inventory_transactions t
+    USING legacy_po_cleanup_batches b
+    WHERE t.reference_type = 'PURCHASE_ORDER'
+      AND t.reference_id = b.po_id
+      AND t.transaction_type = 'IN'
+      AND t.transaction_date = b.transaction_date
+    """)
+    cur.execute("""
+    DELETE FROM po_receipts
+    WHERE id IN (SELECT id FROM legacy_po_cleanup_receipts)
+    """)
+    cur.execute("""
+    UPDATE po_items pi
+    SET quantity_received = COALESCE(src.total_received, 0)
+    FROM (
+        SELECT
+            pi2.id AS po_item_id,
+            COALESCE(SUM(pri.quantity_received), 0) AS total_received
+        FROM po_items pi2
+        LEFT JOIN po_receipt_items pri
+          ON pri.po_id = pi2.po_id
+         AND pri.item_id = pi2.item_id
+        WHERE pi2.po_id IN (SELECT DISTINCT po_id FROM legacy_po_cleanup_batches)
+        GROUP BY pi2.id
+    ) src
+    WHERE pi.id = src.po_item_id
+    """)
+    cur.execute("""
+    UPDATE purchase_orders po
+    SET received_at = src.latest_received_at,
+        status = CASE
+            WHEN src.receipt_count = 0 THEN 'PENDING'
+            WHEN src.completed_item_count = src.total_item_count AND src.total_item_count > 0 THEN 'COMPLETED'
+            ELSE 'PARTIAL'
+        END
+    FROM (
+        SELECT
+            po2.id AS po_id,
+            MAX(pr.received_at) AS latest_received_at,
+            COUNT(DISTINCT pr.id) AS receipt_count,
+            COUNT(pi.id) AS total_item_count,
+            COUNT(pi.id) FILTER (WHERE pi.quantity_received >= pi.quantity_ordered) AS completed_item_count
+        FROM purchase_orders po2
+        LEFT JOIN po_receipts pr ON pr.po_id = po2.id
+        LEFT JOIN po_items pi ON pi.po_id = po2.id
+        WHERE po2.id IN (SELECT DISTINCT po_id FROM legacy_po_cleanup_batches)
+        GROUP BY po2.id
+    ) src
+    WHERE po.id = src.po_id
+    """)
+    cur.execute("DROP TABLE IF EXISTS legacy_po_cleanup_payables")
+    cur.execute("DROP TABLE IF EXISTS legacy_po_cleanup_receipts")
+    cur.execute("DROP TABLE IF EXISTS legacy_po_cleanup_batches")
+    cur.execute("ALTER TABLE po_receipt_items DROP COLUMN IF EXISTS is_over_receive")
 
     # 23. NOTIFICATIONS TABLE
     # One row per recipient user. This keeps unread/read state independent
