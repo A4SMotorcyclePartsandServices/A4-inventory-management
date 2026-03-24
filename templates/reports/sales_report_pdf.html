@@ -332,6 +332,124 @@
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
+        .report-section {
+            margin-top: 14px;
+            page-break-inside: avoid;
+            break-inside: avoid-page;
+        }
+        .report-section.allow-split {
+            page-break-inside: auto;
+            break-inside: auto;
+        }
+        .report-section-title {
+            page-break-after: avoid;
+            break-after: avoid-page;
+        }
+        .report-section-body {
+            page-break-before: avoid;
+            break-before: avoid-page;
+        }
+        .report-row {
+            page-break-inside: avoid;
+            break-inside: avoid-page;
+        }
+        .profit-spotlight {
+            border: 2px solid #14532d;
+            border-radius: 14px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f7fff8 0%, #eefaf1 55%, #fdf7e3 100%);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .profit-spotlight-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px 18px 12px;
+            background: linear-gradient(90deg, #14532d 0%, #1f7a45 100%);
+            color: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .profit-spotlight-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            opacity: 0.86;
+            margin-bottom: 3px;
+        }
+        .profit-spotlight-value {
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            line-height: 1;
+        }
+        .profit-spotlight-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.26);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+        .profit-spotlight-formula {
+            margin-top: 9px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.88);
+            line-height: 1.45;
+        }
+        .profit-spotlight-note {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.82);
+            text-align: right;
+            max-width: 220px;
+            line-height: 1.35;
+        }
+        .profit-spotlight-body {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding: 14px 18px 18px;
+        }
+        .profit-metric {
+            border: 1px solid rgba(20, 83, 45, 0.16);
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.75);
+        }
+        .profit-metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #4b5563;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .profit-metric-value {
+            font-size: 21px;
+            font-weight: 800;
+            color: #111827;
+            line-height: 1.1;
+        }
+        .profit-metric-sub {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #5b6470;
+        }
+        .profit-metric.revenue .profit-metric-value {
+            color: #0f5132;
+        }
+        .profit-metric.cost .profit-metric-value {
+            color: #9a3412;
+        }
     </style>
 </head>
 <body>
@@ -578,12 +696,118 @@
 
     </div>
 
+    {% set product_profit = data.total_product_profit or 0 %}
+    {% set profit_is_loss = product_profit < 0 %}
+    {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
+    {% set product_result_display = (product_profit * -1) if profit_is_loss else product_profit %}
+    <div class="report-section profit-spotlight">
+        <div class="report-section-title profit-spotlight-head">
+            <div>
+                <div class="profit-spotlight-status">{{ product_result_label }}</div>
+                <div class="profit-spotlight-value">₱ {{ "%.2f"|format(product_result_display) }}</div>
+                <div class="profit-spotlight-formula">
+                    Revenue ₱ {{ "%.2f"|format(data.total_product_revenue) }}
+                    - Cost ₱ {{ "%.2f"|format(data.total_product_cost) }}
+                    = {{ product_result_label }} ₱ {{ "%.2f"|format(product_result_display) }}
+                </div>
+            </div>
+        </div>
+        <div class="report-section-body profit-spotlight-body">
+            <div class="report-row profit-metric revenue">
+                <div class="profit-metric-label">Product Revenue</div>
+                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</div>
+                <div class="profit-metric-sub">Total revenue from sold items only.</div>
+            </div>
+            <div class="report-row profit-metric cost">
+                <div class="profit-metric-label">Product Cost</div>
+                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_cost) }}</div>
+                <div class="profit-metric-sub">Based on the item cost saved at the time of sale.</div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    {% else %}
+    <div class="empty-state">
+        <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
+    </div>
+    {% endif %}
+
+    {# ── Debt Payments Collected — outside sales block so it always shows ── #}
+    {% if data.debt_collected %}
+    <div class="report-section" style="border: 1px solid #a3cfbb; border-radius: 6px; overflow: hidden;">
+        <div class="report-section-title summary-box-title" style="background: #d4edda; color: #155724; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            Debt Payments Collected
+        </div>
+        <div class="report-section-body" style="padding: 10px 12px;">
+            {% for p in data.debt_collected %}
+            <div class="report-row summary-item-row">
+                <span>
+                    {{ p.customer_name }}
+                    <span style="font-size: 11px; color: #666;">(OR: {{ p.sales_number }})</span>
+                    {% if p.payment_method %}
+                    <span style="font-size: 11px; color: #888;"> · {{ p.payment_method }}</span>
+                    {% endif %}
+                    {% if p.paid_at %}
+                    <span style="font-size: 11px; color: #aaa;"> · {{ p.paid_at }}</span>
+                    {% endif %}
+                </span>
+                <span style="color: #155724; font-weight: 700;">₱ {{ "%.2f"|format(p.amount_paid) }}</span>
+            </div>
+            {% endfor %}
+            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #155724; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <span>TOTAL COLLECTED</span>
+                <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if data.refunds %}
+    <div class="report-section allow-split" style="border: 1px solid #f1aeb5; border-radius: 6px; overflow: hidden;">
+        <div class="report-section-title summary-box-title" style="background: #f8d7da; color: #721c24; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            Sale Refunds
+        </div>
+        <div class="report-section-body" style="padding: 10px 12px;">
+            {% for refund in data.refunds %}
+            <div class="report-row summary-item-row" style="align-items: flex-start;">
+                <span>
+                    {{ refund.customer_name }}
+                    <span style="font-size: 11px; color: #666;">(OR: {{ refund.sales_number }})</span>
+                    {% if refund.report_label %}
+                    <span style="font-size: 11px; color: #7f1d1d;"> · {{ refund.report_label }}</span>
+                    {% endif %}
+                    <span style="font-size: 11px; color: #888;"> · {{ refund.refund_number }}</span>
+                    <span style="font-size: 11px; color: #aaa;"> · {{ refund.refund_date }}</span>
+                    {% if refund.reason %}
+                    <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Reason: {{ refund.reason }}</div>
+                    {% endif %}
+                    {% if refund["items"] %}
+                    <div style="font-size: 11px; color: #555; margin-top: 3px;">
+                        {% for item in refund["items"] %}
+                            {{ item.quantity }}x {{ item.item_name }} (₱ {{ "%.2f"|format(item.line_total) }}){% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </span>
+                <span style="color: #721c24; font-weight: 700;">₱ {{ "%.2f"|format(refund.refund_amount) }}</span>
+            </div>
+            {% endfor %}
+            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #721c24; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <span>TOTAL REFUNDS</span>
+                <span>₱ {{ "%.2f"|format(data.total_refunds) }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if is_range and data.quota_failures %}
-    <div style="margin-top: 12px; border: 1px solid #fecaca; border-radius: 7px; overflow: hidden;">
-        <div class="summary-box-title" style="background: #fee2e2; color: #7f1d1d; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+    <div class="report-section" style="border: 1px solid #fecaca; border-radius: 7px; overflow: hidden;">
+        <div class="report-section-title summary-box-title" style="background: #fee2e2; color: #7f1d1d; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             Quota Misses by Day
         </div>
-        <div style="padding: 10px 12px; font-size: 12px;">
+        <div class="report-section-body" style="padding: 10px 12px; font-size: 12px;">
             <div style="font-size: 11px; color: #444; margin-bottom: 8px;">
                 Mechanics who did not hit their daily quota during the selected range.
             </div>
@@ -613,82 +837,8 @@
     </div>
     {% endif %}
 
-    {% else %}
-    <div class="empty-state">
-        <p>No paid sales records found for <strong>{{ report_date }}</strong>.</p>
-    </div>
-    {% endif %}
-
-    {# ── Debt Payments Collected — outside sales block so it always shows ── #}
-    {% if data.debt_collected %}
-    <div style="margin-top: 14px; border: 1px solid #a3cfbb; border-radius: 6px; overflow: hidden;">
-        <div class="summary-box-title" style="background: #d4edda; color: #155724; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-            Debt Payments Collected
-        </div>
-        <div style="padding: 10px 12px;">
-            {% for p in data.debt_collected %}
-            <div class="summary-item-row">
-                <span>
-                    {{ p.customer_name }}
-                    <span style="font-size: 11px; color: #666;">(OR: {{ p.sales_number }})</span>
-                    {% if p.payment_method %}
-                    <span style="font-size: 11px; color: #888;"> · {{ p.payment_method }}</span>
-                    {% endif %}
-                    {% if p.paid_at %}
-                    <span style="font-size: 11px; color: #aaa;"> · {{ p.paid_at }}</span>
-                    {% endif %}
-                </span>
-                <span style="color: #155724; font-weight: 700;">₱ {{ "%.2f"|format(p.amount_paid) }}</span>
-            </div>
-            {% endfor %}
-            <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #155724; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                <span>TOTAL COLLECTED</span>
-                <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if data.refunds %}
-    <div style="margin-top: 14px; border: 1px solid #f1aeb5; border-radius: 6px; overflow: hidden;">
-        <div class="summary-box-title" style="background: #f8d7da; color: #721c24; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-            Sale Refunds
-        </div>
-        <div style="padding: 10px 12px;">
-            {% for refund in data.refunds %}
-            <div class="summary-item-row" style="align-items: flex-start;">
-                <span>
-                    {{ refund.customer_name }}
-                    <span style="font-size: 11px; color: #666;">(OR: {{ refund.sales_number }})</span>
-                    {% if refund.report_label %}
-                    <span style="font-size: 11px; color: #7f1d1d;"> · {{ refund.report_label }}</span>
-                    {% endif %}
-                    <span style="font-size: 11px; color: #888;"> · {{ refund.refund_number }}</span>
-                    <span style="font-size: 11px; color: #aaa;"> · {{ refund.refund_date }}</span>
-                    {% if refund.reason %}
-                    <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Reason: {{ refund.reason }}</div>
-                    {% endif %}
-                    {% if refund["items"] %}
-                    <div style="font-size: 11px; color: #555; margin-top: 3px;">
-                        {% for item in refund["items"] %}
-                            {{ item.quantity }}x {{ item.item_name }} (₱ {{ "%.2f"|format(item.line_total) }}){% if not loop.last %}<br>{% endif %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </span>
-                <span style="color: #721c24; font-weight: 700;">₱ {{ "%.2f"|format(refund.refund_amount) }}</span>
-            </div>
-            {% endfor %}
-            <div class="summary-item-row" style="font-weight: 800; font-size: 13px; background: #721c24; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                <span>TOTAL REFUNDS</span>
-                <span>₱ {{ "%.2f"|format(data.total_refunds) }}</span>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="cash-section">
-        <div class="cash-section-title">
+    <div class="report-section allow-split cash-section">
+        <div class="report-section-title cash-section-title">
             💵 Cash Ledger — {{ report_date }}
         </div>
 

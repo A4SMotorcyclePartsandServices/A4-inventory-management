@@ -173,9 +173,18 @@ def init_db():
         discount_percent    NUMERIC(5,2) DEFAULT 0,
         discount_amount     NUMERIC(12,2) DEFAULT 0,
         final_unit_price    NUMERIC(12,2) NOT NULL,
+        cost_per_piece_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0,
         discounted_by       INTEGER REFERENCES users(id),
         created_at          TIMESTAMP DEFAULT NOW()
     )
+    """)
+    cur.execute("ALTER TABLE sales_items ADD COLUMN IF NOT EXISTS cost_per_piece_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("""
+    UPDATE sales_items si
+    SET cost_per_piece_snapshot = COALESCE(i.cost_per_piece, 0)
+    FROM items i
+    WHERE i.id = si.item_id
+      AND COALESCE(si.cost_per_piece_snapshot, 0) = 0
     """)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sale_refunds (

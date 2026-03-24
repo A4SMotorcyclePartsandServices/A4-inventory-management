@@ -398,6 +398,7 @@ def record_sale(data, user_id, username):
                     "name": item_row["name"],
                     "quantity": qty,
                     "original_price": master_price,
+                    "cost_per_piece_snapshot": round(float(item_row.get("cost_per_piece") or 0), 2),
                     "discount_percent_whole": discount_percent_whole,
                     "discount_percent_decimal": discount_percent_whole / 100,
                     "final_price": expected_final_price,
@@ -509,6 +510,7 @@ def record_sale(data, user_id, username):
         for item in normalized_items:
             original_price = float(item["original_price"])
             final_price = float(item["final_price"])
+            cost_per_piece_snapshot = float(item["cost_per_piece_snapshot"])
             discount_percent_whole = float(item["discount_percent_whole"])
             discount_percent_decimal = float(item["discount_percent_decimal"])
             discount_amount = float(item["discount_amount"])
@@ -533,11 +535,12 @@ def record_sale(data, user_id, username):
                 INSERT INTO sales_items (
                     sale_id, item_id, quantity,
                     original_unit_price, discount_percent, discount_amount, final_unit_price,
-                    discounted_by, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    cost_per_piece_snapshot, discounted_by, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 new_sale_id, item['item_id'], quantity,
                 original_price, discount_percent_decimal, discount_amount, final_price,
+                cost_per_piece_snapshot,
                 user_id if discount_percent_whole > 0 else None,
                 clean_time
             ))
@@ -791,7 +794,7 @@ def _create_exchange_replacement_sale(
 ):
     replacement_item_row = conn.execute(
         """
-        SELECT id, name, a4s_selling_price
+        SELECT id, name, a4s_selling_price, cost_per_piece
         FROM items
         WHERE id = %s
         FOR UPDATE
@@ -871,14 +874,15 @@ def _create_exchange_replacement_sale(
         ),
     ).fetchone()
     replacement_sale_id = int(replacement_sale_row["id"])
+    replacement_cost_snapshot = round(float(replacement_item_row["cost_per_piece"] or 0), 2)
 
     conn.execute(
         """
         INSERT INTO sales_items (
             sale_id, item_id, quantity,
             original_unit_price, discount_percent, discount_amount, final_unit_price,
-            discounted_by, created_at
-        ) VALUES (%s, %s, %s, %s, 0, 0, %s, NULL, %s)
+            cost_per_piece_snapshot, discounted_by, created_at
+        ) VALUES (%s, %s, %s, %s, 0, 0, %s, %s, NULL, %s)
         """,
         (
             replacement_sale_id,
@@ -886,6 +890,7 @@ def _create_exchange_replacement_sale(
             replacement_quantity,
             unit_price,
             unit_price,
+            replacement_cost_snapshot,
             refund_time,
         ),
     )

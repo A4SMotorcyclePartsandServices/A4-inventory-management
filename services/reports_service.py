@@ -11,6 +11,26 @@ MECHANIC_QUOTA = 500.0
 
 def _num(value):
     return float(value or 0)
+
+
+def _summarize_items_for_profit(paid_sales):
+    items_summary = {}
+    for sale in paid_sales:
+        for item in sale["products"]:
+            key = item["item_name"]
+            if key not in items_summary:
+                items_summary[key] = {
+                    "item_name": key,
+                    "quantity": 0,
+                    "total": 0.0,
+                    "cost_total": 0.0,
+                    "profit_total": 0.0,
+                }
+            items_summary[key]["quantity"] += int(item["quantity"] or 0)
+            items_summary[key]["total"] += _num(item["line_total"])
+            items_summary[key]["cost_total"] += _num(item.get("cost_total"))
+            items_summary[key]["profit_total"] += _num(item.get("profit_total"))
+    return sorted(items_summary.values(), key=lambda x: x["item_name"])
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────
@@ -391,7 +411,7 @@ def get_all_unresolved_sales(conn):
 def get_sales_report_by_date(report_date):
     """
     Pulls all completed sales for a given date for the End-of-Day PDF report.
-    Return value is identical to before — PDF template is untouched.
+    Return value is identical to before - PDF template is untouched.
     """
     conn = get_db()
 
@@ -468,18 +488,26 @@ def get_sales_report_by_date(report_date):
         return []
 
     paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
-    all_sale_ids  = [row["id"] for row in sales_rows]
-    items_by_sale    = {}
+    all_sale_ids = [row["id"] for row in sales_rows]
+    items_by_sale = {}
     services_by_sale = {}
     refund_items_by_id = {}
 
     if paid_sale_ids:
         placeholders = ",".join(["%s"] * len(paid_sale_ids))
         items_rows = conn.execute(f"""
-            SELECT si.sale_id, i.name AS item_name, si.quantity,
-                   si.original_unit_price, si.discount_percent,
-                   si.discount_amount, si.final_unit_price,
-                   (si.quantity * si.final_unit_price) AS line_total
+            SELECT
+                si.sale_id,
+                i.name AS item_name,
+                si.quantity,
+                si.original_unit_price,
+                si.discount_percent,
+                si.discount_amount,
+                si.final_unit_price,
+                si.cost_per_piece_snapshot,
+                (si.quantity * si.final_unit_price) AS line_total,
+                (si.quantity * si.cost_per_piece_snapshot) AS cost_total,
+                (si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)) AS profit_total
             FROM sales_items si
             JOIN items i ON i.id = si.item_id
             WHERE si.sale_id IN ({placeholders})
@@ -527,15 +555,15 @@ def get_sales_report_by_date(report_date):
 
     debt_collected = [
         {
-            "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
-            "customer_name":   row["customer_name"] or "Walk-in",
-            "total_amount":    round(_num(row["total_amount"]), 2),
-            "amount_paid":     round(_num(row["amount_paid"]), 2),
+            "sales_number": row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name": row["customer_name"] or "Walk-in",
+            "total_amount": round(_num(row["total_amount"]), 2),
+            "amount_paid": round(_num(row["amount_paid"]), 2),
             "service_portion": round(_num(row["service_portion"]), 2),
-            "payment_method":  row["payment_method"] or "—",
-            "reference_no":    row["reference_no"] or "",
-            "notes":           row["notes"] or "",
-            "paid_at":         format_date(row["paid_at"], show_time=True),
+            "payment_method": row["payment_method"] or "-",
+            "reference_no": row["reference_no"] or "",
+            "notes": row["notes"] or "",
+            "paid_at": format_date(row["paid_at"], show_time=True),
         }
         for row in debt_collected_rows
     ]
@@ -543,7 +571,7 @@ def get_sales_report_by_date(report_date):
     refunds = [
         {
             "refund_number": row["refund_number"] or f"Refund #{row['id']}",
-            "sales_number": row["sales_number"] or "—",
+            "sales_number": row["sales_number"] or "-",
             "customer_name": row["customer_name"] or "Walk-in",
             "refund_amount": round(_num(row["refund_amount"]), 2),
             "reason": row["reason"] or "",
@@ -558,73 +586,77 @@ def get_sales_report_by_date(report_date):
     ]
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
-    paid_sales            = []
-    total_gross           = 0.0
+    paid_sales = []
+    total_gross = 0.0
     total_service_revenue = 0.0
+    total_product_cost = 0.0
+    total_product_profit = 0.0
 
     for sale in sales_rows:
-        sale_id       = sale["id"]
-        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
+        sale_id = sale["id"]
+        services_total = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         if sale["status"] == "Paid":
             total_amount = _num(sale["total_amount"])
+            sale_products = items_by_sale.get(sale_id, [])
+            sale_product_cost = round(sum(_num(item.get("cost_total")) for item in sale_products), 2)
+            sale_product_profit = round(sum(_num(item.get("profit_total")) for item in sale_products), 2)
             total_service_revenue += services_total
             paid_sales.append({
-                "sales_number":     sale["sales_number"] or f"#{sale_id}",
-                "customer_name":    sale["customer_name"] or "Walk-in",
-                "mechanic_name":    sale["mechanic_name"] or "—",
-                "services_total":   round(services_total, 2),
-                "total_amount":     round(total_amount, 2),
-                "status":           sale["status"],
-                "payment_method":   sale["payment_method"] or "—",
-                "notes":            sale["notes"] or "",
+                "sales_number": sale["sales_number"] or f"#{sale_id}",
+                "customer_name": sale["customer_name"] or "Walk-in",
+                "mechanic_name": sale["mechanic_name"] or "-",
+                "services_total": round(services_total, 2),
+                "product_cost_total": sale_product_cost,
+                "product_profit_total": sale_product_profit,
+                "total_amount": round(total_amount, 2),
+                "status": sale["status"],
+                "payment_method": sale["payment_method"] or "-",
+                "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
-                "products":         items_by_sale.get(sale_id, []),
-                "services":         services_by_sale.get(sale_id, []),
-                "report_label":     "Exchange/Replacement" if sale["exchange_number"] else "Sale",
-                "exchange_number":  sale["exchange_number"] or "",
+                "products": sale_products,
+                "services": services_by_sale.get(sale_id, []),
+                "report_label": "Exchange/Replacement" if sale["exchange_number"] else "Sale",
+                "exchange_number": sale["exchange_number"] or "",
             })
             total_gross += total_amount
+            total_product_cost += sale_product_cost
+            total_product_profit += sale_product_profit
 
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
         sales_rows, debt_collected_rows, services_by_sale
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
 
-    items_summary = {}
-    for sale in paid_sales:
-        for item in sale["products"]:
-            key = item["item_name"]
-            if key not in items_summary:
-                items_summary[key] = {"item_name": key, "quantity": 0, "total": 0.0}
-            items_summary[key]["quantity"] += int(item["quantity"] or 0)
-            items_summary[key]["total"]    += _num(item["line_total"])
+    items_summary = _summarize_items_for_profit(paid_sales)
 
     return {
-        "sales":                  paid_sales,
-        "unresolved":             all_unresolved,
-        "mechanic_summary":       mechanic_summary,
-        "items_summary":          sorted(items_summary.values(), key=lambda x: x["item_name"]),
-        "total_gross":            round(total_gross, 2),
-        "total_mech_cut":         totals["total_mech_cut"],
-        "total_shop_topup":       totals["total_shop_topup"],
-        "net_revenue":            round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
-        "total_shop_commission":  totals["total_shop_commission"],
-        "total_service_revenue":  round(total_service_revenue, 2),
-        "total_product_revenue":  round(total_gross - total_service_revenue - total_refunds, 2),
-        "debt_collected":         debt_collected,
-        "total_debt_collected":   total_debt_collected,
-        "total_mech_cut_from_paid":  totals["total_mech_cut_from_paid"],
+        "sales": paid_sales,
+        "unresolved": all_unresolved,
+        "mechanic_summary": mechanic_summary,
+        "items_summary": items_summary,
+        "total_gross": round(total_gross, 2),
+        "total_mech_cut": totals["total_mech_cut"],
+        "total_shop_topup": totals["total_shop_topup"],
+        "net_revenue": round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "total_shop_commission": totals["total_shop_commission"],
+        "total_service_revenue": round(total_service_revenue, 2),
+        "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
+        "total_product_cost": round(total_product_cost, 2),
+        "total_product_profit": round(total_product_profit, 2),
+        "debt_collected": debt_collected,
+        "total_debt_collected": total_debt_collected,
+        "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
         "total_shop_comm_from_paid": totals["total_shop_comm_from_paid"],
-        "total_mech_cut_from_debt":  totals["total_mech_cut_from_debt"],
-        "refunds":                refunds,
-        "total_refunds":          total_refunds,
+        "total_mech_cut_from_debt": totals["total_mech_cut_from_debt"],
+        "refunds": refunds,
+        "total_refunds": total_refunds,
     }
 
 
 def get_sales_report_by_range(start_date, end_date):
     """
     Pulls all completed sales between start_date and end_date (inclusive).
-    Return value is identical to before — PDF template is untouched.
+    Return value is identical to before - PDF template is untouched.
     """
     conn = get_db()
 
@@ -701,18 +733,26 @@ def get_sales_report_by_range(start_date, end_date):
         return []
 
     paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
-    all_sale_ids  = [row["id"] for row in sales_rows]
-    items_by_sale    = {}
+    all_sale_ids = [row["id"] for row in sales_rows]
+    items_by_sale = {}
     services_by_sale = {}
     refund_items_by_id = {}
 
     if paid_sale_ids:
         placeholders = ",".join(["%s"] * len(paid_sale_ids))
         items_rows = conn.execute(f"""
-            SELECT si.sale_id, i.name AS item_name, si.quantity,
-                   si.original_unit_price, si.discount_percent,
-                   si.discount_amount, si.final_unit_price,
-                   (si.quantity * si.final_unit_price) AS line_total
+            SELECT
+                si.sale_id,
+                i.name AS item_name,
+                si.quantity,
+                si.original_unit_price,
+                si.discount_percent,
+                si.discount_amount,
+                si.final_unit_price,
+                si.cost_per_piece_snapshot,
+                (si.quantity * si.final_unit_price) AS line_total,
+                (si.quantity * si.cost_per_piece_snapshot) AS cost_total,
+                (si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)) AS profit_total
             FROM sales_items si
             JOIN items i ON i.id = si.item_id
             WHERE si.sale_id IN ({placeholders})
@@ -760,15 +800,15 @@ def get_sales_report_by_range(start_date, end_date):
 
     debt_collected = [
         {
-            "sales_number":    row["sales_number"] or f"#{row['sale_id']}",
-            "customer_name":   row["customer_name"] or "Walk-in",
-            "total_amount":    round(_num(row["total_amount"]), 2),
-            "amount_paid":     round(_num(row["amount_paid"]), 2),
+            "sales_number": row["sales_number"] or f"#{row['sale_id']}",
+            "customer_name": row["customer_name"] or "Walk-in",
+            "total_amount": round(_num(row["total_amount"]), 2),
+            "amount_paid": round(_num(row["amount_paid"]), 2),
             "service_portion": round(_num(row["service_portion"]), 2),
-            "payment_method":  row["payment_method"] or "—",
-            "reference_no":    row["reference_no"] or "",
-            "notes":           row["notes"] or "",
-            "paid_at":         format_date(row["paid_at"], show_time=True),
+            "payment_method": row["payment_method"] or "-",
+            "reference_no": row["reference_no"] or "",
+            "notes": row["notes"] or "",
+            "paid_at": format_date(row["paid_at"], show_time=True),
         }
         for row in debt_collected_rows
     ]
@@ -776,7 +816,7 @@ def get_sales_report_by_range(start_date, end_date):
     refunds = [
         {
             "refund_number": row["refund_number"] or f"Refund #{row['id']}",
-            "sales_number": row["sales_number"] or "—",
+            "sales_number": row["sales_number"] or "-",
             "customer_name": row["customer_name"] or "Walk-in",
             "refund_amount": round(_num(row["refund_amount"]), 2),
             "reason": row["reason"] or "",
@@ -791,34 +831,42 @@ def get_sales_report_by_range(start_date, end_date):
     ]
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
-    paid_sales            = []
-    total_gross           = 0.0
+    paid_sales = []
+    total_gross = 0.0
     total_service_revenue = 0.0
+    total_product_cost = 0.0
+    total_product_profit = 0.0
 
     for sale in sales_rows:
-        sale_id        = sale["id"]
-        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
+        sale_id = sale["id"]
+        services_total = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         if sale["status"] == "Paid":
             total_amount = _num(sale["total_amount"])
+            sale_products = items_by_sale.get(sale_id, [])
+            sale_product_cost = round(sum(_num(item.get("cost_total")) for item in sale_products), 2)
+            sale_product_profit = round(sum(_num(item.get("profit_total")) for item in sale_products), 2)
             total_service_revenue += services_total
             paid_sales.append({
-                "sales_number":     sale["sales_number"] or f"#{sale_id}",
-                "customer_name":    sale["customer_name"] or "Walk-in",
-                "mechanic_name":    sale["mechanic_name"] or "—",
-                "services_total":   round(services_total, 2),
-                "total_amount":     round(total_amount, 2),
-                "status":           sale["status"],
-                "payment_method":   sale["payment_method"] or "—",
-                "notes":            sale["notes"] or "",
+                "sales_number": sale["sales_number"] or f"#{sale_id}",
+                "customer_name": sale["customer_name"] or "Walk-in",
+                "mechanic_name": sale["mechanic_name"] or "-",
+                "services_total": round(services_total, 2),
+                "product_cost_total": sale_product_cost,
+                "product_profit_total": sale_product_profit,
+                "total_amount": round(total_amount, 2),
+                "status": sale["status"],
+                "payment_method": sale["payment_method"] or "-",
+                "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
-                "products":         items_by_sale.get(sale_id, []),
-                "services":         services_by_sale.get(sale_id, []),
-                "report_label":     "Exchange/Replacement" if sale["exchange_number"] else "Sale",
-                "exchange_number":  sale["exchange_number"] or "",
+                "products": sale_products,
+                "services": services_by_sale.get(sale_id, []),
+                "report_label": "Exchange/Replacement" if sale["exchange_number"] else "Sale",
+                "exchange_number": sale["exchange_number"] or "",
             })
             total_gross += total_amount
+            total_product_cost += sale_product_cost
+            total_product_profit += sale_product_profit
 
-    # Build date-bucketed records so the range report can include daily quota misses.
     sales_by_day = {}
     debt_by_day = {}
 
@@ -858,7 +906,6 @@ def get_sales_report_by_range(start_date, end_date):
                     "total_payout": row["total_payout"],
                 })
 
-    # Keep only days in requested range (in case local DB stores timezone-shifted timestamps).
     quota_failures = [
         row for row in quota_failures
         if start_date <= row["date"] <= end_date
@@ -869,39 +916,31 @@ def get_sales_report_by_range(start_date, end_date):
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
 
-    items_summary = {}
-    for sale in paid_sales:
-        for item in sale["products"]:
-            key = item["item_name"]
-            if key not in items_summary:
-                items_summary[key] = {"item_name": key, "quantity": 0, "total": 0.0}
-            items_summary[key]["quantity"] += int(item["quantity"] or 0)
-            items_summary[key]["total"]    += _num(item["line_total"])
+    items_summary = _summarize_items_for_profit(paid_sales)
 
     return {
-        "sales":                  paid_sales,
-        "unresolved":             all_unresolved,
-        "mechanic_summary":       mechanic_summary,
-        "items_summary":          sorted(items_summary.values(), key=lambda x: x["item_name"]),
-        "total_gross":            round(total_gross, 2),
-        "total_mech_cut":         totals["total_mech_cut"],
-        "total_shop_topup":       totals["total_shop_topup"],
-        "net_revenue":            round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
-        "total_shop_commission":  totals["total_shop_commission"],
-        "total_service_revenue":  round(total_service_revenue, 2),
-        "total_product_revenue":  round(total_gross - total_service_revenue - total_refunds, 2),
-        "debt_collected":         debt_collected,
-        "total_debt_collected":   total_debt_collected,
-        "total_mech_cut_from_paid":  totals["total_mech_cut_from_paid"],
+        "sales": paid_sales,
+        "unresolved": all_unresolved,
+        "mechanic_summary": mechanic_summary,
+        "items_summary": items_summary,
+        "total_gross": round(total_gross, 2),
+        "total_mech_cut": totals["total_mech_cut"],
+        "total_shop_topup": totals["total_shop_topup"],
+        "net_revenue": round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "total_shop_commission": totals["total_shop_commission"],
+        "total_service_revenue": round(total_service_revenue, 2),
+        "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
+        "total_product_cost": round(total_product_cost, 2),
+        "total_product_profit": round(total_product_profit, 2),
+        "debt_collected": debt_collected,
+        "total_debt_collected": total_debt_collected,
+        "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
         "total_shop_comm_from_paid": totals["total_shop_comm_from_paid"],
-        "total_mech_cut_from_debt":  totals["total_mech_cut_from_debt"],
-        "refunds":                refunds,
-        "total_refunds":          total_refunds,
-        "quota_failures":            sorted(
+        "total_mech_cut_from_debt": totals["total_mech_cut_from_debt"],
+        "refunds": refunds,
+        "total_refunds": total_refunds,
+        "quota_failures": sorted(
             quota_failures,
             key=lambda row: (row["date"], row["mechanic_name"]),
         ),
     }
-
-
-
