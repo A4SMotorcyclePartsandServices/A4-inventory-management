@@ -1,7 +1,8 @@
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from db.database import get_db
+from services.inventory_service import STOCKTAKE_WARNING_DAYS, attach_recent_stocktake_metadata
 from utils.formatters import format_date
 
 
@@ -57,6 +58,188 @@ def _derive_adjustment(counted_stock, system_stock):
     return variance, None, 0
 
 
+def _record_baseline_history(
+    conn,
+    stocktake_item_id,
+    event_type,
+    baseline_stock,
+    counted_stock_snapshot,
+    variance_snapshot,
+    live_stock=None,
+    previous_active_stock=None,
+    actor_user_id=None,
+    actor_username=None,
+):
+    conn.execute(
+        """
+        INSERT INTO stocktake_item_baseline_history (
+            stocktake_item_id,
+            event_type,
+            baseline_stock,
+            previous_active_stock,
+            live_stock,
+            counted_stock_snapshot,
+            variance_snapshot,
+            actor_user_id,
+            actor_username
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            stocktake_item_id,
+            event_type,
+            baseline_stock,
+            previous_active_stock,
+            live_stock,
+            counted_stock_snapshot,
+            variance_snapshot,
+            actor_user_id,
+            actor_username,
+        ),
+    )
+
+
+def _auto_refresh_active_baseline(
+    conn,
+    line,
+    actor_user_id=None,
+    actor_username=None,
+):
+    live_stock = _get_live_stock(conn, line["item_id"])
+    active_stock = int(line["active_system_stock"] or line["system_stock"] or 0)
+    if live_stock == active_stock:
+        return {**dict(line), "active_system_stock": active_stock, "live_stock": live_stock, "was_auto_refreshed": False}
+
+    counted_stock = line["counted_stock"]
+    if counted_stock is None:
+        variance = 0
+        adjustment_type = None
+        adjustment_quantity = 0
+    else:
+        variance, adjustment_type, adjustment_quantity = _derive_adjustment(
+            int(counted_stock),
+            live_stock,
+        )
+
+    _record_baseline_history(
+        conn,
+        stocktake_item_id=int(line["id"]),
+        event_type="REFRESH",
+        baseline_stock=live_stock,
+        counted_stock_snapshot=int(counted_stock) if counted_stock is not None else None,
+        variance_snapshot=variance,
+        live_stock=live_stock,
+        previous_active_stock=active_stock,
+        actor_user_id=actor_user_id,
+        actor_username=actor_username,
+    )
+
+    conn.execute(
+        """
+        UPDATE stocktake_items
+        SET active_system_stock = %s,
+            variance = %s,
+            baseline_mode = %s,
+            baseline_refreshed_at = NOW(),
+            baseline_refreshed_by = %s,
+            baseline_refreshed_by_username = %s,
+            adjustment_type = %s,
+            adjustment_quantity = %s,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (
+            live_stock,
+            variance,
+            "REFRESHED",
+            actor_user_id,
+            actor_username,
+            adjustment_type,
+            adjustment_quantity,
+            line["id"],
+        ),
+    )
+
+    updated_line = dict(line)
+    updated_line["active_system_stock"] = live_stock
+    updated_line["variance"] = variance
+    updated_line["adjustment_type"] = adjustment_type
+    updated_line["adjustment_quantity"] = adjustment_quantity
+    updated_line["baseline_mode"] = "REFRESHED"
+    updated_line["baseline_refreshed_by"] = actor_user_id
+    updated_line["baseline_refreshed_by_username"] = actor_username
+    updated_line["live_stock"] = live_stock
+    updated_line["was_auto_refreshed"] = True
+    return updated_line
+
+
+def _apply_live_stock_state(conn, session_data):
+    items = session_data.get("items") or []
+    drift_item_count = 0
+
+    for item in items:
+        live_stock = _get_live_stock(conn, item["item_id"])
+        active_stock = int(item.get("active_system_stock") or 0)
+        drift_quantity = live_stock - active_stock
+        has_live_drift = drift_quantity != 0
+
+        item["live_stock"] = live_stock
+        item["live_drift_quantity"] = drift_quantity
+        item["has_live_drift"] = has_live_drift
+
+        if has_live_drift:
+            drift_item_count += 1
+
+    summary = session_data.setdefault("summary", {})
+    summary["drift_item_count"] = drift_item_count
+    session_data["has_live_drift"] = drift_item_count > 0
+    return session_data
+
+
+def _attach_baseline_history(conn, session_data):
+    items = session_data.get("items") or []
+    if not items:
+        return session_data
+
+    item_ids = [int(item["id"]) for item in items if item.get("id") is not None]
+    if not item_ids:
+        return session_data
+
+    history_rows = conn.execute(
+        """
+        SELECT *
+        FROM stocktake_item_baseline_history
+        WHERE stocktake_item_id = ANY(%s)
+        ORDER BY created_at ASC, id ASC
+        """,
+        (item_ids,),
+    ).fetchall()
+
+    history_map = {}
+    for row in history_rows:
+        event = dict(row)
+        event["baseline_stock"] = int(event.get("baseline_stock") or 0)
+        previous_active_stock = event.get("previous_active_stock")
+        event["previous_active_stock"] = int(previous_active_stock) if previous_active_stock is not None else None
+        live_stock = event.get("live_stock")
+        event["live_stock"] = int(live_stock) if live_stock is not None else None
+        counted_snapshot = event.get("counted_stock_snapshot")
+        event["counted_stock_snapshot"] = int(counted_snapshot) if counted_snapshot is not None else None
+        event["variance_snapshot"] = int(event.get("variance_snapshot") or 0)
+        event["created_at_display"] = format_date(event.get("created_at"), show_time=True)
+        event["event_type"] = str(event.get("event_type") or "").upper()
+        history_map.setdefault(int(event["stocktake_item_id"]), []).append(event)
+
+    for item in items:
+        history = history_map.get(int(item["id"]), [])
+        item["baseline_history"] = history
+        refresh_events = [event for event in history if event["event_type"] == "REFRESH"]
+        item["baseline_refresh_count"] = len(refresh_events)
+        item["latest_baseline_refresh"] = refresh_events[-1] if refresh_events else None
+
+    return session_data
+
+
 def _update_session_counters(conn, session_id):
     counts = conn.execute(
         """
@@ -83,6 +266,54 @@ def _update_session_counters(conn, session_id):
     )
 
 
+def get_recent_stocktake_activity(window_days=STOCKTAKE_WARNING_DAYS):
+    conn = get_db()
+    try:
+        cutoff = datetime.now() - timedelta(days=int(window_days or STOCKTAKE_WARNING_DAYS))
+        summary_row = conn.execute(
+            """
+            SELECT
+                COUNT(DISTINCT si.item_id) AS unique_item_count,
+                COUNT(DISTINCT ss.id) AS session_count
+            FROM stocktake_items si
+            JOIN stocktake_sessions ss ON ss.id = si.session_id
+            WHERE ss.status = 'CONFIRMED'
+              AND ss.confirmed_at IS NOT NULL
+              AND ss.confirmed_at >= %s
+            """,
+            (cutoff,),
+        ).fetchone()
+
+        latest_row = conn.execute(
+            """
+            SELECT
+                ss.id,
+                ss.session_number,
+                ss.confirmed_at,
+                ss.item_count,
+                ss.variance_item_count
+            FROM stocktake_sessions ss
+            WHERE ss.status = 'CONFIRMED'
+              AND ss.confirmed_at IS NOT NULL
+            ORDER BY ss.confirmed_at DESC, ss.id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        latest = dict(latest_row) if latest_row else None
+        if latest:
+            latest["confirmed_at_display"] = format_date(latest.get("confirmed_at"), show_time=True)
+
+        return {
+            "window_days": int(window_days or STOCKTAKE_WARNING_DAYS),
+            "unique_item_count": int(summary_row["unique_item_count"] or 0),
+            "session_count": int(summary_row["session_count"] or 0),
+            "latest_confirmed_session": latest,
+        }
+    finally:
+        conn.close()
+
+
 def _serialize_session_row(row):
     if not row:
         return None
@@ -101,19 +332,29 @@ def _serialize_session_row(row):
 def _serialize_item_row(row):
     data = dict(row)
     data["system_stock"] = int(data.get("system_stock") or 0)
+    data["active_system_stock"] = int(data.get("active_system_stock") or data["system_stock"] or 0)
     counted_stock = data.get("counted_stock")
     data["counted_stock"] = int(counted_stock) if counted_stock is not None else None
     data["variance"] = int(data.get("variance") or 0)
     data["adjustment_quantity"] = int(data.get("adjustment_quantity") or 0)
     data["is_applied"] = int(data.get("is_applied") or 0)
+    data["baseline_mode"] = str(data.get("baseline_mode") or "CAPTURED").upper()
+    data["has_refreshed_baseline"] = data["active_system_stock"] != data["system_stock"]
     data["cost_per_piece"] = float(data.get("cost_per_piece") or 0)
     data["system_value"] = data["system_stock"] * data["cost_per_piece"]
+    data["active_system_value"] = data["active_system_stock"] * data["cost_per_piece"]
     data["counted_value"] = (
         data["counted_stock"] * data["cost_per_piece"]
         if data["counted_stock"] is not None
         else None
     )
     data["variance_value"] = data["variance"] * data["cost_per_piece"]
+    if data["counted_stock"] is None:
+        data["captured_variance"] = 0
+        data["captured_variance_value"] = 0
+    else:
+        data["captured_variance"] = int(data["counted_stock"]) - data["system_stock"]
+        data["captured_variance_value"] = data["captured_variance"] * data["cost_per_piece"]
     return data
 
 
@@ -214,6 +455,12 @@ def get_stocktake_session(session_id):
 
         session_data = _serialize_session_row(session_row)
         session_data["items"] = [_serialize_item_row(row) for row in item_rows]
+        attach_recent_stocktake_metadata(
+            conn,
+            session_data["items"],
+            item_id_key="item_id",
+            exclude_session_id=session_id,
+        )
         session_data["summary"] = {
             "item_count": session_data["item_count"],
             "variance_item_count": session_data["variance_item_count"],
@@ -222,12 +469,13 @@ def get_stocktake_session(session_id):
             "total_overage_units": int(summary_row["total_overage_units"] or 0),
             "total_shortage_units": int(summary_row["total_shortage_units"] or 0),
         }
-        return session_data
+        session_data = _apply_live_stock_state(conn, session_data)
+        return _attach_baseline_history(conn, session_data)
     finally:
         conn.close()
 
 
-def add_stocktake_item(session_id, item_id, counted_stock=None, notes=None):
+def add_stocktake_item(session_id, item_id, counted_stock=None, notes=None, actor_user_id=None, actor_username=None):
     conn = get_db()
     try:
         conn.execute("BEGIN")
@@ -281,26 +529,43 @@ def add_stocktake_item(session_id, item_id, counted_stock=None, notes=None):
                 session_id,
                 item_id,
                 system_stock,
+                active_system_stock,
                 counted_stock,
                 variance,
+                baseline_mode,
                 adjustment_type,
                 adjustment_quantity,
                 notes
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
                 session_id,
                 item_id,
                 system_stock,
+                system_stock,
                 normalized_count,
                 variance,
+                "CAPTURED",
                 adjustment_type,
                 adjustment_quantity,
                 (notes or "").strip() or None,
             ),
         ).fetchone()
+
+        _record_baseline_history(
+            conn,
+            stocktake_item_id=int(row["id"]),
+            event_type="CAPTURED",
+            baseline_stock=system_stock,
+            counted_stock_snapshot=normalized_count,
+            variance_snapshot=variance,
+            live_stock=system_stock,
+            previous_active_stock=None,
+            actor_user_id=actor_user_id if actor_user_id is not None else session_row["created_by"],
+            actor_username=actor_username or session_row["created_by_username"],
+        )
 
         _update_session_counters(conn, session_id)
         conn.commit()
@@ -314,7 +579,7 @@ def add_stocktake_item(session_id, item_id, counted_stock=None, notes=None):
         conn.close()
 
 
-def update_stocktake_item(session_id, item_id, counted_stock, notes=None):
+def update_stocktake_item(session_id, item_id, counted_stock, notes=None, actor_user_id=None, actor_username=None):
     conn = get_db()
     try:
         conn.execute("BEGIN")
@@ -344,6 +609,13 @@ def update_stocktake_item(session_id, item_id, counted_stock, notes=None):
         if not line:
             raise ValueError("Stocktake item was not found in this session.")
 
+        line = _auto_refresh_active_baseline(
+            conn,
+            line,
+            actor_user_id=actor_user_id,
+            actor_username=actor_username,
+        )
+
         if counted_stock is None:
             normalized_count = None
             variance = 0
@@ -355,7 +627,7 @@ def update_stocktake_item(session_id, item_id, counted_stock, notes=None):
                 raise ValueError("Counted stock cannot be negative.")
             variance, adjustment_type, adjustment_quantity = _derive_adjustment(
                 normalized_count,
-                int(line["system_stock"] or 0),
+                int(line["active_system_stock"] or line["system_stock"] or 0),
             )
 
         conn.execute(
@@ -390,7 +662,7 @@ def update_stocktake_item(session_id, item_id, counted_stock, notes=None):
         conn.close()
 
 
-def bulk_save_stocktake_items(session_id, items):
+def bulk_save_stocktake_items(session_id, items, actor_user_id=None, actor_username=None):
     conn = get_db()
     try:
         conn.execute("BEGIN")
@@ -411,6 +683,7 @@ def bulk_save_stocktake_items(session_id, items):
         existing_rows = conn.execute(
             """
             SELECT id, item_id, system_stock
+            , active_system_stock
             FROM stocktake_items
             WHERE session_id = %s
             FOR UPDATE
@@ -437,6 +710,13 @@ def bulk_save_stocktake_items(session_id, items):
             if not line:
                 raise ValueError("One or more stocktake items are no longer part of this session.")
 
+            line = _auto_refresh_active_baseline(
+                conn,
+                line,
+                actor_user_id=actor_user_id,
+                actor_username=actor_username,
+            )
+
             counted_stock = raw_item.get("counted_stock")
             if counted_stock in ("", None):
                 normalized_count = None
@@ -452,7 +732,7 @@ def bulk_save_stocktake_items(session_id, items):
                     raise ValueError("Counted stock cannot be negative.")
                 variance, adjustment_type, adjustment_quantity = _derive_adjustment(
                     normalized_count,
-                    int(line["system_stock"] or 0),
+                    int(line["active_system_stock"] or line["system_stock"] or 0),
                 )
 
             conn.execute(
@@ -514,6 +794,58 @@ def remove_stocktake_item(session_id, item_id):
         )
         if deleted.rowcount <= 0:
             raise ValueError("Stocktake item was not found in this session.")
+
+        _update_session_counters(conn, session_id)
+        conn.commit()
+        return get_stocktake_session(session_id)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def refresh_stocktake_item_baseline(session_id, item_id, user_id=None, username=None):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        session_row = conn.execute(
+            """
+            SELECT *
+            FROM stocktake_sessions
+            WHERE id = %s
+            FOR UPDATE
+            """,
+            (session_id,),
+        ).fetchone()
+        if not session_row:
+            raise ValueError("Stocktake session not found.")
+        if str(session_row["status"] or "").upper() != STOCKTAKE_STATUS_DRAFT:
+            raise ValueError("Only draft stocktake sessions can be refreshed.")
+
+        line = conn.execute(
+            """
+            SELECT si.*, i.name
+            FROM stocktake_items si
+            JOIN items i ON i.id = si.item_id
+            WHERE si.session_id = %s AND si.item_id = %s
+            FOR UPDATE
+            """,
+            (session_id, item_id),
+        ).fetchone()
+        if not line:
+            raise ValueError("Stocktake item was not found in this session.")
+
+        active_stock = int(line["active_system_stock"] or line["system_stock"] or 0)
+        live_stock = _get_live_stock(conn, item_id)
+        if live_stock == active_stock:
+            raise ValueError("This item no longer has live stock drift.")
+        _auto_refresh_active_baseline(
+            conn,
+            line,
+            actor_user_id=user_id,
+            actor_username=username,
+        )
 
         _update_session_counters(conn, session_id)
         conn.commit()
@@ -607,23 +939,15 @@ def confirm_stocktake_session(session_id, user_id, username):
         if missing_counts:
             raise ValueError("Every stocktake item needs a counted stock before confirmation.")
 
-        drift_rows = []
-        for row in item_rows:
-            live_stock = _get_live_stock(conn, row["item_id"])
-            stored_stock = int(row["system_stock"] or 0)
-            if live_stock != stored_stock:
-                drift_rows.append(
-                    f"{row['name']} (captured {stored_stock}, live {live_stock})"
-                )
-
-        if drift_rows:
-            preview = ", ".join(drift_rows[:5])
-            if len(drift_rows) > 5:
-                preview += f", and {len(drift_rows) - 5} more"
-            raise ValueError(
-                "Live stock changed since this draft was captured. "
-                f"Please review and refresh the affected items: {preview}."
+        item_rows = [
+            _auto_refresh_active_baseline(
+                conn,
+                row,
+                actor_user_id=user_id,
+                actor_username=username,
             )
+            for row in item_rows
+        ]
 
         for row in item_rows:
             variance = int(row["variance"] or 0)
@@ -631,13 +955,14 @@ def confirm_stocktake_session(session_id, user_id, username):
                 continue
 
             counted_stock = int(row["counted_stock"] or 0)
-            system_stock = int(row["system_stock"] or 0)
+            system_stock = int(row["active_system_stock"] or row["system_stock"] or 0)
             adjustment_type = "IN" if variance > 0 else "OUT"
             adjustment_quantity = abs(variance)
             change_reason = "STOCKTAKE_VARIANCE_GAIN" if variance > 0 else "STOCKTAKE_VARIANCE_LOSS"
             note_parts = [
                 f"Stocktake {session_row['session_number']}",
-                f"System: {system_stock}",
+                f"Captured system: {int(row['system_stock'] or 0)}",
+                f"Active baseline: {system_stock}",
                 f"Counted: {counted_stock}",
                 f"Variance: {variance}",
             ]

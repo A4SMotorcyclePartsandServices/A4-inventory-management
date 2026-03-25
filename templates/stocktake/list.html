@@ -23,6 +23,12 @@
         font-size: 0.92rem;
     }
 
+    .stocktake-info-note {
+        background: rgba(59, 130, 246, 0.14);
+        border: 1px solid rgba(59, 130, 246, 0.34);
+        color: #bfdbfe;
+    }
+
     .stocktake-form-card,
     .stocktake-table-card {
         background: var(--bg-card);
@@ -155,6 +161,14 @@
 
     <div class="stocktake-note mb-4">
         <i class="bi bi-info-circle me-2"></i>{{ partial_stocktake_label }}
+    </div>
+
+    <div class="stocktake-note stocktake-info-note mb-4">
+        <i class="bi bi-clock-history me-2"></i>
+        {{ recent_stocktake_activity.unique_item_count }} unique item(s) were counted in confirmed stocktakes within the last {{ recent_stocktake_activity.window_days }} days across {{ recent_stocktake_activity.session_count }} session(s).
+        {% if recent_stocktake_activity.latest_confirmed_session %}
+        Latest confirmed session: <strong>{{ recent_stocktake_activity.latest_confirmed_session.session_number }}</strong> on {{ recent_stocktake_activity.latest_confirmed_session.confirmed_at_display }}.
+        {% endif %}
     </div>
 
     <div class="stocktake-grid">

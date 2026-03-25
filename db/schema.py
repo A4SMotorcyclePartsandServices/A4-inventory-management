@@ -1032,8 +1032,13 @@ def init_db():
         session_id             INTEGER NOT NULL REFERENCES stocktake_sessions(id) ON DELETE CASCADE,
         item_id                INTEGER NOT NULL REFERENCES items(id),
         system_stock           INTEGER NOT NULL DEFAULT 0,
+        active_system_stock    INTEGER NOT NULL DEFAULT 0,
         counted_stock          INTEGER,
         variance               INTEGER NOT NULL DEFAULT 0,
+        baseline_mode          TEXT NOT NULL DEFAULT 'CAPTURED',
+        baseline_refreshed_at  TIMESTAMP,
+        baseline_refreshed_by  INTEGER,
+        baseline_refreshed_by_username TEXT,
         adjustment_type        TEXT CHECK(adjustment_type IN ('IN', 'OUT')),
         adjustment_quantity    INTEGER NOT NULL DEFAULT 0,
         is_applied             INTEGER NOT NULL DEFAULT 0,
@@ -1045,8 +1050,13 @@ def init_db():
     )
     """)
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS system_stock INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS active_system_stock INTEGER NOT NULL DEFAULT 0")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS counted_stock INTEGER")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS variance INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS baseline_mode TEXT NOT NULL DEFAULT 'CAPTURED'")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS baseline_refreshed_at TIMESTAMP")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS baseline_refreshed_by INTEGER")
+    cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS baseline_refreshed_by_username TEXT")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS adjustment_type TEXT")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS adjustment_quantity INTEGER NOT NULL DEFAULT 0")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS is_applied INTEGER NOT NULL DEFAULT 0")
@@ -1055,10 +1065,27 @@ def init_db():
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()")
     cur.execute("ALTER TABLE stocktake_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()")
     cur.execute("""
+        UPDATE stocktake_items
+        SET active_system_stock = system_stock
+        WHERE COALESCE(active_system_stock, 0) = 0
+    """)
+    cur.execute("""
+        UPDATE stocktake_items
+        SET baseline_mode = 'REFRESHED'
+        WHERE COALESCE(active_system_stock, 0) <> COALESCE(system_stock, 0)
+          AND COALESCE(baseline_mode, 'CAPTURED') = 'CAPTURED'
+    """)
+    cur.execute("""
     DO $$
     BEGIN
         BEGIN
             ALTER TABLE stocktake_items DROP CONSTRAINT IF EXISTS stocktake_items_adjustment_type_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE stocktake_items DROP CONSTRAINT IF EXISTS stocktake_items_baseline_mode_check;
         EXCEPTION WHEN undefined_table THEN
             NULL;
         END;
@@ -1070,10 +1097,132 @@ def init_db():
         EXCEPTION WHEN duplicate_object THEN
             NULL;
         END;
+
+        BEGIN
+            ALTER TABLE stocktake_items
+            ADD CONSTRAINT stocktake_items_baseline_mode_check
+            CHECK (baseline_mode IN ('CAPTURED', 'REFRESHED'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
     END $$;
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_items_item ON stocktake_items(item_id)")
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stocktake_item_baseline_history (
+        id                         SERIAL PRIMARY KEY,
+        stocktake_item_id          INTEGER NOT NULL REFERENCES stocktake_items(id) ON DELETE CASCADE,
+        event_type                 TEXT NOT NULL,
+        baseline_stock             INTEGER NOT NULL DEFAULT 0,
+        previous_active_stock      INTEGER,
+        live_stock                 INTEGER,
+        counted_stock_snapshot     INTEGER,
+        variance_snapshot          INTEGER NOT NULL DEFAULT 0,
+        actor_user_id              INTEGER,
+        actor_username             TEXT,
+        created_at                 TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS stocktake_item_id INTEGER")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS event_type TEXT")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS baseline_stock INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS previous_active_stock INTEGER")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS live_stock INTEGER")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS counted_stock_snapshot INTEGER")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS variance_snapshot INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS actor_user_id INTEGER")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS actor_username TEXT")
+    cur.execute("ALTER TABLE stocktake_item_baseline_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE stocktake_item_baseline_history DROP CONSTRAINT IF EXISTS stocktake_item_baseline_history_event_type_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE stocktake_item_baseline_history
+            ADD CONSTRAINT stocktake_item_baseline_history_event_type_check
+            CHECK (event_type IN ('CAPTURED', 'REFRESH'));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_item_baseline_history_item ON stocktake_item_baseline_history(stocktake_item_id, created_at ASC)")
+    cur.execute("""
+        INSERT INTO stocktake_item_baseline_history (
+            stocktake_item_id,
+            event_type,
+            baseline_stock,
+            previous_active_stock,
+            live_stock,
+            counted_stock_snapshot,
+            variance_snapshot,
+            actor_user_id,
+            actor_username,
+            created_at
+        )
+        SELECT
+            si.id,
+            'CAPTURED',
+            si.system_stock,
+            NULL,
+            si.system_stock,
+            si.counted_stock,
+            CASE
+                WHEN si.counted_stock IS NULL THEN 0
+                ELSE si.counted_stock - si.system_stock
+            END,
+            ss.created_by,
+            ss.created_by_username,
+            COALESCE(si.created_at, ss.created_at, NOW())
+        FROM stocktake_items si
+        JOIN stocktake_sessions ss ON ss.id = si.session_id
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM stocktake_item_baseline_history h
+            WHERE h.stocktake_item_id = si.id
+              AND h.event_type = 'CAPTURED'
+        )
+    """)
+    cur.execute("""
+        INSERT INTO stocktake_item_baseline_history (
+            stocktake_item_id,
+            event_type,
+            baseline_stock,
+            previous_active_stock,
+            live_stock,
+            counted_stock_snapshot,
+            variance_snapshot,
+            actor_user_id,
+            actor_username,
+            created_at
+        )
+        SELECT
+            si.id,
+            'REFRESH',
+            si.active_system_stock,
+            si.system_stock,
+            si.active_system_stock,
+            si.counted_stock,
+            si.variance,
+            si.baseline_refreshed_by,
+            si.baseline_refreshed_by_username,
+            COALESCE(si.baseline_refreshed_at, si.updated_at, NOW())
+        FROM stocktake_items si
+        WHERE COALESCE(si.active_system_stock, 0) <> COALESCE(si.system_stock, 0)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM stocktake_item_baseline_history h
+            WHERE h.stocktake_item_id = si.id
+              AND h.event_type = 'REFRESH'
+          )
+    """)
 
     # --- SEEDING ---
 

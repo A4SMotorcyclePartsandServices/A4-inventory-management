@@ -184,6 +184,54 @@
             font-size: 0.76rem;
         }
 
+        .stock-metric-note {
+            font-size: 0.7rem;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.25;
+        }
+
+        .drift-card {
+            display: grid;
+            gap: 6px;
+            text-align: left;
+            font-size: 0.74rem;
+            line-height: 1.25;
+        }
+
+        .drift-card-row {
+            color: var(--muted);
+        }
+
+        .drift-card-row strong {
+            color: var(--ink);
+        }
+
+        .drift-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: fit-content;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .drift-badge.refreshed {
+            background: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffecb5;
+        }
+
+        .drift-badge.captured {
+            background: #e5e7eb;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+
         .value-chip {
             display: inline-flex;
             align-items: center;
@@ -353,11 +401,12 @@
     <table>
         <thead>
             <tr>
-                <th style="width: 28%;">Item</th>
+                <th style="width: 24%;">Item</th>
                 <th style="width: 12%;">System Stock</th>
                 <th style="width: 12%;">Counted Stock</th>
                 <th style="width: 12%;">Variance</th>
-                <th style="width: 36%;">Notes</th>
+                <th style="width: 20%;">Item Drift</th>
+                <th style="width: 20%;">Notes</th>
             </tr>
         </thead>
         <tbody>
@@ -393,11 +442,44 @@
                         </div>
                     </div>
                 </td>
+                <td>
+                    <div class="drift-card">
+                        <span class="drift-badge {% if item.has_refreshed_baseline %}refreshed{% else %}captured{% endif %}">
+                            {{ item.baseline_mode }}
+                        </span>
+                        <div class="drift-card-row">
+                            Active baseline: <strong>{{ item.active_system_stock }} pcs</strong>
+                            <br>
+                            &#8369;{{ "{:,.2f}".format(item.active_system_value or 0) }}
+                        </div>
+                        <div class="drift-card-row">
+                            Captured variance:
+                            <strong>{% if item.captured_variance > 0 %}+{% endif %}{{ item.captured_variance }} pcs</strong>
+                            <br>
+                            {% if item.captured_variance_value > 0 %}+{% elif item.captured_variance_value < 0 %}-{% endif %}&#8369;{{ "{:,.2f}".format(item.captured_variance_value|abs) }}
+                        </div>
+                        <div class="drift-card-row">
+                            Refresh count: <strong>{{ item.baseline_refresh_count or 0 }}</strong>
+                        </div>
+                        {% if item.latest_baseline_refresh %}
+                        <div class="drift-card-row">
+                            Latest refresh:
+                            <strong>{{ item.latest_baseline_refresh.baseline_stock }} pcs</strong>
+                            {% if item.latest_baseline_refresh.created_at_display %}
+                            <br>{{ item.latest_baseline_refresh.created_at_display }}
+                            {% endif %}
+                            {% if item.latest_baseline_refresh.actor_username %}
+                            <br>by {{ item.latest_baseline_refresh.actor_username }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </td>
                 <td>{{ item.notes or '-' }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" style="text-align:center; color:#666;">No counted items were recorded for this stocktake session.</td>
+                <td colspan="6" style="text-align:center; color:#666;">No counted items were recorded for this stocktake session.</td>
             </tr>
             {% endfor %}
         </tbody>

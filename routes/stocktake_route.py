@@ -12,6 +12,7 @@ from services.stocktake_service import (
     confirm_stocktake_session,
     create_stocktake_session,
     get_stocktake_session,
+    get_recent_stocktake_activity,
     list_stocktake_sessions,
     remove_stocktake_item,
     update_stocktake_item,
@@ -28,6 +29,7 @@ def stocktake_list():
     return render_template(
         "stocktake/list.html",
         sessions=sessions,
+        recent_stocktake_activity=get_recent_stocktake_activity(),
         partial_stocktake_label=PARTIAL_STOCKTAKE_LABEL,
     )
 
@@ -73,6 +75,8 @@ def stocktake_add_item_api(session_id):
             item_id=int(data.get("item_id")),
             counted_stock=data.get("counted_stock"),
             notes=(data.get("notes") or "").strip() or None,
+            actor_user_id=session.get("user_id"),
+            actor_username=session.get("username"),
         )
         return jsonify({"status": "success", **result})
     except ValueError as exc:
@@ -91,6 +95,8 @@ def stocktake_update_item_api(session_id, item_id):
             item_id=item_id,
             counted_stock=data.get("counted_stock"),
             notes=(data.get("notes") or "").strip() or None,
+            actor_user_id=session.get("user_id"),
+            actor_username=session.get("username"),
         )
         return jsonify({"status": "success", "session": result})
     except ValueError as exc:
@@ -107,6 +113,8 @@ def stocktake_save_draft_api(session_id):
         result = bulk_save_stocktake_items(
             session_id=session_id,
             items=data.get("items") or [],
+            actor_user_id=session.get("user_id"),
+            actor_username=session.get("username"),
         )
         flash("Stocktake draft saved.", "success")
         return jsonify({"status": "success", "session": result})
@@ -206,15 +214,30 @@ def stocktake_csv(session_id):
     writer.writerow(["Total Shortage Units", stocktake["summary"]["total_shortage_units"]])
     writer.writerow(["Total Overage Units", stocktake["summary"]["total_overage_units"]])
     writer.writerow([])
-    writer.writerow(["Item", "Category", "System Stock", "Counted Stock", "Variance", "Adjustment Type", "Adjustment Quantity", "Notes"])
+    writer.writerow([
+        "Item",
+        "Category",
+        "Captured System Stock",
+        "Active Baseline Stock",
+        "Counted Stock",
+        "Variance",
+        "Captured Variance",
+        "Baseline Mode",
+        "Adjustment Type",
+        "Adjustment Quantity",
+        "Notes",
+    ])
 
     for item in stocktake["items"]:
         writer.writerow([
             item.get("name") or "",
             item.get("category") or "",
             item.get("system_stock") or 0,
+            item.get("active_system_stock") or 0,
             "" if item.get("counted_stock") is None else item.get("counted_stock"),
             item.get("variance") or 0,
+            item.get("captured_variance") or 0,
+            item.get("baseline_mode") or "CAPTURED",
             item.get("adjustment_type") or "",
             item.get("adjustment_quantity") or 0,
             item.get("notes") or "",

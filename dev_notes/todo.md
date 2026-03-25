@@ -41,9 +41,9 @@
 - [ ] Prepare env vars before deployment
 
 ## Variance Page
-- [ ] CSV import for count sheets
-- [ ] Batch count entry for faster physical inventory encoding
-- [ ] Warn user if live stock changed after draft session started
-- [ ] Correction session flow for fixing mistakes after confirmation
-- [ ] Printable stocktake reports / PDF polish
-- [ ] Filters by category and vendor for stocktake item selection
+- [X] ~~*CSV import for count sheets*~~ [2026-03-25]
+- [X] ~~*Batch count entry for faster physical inventory encoding*~~ [2026-03-25]
+- [X] ~~*Warn user if live stock changed after draft session started*~~ [2026-03-25]
+- [X] ~~*Correction session flow for fixing mistakes after confirmation*~~ [2026-03-25]
+- [X] ~~*Printable stocktake reports / PDF polish*~~ [2026-03-25]
+- [X] ~~*Filters by category and vendor for stocktake item selection*~~ [2026-03-25]

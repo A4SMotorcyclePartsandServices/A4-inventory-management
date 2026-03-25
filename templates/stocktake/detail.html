@@ -210,13 +210,50 @@
         color: var(--text-muted);
     }
 
-    .variance-cell {
-        font-weight: 700;
+    .result-stocktake-meta {
+        margin-top: 0.35rem;
+        font-size: 0.75rem;
+        line-height: 1.35;
     }
 
-    .variance-cell.variance-pos { color: #4ade80 !important; }
-    .variance-cell.variance-neg { color: #f87171 !important; }
-    .variance-cell.variance-zero { color: var(--text-muted) !important; }
+    .result-stocktake-meta.warning {
+        color: #facc15;
+        font-weight: 600;
+    }
+
+    .result-stocktake-meta.info {
+        color: #93c5fd;
+    }
+
+    .stocktake-item-history {
+        margin-top: 0.18rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.18rem;
+        align-items: center;
+        justify-content: flex-start;
+        text-align: center;
+    }
+
+    .stocktake-item-history-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.28rem;
+        padding: 0.22rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        background: rgba(250, 204, 21, 0.16);
+        color: #facc15;
+    }
+
+    .stocktake-item-history-copy {
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        width: auto;
+        text-align: center;
+    }
 
     .stocktake-actions {
         display: flex;
@@ -238,6 +275,102 @@
         align-items: center;
         gap: 0.65rem;
         flex-wrap: wrap;
+    }
+
+    .stocktake-items-table {
+        table-layout: auto;
+    }
+
+    .stocktake-items-table th:nth-child(1),
+    .stocktake-items-table td:nth-child(1) {
+        width: 34%;
+    }
+
+    .stocktake-items-table th:nth-child(2),
+    .stocktake-items-table td:nth-child(2) {
+        width: 180px;
+        text-align: center;
+    }
+
+    .stocktake-items-table th:nth-child(3),
+    .stocktake-items-table td:nth-child(3) {
+        width: 32%;
+    }
+
+    .stocktake-items-table th:nth-child(4),
+    .stocktake-items-table td:nth-child(4) {
+        width: 72px;
+        text-align: center;
+    }
+
+    .stocktake-items-table td {
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+        vertical-align: middle;
+    }
+
+    .stocktake-item-cell {
+        text-align: center !important;
+    }
+
+    .stocktake-item-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.12rem;
+    }
+
+    .stocktake-item-name {
+        font-size: 1rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .stocktake-item-category {
+        margin-top: 0.18rem;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .stocktake-count-cell {
+        text-align: center;
+    }
+
+    .stocktake-count-cell .counted-stock-input {
+        max-width: 190px;
+        margin: 0 auto;
+    }
+
+    .stocktake-count-value {
+        font-size: 1.05rem;
+        font-weight: 800;
+    }
+
+    .stocktake-note-cell {
+        text-align: left;
+    }
+
+    .stocktake-note-cell .item-note-input {
+        max-width: 100%;
+    }
+
+    .stocktake-note-text {
+        color: var(--text-primary);
+        word-break: break-word;
+    }
+
+    .stocktake-action-cell {
+        text-align: center;
+    }
+
+    .stocktake-remove-btn {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
     }
 
     .draft-state {
@@ -288,6 +421,53 @@
         font-weight: 600;
     }
 
+    .batch-count-modal .modal-content {
+        background: #131722;
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        color: var(--text-primary);
+    }
+
+    .batch-count-modal .modal-header,
+    .batch-count-modal .modal-footer {
+        border-color: rgba(255,255,255,0.08);
+    }
+
+    .batch-count-search {
+        position: relative;
+    }
+
+    .batch-count-results {
+        position: absolute;
+        inset: calc(100% + 6px) 0 auto 0;
+        z-index: 30;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        max-height: 260px;
+        overflow-y: auto;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.35);
+        display: none;
+    }
+
+    .batch-count-table td,
+    .batch-count-table th {
+        vertical-align: middle;
+    }
+
+    .batch-count-table input {
+        min-width: 92px;
+    }
+
+    .batch-count-empty {
+        padding: 1rem;
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 14px;
+        color: var(--text-muted);
+        text-align: center;
+        font-size: 0.9rem;
+    }
+
     @media (max-width: 992px) {
         .stocktake-draft-controls {
             justify-content: flex-start;
@@ -332,11 +512,24 @@
         <div class="stocktake-title-row mb-1">
             <h2 class="mb-0">Stocktake {{ stocktake.session_number }}</h2>
             {% if current_user and current_user.role == 'admin' %}
-            <a href="{{ url_for('stocktake.stocktake_csv', session_id=stocktake.id) }}" class="btn btn-sm btn-outline-success stocktake-export-btn" title="Download CSV">
+            <a
+                href="{{ url_for('stocktake.stocktake_csv', session_id=stocktake.id) }}"
+                class="btn btn-sm btn-outline-success stocktake-export-btn"
+                id="stocktakeCsvBtn"
+                title="Download CSV"
+                {% if stocktake.status != 'CONFIRMED' %}style="display:none;"{% endif %}
+            >
                 <i class="bi bi-filetype-csv"></i>
             </a>
             {% endif %}
-            <a href="{{ url_for('stocktake.stocktake_report', session_id=stocktake.id) }}" target="_blank" class="btn btn-sm btn-outline-danger stocktake-export-btn" title="Open printable PDF view">
+            <a
+                href="{{ url_for('stocktake.stocktake_report', session_id=stocktake.id) }}"
+                target="_blank"
+                class="btn btn-sm btn-outline-danger stocktake-export-btn"
+                id="stocktakePdfBtn"
+                title="Open printable PDF view"
+                {% if stocktake.status != 'CONFIRMED' %}style="display:none;"{% endif %}
+            >
                 <i class="bi bi-filetype-pdf"></i>
             </a>
         </div>
@@ -345,7 +538,6 @@
     <div class="stocktake-note">
         <i class="bi bi-info-circle me-2"></i>{{ partial_stocktake_label }}
     </div>
-
     <div class="stocktake-summary-grid" id="summaryCards">
         <div class="summary-card">
             <span class="kicker">Items Counted</span>
@@ -416,7 +608,7 @@
                 </div>
                 <div class="stocktake-add-input-row">
                     <div class="search-box">
-                        <input type="text" id="itemSearchInput" class="form-control" placeholder="Search item name or description">
+                        <input type="text" id="itemSearchInput" class="form-control" placeholder="Search item name, category, or description">
                         <div class="search-results" id="itemSearchResults"></div>
                     </div>
                 </div>
@@ -430,6 +622,9 @@
                     <span class="text-warning" id="tableCountLabel">{{ stocktake.summary.item_count }} line(s)</span>
                     {% if stocktake.status == 'DRAFT' %}
                     <div class="stocktake-draft-controls">
+                        <button type="button" class="btn btn-outline-warning" id="openBatchCountBtn">
+                            <i class="bi bi-table me-1"></i>Batch Count Entry
+                        </button>
                         <span class="draft-state clean" id="draftStateBadge">
                             <i class="bi bi-check-circle"></i><span id="draftStateText">All changes saved</span>
                         </span>
@@ -448,13 +643,11 @@
             </div>
 
             <div class="table-responsive">
-                <table class="table table-dark align-middle mb-0">
+                <table class="table table-dark align-middle mb-0 stocktake-items-table">
                     <thead>
                         <tr>
                             <th>Item</th>
-                            <th>System Stock</th>
                             <th>Counted Stock</th>
-                            <th>Variance</th>
                             <th>Notes</th>
                             <th>Action</th>
                         </tr>
@@ -467,6 +660,49 @@
     </div>
 
 </div>
+
+<div class="modal fade batch-count-modal" id="batchCountModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-1">Batch Count Entry</h5>
+                    <div class="small text-muted">Search items, type counted stock, and apply the batch to this draft.</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body d-grid gap-3">
+                <div class="batch-count-search">
+                    <input type="text" id="batchCountSearchInput" class="form-control" placeholder="Search item name, category, or description">
+                    <div class="batch-count-results" id="batchCountSearchResults"></div>
+                </div>
+                <div class="small text-muted" id="batchCountSummary">0 item(s) ready to apply.</div>
+                <div id="batchCountEmptyState" class="batch-count-empty">
+                    Search for an item, add it to the batch list, then enter the counted stock and optional note.
+                </div>
+                <div class="table-responsive" id="batchCountTableWrap" style="display:none;">
+                    <table class="table table-dark align-middle mb-0 batch-count-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 36%;">Item</th>
+                                <th style="width: 18%;">Counted Stock</th>
+                                <th style="width: 34%;">Note</th>
+                                <th style="width: 12%;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchCountTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" id="applyBatchCountBtn">
+                    <i class="bi bi-save me-1"></i>Apply to Draft
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -474,20 +710,21 @@
 const stocktakeSessionId = {{ stocktake.id|tojson }};
 let stocktakeSession = {{ stocktake|tojson }};
 let searchDebounce = null;
+let batchSearchDebounce = null;
 let hasUnsavedChanges = false;
+let batchModal = null;
+let batchEntries = [];
+let lastMainSearchItems = [];
+let lastBatchSearchItems = [];
 const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
 
-function varianceClass(value) {
-    const num = Number(value || 0);
-    if (num > 0) return 'variance-pos';
-    if (num < 0) return 'variance-neg';
-    return 'variance-zero';
-}
-
-function varianceLabel(value) {
-    const num = Number(value || 0);
-    if (num > 0) return `+${num}`;
-    return `${num}`;
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function sessionIsEditable() {
@@ -531,11 +768,16 @@ function renderSessionMeta() {
     document.getElementById('summaryShortageItemCount').textContent = summary.shortage_item_count || 0;
     document.getElementById('summaryOverageItemCount').textContent = summary.overage_item_count || 0;
     document.getElementById('tableCountLabel').textContent = `${summary.item_count || 0} line(s)`;
-
     const confirmBtn = document.getElementById('confirmSessionBtn');
     const cancelBtn = document.getElementById('cancelSessionBtn');
+    const batchBtn = document.getElementById('openBatchCountBtn');
+    const csvBtn = document.getElementById('stocktakeCsvBtn');
+    const pdfBtn = document.getElementById('stocktakePdfBtn');
     if (confirmBtn) confirmBtn.style.display = sessionIsEditable() ? '' : 'none';
     if (cancelBtn) cancelBtn.style.display = sessionIsEditable() ? '' : 'none';
+    if (batchBtn) batchBtn.style.display = sessionIsEditable() ? '' : 'none';
+    if (csvBtn) csvBtn.style.display = String(stocktakeSession.status || '').toUpperCase() === 'CONFIRMED' ? '' : 'none';
+    if (pdfBtn) pdfBtn.style.display = String(stocktakeSession.status || '').toUpperCase() === 'CONFIRMED' ? '' : 'none';
 
     const searchInput = document.getElementById('itemSearchInput');
     if (searchInput) {
@@ -555,7 +797,7 @@ function renderItemsTable() {
     if (!items.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="text-center text-muted py-4">
+                <td colspan="4" class="text-center text-muted py-4">
                     No items have been added to this stocktake session yet.
                 </td>
             </tr>`;
@@ -564,40 +806,70 @@ function renderItemsTable() {
 
     tbody.innerHTML = items.map((item) => `
         <tr data-item-id="${item.item_id}">
-            <td>
-                <div class="fw-bold">${escapeHtml(item.name || 'Unknown Item')}</div>
-                <div class="small text-muted">${escapeHtml(item.category || '')}</div>
+            <td class="stocktake-item-cell">
+                <div class="stocktake-item-block">
+                    <div class="stocktake-item-name">${escapeHtml(item.name || 'Unknown Item')}</div>
+                    ${item.category ? `<div class="stocktake-item-category">${escapeHtml(item.category)}</div>` : ''}
+                    ${item.recently_counted ? `
+                        <div class="stocktake-item-history">
+                            <span class="stocktake-item-history-badge">
+                                <i class="bi bi-clock-history"></i>Recently counted
+                            </span>
+                            <span class="stocktake-item-history-copy">
+                                ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}
+                            </span>
+                        </div>
+                    ` : item.has_stocktake_history ? `
+                        <div class="stocktake-item-history">
+                            <span class="stocktake-item-history-copy">
+                                Last counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}
+                            </span>
+                        </div>
+                    ` : ''}
+                </div>
             </td>
-            <td class="fw-bold">${Number(item.system_stock || 0)}</td>
-            <td>
+            <td class="stocktake-count-cell">
                 ${editable
                     ? `<input type="number" class="form-control form-control-sm counted-stock-input" min="0" step="1" value="${item.counted_stock == null ? '' : Number(item.counted_stock)}">`
-                    : `<span class="fw-bold">${item.counted_stock == null ? '-' : Number(item.counted_stock)}</span>`}
+                    : `<span class="stocktake-count-value">${item.counted_stock == null ? '-' : Number(item.counted_stock)}</span>`}
             </td>
-            <td class="variance-cell ${varianceClass(item.variance)}">${varianceLabel(item.variance || 0)}</td>
-            <td>
+            <td class="stocktake-note-cell">
                 ${editable
                     ? `<input type="text" class="form-control form-control-sm item-note-input" value="${escapeHtml(item.notes || '')}" placeholder="Optional note">`
-                    : `<span class="small text-muted">${escapeHtml(item.notes || '-')}</span>`}
+                    : `<span class="stocktake-note-text">${escapeHtml(item.notes || '-')}</span>`}
             </td>
-            <td>
+            <td class="stocktake-action-cell">
                 ${editable ? `
-                    <div class="d-flex flex-wrap gap-2 justify-content-center">
-                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">Remove</button>
+                    <div class="d-flex justify-content-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn stocktake-remove-btn" title="Remove item" aria-label="Remove item">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
                     </div>
                 ` : `
-                    <span class="small ${item.is_applied ? 'text-success' : 'text-muted'}">
-                        ${item.is_applied ? 'Updated' : 'Locked'}
-                    </span>
+                    <div class="d-grid gap-1 justify-content-center">
+                        <span class="small ${item.is_applied ? 'text-success' : 'text-muted'}">
+                            ${item.is_applied ? 'Updated' : 'Locked'}
+                        </span>
+                    </div>
                 `}
             </td>
         </tr>
     `).join('');
 }
 
-function renderSearchResults(items) {
-    const container = document.getElementById('itemSearchResults');
+function renderSearchResultsLegacy(items, options = {}) {
+    const {
+        containerId = 'itemSearchResults',
+        mode = 'main',
+    } = options;
+    const container = document.getElementById(containerId);
     if (!container) return;
+    if (mode === 'main') {
+        lastMainSearchItems = Array.isArray(items) ? items : [];
+    }
+    if (mode === 'batch') {
+        lastBatchSearchItems = Array.isArray(items) ? items : [];
+    }
     if (!items.length) {
         container.innerHTML = `<div class="p-3 text-muted small">No matching items found.</div>`;
         container.style.display = 'block';
@@ -605,12 +877,71 @@ function renderSearchResults(items) {
     }
 
     container.innerHTML = items.map((item) => `
-        <button type="button" class="search-result" data-item-id="${item.id}">
+        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}">
             <div class="fw-bold">${escapeHtml(item.name || '')}</div>
-            <div class="result-meta">Stock: ${Number(item.current_stock || 0)}${item.category ? ` · ${escapeHtml(item.category)}` : ''}</div>
+            <div class="result-meta">
+                Stock: ${Number(item.current_stock || 0)}
+                ${item.category ? ` · ${escapeHtml(item.category)}` : ''}
+                ${item.description ? ` · ${escapeHtml(item.description)}` : ''}
+            </div>
         </button>
     `).join('');
     container.style.display = 'block';
+}
+
+function renderSearchResults(items, options = {}) {
+    const {
+        containerId = 'itemSearchResults',
+        mode = 'main',
+    } = options;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (mode === 'main') {
+        lastMainSearchItems = Array.isArray(items) ? items : [];
+    }
+    if (mode === 'batch') {
+        lastBatchSearchItems = Array.isArray(items) ? items : [];
+    }
+    if (!items.length) {
+        container.innerHTML = `<div class="p-3 text-muted small">No matching items found.</div>`;
+        container.style.display = 'block';
+        return;
+    }
+
+    container.innerHTML = items.map((item) => `
+        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}">
+            <div class="fw-bold">${escapeHtml(item.name || '')}</div>
+            <div class="result-meta">
+                Stock: ${Number(item.current_stock || 0)}
+                ${item.category ? ` · ${escapeHtml(item.category)}` : ''}
+                ${item.description ? ` · ${escapeHtml(item.description)}` : ''}
+            </div>
+            ${item.recently_counted ? `
+                <div class="result-stocktake-meta warning">
+                    Counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}.
+                </div>
+            ` : item.has_stocktake_history ? `
+                <div class="result-stocktake-meta info">
+                    Last counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}.
+                </div>
+            ` : ''}
+        </button>
+    `).join('');
+    container.style.display = 'block';
+}
+
+async function confirmRecentCountWarning(item) {
+    if (!item || !item.recently_counted) {
+        return true;
+    }
+
+    return A4Confirm.show({
+        title: 'Recently counted item',
+        text: `${item.name || 'This item'} was counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${item.last_stocktake_session_number || 'another confirmed stocktake session'}. You can still continue if this recount is intentional.`,
+        confirmButtonText: 'Add Item',
+        cancelButtonText: 'Cancel',
+        dangerMode: false,
+    });
 }
 
 async function fetchSearchResults(query) {
@@ -623,6 +954,14 @@ async function fetchSearchResults(query) {
 }
 
 async function addItemToSession(itemId) {
+    return addItemToSessionInternal(itemId, {});
+}
+
+async function addItemToSessionInternal(itemId, options = {}) {
+    const {
+        silent = false,
+        rerender = true,
+    } = options;
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -633,9 +972,14 @@ async function addItemToSession(itemId) {
         throw new Error(data.message || 'Failed to add item.');
     }
     stocktakeSession = data.session;
-    renderSessionMeta();
-    renderItemsTable();
-    A4Flash.show('Item added to stocktake session.', 'success', { replace: true, autoCloseMs: 2200 });
+    if (rerender) {
+        renderSessionMeta();
+        renderItemsTable();
+    }
+    if (!silent) {
+        A4Flash.show('Item added to stocktake session.', 'success', { replace: true, autoCloseMs: 2200 });
+    }
+    return data.session;
 }
 
 async function saveItemRow(itemId, countedStock, notes) {
@@ -682,6 +1026,11 @@ function collectDraftItems() {
 
 async function saveDraft() {
     const items = collectDraftItems();
+    return persistDraft(items, { redirectOnSuccess: true });
+}
+
+async function persistDraft(items, options = {}) {
+    const { redirectOnSuccess = false } = options;
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/save-draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -693,28 +1042,149 @@ async function saveDraft() {
     }
     stocktakeSession = data.session;
     setDirtyState(false);
-    window.location.href = stocktakeListUrl;
+    renderSessionMeta();
+    renderItemsTable();
+    if (redirectOnSuccess) {
+        window.location.href = stocktakeListUrl;
+    }
+    return data.session;
 }
 
-function updateVariancePreview(row) {
-    if (!row) return;
-    const countedInput = row.querySelector('.counted-stock-input');
-    const varianceCell = row.querySelector('.variance-cell');
-    if (!countedInput || !varianceCell) return;
+function getBatchEntry(itemId) {
+    return batchEntries.find((entry) => Number(entry.item_id) === Number(itemId));
+}
 
-    const itemId = Number(row.dataset.itemId);
-    const item = (stocktakeSession.items || []).find((entry) => Number(entry.item_id) === itemId);
-    if (!item) return;
-
-    const rawValue = countedInput.value;
-    let variance = 0;
-    if (rawValue !== '') {
-        const countedStock = Number(rawValue);
-        variance = countedStock - Number(item.system_stock || 0);
+function upsertBatchEntry(item) {
+    const existing = getBatchEntry(item.id);
+    const sessionItem = (stocktakeSession.items || []).find((entry) => Number(entry.item_id) === Number(item.id));
+    if (existing) {
+        return existing;
     }
 
-    varianceCell.textContent = varianceLabel(variance);
-    varianceCell.className = `variance-cell ${varianceClass(variance)}`;
+    const entry = {
+        item_id: Number(item.id),
+        name: item.name || 'Unknown Item',
+        category: item.category || '',
+        description: item.description || '',
+        recently_counted: Boolean(item.recently_counted),
+        has_stocktake_history: Boolean(item.has_stocktake_history),
+        days_since_last_stocktake: item.days_since_last_stocktake,
+        last_stocktake_session_number: item.last_stocktake_session_number || '',
+        counted_stock: sessionItem?.counted_stock == null ? '' : String(Number(sessionItem.counted_stock)),
+        notes: sessionItem?.notes || '',
+        exists_in_session: Boolean(sessionItem),
+    };
+    batchEntries.push(entry);
+    return entry;
+}
+
+function renderBatchEntries() {
+    const tbody = document.getElementById('batchCountTableBody');
+    const emptyState = document.getElementById('batchCountEmptyState');
+    const tableWrap = document.getElementById('batchCountTableWrap');
+    const summary = document.getElementById('batchCountSummary');
+    if (!tbody || !emptyState || !tableWrap || !summary) return;
+
+    summary.textContent = `${batchEntries.length} item(s) ready to apply.`;
+    if (!batchEntries.length) {
+        emptyState.style.display = '';
+        tableWrap.style.display = 'none';
+        tbody.innerHTML = '';
+        return;
+    }
+
+    emptyState.style.display = 'none';
+    tableWrap.style.display = '';
+    tbody.innerHTML = batchEntries.map((entry) => `
+        <tr data-batch-item-id="${entry.item_id}">
+            <td>
+                <div class="fw-bold">${escapeHtml(entry.name)}</div>
+                <div class="small text-muted">${escapeHtml(entry.category || entry.description || '')}</div>
+                ${entry.recently_counted ? `
+                    <div class="stocktake-item-history mt-1">
+                        <span class="stocktake-item-history-badge">
+                            <i class="bi bi-clock-history"></i>Recently counted
+                        </span>
+                        <span class="stocktake-item-history-copy">
+                            ${Number(entry.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(entry.last_stocktake_session_number || 'a confirmed stocktake')}
+                        </span>
+                    </div>
+                ` : entry.has_stocktake_history ? `
+                    <div class="stocktake-item-history mt-1">
+                        <span class="stocktake-item-history-copy">
+                            Last counted ${Number(entry.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(entry.last_stocktake_session_number || 'a confirmed stocktake')}
+                        </span>
+                    </div>
+                ` : ''}
+                <div class="small mt-1 fw-bold ${entry.exists_in_session ? 'text-danger' : 'text-muted'}">
+                    ${entry.exists_in_session ? 'Already in draft' : 'Will be added'}
+                </div>
+            </td>
+            <td>
+                <input type="number" class="form-control form-control-sm batch-counted-stock-input" min="0" step="1" value="${escapeHtml(entry.counted_stock)}" placeholder="Qty">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm batch-note-input" value="${escapeHtml(entry.notes)}" placeholder="Optional note">
+            </td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-batch-entry-btn">Remove</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openBatchCountModal() {
+    if (!batchModal) return;
+    batchEntries = [];
+    renderBatchEntries();
+    const input = document.getElementById('batchCountSearchInput');
+    const results = document.getElementById('batchCountSearchResults');
+    if (input) input.value = '';
+    if (results) {
+        results.innerHTML = '';
+        results.style.display = 'none';
+    }
+    batchModal.show();
+    window.setTimeout(() => input?.focus(), 180);
+}
+
+async function applyBatchEntries() {
+    if (!batchEntries.length) {
+        throw new Error('Add at least one item to the batch before applying it.');
+    }
+    if (hasUnsavedChanges) {
+        throw new Error('Save the current draft changes first before applying a batch entry set.');
+    }
+
+    const existingIds = new Set((stocktakeSession.items || []).map((item) => Number(item.item_id)));
+    for (const entry of batchEntries) {
+        if (!existingIds.has(Number(entry.item_id))) {
+            await addItemToSessionInternal(entry.item_id, { silent: true, rerender: false });
+            existingIds.add(Number(entry.item_id));
+        }
+    }
+
+    const mergedItems = (stocktakeSession.items || []).map((item) => {
+        const batchEntry = getBatchEntry(item.item_id);
+        if (!batchEntry) {
+            return {
+                item_id: Number(item.item_id),
+                counted_stock: item.counted_stock == null ? null : Number(item.counted_stock),
+                notes: item.notes || '',
+            };
+        }
+        return {
+            item_id: Number(item.item_id),
+            counted_stock: batchEntry.counted_stock === '' ? null : Number(batchEntry.counted_stock),
+            notes: batchEntry.notes || '',
+        };
+    });
+
+    await persistDraft(mergedItems, { redirectOnSuccess: false });
+    batchEntries = [];
+    renderBatchEntries();
+    batchModal?.hide();
+    A4Flash.show('Batch count entry applied to the draft.', 'success', { replace: true, autoCloseMs: 2400 });
 }
 
 async function confirmSession() {
@@ -767,8 +1237,14 @@ document.addEventListener('DOMContentLoaded', function () {
     renderSessionMeta();
     renderItemsTable();
 
+    if (window.bootstrap && document.getElementById('batchCountModal')) {
+        batchModal = new bootstrap.Modal(document.getElementById('batchCountModal'));
+    }
+
     const searchInput = document.getElementById('itemSearchInput');
     const resultsBox = document.getElementById('itemSearchResults');
+    const batchSearchInput = document.getElementById('batchCountSearchInput');
+    const batchResultsBox = document.getElementById('batchCountSearchResults');
 
     if (searchInput) {
         searchInput.addEventListener('input', function () {
@@ -784,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', function () {
             searchDebounce = setTimeout(async () => {
                 try {
                     const items = await fetchSearchResults(query);
-                    renderSearchResults(items);
+                    renderSearchResults(items, { containerId: 'itemSearchResults', mode: 'main' });
                 } catch (error) {
                     A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
                 }
@@ -795,6 +1271,31 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!event.target.closest('.search-box')) {
                 resultsBox.style.display = 'none';
             }
+            if (!event.target.closest('.batch-count-search')) {
+                batchResultsBox.style.display = 'none';
+            }
+        });
+    }
+
+    if (batchSearchInput) {
+        batchSearchInput.addEventListener('input', function () {
+            const query = batchSearchInput.value.trim();
+            clearTimeout(batchSearchDebounce);
+
+            if (query.length < 2) {
+                batchResultsBox.style.display = 'none';
+                batchResultsBox.innerHTML = '';
+                return;
+            }
+
+            batchSearchDebounce = setTimeout(async () => {
+                try {
+                    const items = await fetchSearchResults(query);
+                    renderSearchResults(items, { containerId: 'batchCountSearchResults', mode: 'batch' });
+                } catch (error) {
+                    A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
+                }
+            }, 220);
         });
     }
 
@@ -802,8 +1303,11 @@ document.addEventListener('DOMContentLoaded', function () {
         resultsBox.addEventListener('click', async function (event) {
             const button = event.target.closest('.search-result');
             if (!button) return;
+            const item = lastMainSearchItems.find((entry) => Number(entry.id) === Number(button.dataset.itemId));
 
             try {
+                const shouldContinue = await confirmRecentCountWarning(item);
+                if (!shouldContinue) return;
                 await addItemToSession(Number(button.dataset.itemId));
                 resultsBox.style.display = 'none';
                 resultsBox.innerHTML = '';
@@ -813,6 +1317,58 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    if (batchResultsBox) {
+        batchResultsBox.addEventListener('click', async function (event) {
+            const button = event.target.closest('.search-result');
+            if (!button) return;
+            const itemId = Number(button.dataset.itemId);
+            const item = lastBatchSearchItems.find((entry) => Number(entry.id) === itemId);
+            if (!item) return;
+
+            const shouldContinue = await confirmRecentCountWarning(item);
+            if (!shouldContinue) return;
+
+            const entry = upsertBatchEntry(item);
+            renderBatchEntries();
+            batchResultsBox.style.display = 'none';
+            batchResultsBox.innerHTML = '';
+            if (batchSearchInput) {
+                batchSearchInput.value = '';
+                batchSearchInput.focus();
+            }
+
+            const row = document.querySelector(`#batchCountTableBody tr[data-batch-item-id="${entry.item_id}"] .batch-counted-stock-input`);
+            row?.focus();
+            row?.select();
+        });
+    }
+
+    batchSearchInput?.addEventListener('focus', function () {
+        if (batchResultsBox?.innerHTML.trim()) {
+            batchResultsBox.style.display = 'block';
+        }
+    });
+
+    document.getElementById('batchCountTableBody')?.addEventListener('input', function (event) {
+        const row = event.target.closest('tr[data-batch-item-id]');
+        if (!row) return;
+        const entry = getBatchEntry(Number(row.dataset.batchItemId));
+        if (!entry) return;
+        if (event.target.classList.contains('batch-counted-stock-input')) {
+            entry.counted_stock = event.target.value;
+        }
+        if (event.target.classList.contains('batch-note-input')) {
+            entry.notes = event.target.value;
+        }
+    });
+
+    document.getElementById('batchCountTableBody')?.addEventListener('click', function (event) {
+        const row = event.target.closest('tr[data-batch-item-id]');
+        if (!row || !event.target.closest('.remove-batch-entry-btn')) return;
+        batchEntries = batchEntries.filter((entry) => Number(entry.item_id) !== Number(row.dataset.batchItemId));
+        renderBatchEntries();
+    });
 
     document.getElementById('stocktakeItemsBody').addEventListener('click', async function (event) {
         const row = event.target.closest('tr[data-item-id]');
@@ -834,15 +1390,14 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (error) {
                 A4Flash.show(error.message || 'Failed to remove stocktake item.', 'danger', { replace: true });
             }
+            return;
         }
+
     });
 
     document.getElementById('stocktakeItemsBody').addEventListener('input', function (event) {
         const row = event.target.closest('tr[data-item-id]');
         if (!row) return;
-        if (event.target.classList.contains('counted-stock-input')) {
-            updateVariancePreview(row);
-        }
         if (
             event.target.classList.contains('counted-stock-input')
             || event.target.classList.contains('item-note-input')
@@ -856,6 +1411,18 @@ document.addEventListener('DOMContentLoaded', function () {
             await saveDraft();
         } catch (error) {
             A4Flash.show(error.message || 'Failed to save stocktake draft.', 'danger', { replace: true });
+        }
+    });
+
+    document.getElementById('openBatchCountBtn')?.addEventListener('click', function () {
+        openBatchCountModal();
+    });
+
+    document.getElementById('applyBatchCountBtn')?.addEventListener('click', async function () {
+        try {
+            await applyBatchEntries();
+        } catch (error) {
+            A4Flash.show(error.message || 'Failed to apply batch count entry.', 'danger', { replace: true });
         }
     });
 

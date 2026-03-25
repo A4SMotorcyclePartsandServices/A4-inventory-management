@@ -1,4 +1,86 @@
+from datetime import datetime
+
 from db.database import get_db
+from utils.formatters import format_date
+
+
+STOCKTAKE_WARNING_DAYS = 30
+
+
+def attach_recent_stocktake_metadata(conn, items, item_id_key="id", exclude_session_id=None):
+    if not items:
+        return items
+
+    item_ids = []
+    for item in items:
+        try:
+            item_ids.append(int(item.get(item_id_key)))
+        except (TypeError, ValueError):
+            continue
+
+    if not item_ids:
+        return items
+
+    query = """
+        SELECT DISTINCT ON (si.item_id)
+            si.item_id,
+            ss.id AS stocktake_session_id,
+            ss.session_number,
+            ss.confirmed_at,
+            si.counted_stock
+        FROM stocktake_items si
+        JOIN stocktake_sessions ss ON ss.id = si.session_id
+        WHERE ss.status = 'CONFIRMED'
+          AND ss.confirmed_at IS NOT NULL
+          AND si.item_id = ANY(%s)
+    """
+    params = [item_ids]
+    if exclude_session_id is not None:
+        query += " AND ss.id <> %s"
+        params.append(int(exclude_session_id))
+    query += """
+        ORDER BY si.item_id, ss.confirmed_at DESC, ss.id DESC
+    """
+
+    history_rows = conn.execute(query, tuple(params)).fetchall()
+
+    history_map = {int(row["item_id"]): dict(row) for row in history_rows}
+    now = datetime.now()
+
+    for item in items:
+        try:
+            item_id = int(item.get(item_id_key))
+        except (TypeError, ValueError):
+            continue
+
+        history = history_map.get(item_id)
+        item["has_stocktake_history"] = bool(history)
+        item["recently_counted"] = False
+        item["days_since_last_stocktake"] = None
+        item["last_stocktake_session_id"] = None
+        item["last_stocktake_session_number"] = None
+        item["last_stocktake_confirmed_at"] = None
+        item["last_stocktake_confirmed_at_display"] = None
+        item["last_stocktake_counted_stock"] = None
+
+        if not history:
+            continue
+
+        confirmed_at = history.get("confirmed_at")
+        days_since = None
+        if confirmed_at:
+            days_since = max((now - confirmed_at).days, 0)
+
+        item["days_since_last_stocktake"] = days_since
+        item["last_stocktake_session_id"] = history.get("stocktake_session_id")
+        item["last_stocktake_session_number"] = history.get("session_number")
+        item["last_stocktake_confirmed_at"] = confirmed_at
+        item["last_stocktake_confirmed_at_display"] = format_date(confirmed_at, show_time=True)
+        counted_stock = history.get("counted_stock")
+        item["last_stocktake_counted_stock"] = int(counted_stock) if counted_stock is not None else None
+        item["recently_counted"] = days_since is not None and days_since <= STOCKTAKE_WARNING_DAYS
+
+    return items
 
 def get_items_with_stock(snapshot_date=None):
     conn = get_db()
@@ -67,9 +149,9 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
             query_parts = []
             params = []
             for word in words:
-                query_parts.append("(name ILIKE %s OR description ILIKE %s)")
+                query_parts.append("(name ILIKE %s OR description ILIKE %s OR category ILIKE %s)")
                 pattern = f"%{word}%"
-                params.extend([pattern, pattern])
+                params.extend([pattern, pattern, pattern])
             
             where_clause = " AND ".join(query_parts)
             
@@ -119,8 +201,6 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
     pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
     pending_box_map = {row["item_id"]: row["pending_box_quantity"] for row in pending_rows}
 
-    conn.close()
-
     # 4. MERGE
     results = []
     for row in rows:
@@ -130,6 +210,8 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
         d["pending_box_quantity"] = pending_box_map.get(row["id"], 0)
         results.append(d)
 
+    attach_recent_stocktake_metadata(conn, results, item_id_key="id")
+    conn.close()
     return results
 
 def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-01-18"):
