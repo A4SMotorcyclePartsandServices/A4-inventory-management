@@ -37,6 +37,14 @@ Target: internet-facing production deployment for this Flask app.
 - Verify CSRF failures return a safe response and are logged.
 - Consider moving login throttling to shared storage if you will run multiple app instances.
 
+### Top 5 auth fixes before deployment
+
+- Move login rate limiting out of in-memory process state and into shared storage so lockouts survive restarts and still work if you run multiple app instances.
+- Strengthen login throttling to include IP-based and account-based protections, not just the current `IP + username` key, so attackers cannot cheaply rotate usernames or spoof around the limit.
+- Only trust `X-Forwarded-For` when the app is behind a correctly configured reverse proxy; otherwise use the real client address so rate limiting cannot be bypassed by header spoofing.
+- Enforce HTTPS everywhere and keep `SESSION_COOKIE_SECURE=1` in production so login sessions cannot be stolen over plain HTTP.
+- Add audit logging and alerting for failed logins, lockouts, and privileged auth events so suspicious access attempts are visible during production use.
+
 ### Database and secrets
 
 - Use a dedicated production database user with least privilege.

@@ -65,7 +65,7 @@ def get_current_user():
     try:
         user = conn.execute(
             """
-            SELECT id, username, role, is_active
+            SELECT id, username, role, is_active, COALESCE(must_change_password, 0) AS must_change_password
             FROM users
             WHERE id = %s
             """,
@@ -86,6 +86,7 @@ def ensure_authenticated_user():
 
     session["username"] = user["username"]
     session["role"] = user["role"]
+    session["must_change_password"] = int(user.get("must_change_password") or 0)
     g.current_user = user
     return user
 

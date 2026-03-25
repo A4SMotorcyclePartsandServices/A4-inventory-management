@@ -83,6 +83,11 @@
                 Sign In
             </button>
         </form>
+        <div class="text-center mt-3">
+            <a href="{{ url_for('password_reset.forgot_password') }}" class="text-decoration-none text-warning small">
+                Forgot password?
+            </a>
+        </div>
     </div>
 </div>
 {% endblock %}

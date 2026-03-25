@@ -162,7 +162,7 @@ Future upgrade: move to Redis or DB
 - [X] ~~*Sales print copy existing design. receipt style*~~ [2026-03-23]
 
 ## forgot password
-- [ ] admin reset user password
+- [X] ~~*admin reset user password*~~ [2026-03-25]
 - [ ] electricity issues please resolve
 - [ ] Sales analytics page check rendering
 - [ ] A4S-lipa.com

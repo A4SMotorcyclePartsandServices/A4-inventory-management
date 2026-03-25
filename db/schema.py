@@ -10,12 +10,15 @@ def init_db():
         id              SERIAL PRIMARY KEY,
         username        TEXT NOT NULL UNIQUE,
         password_hash   TEXT NOT NULL,
+        phone_no        TEXT,
         role            TEXT CHECK(role IN ('admin', 'staff')) NOT NULL,
         is_active       INTEGER DEFAULT 1,
         created_at      TIMESTAMP DEFAULT NOW(),
         created_by      INTEGER REFERENCES users(id)
     )
     """)
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_no TEXT")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER NOT NULL DEFAULT 0")
 
     # 2. MECHANICS TABLE
     cur.execute("""
@@ -847,6 +850,33 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient_unread ON notifications(recipient_user_id, is_archived, is_read, created_at DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_entity ON notifications(entity_type, entity_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(notification_type)")
+
+    # 24. PASSWORD RESET REQUESTS TABLE
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id                  SERIAL PRIMARY KEY,
+        username_submitted  TEXT NOT NULL,
+        user_id             INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        status              TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'COMPLETED', 'REJECTED', 'CANCELLED')),
+        request_note        TEXT,
+        requested_by_ip     TEXT,
+        requested_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+        repeat_request_count INTEGER NOT NULL DEFAULT 0,
+        last_requested_at   TIMESTAMP,
+        handled_by          INTEGER REFERENCES users(id),
+        handled_at          TIMESTAMP,
+        admin_note          TEXT
+    )
+    """)
+    cur.execute("ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS repeat_request_count INTEGER NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE password_reset_requests ADD COLUMN IF NOT EXISTS last_requested_at TIMESTAMP")
+    cur.execute("""
+        UPDATE password_reset_requests
+        SET last_requested_at = COALESCE(last_requested_at, requested_at)
+        WHERE last_requested_at IS NULL
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_password_reset_requests_status_requested ON password_reset_requests(status, requested_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_password_reset_requests_user_status ON password_reset_requests(user_id, status, requested_at DESC)")
 
     # 24. APPROVAL REQUESTS TABLE
     # Generic approval workflow table reusable by multiple business modules.

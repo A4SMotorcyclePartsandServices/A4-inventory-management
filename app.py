@@ -24,7 +24,9 @@ from db.schema import init_db
 # ------------------------
 # Services (business logic)
 # ------------------------
-from routes.login_route import auth_bp
+from routes.auth_route import auth_bp
+from routes.admin_users_route import admin_users_bp
+from routes.password_reset_route import password_reset_bp
 from auth.utils import ensure_authenticated_user, admin_required
 from services.inventory_service import get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
@@ -89,7 +91,7 @@ csrf = CSRFProtect(app)
 
 @app.before_request
 def restrict_access():
-    public_routes = {"auth.login", "static"}
+    public_routes = {"auth.login", "password_reset.forgot_password", "static"}
 
     if not request.endpoint or request.endpoint in public_routes:
         return
@@ -100,6 +102,19 @@ def restrict_access():
     user = ensure_authenticated_user()
     if not user:
         return redirect(url_for("auth.login"))
+
+    must_change_password = int(user.get("must_change_password") or 0) == 1
+    allowed_password_reset_endpoints = {
+        "password_reset.change_password",
+        "auth.logout",
+        "notification.notification_summary",
+        "notification.notification_list",
+        "notification.notification_mark_read",
+        "notification.notification_mark_all_read",
+        "static",
+    }
+    if must_change_password and request.endpoint not in allowed_password_reset_endpoints:
+        return redirect(url_for("password_reset.change_password"))
 
 
 @app.after_request
@@ -125,6 +140,8 @@ init_db()  # Safe to call on startup (creates tables if missing)
 app.register_blueprint(dashboard_api)
 app.register_blueprint(approval_bp)
 app.register_blueprint(auth_bp)
+app.register_blueprint(admin_users_bp)
+app.register_blueprint(password_reset_bp)
 app.register_blueprint(transaction_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(debt_bp)
