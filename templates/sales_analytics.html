@@ -208,6 +208,210 @@
     .table tbody tr:hover {
         background: rgba(193,18,31,0.04) !important;
     }
+    .profit-spotlight {
+        position: relative;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+            #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .profit-spotlight::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+        background: linear-gradient(90deg, #e63946, #4cc9f0 52%, #ffca3a);
+    }
+
+    .profit-spotlight-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+        gap: 1.15rem;
+        padding: 1.35rem 1.3rem 1.05rem;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        background:
+            radial-gradient(circle at top right, rgba(76, 201, 240, 0.15), transparent 34%),
+            linear-gradient(135deg, rgba(230, 57, 70, 0.12), rgba(255, 202, 58, 0.06));
+    }
+
+    .profit-spotlight-title {
+        color: #adb5bd;
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-weight: 800;
+        margin-bottom: 0.55rem;
+    }
+
+    .profit-spotlight-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.34rem 0.78rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: rgba(255,255,255,0.06);
+        color: var(--text-primary);
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-weight: 800;
+        margin-bottom: 0.6rem;
+    }
+
+    .profit-spotlight-status.loss {
+        color: #ffb4a2;
+        border-color: rgba(255, 180, 162, 0.18);
+        background: rgba(231, 111, 81, 0.14);
+    }
+
+    .profit-spotlight-status.profit {
+        color: #b7efc5;
+        border-color: rgba(183, 239, 197, 0.18);
+        background: rgba(45, 198, 83, 0.12);
+    }
+
+    .profit-spotlight-value {
+        color: var(--text-primary);
+        font-size: 2.65rem;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.05em;
+    }
+
+    .profit-spotlight-formula {
+        margin-top: 0.8rem;
+        color: #cbd5e1;
+        font-size: 0.88rem;
+        line-height: 1.5;
+        max-width: 700px;
+    }
+
+    .profit-spotlight-breakdown {
+        display: grid;
+        gap: 0.8rem;
+        align-content: start;
+    }
+
+    .profit-breakdown-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+        padding-bottom: 0.7rem;
+        border-bottom: 1px dashed rgba(255,255,255,0.10);
+    }
+
+    .profit-breakdown-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .profit-breakdown-label {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-weight: 700;
+    }
+
+    .profit-breakdown-value {
+        color: var(--text-primary);
+        font-size: 1.1rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .profit-breakdown-value.cost {
+        color: #ff9f1c;
+    }
+
+    .profit-spotlight-body {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        padding: 1.05rem 1.3rem 1.3rem;
+    }
+
+    .profit-metric {
+        position: relative;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 1rem 1.05rem 0.95rem;
+    }
+
+    .profit-metric::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        border-radius: 12px 0 0 12px;
+        background: transparent;
+    }
+
+    .profit-metric-label {
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+    }
+
+    .profit-metric-value {
+        font-size: 1.95rem;
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+    }
+
+    .profit-metric.revenue::before {
+        background: #4cc9f0;
+    }
+
+    .profit-metric.revenue .profit-metric-value {
+        color: #4cc9f0;
+    }
+
+    .profit-metric.cost::before {
+        background: #ffca3a;
+    }
+
+    .profit-metric.cost .profit-metric-value {
+        color: #ffca3a;
+    }
+
+    .profit-metric-sub {
+        margin-top: 0.45rem;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        line-height: 1.4;
+    }
+
+    .profit-main-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.55rem;
+        color: #adb5bd;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+
+    .profit-main-meta .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: #4cc9f0;
+        box-shadow: 0 0 0 4px rgba(76, 201, 240, 0.12);
+    }
+
 
     @media (max-width: 991px) {
         .analytics-hero {
@@ -217,6 +421,16 @@
         .range-form {
             width: 100%;
             grid-template-columns: 1fr;
+        }
+
+        .profit-spotlight-head,
+        .profit-spotlight-body {
+            grid-template-columns: 1fr;
+        }
+
+        .profit-breakdown-value {
+            white-space: normal;
+            text-align: right;
         }
     }
 </style>
@@ -236,7 +450,7 @@
             Sales Analytics
         </div>
         <div class="text-uppercase small fw-bold mb-2" style="letter-spacing: 0.16em; color: #adb5bd;">Revenue performance overview</div>
-        <p>Track realized sales, refund impact, payment mix, and who is driving revenue for the selected range.</p>
+        <p>Track realized sales, snapshot-based product profit, refund impact, payment mix, and who is driving revenue for the selected range.</p>
         <div class="d-flex flex-wrap gap-2 mt-3">
             <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">Paid Sales: {{ analytics.summary.paid_transactions }}</span>
             <span class="badge rounded-pill text-bg-dark border border-secondary-subtle px-3 py-2">Partial: {{ analytics.summary.partial_transactions }}</span>
@@ -309,6 +523,59 @@
 </div>
 
 <div class="row g-3 mb-3">
+    {% set product_profit = analytics.summary.product_profit or 0 %}
+    {% set profit_is_loss = product_profit < 0 %}
+    {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
+    {% set product_result_display = (product_profit * -1) if profit_is_loss else product_profit %}
+    <div class="col-12">
+        <div class="profit-spotlight">
+            <div class="profit-spotlight-head">
+                <div>
+                    <div class="profit-spotlight-title">Product Result</div>
+                    <div class="profit-main-meta">
+                        <span class="dot"></span>
+                        Paid item sales performance
+                    </div>
+                    <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ product_result_label }}</div>
+                    <div class="profit-spotlight-value">PHP {{ "{:,.2f}".format(product_result_display) }}</div>
+                    <div class="profit-spotlight-formula">
+                        Revenue (PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }})
+                        - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
+                        = {{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
+                    </div>
+                </div>
+                <div class="profit-spotlight-breakdown">
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Paid Item Sales</span>
+                        <span class="profit-breakdown-value">{{ analytics.summary.paid_transactions }}</span>
+                    </div>
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Product Revenue</span>
+                        <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</span>
+                    </div>
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Product Cost</span>
+                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="profit-spotlight-body">
+                <div class="profit-metric revenue">
+                    <div class="profit-metric-label">Product Revenue</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</div>
+                    <div class="profit-metric-sub">Total revenue from paid item sales in the selected range.</div>
+                </div>
+                <div class="profit-metric cost">
+                    <div class="profit-metric-label">Product Cost</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</div>
+                    <div class="profit-metric-sub">Based on frozen sale-time item cost snapshots, not the current catalog cost.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
     <div class="col-lg-8">
         <div class="panel-card">
             <h3>Sales trend</h3>
@@ -370,6 +637,7 @@
                             <th>Item</th>
                             <th>Qty</th>
                             <th>Revenue</th>
+                            <th>Profit</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -379,11 +647,12 @@
                                 <td>{{ row.name }}</td>
                                 <td>{{ row.quantity_sold }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_profit) }}</td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="3" class="empty-table">No paid item sales in this range.</td>
+                                <td colspan="4" class="empty-table">No paid item sales in this range.</td>
                             </tr>
                         {% endif %}
                     </tbody>

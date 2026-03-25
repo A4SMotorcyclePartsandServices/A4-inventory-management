@@ -59,17 +59,23 @@ def get_sales_analytics_snapshot(start_date, end_date):
         """
         SELECT
             COALESCE(SUM(items_total), 0) AS product_revenue,
+            COALESCE(SUM(item_cost_total), 0) AS product_cost,
+            COALESCE(SUM(item_profit_total), 0) AS product_profit,
             COALESCE(SUM(services_total), 0) AS service_revenue
         FROM (
             SELECT
                 s.id,
                 COALESCE(si.items_total, 0) AS items_total,
+                COALESCE(si.item_cost_total, 0) AS item_cost_total,
+                COALESCE(si.item_profit_total, 0) AS item_profit_total,
                 COALESCE(ss.services_total, 0) AS services_total
             FROM sales s
             LEFT JOIN (
                 SELECT
                     sale_id,
-                    SUM(quantity * final_unit_price) AS items_total
+                    SUM(quantity * final_unit_price) AS items_total,
+                    SUM(quantity * cost_per_piece_snapshot) AS item_cost_total,
+                    SUM(quantity * (final_unit_price - cost_per_piece_snapshot)) AS item_profit_total
                 FROM sales_items
                 GROUP BY sale_id
             ) si ON si.sale_id = s.id
@@ -149,7 +155,9 @@ def get_sales_analytics_snapshot(start_date, end_date):
         SELECT
             i.name AS item_name,
             SUM(si.quantity) AS quantity_sold,
-            COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue
+            COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue,
+            COALESCE(SUM(si.quantity * si.cost_per_piece_snapshot), 0) AS total_cost,
+            COALESCE(SUM(si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)), 0) AS total_profit
         FROM sales_items si
         JOIN sales s ON s.id = si.sale_id
         JOIN items i ON i.id = si.item_id
@@ -269,6 +277,8 @@ def get_sales_analytics_snapshot(start_date, end_date):
             "partial_sales_amount": round(_num(summary_row["partial_sales_amount"]), 2),
             "unresolved_sales_amount": round(_num(summary_row["unresolved_sales_amount"]), 2),
             "product_revenue": round(_num(product_service_row["product_revenue"]), 2),
+            "product_cost": round(_num(product_service_row["product_cost"]), 2),
+            "product_profit": round(_num(product_service_row["product_profit"]), 2),
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
         },
         "charts": {
@@ -301,6 +311,8 @@ def get_sales_analytics_snapshot(start_date, end_date):
                     "name": row["item_name"],
                     "quantity_sold": int(row["quantity_sold"] or 0),
                     "total_revenue": round(_num(row["total_revenue"]), 2),
+                    "total_cost": round(_num(row["total_cost"]), 2),
+                    "total_profit": round(_num(row["total_profit"]), 2),
                 }
                 for row in top_items
             ],
