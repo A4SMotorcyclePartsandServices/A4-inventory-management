@@ -172,6 +172,6 @@ Future upgrade: move to Redis or DB
 - [ ] to determine OUT, begbal + received - sold = OUT  
 
 ## Variance Page
-- [ ] Remove adjustment column
-- [ ] Action after confirming session, instead of applied make it updated
-- [ ] edit pdf, for system stock (SS), Counted Stock (CS), Variance (V), extract cost per piece for that item. basically a way for the user to see how much money they are sitting with that stock  
+- [X] ~~*Remove adjustment column*~~ [2026-03-25]
+- [X] ~~*Action after confirming session, instead of applied make it updated*~~ [2026-03-25]
+- [X] ~~*edit pdf, for system stock (SS), Counted Stock (CS), Variance (V), extract cost per piece for that item. basically a way for the user to see how much money they are sitting with that stock*~~ [2026-03-25]  

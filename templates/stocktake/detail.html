@@ -456,7 +456,6 @@
                             <th>Counted Stock</th>
                             <th>Variance</th>
                             <th>Notes</th>
-                            <th>Adjustment</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -556,7 +555,7 @@ function renderItemsTable() {
     if (!items.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center text-muted py-4">
+                <td colspan="6" class="text-center text-muted py-4">
                     No items have been added to this stocktake session yet.
                 </td>
             </tr>`;
@@ -582,18 +581,13 @@ function renderItemsTable() {
                     : `<span class="small text-muted">${escapeHtml(item.notes || '-')}</span>`}
             </td>
             <td>
-                <div class="small ${item.adjustment_type === 'IN' ? 'text-success' : item.adjustment_type === 'OUT' ? 'text-danger' : 'stocktake-no-adjustment'}">
-                    ${item.adjustment_quantity > 0 ? `${escapeHtml(item.adjustment_type)} ${Number(item.adjustment_quantity)}` : 'No adjustment'}
-                </div>
-            </td>
-            <td>
                 ${editable ? `
                     <div class="d-flex flex-wrap gap-2 justify-content-center">
                         <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn">Remove</button>
                     </div>
                 ` : `
                     <span class="small ${item.is_applied ? 'text-success' : 'text-muted'}">
-                        ${item.is_applied ? 'Applied' : 'Locked'}
+                        ${item.is_applied ? 'Updated' : 'Locked'}
                     </span>
                 `}
             </td>

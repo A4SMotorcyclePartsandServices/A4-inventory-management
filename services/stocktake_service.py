@@ -106,6 +106,14 @@ def _serialize_item_row(row):
     data["variance"] = int(data.get("variance") or 0)
     data["adjustment_quantity"] = int(data.get("adjustment_quantity") or 0)
     data["is_applied"] = int(data.get("is_applied") or 0)
+    data["cost_per_piece"] = float(data.get("cost_per_piece") or 0)
+    data["system_value"] = data["system_stock"] * data["cost_per_piece"]
+    data["counted_value"] = (
+        data["counted_stock"] * data["cost_per_piece"]
+        if data["counted_stock"] is not None
+        else None
+    )
+    data["variance_value"] = data["variance"] * data["cost_per_piece"]
     return data
 
 
@@ -181,7 +189,8 @@ def get_stocktake_session(session_id):
                 i.name,
                 i.category,
                 i.pack_size,
-                i.a4s_selling_price
+                i.a4s_selling_price,
+                i.cost_per_piece
             FROM stocktake_items si
             JOIN items i ON i.id = si.item_id
             WHERE si.session_id = %s
