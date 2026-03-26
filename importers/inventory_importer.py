@@ -45,7 +45,7 @@ def import_inventory_csv(file):
         "zero_quantity": 0
     }
 
-    for row in reader:
+    for row_number, row in enumerate(reader, start=2):
         # Normalize headers
         normalized = {k.strip().lower(): v for k, v in row.items()}
 
@@ -59,6 +59,13 @@ def import_inventory_csv(file):
         if not item_name or not qty_raw:
             skipped += 1
             skip_reasons["missing_fields"] += 1
+            skipped_rows.append({
+                "row_number": row_number,
+                "inventory_id": raw_item_name,
+                "normalized_inventory_id": item_name,
+                "quantity_on_hand": qty_raw,
+                "reason": "Missing Inventory ID or Quantity On Hand"
+            })
             continue
 
         # 2️⃣ Clean quantity
@@ -67,12 +74,26 @@ def import_inventory_csv(file):
         except ValueError:
             skipped += 1
             skip_reasons["bad_quantity"] += 1
+            skipped_rows.append({
+                "row_number": row_number,
+                "inventory_id": raw_item_name,
+                "normalized_inventory_id": item_name,
+                "quantity_on_hand": qty_raw,
+                "reason": "Invalid quantity value"
+            })
             continue
 
         # 3️⃣ Zero or negative stock → no baseline transaction
         if quantity <= 0:
             skipped += 1
             skip_reasons["zero_quantity"] += 1
+            skipped_rows.append({
+                "row_number": row_number,
+                "inventory_id": raw_item_name,
+                "normalized_inventory_id": item_name,
+                "quantity_on_hand": qty_raw,
+                "reason": "Quantity is zero or negative"
+            })
             continue
 
         # 4️⃣ STRICT item match (after whitespace normalization only)
@@ -81,6 +102,7 @@ def import_inventory_csv(file):
             skipped += 1
             skip_reasons["item_not_found"] += 1
             skipped_rows.append({
+                "row_number": row_number,
                 "inventory_id": raw_item_name,
                 "normalized_inventory_id": item_name,
                 "quantity_on_hand": qty_raw,
