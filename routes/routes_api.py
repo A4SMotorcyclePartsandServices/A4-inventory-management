@@ -119,3 +119,34 @@ def search_services():
     conn.close()
     
     return jsonify({"services": services})
+
+
+@dashboard_api.route("/api/search/items")
+def search_items():
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({"items": []})
+
+    words = query.split()
+    where_clause = " AND ".join([
+        "(name ILIKE %s OR category ILIKE %s OR COALESCE(description, '') ILIKE %s)"
+        for _ in words
+    ])
+    params = []
+    for word in words:
+        pattern = f'%{word}%'
+        params.extend([pattern, pattern, pattern])
+
+    conn = get_db()
+    cursor = conn.execute(f"""
+        SELECT id, name, category, COALESCE(a4s_selling_price, 0) AS a4s_selling_price
+        FROM items
+        WHERE {where_clause}
+        ORDER BY name ASC
+        LIMIT 20
+    """, params)
+
+    items = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return jsonify({"items": items})

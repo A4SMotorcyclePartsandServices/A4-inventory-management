@@ -518,6 +518,38 @@
                     </div>
                     {% endfor %}
 
+                    {% for bundle in sale.bundles %}
+                    <div class="line-item" style="padding-top: 7px; margin-top: 7px; border-top: 1px dashed #cfcfcf;">
+                        <strong>Bundle: {{ bundle.bundle_name_snapshot }}</strong>
+                        <div class="line-meta">
+                            {{ bundle.subcategory_name_snapshot }}
+                            {% if bundle.vehicle_category_snapshot %} · {{ bundle.vehicle_category_snapshot }}{% endif %}
+                            {% if bundle.bundle_version_no_snapshot %} · Version {{ bundle.bundle_version_no_snapshot }}{% endif %}
+                            &nbsp;|&nbsp; Fixed: <strong>₱ {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
+                        </div>
+                        {% if bundle.get('services', []) %}
+                        <div class="line-meta" style="margin-top: 4px;">
+                            <span class="svc-label" style="display: inline; margin-right: 6px;">Bundled Services</span>
+                            {% for svc in bundle.get('services', []) %}
+                                {{ svc.service_name_snapshot }}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if bundle.get('items', []) %}
+                        <div class="line-meta" style="margin-top: 4px;">
+                            <span class="svc-label" style="display: inline; margin-right: 6px;">Bundled Items</span>
+                            {% for item in bundle.get('items', []) %}
+                                {{ item.quantity if item.is_included else 0 }}x {{ item.item_name_snapshot }}{% if not item.is_included %} (excluded){% endif %}{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div class="line-meta" style="margin-top: 4px;">
+                            <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
+                            ₱ {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
+                        </div>
+                    </div>
+                    {% endfor %}
+
                     {% if sale.services %}
                     <div class="services-cell">
                         <div class="svc-label">Services</div>
@@ -529,9 +561,14 @@
                 </td>
                 <td>
                     {{ sale.mechanic_name }}
-                    {% if sale.services_total > 0 %}
+                    {% if sale.standalone_services_total > 0 %}
                     <div style="font-size: 11px; color: #666; margin-top: 3px;">
-                        Svcs: ₱ {{ "%.2f"|format(sale.services_total) }}
+                        Services: ₱ {{ "%.2f"|format(sale.standalone_services_total) }}
+                    </div>
+                    {% endif %}
+                    {% if sale.bundle_service_total > 0 %}
+                    <div style="font-size: 11px; color: #666; margin-top: 3px;">
+                        Bundle Service Side: ₱ {{ "%.2f"|format(sale.bundle_service_total) }}
                     </div>
                     {% endif %}
                 </td>
@@ -590,20 +627,28 @@
                     {% for mech in data.mechanic_summary %}
                     <div class="mechanic-block">
                         <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
-                        <div class="mechanic-block-row">
-                            <span>Services rendered</span>
-                            <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
-                        </div>
-                        {% if mech.debt_service_portion > 0 %}
-                        <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
-                            <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
-                            <span></span>
-                        </div>
-                        <div class="mechanic-block-row" style="font-weight: 700;">
-                            <span>Total for payout</span>
-                            <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
-                        </div>
-                        {% endif %}
+                    <div class="mechanic-block-row">
+                        <span>Services rendered</span>
+                        <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
+                    </div>
+                    {% if mech.bundle_mech_share > 0 %}
+                    <div class="mechanic-block-row">
+                        <span>Bundle service side</span>
+                        <span>₱ {{ "%.2f"|format(mech.bundle_mech_share) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if mech.debt_service_portion > 0 %}
+                    <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
+                        <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
+                        <span></span>
+                    </div>
+                    {% endif %}
+                    {% if mech.bundle_mech_share > 0 or mech.debt_service_portion > 0 %}
+                    <div class="mechanic-block-row" style="font-weight: 700;">
+                        <span>Total for payout</span>
+                        <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
+                    </div>
+                    {% endif %}
                         <div class="mechanic-block-cut">
                             <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
                             <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
@@ -654,7 +699,7 @@
                         <span class="value">₱ {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
-                        <span class="label">↳ Mechanic Payout (from services)</span>
+                        <span class="label">↳ Mechanic Payout (from paid svc/bundles)</span>
                         <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
                     </div>
                     {% if data.total_shop_topup > 0 %}
@@ -716,12 +761,12 @@
             <div class="report-row profit-metric revenue">
                 <div class="profit-metric-label">Product Revenue</div>
                 <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</div>
-                <div class="profit-metric-sub">Total revenue from sold items only.</div>
+                <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
             </div>
             <div class="report-row profit-metric cost">
                 <div class="profit-metric-label">Product Cost</div>
                 <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_cost) }}</div>
-                <div class="profit-metric-sub">Based on the item cost saved at the time of sale.</div>
+                <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item selling-price totals.</div>
             </div>
         </div>
     </div>
@@ -940,6 +985,38 @@
                                     ₱ {{ "%.2f"|format(item.final_unit_price) }} each
                                 {% endif %}
                                 &nbsp;|&nbsp; Line: <strong>₱ {{ "%.2f"|format(item.line_total) }}</strong>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {% for bundle in sale.bundles %}
+                        <div class="line-item" style="padding-top: 7px; margin-top: 7px; border-top: 1px dashed #e2bcbc;">
+                            <strong>Bundle: {{ bundle.bundle_name_snapshot }}</strong>
+                            <div class="line-meta">
+                                {{ bundle.subcategory_name_snapshot }}
+                                {% if bundle.vehicle_category_snapshot %} · {{ bundle.vehicle_category_snapshot }}{% endif %}
+                                {% if bundle.bundle_version_no_snapshot %} · Version {{ bundle.bundle_version_no_snapshot }}{% endif %}
+                                &nbsp;|&nbsp; Fixed: <strong>₱ {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
+                            </div>
+                            {% if bundle.get('services', []) %}
+                            <div class="line-meta" style="margin-top: 4px;">
+                                <span class="svc-label" style="display: inline; margin-right: 6px;">Bundled Services</span>
+                                {% for svc in bundle.get('services', []) %}
+                                    {{ svc.service_name_snapshot }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if bundle.get('items', []) %}
+                            <div class="line-meta" style="margin-top: 4px;">
+                                <span class="svc-label" style="display: inline; margin-right: 6px;">Bundled Items</span>
+                                {% for item in bundle.get('items', []) %}
+                                    {{ item.quantity if item.is_included else 0 }}x {{ item.item_name_snapshot }}{% if not item.is_included %} (excluded){% endif %}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <div class="line-meta" style="margin-top: 4px;">
+                                <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
+                                ₱ {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
                             </div>
                         </div>
                         {% endfor %}

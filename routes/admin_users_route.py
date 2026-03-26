@@ -1,23 +1,29 @@
+import json
+
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, flash, url_for
 
 from auth.utils import ensure_authenticated_user
 from services.admin_users_service import (
     _to_bool,
+    create_bundle_record,
     add_mechanic_record,
     add_payment_method_record,
     add_service_record,
     create_staff_user,
     get_admin_sales_page,
     get_audit_trail_page,
+    get_bundle_edit_payload,
     get_item_details_payload,
     get_manage_users_context,
     get_manual_in_details,
     get_payables_audit_page,
     get_sale_refund_context,
+    toggle_bundle_active_status,
     toggle_mechanic_active_status,
     toggle_payment_method_active_status,
     toggle_service_active_status,
     toggle_user_active_status,
+    update_bundle_record,
 )
 from services.password_reset_service import (
     complete_password_reset_request,
@@ -25,6 +31,24 @@ from services.password_reset_service import (
 )
 
 admin_users_bp = Blueprint("admin_users", __name__)
+
+
+MANAGE_USERS_TABS = {
+    "users-tab",
+    "mechanics-tab",
+    "password-resets-tab",
+    "manage-services-tab",
+    "bundles-tab",
+    "payment-methods-tab",
+    "loyalty-tab",
+}
+
+AUDIT_TABS = {
+    "sales-tab",
+    "debt-audit-tab",
+    "audit-tab",
+    "payables-audit-tab",
+}
 
 
 @admin_users_bp.before_request
@@ -57,8 +81,24 @@ def manage_users():
             flash(f"Error creating user: {str(exc)}", "danger")
 
     active_tab = request.args.get("tab", "users-tab")
+    if request.method == "GET" and active_tab in AUDIT_TABS:
+        return redirect(url_for("admin_users.audit_dashboard", tab=active_tab))
+    if active_tab not in MANAGE_USERS_TABS:
+        active_tab = "users-tab"
     context = get_manage_users_context(active_tab=active_tab)
     return render_template("users/users.html", **context)
+
+
+@admin_users_bp.route("/users/audit", methods=["GET"])
+def audit_dashboard():
+    active_tab = request.args.get("tab", "sales-tab")
+    if active_tab in MANAGE_USERS_TABS:
+        return redirect(url_for("admin_users.manage_users", tab=active_tab))
+    if active_tab not in AUDIT_TABS:
+        active_tab = "sales-tab"
+
+    context = get_manage_users_context(active_tab=active_tab)
+    return render_template("users/audit.html", **context)
 
 
 @admin_users_bp.route("/users/toggle/<int:user_id>", methods=["POST"])
@@ -195,6 +235,113 @@ def toggle_service(service_id):
     if result["status"] == "ok":
         flash(f"Service '{result['name']}' status updated.", "info")
     return redirect(url_for("admin_users.manage_users", tab="manage-services-tab"))
+
+
+@admin_users_bp.route("/bundles/add", methods=["POST"])
+def add_bundle():
+    try:
+        variants = json.loads(request.form.get("variants_json") or "[]")
+        service_ids = json.loads(request.form.get("services_json") or "[]")
+        items = json.loads(request.form.get("items_json") or "[]")
+    except json.JSONDecodeError:
+        flash("Bundle form data could not be read. Please try again.", "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+    try:
+        result = create_bundle_record(
+            name=request.form.get("name", ""),
+            vehicle_category=request.form.get("vehicle_category", ""),
+            variants=variants,
+            service_ids=service_ids,
+            items=items,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+    except Exception as exc:
+        flash(f"Error creating bundle: {str(exc)}", "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+    if result["status"] == "duplicate":
+        flash(
+            f"Bundle '{result['name']}' for '{result['vehicle_category']}' already exists.",
+            "warning",
+        )
+    elif result["status"] == "ok":
+        flash(f"Bundle '{result['name']}' created successfully.", "success")
+    else:
+        flash("Error creating bundle.", "danger")
+
+    return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+
+@admin_users_bp.route("/bundles/<int:bundle_id>/edit", methods=["POST"])
+def edit_bundle(bundle_id):
+    try:
+        variants = json.loads(request.form.get("variants_json") or "[]")
+        service_ids = json.loads(request.form.get("services_json") or "[]")
+        items = json.loads(request.form.get("items_json") or "[]")
+    except json.JSONDecodeError:
+        flash("Bundle form data could not be read. Please try again.", "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+    try:
+        result = update_bundle_record(
+            bundle_id=bundle_id,
+            name=request.form.get("name", ""),
+            vehicle_category=request.form.get("vehicle_category", ""),
+            variants=variants,
+            service_ids=service_ids,
+            items=items,
+            changed_by=session.get("user_id"),
+            changed_by_username=session.get("username"),
+            change_notes=request.form.get("change_notes", ""),
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+    except Exception as exc:
+        flash(f"Error updating bundle: {str(exc)}", "danger")
+        return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+    if result["status"] == "missing":
+        flash("Bundle not found.", "danger")
+    elif result["status"] == "duplicate":
+        flash(
+            f"Bundle '{result['name']}' for '{result['vehicle_category']}' already exists.",
+            "warning",
+        )
+    elif result["status"] == "ok":
+        flash(
+            f"Bundle '{result['name']}' updated. New version: {result['version_no']}.",
+            "success",
+        )
+    else:
+        flash("Error updating bundle.", "danger")
+
+    return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+
+@admin_users_bp.route("/bundles/toggle/<int:bundle_id>", methods=["POST"])
+def toggle_bundle(bundle_id):
+    result = toggle_bundle_active_status(bundle_id)
+    if result["status"] == "missing":
+        flash("Bundle not found.", "danger")
+    elif result["new_status"] == 0:
+        flash(f"Bundle '{result['name']}' disabled.", "warning")
+    else:
+        flash(f"Bundle '{result['name']}' activated.", "success")
+    return redirect(url_for("admin_users.manage_users", tab="bundles-tab"))
+
+
+@admin_users_bp.route("/api/bundles/<int:bundle_id>")
+def bundle_details_api(bundle_id):
+    try:
+        return jsonify(get_bundle_edit_payload(bundle_id))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @admin_users_bp.route("/payment-methods/add", methods=["POST"])

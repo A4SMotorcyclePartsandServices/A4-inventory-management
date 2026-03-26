@@ -333,6 +333,7 @@
     {% set payment_lower = payment_name|lower %}
     {% set sale_items = sale.get('items', []) %}
     {% set sale_services = sale.get('services', []) %}
+    {% set sale_bundles = sale.get('bundles', []) %}
     {% set refund_history = sale.get('refund_history', []) %}
     {% if 'cash' in payment_lower %}
         {% set payment_class = 'cash' %}
@@ -413,7 +414,63 @@
                                 </tr>
                                 {% endfor %}
 
-                                {% if not sale_items and not sale_services %}
+                                {% for bundle in sale_bundles %}
+                                <tr>
+                                    <td colspan="3" style="background: rgba(15, 118, 110, 0.08); border-top: 1px solid rgba(15, 118, 110, 0.16); border-bottom-style: solid;">
+                                        <div class="line-name" style="color:#0f766e; text-transform: uppercase;">Bundle - {{ bundle.bundle_name }}</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="line-name">{{ bundle.subcategory_name }}</div>
+                                        <div class="line-note">{{ bundle.vehicle_category or 'Vehicle' }} • Version {{ bundle.version_no or 0 }}</div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="line-name">&#8369;{{ '%.2f'|format(bundle.bundle_price or 0) }}</div>
+                                        <div class="line-note">Fixed bundle price</div>
+                                    </td>
+                                    <td class="text-center"><div class="line-name">1</div></td>
+                                </tr>
+
+                                {% if bundle.get('services', []) %}
+                                <tr>
+                                    <td colspan="3" style="text-align:center; color:#0f766e; font-weight:700; background: rgba(15, 118, 110, 0.04);">Bundled Services</td>
+                                </tr>
+                                {% for svc in bundle.get('services', []) %}
+                                <tr>
+                                    <td>
+                                        <div class="line-name">{{ svc.name }}</div>
+                                    </td>
+                                    <td class="text-center"><div class="line-note">Included in bundle</div></td>
+                                    <td class="text-center"><div class="line-name">1</div></td>
+                                </tr>
+                                {% endfor %}
+                                {% endif %}
+
+                                {% if bundle.get('items', []) %}
+                                <tr>
+                                    <td colspan="3" style="text-align:center; color:#0f766e; font-weight:700; background: rgba(15, 118, 110, 0.04);">Bundled Items</td>
+                                </tr>
+                                {% for item in bundle.get('items', []) %}
+                                <tr>
+                                    <td>
+                                        <div class="line-name">{{ item.name }}</div>
+                                        <div class="line-note {% if not item.is_included %}refund{% endif %}">
+                                            {% if item.is_included %}
+                                                Included in stock deduction
+                                            {% else %}
+                                                Excluded from stock deduction
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="text-center"><div class="line-note">Included in bundle</div></td>
+                                    <td class="text-center"><div class="line-name">{{ item.quantity if item.is_included else 0 }}</div></td>
+                                </tr>
+                                {% endfor %}
+                                {% endif %}
+                                {% endfor %}
+
+                                {% if not sale_items and not sale_services and not sale_bundles %}
                                 <tr>
                                     <td colspan="3" class="text-center">No line items recorded for this sale.</td>
                                 </tr>

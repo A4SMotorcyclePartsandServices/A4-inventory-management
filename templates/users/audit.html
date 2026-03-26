@@ -444,321 +444,9 @@
         font-size: 0.88rem;
     }
 
-    .bundle-modal-dialog {
-        max-width: 1180px;
-    }
-
-    .bundle-modal-content {
-        background: linear-gradient(180deg, #23272e, #1b1f25) !important;
-        border-radius: 18px;
-        overflow: hidden;
-    }
-
-    .bundle-editor-shell {
-        display: grid;
-        gap: 1rem;
-    }
-
-    .bundle-editor-card {
-        padding: 1rem 1.05rem;
-        border-radius: 16px;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
-    }
-
-    .bundle-editor-kicker {
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: #9ca3af;
-        margin-bottom: 0.55rem;
-    }
-
-    .bundle-editor-grid {
-        display: grid;
-        grid-template-columns: 1.2fr 1.2fr 0.7fr;
-        gap: 0.9rem;
-    }
-
-    .bundle-editor-sections {
-        display: grid;
-        grid-template-columns: 1.28fr 0.92fr 0.92fr;
-        gap: 1rem;
-        align-items: start;
-    }
-
-    .bundle-editor-section-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-        margin-bottom: 0.8rem;
-    }
-
-    .bundle-editor-list {
-        display: grid;
-        gap: 0.7rem;
-    }
-
-    .bundle-editor-empty {
-        padding: 0.95rem;
-        border-radius: 12px;
-        border: 1px dashed rgba(255,255,255,0.1);
-        color: #7b8190;
-        font-size: 0.85rem;
-        text-align: center;
-    }
-
-    #bundle-variants-wrap .bundle-variant-row {
-        padding: 1rem !important;
-        border-radius: 14px !important;
-        background: rgba(255,255,255,0.015);
-    }
-
-    .bundle-create-variant-stack {
-        display: grid;
-        gap: 0.85rem;
-    }
-
-    .bundle-create-line-item {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.9rem;
-        align-items: end;
-    }
-
-    .bundle-create-total-row {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 48px;
-        gap: 0.8rem;
-        align-items: end;
-    }
-
-    #bundle-variants-wrap .bundle-variant-name,
-    #bundle-variants-wrap .bundle-item-value-input,
-    #bundle-variants-wrap .bundle-shop-share-input,
-    #bundle-variants-wrap .bundle-mechanic-share-input,
-    #bundle-variants-wrap .bundle-variant-total-price {
-        min-height: 46px;
-        font-size: 1rem;
-    }
-
-    #bundle-variants-wrap .input-group-text {
-        min-width: 44px;
-        justify-content: center;
-        font-size: 1rem;
-        font-weight: 700;
-    }
-
-    #bundle-variants-wrap .bundle-remove-btn-inline {
-        min-height: 46px;
-        width: 48px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    #bundle-variants-wrap .form-label {
-        font-size: 0.78rem !important;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        margin-bottom: 0.35rem;
-    }
-
-    .bundle-details-table-wrap {
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 14px;
-        overflow: hidden;
-        background: rgba(255,255,255,0.03);
-    }
-
-    .bundle-details-table {
-        width: 100%;
-        margin-bottom: 0;
-        table-layout: auto !important;
-    }
-
-    .bundle-details-table th,
-    .bundle-details-table td {
-        padding: 0.9rem 1rem;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        background: transparent !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-    }
-
-    .bundle-details-table thead th {
-        background: rgba(255,255,255,0.03) !important;
-        color: #9ca3af;
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        white-space: normal !important;
-    }
-
-    .bundle-details-table tbody tr:last-child td {
-        border-bottom: none;
-    }
-
-    .bundle-details-table tbody td {
-        color: #f5f5f5;
-        white-space: nowrap !important;
-    }
-
-    .bundle-details-table tbody td:first-child {
-        white-space: normal !important;
-        overflow-wrap: anywhere;
-    }
-
-    #editBundleModal .modal-body {
-        max-height: calc(100vh - 180px);
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-
-    #editBundleModal .bundle-variant-row,
-    #editBundleModal .bundle-service-row,
-    #editBundleModal .bundle-item-row {
-        border: 1px solid rgba(255,255,255,0.09) !important;
-        border-radius: 14px !important;
-        background: rgba(10, 14, 20, 0.32);
-        padding: 0.85rem !important;
-        margin-bottom: 0 !important;
-    }
-
-    #editBundleModal .bundle-row-label {
-        font-size: 0.68rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #8d94a3;
-        margin-bottom: 0.38rem;
-    }
-
-    #editBundleModal .bundle-row-grid {
-        display: grid;
-        gap: 0.75rem;
-        align-items: end;
-    }
-
-    #editBundleModal .bundle-row-grid.variant-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) 46px;
-        align-items: end;
-    }
-
-    #editBundleModal .bundle-editor-sections {
-        grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.9fr);
-    }
-
-    #editBundleModal .bundle-editor-side-stack {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 1rem;
-        align-content: start;
-    }
-
-    #editBundleModal .bundle-row-grid.service-grid {
-        grid-template-columns: minmax(0, 1fr) 46px;
-    }
-
-    #editBundleModal .bundle-row-grid.item-grid {
-        grid-template-columns: minmax(0, 1fr) 90px 46px;
-    }
-
-    #editBundleModal .bundle-remove-btn {
-        width: 46px;
-        height: 46px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 12px;
-    }
-
-    #editBundleModal .input-group-text {
-        min-width: 40px;
-        justify-content: center;
-    }
-
-    #editBundleModal .bundle-editor-help {
-        margin-top: 0.8rem;
-        color: #ff5c6c;
-        font-size: 0.83rem;
-    }
-
-    @media (max-width: 1100px) {
-        #editBundleModal .bundle-row-grid.variant-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        #editBundleModal .bundle-row-grid.variant-grid .bundle-remove-btn {
-            width: 100%;
-        }
-    }
-
-    .bundle-details-shell {
-        display: grid;
-        gap: 1rem;
-    }
-
-    .bundle-details-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.9rem;
-    }
-
-    .bundle-details-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        display: grid;
-        gap: 0.7rem;
-    }
-
-    .bundle-details-pill {
-        padding: 0.82rem 0.9rem;
-        border-radius: 14px;
-        border: 1px solid rgba(255,255,255,0.08);
-        background: rgba(10, 14, 20, 0.32);
-    }
-
-    .bundle-details-pill-title {
-        font-size: 0.7rem;
-        font-weight: 800;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #8d94a3;
-        margin-bottom: 0.28rem;
-    }
-
-    .bundle-details-pill-value {
-        font-size: 0.98rem;
-        font-weight: 700;
-        color: #f5f5f5;
-        overflow-wrap: anywhere;
-    }
-
     @media (max-width: 767.98px) {
         .password-reset-meta-grid {
             grid-template-columns: 1fr;
-        }
-
-        .bundle-editor-grid,
-        .bundle-details-grid,
-        #editBundleModal .bundle-row-grid.variant-grid,
-        #editBundleModal .bundle-row-grid.service-grid,
-        #editBundleModal .bundle-row-grid.item-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .bundle-editor-sections,
-        #editBundleModal .bundle-editor-side-stack {
-            grid-template-columns: 1fr;
-        }
-
-        #editBundleModal .bundle-remove-btn {
-            width: 100%;
         }
     }
 
@@ -1111,7 +799,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-shield-lock-fill"></i> Admin Panel</h2>
+    <h2><i class="bi bi-clipboard-data"></i> Audit Panel</h2>
     <a href="/" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
     </a>
@@ -1120,884 +808,393 @@
 <!-- TABS -->
 <ul class="nav nav-tabs mb-0" role="tablist">
     <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'users-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
-            <i class="bi bi-people-fill"></i> Users
+        <button class="nav-link {% if active_tab == 'sales-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
+            <i class="bi bi-cash-stack"></i> Sales
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'mechanics-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
-            <i class="bi bi-tools"></i> Mechanics
+        <button class="nav-link {% if active_tab == 'debt-audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#debt-audit-tab" type="button">
+            <i class="bi bi-cash-coin"></i> Debt Payments
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'password-resets-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#password-resets-tab" type="button">
-            <i class="bi bi-key-fill"></i> Password Resets
+        <button class="nav-link {% if active_tab == 'audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#audit-tab" type="button">
+            <i class="bi bi-clock-history"></i> Audit Trail
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'manage-services-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#manage-services-tab" type="button">
-            <i class="bi bi-gear-wide-connected"></i> Services
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'bundles-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#bundles-tab" type="button">
-            <i class="bi bi-box-seam"></i> Bundles
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'payment-methods-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#payment-methods-tab" type="button">
-            <i class="bi bi-credit-card-2-front"></i> Payment Methods
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'loyalty-tab' %}active{% endif %}"
-                data-bs-toggle="tab" data-bs-target="#loyalty-tab" type="button">
-            <i class="bi bi-award-fill"></i> Loyalty
+        <button class="nav-link {% if active_tab == 'payables-audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#payables-audit-tab" type="button">
+            <i class="bi bi-journal-check"></i> Payables Audit
         </button>
     </li>
 </ul>
 
 <div class="tab-content">
+    <!-- SALES TAB -->
+    <div class="tab-pane fade {% if active_tab == 'sales-tab' %}show active{% endif %}" id="sales-tab">
 
-    <!-- USERS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'users-tab' %}show active{% endif %}" id="users-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
-            <form method="post" class="row g-3">
-                <div class="col-md-4">
-                    <input name="username" class="form-control" placeholder="New staff username" required>
-                </div>
-                <div class="col-md-4">
-                    <input name="phone_no" type="tel" inputmode="numeric" class="form-control" placeholder="Phone number" required>
-                </div>
-                <div class="col-md-3">
-                    <input name="password" type="password" class="form-control" placeholder="Temporary password" required>
-                </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-danger w-100">
-                        <i class="bi bi-person-plus-fill"></i> Create
-                    </button>
-                </div>
-            </form>
-        </div>
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
 
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Username</th>
-                        <th>Phone #</th>
-                        <th>Role</th>
-                        <th>Created At</th>
-                        <th>Created By</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td class="fw-bold">{{ user.username }}</td>
-                        <td class="text-white-50">{{ user.phone_no or '---' }}</td>
-                        <td>
-                            {% if user.role == 'admin' %}
-                                <span class="badge bg-danger role-badge">Admin</span>
-                            {% else %}
-                                <span class="badge bg-secondary role-badge">Staff</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">{{ user.created_at }}</td>
-                        <td class="text-white-50">
-                            {% if user.creator_name %}
-                                <i class="bi bi-person-badge"></i> {{ user.creator_name }}
-                            {% else %}
-                                <span class="text-muted small">System</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            {% if user.role == 'admin' %}
-                                <span class="text-success small fw-bold">
-                                    <i class="bi bi-shield-check"></i> PROTECTED
-                                </span>
-                            {% else %}
-                                <form action="{{ url_for('admin_users.toggle_user', user_id=user.id) }}" method="POST">
-                                    {% if user.is_active == 1 %}
-                                        <button type="submit" class="toggle-btn p-0 text-success">
-                                            <i class="bi bi-toggle-on fs-4"></i>
-                                            <small class="d-block">ACTIVE</small>
-                                        </button>
-                                    {% else %}
-                                        <button type="submit" class="toggle-btn p-0 text-muted">
-                                            <i class="bi bi-toggle-off fs-4"></i>
-                                            <small class="d-block">DISABLED</small>
-                                        </button>
-                                    {% endif %}
-                                </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-danger fw-semibold fs-5 mb-0">
+                    <i class="bi bi-cash-stack me-2"></i> Sales History
+                </h6>
+                <span class="text-danger small" id="sales-summary"></span>
+            </div>
 
-    <!-- PASSWORD RESETS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'password-resets-tab' %}show active{% endif %}" id="password-resets-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-2 text-white-50">Staff Password Reset Requests</h5>
-            <p class="text-info mb-0 small">
-                Staff users can request a reset from the login page. Admins set a temporary password here, then the user is forced to change it after signing in.
-            </p>
-        </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
 
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Requested</th>
-                        <th>Username</th>
-                        <th>Note</th>
-                        <th>Status</th>
-                        <th>Handled By</th>
-                        <th>Admin Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for req in password_reset_requests %}
-                    <tr>
-                        <td class="text-white-50">
-                            <div>{{ req.requested_at }}</div>
-                            {% if req.repeat_request_count > 0 %}
-                            <div class="small text-warning">
-                                Asked again {{ req.repeat_request_count }} more time{{ 's' if req.repeat_request_count != 1 else '' }}
-                            </div>
-                            <div class="small text-muted">
-                                Latest repeat: {{ req.last_requested_at }}
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="fw-bold">{{ req.matched_username or req.username_submitted }}</div>
-                            {% if req.requested_by_ip %}
-                            <div class="small text-muted">IP: {{ req.requested_by_ip }}</div>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">
-                            {{ req.request_note or 'No note provided.' }}
-                            {% if req.repeat_request_count > 0 %}
-                            <div class="mt-2 small text-info">
-                                Deduped into this same request record. Total submissions: {{ req.total_request_count }}.
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if req.status == 'PENDING' %}
-                                <span class="badge bg-warning text-dark">Pending</span>
-                            {% elif req.status == 'COMPLETED' %}
-                                <span class="badge bg-success">Completed</span>
-                            {% elif req.status == 'REJECTED' %}
-                                <span class="badge bg-danger">Rejected</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ req.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">
-                            {% if req.handled_by_username %}
-                                <div>{{ req.handled_by_username }}</div>
-                                <div class="small text">{{ req.handled_at or '' }}</div>
-                            {% else %}
-                                <span class="text-muted">Waiting for admin</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center actions-cell">
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-outline-info"
-                                title="Review password reset request"
-                                data-request-id="{{ req.id }}"
-                                data-username="{{ req.matched_username or req.username_submitted }}"
-                                data-requested-at="{{ req.requested_at }}"
-                                data-last-requested-at="{{ req.last_requested_at or '' }}"
-                                data-repeat-count="{{ req.repeat_request_count }}"
-                                data-total-count="{{ req.total_request_count }}"
-                                data-request-ip="{{ req.requested_by_ip or '' }}"
-                                data-request-note="{{ req.request_note or '' }}"
-                                data-status="{{ req.status }}"
-                                data-handled-by="{{ req.handled_by_username or '' }}"
-                                data-handled-at="{{ req.handled_at or '' }}"
-                                data-admin-note="{{ req.admin_note or '' }}"
-                                data-can-complete="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
-                                data-can-reject="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
-                                data-has-match="{{ 1 if req.matched_username else 0 }}"
-                                onclick="openPasswordResetReviewModal(this)">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">No password reset requests yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+                <div class="btn-group btn-group-sm" id="sales-status-toggle">
+                    <button type="button" class="btn btn-outline-secondary active"
+                            onclick="setSalesStatus(null, this)">All</button>
+                    <button type="button" class="btn btn-outline-success"
+                            onclick="setSalesStatus('Paid', this)">Paid</button>
+                    <button type="button" class="btn btn-outline-warning"
+                            onclick="setSalesStatus('Partial', this)">Partial</button>
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="setSalesStatus('Unresolved', this)">Unpaid</button>
+                </div>
 
-    <!-- MECHANICS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'mechanics-tab' %}show active{% endif %}" id="mechanics-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-3 text-white-50">Add New Mechanic</h5>
-            <form action="{{ url_for('admin_users.add_mechanic') }}" method="POST" class="row g-3">
-                <div class="col-md-5">
-                    <input name="name" class="form-control" placeholder="Mechanic Name" required>
-                </div>
-                <div class="col-md-3">
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-white-50">Rate</span>
-                        <select name="commission" class="form-select border-secondary text-white bg-dark">
-                            <option value="0.80">80%</option>
-                            <option value="0.50">50%</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <input name="phone" class="form-control" placeholder="Phone #">
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-danger w-100">
-                        <i class="bi bi-plus-circle"></i> Add
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Standard Rate</th>
-                        <th>Phone</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for mechanic in mechanics %}
-                    <tr>
-                        <td class="fw-bold">{{ mechanic.name }}</td>
-                        <td>
-                            <span class="badge bg-dark border border-secondary text-warning">
-                                {{ (mechanic.commission_rate * 100)|int }}%
-                            </span>
-                        </td>
-                        <td class="text-white-50">{{ mechanic.phone or '---' }}</td>
-                        <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_mechanic', mechanic_id=mechanic.id) }}" method="POST">
-                                {% if mechanic.is_active == 1 %}
-                                    <button type="submit" class="toggle-btn text-success" title="Click to Disable">
-                                        <i class="bi bi-toggle-on fs-3"></i>
-                                        <small class="d-block fw-bold" style="font-size: 0.65rem;">ACTIVE</small>
-                                    </button>
-                                {% else %}
-                                    <button type="submit" class="toggle-btn p-0 text-muted" title="Click to Activate">
-                                        <i class="bi bi-toggle-off fs-3"></i>
-                                        <small class="d-block fw-bold" style="font-size: 0.65rem;">INACTIVE</small>
-                                    </button>
-                                {% endif %}
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="4" class="text-center text-muted">No mechanics added yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- SERVICES TAB -->
-    <div class="tab-pane fade {% if active_tab == 'manage-services-tab' %}show active{% endif %}" id="manage-services-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
-            <form action="{{ url_for('admin_users.add_service') }}" method="POST" class="row g-3">
-                <div class="col-md-4">
-                    <input id="add-service-name-input" name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
-                </div>
-                <div class="col-md-3">
-                    <select name="existing_category" id="categorySelect" class="form-select bg-dark text-white border-secondary">
-                        <option value="Labor">Labor</option> 
-                        {% for cat in categories %}
-                            {% if cat.category != 'Labor' %}
-                                <option value="{{ cat.category }}">{{ cat.category }}</option>
-                            {% endif %}
-                        {% endfor %}
-                        <option value="__OTHER__">-- New Category --</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <input name="new_category" id="newCategoryInput" class="form-control" placeholder="Select '-- New Category --' to type" disabled>
-                </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-danger w-100">
-                        <i class="bi bi-plus-lg"></i> Add
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <div class="input-group">
-                    <span class="input-group-text bg-dark border-secondary text-white-50">
+                <!-- Search -->
+                <div class="input-group input-group-sm" style="width: 220px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
                         <i class="bi bi-search"></i>
                     </span>
-                    <input type="text" id="serviceSearch" class="form-control bg-dark text-white border-secondary" 
-                        placeholder="Search services (e.g. 'change oil')..." onkeyup="filterServices()">
+                    <input type="text" id="sales-search-input"
+                        class="form-control form-control-sm"
+                        placeholder="Receipt # or customer..."
+                        style="background:#141720; border-color:#333; color:#fff;">
                 </div>
-                <small class="text-muted">Showing up to 20 results from the master list.</small>
+
+                <!-- Date range -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="sales-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+
+                <!-- Discounted sales filter -->
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="sales-discount-filter">
+                    <label class="form-check-label text-white-50 small" for="sales-discount-filter">
+                        Discounted sales only
+                    </label>
+                </div>
+
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearSalesFilters()" title="Clear all filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
             </div>
         </div>
 
         <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
+            <table class="table table-dark table-hover align-middle" style="table-layout: fixed; width: 100%;">
                 <thead>
                     <tr>
-                        <th>Service Name</th>
-                        <th>Category</th>
-                        <th class="text-center">Status</th>
+                        <th style="width:18%;">Date & Time</th>
+                        <th style="width:15%;">Receipt #</th>
+                        <th style="width:22%;">Customer</th>
+                        <th style="width:13%;">Payment</th>
+                        <th style="width:12%;">Status</th>
+                        <th style="width:12%;">Total</th>
+                        <th class="actions-cell" style="width:11%; text-align:center;">Action</th>
                     </tr>
                 </thead>
-                <tbody id="servicesBody">
-                    {% for svc in services_list %}
-                    <tr>
-                        <td class="fw-bold">{{ svc.name }}</td>
-                        <td><span class="badge bg-dark border border-secondary text-info">{{ svc.category }}</span></td>
-                        <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_service', service_id=svc.id) }}" method="POST">
-                                {% if svc.is_active == 1 %}
-                                    <button type="submit" class="toggle-btn text-success">
-                                        <i class="bi bi-toggle-on fs-3"></i>
-                                        <small class="d-block">ACTIVE</small>
-                                    </button>
-                                {% else %}
-                                    <button type="submit" class="toggle-btn text-muted">
-                                        <i class="bi bi-toggle-off fs-3"></i>
-                                        <small class="d-block">DISABLED</small>
-                                    </button>
-                                {% endif %}
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="3" class="text-center text-muted">No services configured yet.</td>
-                    </tr>
-                    {% endfor %}
+                <tbody id="sales-admin-body">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
-    </div>
 
-    <!-- BUNDLES TAB -->
-    <div class="tab-pane fade {% if active_tab == 'bundles-tab' %}show active{% endif %}" id="bundles-tab">
-        <div class="admin-card shadow-sm">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
-                <div>
-                    <h5 class="mb-1 text-white-50" id="bundle-form-title">Create New Bundle</h5>
-                    <div class="small text-info" id="bundle-form-subtitle">
-                        Admin-only master setup for bundle name, vehicle category, cc-based price variants, included services, and included items.
-                    </div>
-                </div>
-                <span class="badge bg-dark border border-secondary text-info" id="bundle-form-mode-badge">Create Mode</span>
-            </div>
-
-            <form action="{{ url_for('admin_users.add_bundle') }}" method="POST" id="bundle-create-form">
-                <input type="hidden" name="variants_json" id="bundle-variants-json">
-                <input type="hidden" name="services_json" id="bundle-services-json">
-                <input type="hidden" name="items_json" id="bundle-items-json">
-
-                <div class="row g-3">
-                    <div class="col-md-5">
-                        <label class="form-label text-white-50" style="font-size:0.75rem;">Bundle Name</label>
-                        <input name="name" id="bundle-name" class="form-control" placeholder="e.g. Bundle A" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label text-white-50" style="font-size:0.75rem;">Vehicle Category</label>
-                        <input name="vehicle_category" id="bundle-vehicle-category" class="form-control" placeholder="e.g. Scooter" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label text-white-50" style="font-size:0.75rem;" id="bundle-submit-label">Create</label>
-                        <button type="submit" class="btn btn-danger w-100" id="bundle-submit-btn">
-                            <i class="bi bi-plus-circle me-1"></i> Save Bundle
-                        </button>
-                    </div>
-                </div>
-
-                <div class="row g-4 mt-1">
-                    <div class="col-lg-4">
-                        <div class="p-3 rounded border border-secondary h-100" style="background:#171717;">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong class="text-warning">Subcategory</strong>
-                                <button type="button" class="btn btn-sm btn-outline-warning" id="add-bundle-variant-btn">
-                                    <i class="bi bi-plus-lg me-1"></i>Add Subcategory
-                                </button>
-                            </div>
-                            <div id="bundle-variants-wrap"></div>
-                            <small class="text-danger">Add one subcategory per cc range, then enter the price for that subcategory.</small>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-4">
-                        <div class="p-3 rounded border border-secondary h-100" style="background:#171717;">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong class="text-info">Included Services</strong>
-                                <button type="button" class="btn btn-sm btn-outline-info" id="add-bundle-service-btn">
-                                    <i class="bi bi-plus-lg me-1"></i>Add Service
-                                </button>
-                            </div>
-                            <div id="bundle-services-wrap"></div>
-                            <small class="text-danger">Search and select the shared services included in this bundle.</small>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-4">
-                        <div class="p-3 rounded border border-secondary h-100" style="background:#171717;">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <strong class="text-success">Included Items</strong>
-                                <button type="button" class="btn btn-sm btn-outline-success" id="add-bundle-item-btn">
-                                    <i class="bi bi-plus-lg me-1"></i>Add Item
-                                </button>
-                            </div>
-                            <div id="bundle-items-wrap"></div>
-                            <small class="text-danger">Search items and set the default quantity included in the bundle.</small>
-                        </div>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Bundle</th>
-                        <th>Vehicle Category</th>
-                        <th>Contents</th>
-                        <th>Created</th>
-                        <th class="text-center">Actions</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for bundle in bundles %}
-                    <tr>
-                        <td class="fw-bold">{{ bundle.name }}</td>
-                        <td>
-                            <span class="badge bg-dark border border-secondary text-info">{{ bundle.vehicle_category }}</span>
-                            <div class="small text-muted mt-1">Version {{ bundle.current_version_no }}</div>
-                        </td>
-                        <td class="text-white-50">
-                            <span class="me-3">{{ bundle.variant_count }} subcategor{{ 'y' if bundle.variant_count == 1 else 'ies' }}</span>
-                            <span class="me-3">{{ bundle.service_count }} service{{ 's' if bundle.service_count != 1 else '' }}</span>
-                            <span>{{ bundle.item_count }} item{{ 's' if bundle.item_count != 1 else '' }}</span>
-                        </td>
-                        <td class="text-white-50">{{ bundle.created_at }}</td>
-                        <td class="text-center">
-                            <div class="d-flex align-items-center justify-content-center gap-2 flex-wrap">
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-info"
-                                    onclick="openBundleDetails({{ bundle.id }})"
-                                    title="View bundle details">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-warning"
-                                    onclick="openBundleEditModal({{ bundle.id }})"
-                                    title="Edit bundle">
-                                    <i class="bi bi-wrench"></i>
-                                </button>
-                            </div>
-                        </td>
-                        <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_bundle', bundle_id=bundle.id) }}" method="POST">
-                                {% if bundle.is_active == 1 %}
-                                    <button type="submit" class="toggle-btn text-success">
-                                        <i class="bi bi-toggle-on fs-3"></i>
-                                        <small class="d-block">ACTIVE</small>
-                                    </button>
-                                {% else %}
-                                    <button type="submit" class="toggle-btn text-muted">
-                                        <i class="bi bi-toggle-off fs-3"></i>
-                                        <small class="d-block">DISABLED</small>
-                                    </button>
-                                {% endif %}
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">No bundles configured yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- PAYMENT METHODS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'payment-methods-tab' %}show active{% endif %}" id="payment-methods-tab">
-
-    <div class="admin-card shadow-sm">
-        <h5 class="mb-3 text-white-50">Add New Payment Method</h5>
-        <form action="{{ url_for('admin_users.add_payment_method') }}" method="POST" class="row g-3">
-            <div class="col-md-6">
-                <input name="name" class="form-control" placeholder="Payment Method Name (e.g. Metrobank)" required>
-            </div>
-            <div class="col-md-4">
-                <select name="category" class="form-select bg-dark text-white border-secondary" required>
-                    <option value="Bank">Bank</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Debt">Debt</option>
-                    <option value="Online">Online</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-danger w-100">
-                    <i class="bi bi-plus-circle"></i> Add
+        <!-- Pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="sales-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="sales-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="sales-prev-btn" onclick="salesChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="sales-next-btn" onclick="salesChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
                 </button>
             </div>
-        </form>
-    </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for pm in payment_methods %}
-                    <tr>
-                        <td class="fw-bold">{{ pm.name }}</td>
-                        <td>
-                            <span class="badge bg-dark border border-secondary text-info">
-                                {{ pm.category }}
-                            </span>
-                        </td>
-                        <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_payment_method', pm_id=pm.id) }}" method="POST">
-                                {% if pm.is_active == 1 %}
-                                    <button type="submit" class="toggle-btn text-success">
-                                        <i class="bi bi-toggle-on fs-3"></i>
-                                        <small class="d-block">ACTIVE</small>
-                                    </button>
-                                {% else %}
-                                    <button type="submit" class="toggle-btn text-muted">
-                                        <i class="bi bi-toggle-off fs-3"></i>
-                                        <small class="d-block">DISABLED</small>
-                                    </button>
-                                {% endif %}
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="3" class="text-center text-muted">
-                            No payment methods configured yet.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
+
     </div>
 
-    <!-- LOYALTY PROGRAMS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'loyalty-tab' %}show active{% endif %}" id="loyalty-tab">
+    <!-- DEBT PAYMENTS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'debt-audit-tab' %}show active{% endif %}" id="debt-audit-tab">
 
-        <!-- CREATE FORM -->
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-3 text-white-50">Add Loyalty Program</h5>
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
 
-            <div class="row g-3" id="loyalty-form">
+            <!-- Left: Title + summary count -->
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-warning fw-semibold fs-5 mb-0">
+                    <i class="bi bi-cash-coin me-2"></i> Debt Payment History
+                </h6>
+                <span class="text-warning small" id="debt-audit-summary"></span>
+            </div>
 
-                <!-- Program Name -->
-                <div class="col-md-4">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Program Name <span class="text-danger">*</span></label>
-                    <input type="text" id="lf-name" class="form-control bg-dark text-white border-secondary"
-                        placeholder="e.g. Oil Change Reward">
-                </div>
+            <!-- Right: Toggle + Date Filter -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
 
-                <!-- Program Type -->
-                <div class="col-md-2">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Type <span class="text-danger">*</span></label>
-                    <select id="lf-type" class="form-select bg-dark text-white border-secondary" onchange="loyaltyTypeChanged()">
-                        <option value="SERVICE">Service-based</option>
-                        <option value="ITEM">Item-based</option>
-                    </select>
-                </div>
-
-                <div class="col-md-2">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Mode <span class="text-danger">*</span></label>
-                    <select id="lf-program-mode" class="form-select bg-dark text-white border-secondary" onchange="loyaltyModesChanged()">
-                        <option value="REDEEMABLE">Redeemable</option>
-                        <option value="EARN_ONLY">Earn Only</option>
-                    </select>
-                </div>
-
-                <!-- Qualifying Service / Item (autocomplete) -->
-                <div class="col-md-4">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-qualifying-label">
-                        Qualifying Service <span class="text-danger">*</span>
-                    </label>
-                    <div class="position-relative">
-                        <input type="text" id="lf-qualifying-search" class="form-control bg-dark text-white border-secondary"
-                            placeholder="Search service..." autocomplete="off"
-                            oninput="loyaltyQualifyingSearch()">
-                        <div id="lf-qualifying-suggestions"
-                            class="list-group position-absolute w-100"
-                            style="display:none; z-index:9999; background:#1a1a1a; border:1px solid #444; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto;">
-                        </div>
-                        <input type="hidden" id="lf-qualifying-id">
-                    </div>
-                </div>
-
-                <!-- Threshold -->
-                <div class="col-md-2" id="lf-threshold-group">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Stamps needed <span class="text-danger" id="lf-threshold-required">*</span></label>
-                    <input type="number" id="lf-threshold" class="form-control bg-dark text-white border-secondary"
-                        min="1" value="10" placeholder="e.g. 10">
-                </div>
-
-                <div class="col-md-2" id="lf-points-threshold-group" style="display:none;">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Points needed <span class="text-danger" id="lf-points-threshold-required">*</span></label>
-                    <input type="number" id="lf-points-threshold" class="form-control bg-dark text-white border-secondary"
-                        min="1" value="100" placeholder="e.g. 100">
-                </div>
-
-                <div class="col-md-2">
-                    <label class="form-label text-white-50 d-block" style="font-size:0.75rem;">Earning Modes</label>
-                    <div class="d-flex gap-3 align-items-center pt-1">
-                        <label class="form-check-label text-white-50" style="font-size:0.78rem;">
-                            <input class="form-check-input me-1" type="checkbox" id="lf-stamp-enabled" checked onchange="loyaltyModesChanged()">
-                            Stamps
-                        </label>
-                        <label class="form-check-label text-white-50" style="font-size:0.78rem;">
-                            <input class="form-check-input me-1" type="checkbox" id="lf-points-enabled" onchange="loyaltyModesChanged()">
-                            Points
-                        </label>
-                    </div>
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Basis <span class="text-danger">*</span></label>
-                    <select id="lf-reward-basis" class="form-select bg-dark text-white border-secondary" onchange="loyaltyModesChanged()">
-                        <option value="STAMPS">Stamps Threshold</option>
-                        <option value="POINTS">Points Threshold</option>
-                        <option value="STAMPS_OR_POINTS">Stamps OR Points</option>
-                    </select>
-                </div>
-
-                <!-- Reward Type -->
-                <div class="col-md-3" id="lf-reward-type-group">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Type <span class="text-danger">*</span></label>
-                    <select id="lf-reward-type" class="form-select bg-dark text-white border-secondary" onchange="loyaltyRewardTypeChanged()">
-                        <option value="FREE_SERVICE">Free Service</option>
-                        <option value="FREE_ITEM">Free Item</option>
-                        <option value="DISCOUNT_PERCENT">Discount %</option>
-                        <option value="DISCOUNT_AMOUNT">Discount &#8369;</option>
-                        <option value="RAFFLE_ENTRY">Raffle Entry</option>
-                    </select>
-                </div>
-
-                <!-- Reward Value -->
-                <div class="col-md-2" id="lf-reward-value-group">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;" id="lf-reward-value-label">
-                        Reward Value
-                        <span class="text-warning" style="font-size:0.65rem;" id="lf-reward-value-hint">(leave 0 for free)</span>
-                    </label>
-                    <input type="number" id="lf-reward-value" class="form-control bg-dark text-white border-secondary"
-                        min="0" value="0" step="0.01">
-                </div>
-
-                <!-- Reward Description -->
-                <div class="col-md-4" id="lf-reward-desc-group">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Reward Description</label>
-                    <input type="text" id="lf-reward-desc" class="form-control bg-dark text-white border-secondary"
-                        placeholder="e.g. 1 free oil change on 10th visit">
-                </div>
-
-                <!-- Period Start -->
-                <div class="col-md-2">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Period Start <span class="text-danger">*</span></label>
-                    <input type="date" id="lf-period-start" class="form-control bg-dark text-white border-secondary">
-                </div>
-
-                <!-- Period End -->
-                <div class="col-md-2">
-                    <label class="form-label text-white-50" style="font-size:0.75rem;">Period End <span class="text-danger">*</span></label>
-                    <input type="date" id="lf-period-end" class="form-control bg-dark text-white border-secondary">
-                </div>
-
-                <div class="col-12" id="lf-points-rules-card" style="display:none;">
-                    <div class="p-2 rounded border border-secondary" style="background:#171717;">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <strong class="text-white-50" style="font-size:0.8rem;">Point Rules</strong>
-                            <button type="button" class="btn btn-sm btn-outline-info" onclick="loyaltyAddRuleRow()">
-                                <i class="bi bi-plus-lg me-1"></i>Add Rule
-                            </button>
-                        </div>
-                        <div id="lf-point-rules"></div>
-                        <small class="text-warning">Rules are checked by priority. Enable "Stop on match" for first-match wins.</small>
-                    </div>
-                </div>
-
-                <!-- Submit -->
-                <div class="col-12 d-flex align-items-end gap-2">
-                    <button type="button" class="btn btn-danger" onclick="loyaltySubmitProgram()">
-                        <i class="bi bi-plus-circle me-1"></i> Create Program
+                <!-- Status toggle -->
+                <div class="btn-group btn-group-sm" id="debt-status-toggle">
+                    <button type="button" class="btn btn-outline-secondary active" data-filter="unpaid"
+                            onclick="setDebtFilter('unpaid', this)">
+                        <i class="bi bi-exclamation-circle me-1"></i>Unpaid
                     </button>
-                    <span id="lf-error" style="color:#f87171; font-size:0.82rem;"></span>
-                    <span id="lf-status" class="small text-muted ms-2"></span>
+                    <button type="button" class="btn btn-outline-secondary" data-filter="all"
+                            onclick="setDebtFilter('all', this)">
+                        All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-filter="paid"
+                            onclick="setDebtFilter('paid', this)">
+                        <i class="bi bi-check-circle me-1"></i>Paid
+                    </button>
                 </div>
+
+                <!-- Date range picker -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="debt-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="applyDebtDateFilter()" title="Apply filter">
+                    <i class="bi bi-search"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearDebtDateFilter()" title="Clear dates">
+                    <i class="bi bi-x-lg"></i>
+                </button>
 
             </div>
         </div>
 
-        <!-- PROGRAMS TABLE -->
-        <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="text-white-50 mb-0">
-                <i class="bi bi-list-ul me-2"></i>Existing Programs
-            </h6>
-            <button class="btn btn-sm btn-outline-secondary" onclick="loadLoyaltyPrograms()">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
+    <div class="table-responsive">
+            <table class="table table-dark align-middle" id="debt-audit-table">
                 <thead>
-                    <tr>
-                        <th>Program Name</th>
-                        <th>Type</th>
-                        <th>Qualifies On</th>
-                        <th class="text-center">Earning</th>
-                        <th>Reward</th>
-                        <th>Period</th>
-                        <th class="text-center">Actions</th>
+                    <tr class="border-bottom border-secondary">
+                        <th>Customer</th>
+                        <th>Debt Records</th>
+                        <th>Date</th>
+                        <th class="text-end">Total Debt</th>
+                        <th class="text-end">Total Paid</th>
+                        <th class="text-end">Remaining</th>
                         <th class="text-center">Status</th>
+                        <th class="text-center actions-cell" style="width: 10%;">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="loyalty-programs-admin-body">
-                    <tr><td colspan="8" class="text-center text-muted py-3">Loading...</td></tr>
+                <tbody id="debt-audit-body">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- AUDIT TAB -->
+    <div class="tab-pane fade {% if active_tab == 'audit-tab' %}show active{% endif %}" id="audit-tab">
+
+        <!-- Controls row -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+
+            <!-- Left: Title + count -->
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-info fw-semibold fs-5 mb-0">
+                    <i class="bi bi-truck me-2"></i> Item Movement
+                </h6>
+                <span class="text-info small" id="audit-summary"></span>
+            </div>
+
+            <!-- Right: Filters -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                <!-- Movement type toggle -->
+                <div class="btn-group btn-group-sm" id="audit-type-toggle">
+                    <button type="button" class="btn btn-outline-secondary active" 
+                            onclick="setAuditType(null, this)">All</button>
+                    <button type="button" class="btn btn-outline-success"
+                            onclick="setAuditType('IN', this)">
+                        <i class="bi bi-box-arrow-in-down me-1"></i>IN
+                    </button>
+                    <button type="button" class="btn btn-outline-danger"
+                            onclick="setAuditType('OUT', this)">
+                        <i class="bi bi-box-arrow-up me-1"></i>OUT
+                    </button>
+                    <button type="button" class="btn btn-outline-info"
+                            onclick="setAuditType('ORDER', this)">
+                        <i class="bi bi-clipboard-check me-1"></i>ORDER
+                    </button>
+                </div>
+
+                <!-- Date range picker -->
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="audit-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+
+                <!-- Discounted sales filter -->
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="audit-discount-filter">
+                    <label class="form-check-label text-white-50 small" for="audit-discount-filter">
+                        Discounted sales only
+                    </label>
+                </div>
+
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearAuditDateFilter()" title="Clear dates">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle" id="audit-trail-table">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th style="width: 13%;">Date & Time</th>
+                        <th style="width: 20%;">Item Summary</th>
+                        <th style="width: 10%; text-align:center;">Movement</th>  <!-- was 8% -->
+                        <th style="width: 11%;">Reason</th>                       <!-- was 12% -->
+                        <th style="width: 5%; text-align:center;">Qty</th>
+                        <th class="audit-reference-head" style="width: 13%;">Reference</th>
+                        <th style="width: 19%;">Notes</th>                        <!-- was 18% -->
+                        <th style="width: 9%;">Staff</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-trail-body">
+                    <tr><td colspan="8" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
 
-    </div>
-
-    <div class="modal fade" id="loyaltyProgramDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-danger">Loyalty Program Details</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="small text-white-50">Program</div>
-                            <div id="loyaltyDetailName" class="fw-bold"></div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="small text-white-50">Type</div>
-                            <div id="loyaltyDetailType"></div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="small text-white-50">Status</div>
-                            <div id="loyaltyDetailStatus"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="small text-white-50">Qualifies On</div>
-                            <div id="loyaltyDetailQualifying"></div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="small text-white-50">Period</div>
-                            <div id="loyaltyDetailPeriod"></div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="small text-white-50 mb-2">Earning</div>
-                        <div id="loyaltyDetailEarning" class="d-flex flex-wrap gap-2"></div>
-                    </div>
-
-                    <div class="mb-3">
-                        <div class="small text-white-50 mb-2">Reward</div>
-                        <div id="loyaltyDetailReward"></div>
-                    </div>
-
-                    <div>
-                        <div class="small text-white-50 mb-2">Point Rules</div>
-                        <div id="loyaltyDetailRules" class="small"></div>
-                    </div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <a id="saleDetailsPrintBtn" href="#" target="_blank" class="btn btn-outline-warning btn-sm">
-                        <i class="bi bi-printer me-1"></i>Print
-                    </a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                </div>
+        <!-- Pagination -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="audit-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="audit-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="audit-prev-btn" onclick="auditChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="audit-next-btn" onclick="auditChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
             </div>
         </div>
-    </div>
 
-    <div class="modal fade" id="extendLoyaltyProgramModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-danger">Extend Loyalty Program</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <!-- PAYABLES AUDIT TAB -->
+    <div class="tab-pane fade {% if active_tab == 'payables-audit-tab' %}show active{% endif %}" id="payables-audit-tab">
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-warning fw-semibold fs-5 mb-0">
+                    <i class="bi bi-journal-check me-2"></i> Payables Movement
+                </h6>
+                <span class="text-warning small" id="payables-audit-summary"></span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <select id="payables-audit-event-filter" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 210px;">
+                    <option value="">All Events</option>
+                    <option value="PO_PAYABLE_CREATED">Payable Created (PO)</option>
+                    <option value="MANUAL_PAYABLE_CREATED">Payable Created (Manual)</option>
+                    <option value="CHEQUE_ISSUED">Cheque Issued</option>
+                    <option value="CHEQUE_STATUS_UPDATED">Cheque Status Updated</option>
+                </select>
+
+                <select id="payables-audit-source-filter" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 160px;">
+                    <option value="">All Sources</option>
+                    <option value="PO_DELIVERY">PO Delivery</option>
+                    <option value="MANUAL">Manual</option>
+                </select>
+
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="payables-audit-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
                 </div>
-                <div class="modal-body">
-                    <input type="hidden" id="extend-loyalty-program-id">
-                    <div class="mb-3">
-                        <label class="form-label text-white-50 small">Program</label>
-                        <input type="text" id="extend-loyalty-program-name" class="form-control bg-dark text-white border-secondary" readonly>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label text-white-50 small">Start Date</label>
-                            <input type="date" id="extend-loyalty-period-start" class="form-control bg-dark text-white border-secondary" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-white-50 small">Current End Date</label>
-                            <input type="date" id="extend-loyalty-current-end" class="form-control bg-dark text-white border-secondary" readonly>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label text-white-50 small">New End Date</label>
-                            <input type="date" id="extend-loyalty-new-end" class="form-control bg-dark text-white border-secondary">
-                            <div class="form-text text-white-50">Start date is locked. You can only extend the end date while the program is still active in time.</div>
-                        </div>
-                    </div>
-                    <div id="extend-loyalty-error" class="text-danger small mt-3"></div>
+
+                <div class="input-group input-group-sm" style="width: 200px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="payables-audit-payee-search"
+                        class="form-control form-control-sm"
+                        placeholder="Search payee..."
+                        style="background:#141720; border-color:#333; color:#fff;">
                 </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="submitLoyaltyProgramExtension()">Save Extension</button>
+
+                <div class="input-group input-group-sm" style="width: 210px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="payables-audit-cheque-search"
+                        class="form-control form-control-sm"
+                        placeholder="Search cheque no..."
+                        style="background:#141720; border-color:#333; color:#fff;">
                 </div>
+
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearPayablesAuditFilters()" title="Clear filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
             </div>
         </div>
-    </div>
 
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle" id="payables-audit-table">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th style="width: 13%;">Date & Time</th>
+                        <th style="width: 16%;">Payee / Vendor</th>
+                        <th style="width: 10%;">Source</th>
+                        <th style="width: 13%;">Event</th>
+                        <th style="width: 20%;">Reference</th>
+                        <th style="width: 11%;" class="text-end">Amount</th>
+                        <th style="width: 17%;">Staff</th>
+                    </tr>
+                </thead>
+                <tbody id="payables-audit-body">
+                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3" id="payables-audit-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="payables-audit-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="payables-audit-prev-btn" onclick="payablesAuditChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="payables-audit-next-btn" onclick="payablesAuditChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
         <!-- SALES MODAL -->
     <div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -2040,6 +1237,9 @@
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
+                    <a id="saleDetailsPrintBtn" href="#" target="_blank" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-printer me-1"></i>Print
+                    </a>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
@@ -2259,114 +1459,6 @@
         </div>
     </div>
 
-    <div class="modal fade" id="bundleDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable bundle-modal-dialog">
-            <div class="modal-content bg-dark border-secondary text-white bundle-modal-content">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-info">
-                        <i class="bi bi-eye me-2"></i>Bundle Details
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="bundleDetailsBody">
-                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading bundle...</div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="editBundleModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable bundle-modal-dialog">
-            <div class="modal-content bg-dark border-secondary text-white bundle-modal-content">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-warning">
-                        <i class="bi bi-wrench-adjustable-circle me-2"></i>Edit Bundle
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="edit-bundle-form" method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="variants_json" id="edit-bundle-variants-json">
-                        <input type="hidden" name="services_json" id="edit-bundle-services-json">
-                        <input type="hidden" name="items_json" id="edit-bundle-items-json">
-
-                        <div class="bundle-editor-shell">
-                            <div class="bundle-editor-card">
-                                <div class="bundle-editor-kicker">Version Update</div>
-                                <div class="bundle-editor-grid">
-                                    <div>
-                                        <label class="form-label text-white-50 small">Bundle Name</label>
-                                        <input name="name" id="edit-bundle-name" class="form-control bg-dark text-white border-secondary" required>
-                                    </div>
-                                    <div>
-                                        <label class="form-label text-white-50 small">Vehicle Category</label>
-                                        <input name="vehicle_category" id="edit-bundle-vehicle-category" class="form-control bg-dark text-white border-secondary" required>
-                                    </div>
-                                    <div>
-                                        <label class="form-label text-white-50 small">Current Version</label>
-                                        <input id="edit-bundle-version-display" class="form-control bg-dark text-white border-secondary" readonly>
-                                    </div>
-                                </div>
-                                <div class="mt-3">
-                                    <label class="form-label text-white-50 small">Change Note</label>
-                                    <input type="text" name="change_notes" id="edit-bundle-change-notes" class="form-control bg-dark text-white border-secondary"
-                                        placeholder="e.g. Added another included item for this version">
-                                    <div class="form-text text-white-50">Saving here creates a new bundle version and keeps the previous one for reporting history.</div>
-                                </div>
-                            </div>
-
-                            <div class="bundle-editor-sections">
-                                <div class="bundle-editor-card">
-                                    <div class="bundle-editor-section-title">
-                                        <strong class="text-warning">Subcategories</strong>
-                                        <button type="button" class="btn btn-sm btn-outline-warning" id="edit-add-bundle-variant-btn">
-                                            <i class="bi bi-plus-lg me-1"></i>Add Subcategory
-                                        </button>
-                                    </div>
-                                    <div id="edit-bundle-variants-wrap" class="bundle-editor-list"></div>
-                                    <div class="bundle-editor-help">Add one subcategory per cc range, then enter the price for that subcategory.</div>
-                                </div>
-
-                                <div class="bundle-editor-side-stack">
-                                    <div class="bundle-editor-card">
-                                        <div class="bundle-editor-section-title">
-                                            <strong class="text-info">Included Services</strong>
-                                            <button type="button" class="btn btn-sm btn-outline-info" id="edit-add-bundle-service-btn">
-                                                <i class="bi bi-plus-lg me-1"></i>Add Service
-                                            </button>
-                                        </div>
-                                        <div id="edit-bundle-services-wrap" class="bundle-editor-list"></div>
-                                        <div class="bundle-editor-help">Search and select the shared services included in this bundle.</div>
-                                    </div>
-
-                                    <div class="bundle-editor-card">
-                                        <div class="bundle-editor-section-title">
-                                            <strong class="text-success">Included Items</strong>
-                                            <button type="button" class="btn btn-sm btn-outline-success" id="edit-add-bundle-item-btn">
-                                                <i class="bi bi-plus-lg me-1"></i>Add Item
-                                            </button>
-                                        </div>
-                                        <div id="edit-bundle-items-wrap" class="bundle-editor-list"></div>
-                                        <div class="bundle-editor-help">Search items and set the default quantity included in the bundle.</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer border-secondary">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-danger btn-sm">
-                            <i class="bi bi-save me-1"></i>Save New Version
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <!-- DEBT PAYMENTS MODAL -->
     <div class="modal fade" id="debtPaymentsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -2492,145 +1584,40 @@ function initializeBundleForm() {
     document.getElementById('add-bundle-service-btn').addEventListener('click', () => addBundleServiceRow());
     document.getElementById('add-bundle-item-btn').addEventListener('click', () => addBundleItemRow());
     document.getElementById('bundle-create-form').addEventListener('submit', prepareBundleSubmission);
-    document.getElementById('edit-add-bundle-variant-btn')?.addEventListener('click', () => addEditBundleVariantRow());
-    document.getElementById('edit-add-bundle-service-btn')?.addEventListener('click', () => addEditBundleServiceRow());
-    document.getElementById('edit-add-bundle-item-btn')?.addEventListener('click', () => addEditBundleItemRow());
-    document.getElementById('edit-bundle-form')?.addEventListener('submit', prepareEditBundleSubmission);
 
     addBundleVariantRow({ variant_name: '', sale_price: '' });
     addBundleServiceRow();
     addBundleItemRow();
 }
 
-function resetEditBundleDynamicRows() {
-    const variantsWrap = document.getElementById('edit-bundle-variants-wrap');
-    const servicesWrap = document.getElementById('edit-bundle-services-wrap');
-    const itemsWrap = document.getElementById('edit-bundle-items-wrap');
-    if (variantsWrap) variantsWrap.innerHTML = '';
-    if (servicesWrap) servicesWrap.innerHTML = '';
-    if (itemsWrap) itemsWrap.innerHTML = '';
-}
-
-function addBundleVariantRowTo(wrapId, initial = {}) {
-    const wrap = document.getElementById(wrapId);
+function addBundleVariantRow(initial = {}) {
+    const wrap = document.getElementById('bundle-variants-wrap');
     if (!wrap) return;
 
     const row = document.createElement('div');
     row.className = 'bundle-variant-row border border-secondary rounded p-2 mb-2';
     row.innerHTML = `
-        <div class="bundle-create-variant-stack">
-            <div>
-                <label class="form-label text-white-50 mb-1" style="font-size:0.72rem;">Subcategory Name</label>
+        <div class="row g-2 align-items-center">
+            <div class="col-7">
                 <input type="text" class="form-control bg-dark text-white border-secondary bundle-variant-name"
-                    placeholder="e.g. 110-115 cc, 125 cc, 150-155 cc" value="${escapeHtml(initial.variant_name || '')}">
+                    placeholder="e.g. 110-115 cc" value="${escapeHtml(initial.variant_name || '')}">
             </div>
-            <div class="bundle-create-line-item">
-                <div>
-                    <label class="form-label text-white-50 mb-1" style="font-size:0.72rem;">Item Value</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                        <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-item-value-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}">
-                    </div>
-                </div>
-                <div>
-                    <label class="form-label text-white-50 mb-1" style="font-size:0.72rem;">Shop Share</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                        <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-shop-share-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.shop_share || ''))}">
-                    </div>
-                </div>
+            <div class="col-4">
+                <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-variant-price"
+                    placeholder="Price" value="${escapeHtml(String(initial.sale_price || ''))}">
             </div>
-            <div>
-                <label class="form-label text-white-50 mb-1" style="font-size:0.72rem;">Mechanic Share</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                    <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-mechanic-share-input"
-                        placeholder="0.00" value="${escapeHtml(String(initial.mechanic_share || ''))}">
-                </div>
-            </div>
-            <div class="bundle-create-total-row">
-                <div>
-                <label class="form-label text-white-50 mb-1" style="font-size:0.72rem;">Price for This Subcategory</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-dark border-secondary text-info">P</span>
-                    <input type="text" class="form-control bg-dark text-white border-secondary bundle-variant-total-price"
-                        value="${escapeHtml(String(initial.sale_price || '0.00'))}" readonly>
-                </div>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger bundle-remove-btn-inline" onclick="removeBundleRow(this)">
+            <div class="col-1 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeBundleRow(this)">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
         </div>
     `;
     wrap.appendChild(row);
-    recalculateBundleVariantRow(row);
 }
 
-function addBundleVariantRow(initial = {}) {
-    addBundleVariantRowTo('bundle-variants-wrap', initial);
-}
-
-function addEditBundleVariantRow(initial = {}) {
-    const wrap = document.getElementById('edit-bundle-variants-wrap');
-    if (!wrap) return;
-
-    const row = document.createElement('div');
-    row.className = 'bundle-variant-row';
-    row.innerHTML = `
-        <div class="d-grid gap-3">
-            <div>
-                <div class="bundle-row-label">Subcategory</div>
-                <input type="text" class="form-control bg-dark text-white border-secondary bundle-variant-name"
-                    placeholder="e.g. 110-115 cc, 125 cc, 150-155 cc" value="${escapeHtml(initial.variant_name || '')}">
-            </div>
-            <div class="bundle-row-grid variant-grid">
-                <div>
-                    <div class="bundle-row-label">Item Value</div>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                        <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-item-value-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}">
-                    </div>
-                </div>
-                <div>
-                    <div class="bundle-row-label">Shop Share</div>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                        <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-shop-share-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.shop_share || ''))}">
-                    </div>
-                </div>
-                <div>
-                    <div class="bundle-row-label">Mechanic Share</div>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-warning">P</span>
-                        <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-mechanic-share-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.mechanic_share || ''))}">
-                    </div>
-                </div>
-                <div>
-                    <div class="bundle-row-label">Auto Total Price</div>
-                    <div class="input-group">
-                        <span class="input-group-text bg-dark border-secondary text-info">P</span>
-                        <input type="text" class="form-control bg-dark text-white border-secondary bundle-variant-total-price"
-                            value="${escapeHtml(String(initial.sale_price || '0.00'))}" readonly>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-outline-danger bundle-remove-btn" onclick="removeBundleRow(this)" title="Remove subcategory">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-        </div>
-    `;
-    wrap.appendChild(row);
-    recalculateBundleVariantRow(row);
-}
-
-function addBundleServiceRowTo(wrapId, initial = {}) {
-    const wrap = document.getElementById(wrapId);
+function addBundleServiceRow(initial = {}) {
+    const wrap = document.getElementById('bundle-services-wrap');
     if (!wrap) return;
 
     const row = document.createElement('div');
@@ -2653,39 +1640,8 @@ function addBundleServiceRowTo(wrapId, initial = {}) {
     wrap.appendChild(row);
 }
 
-function addBundleServiceRow(initial = {}) {
-    addBundleServiceRowTo('bundle-services-wrap', initial);
-}
-
-function addEditBundleServiceRow(initial = {}) {
-    const wrap = document.getElementById('edit-bundle-services-wrap');
-    if (!wrap) return;
-
-    const row = document.createElement('div');
-    row.className = 'bundle-service-row';
-    row.innerHTML = `
-        <div class="position-relative">
-            <div class="bundle-row-grid service-grid">
-                <div>
-                    <div class="bundle-row-label">Service</div>
-                    <input type="text" class="form-control bg-dark text-white border-secondary bundle-service-search"
-                        placeholder="Search service..." autocomplete="off" value="${escapeHtml(initial.name || '')}">
-                    <input type="hidden" class="bundle-service-id" value="${escapeHtml(String(initial.service_id || ''))}">
-                </div>
-                <button type="button" class="btn btn-outline-danger bundle-remove-btn" onclick="removeBundleRow(this)" title="Remove service">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            <div class="list-group position-absolute w-100 bundle-service-suggestions"
-                style="display:none; z-index:9999; background:#1a1a1a; border:1px solid #444; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto;">
-            </div>
-        </div>
-    `;
-    wrap.appendChild(row);
-}
-
-function addBundleItemRowTo(wrapId, initial = {}) {
-    const wrap = document.getElementById(wrapId);
+function addBundleItemRow(initial = {}) {
+    const wrap = document.getElementById('bundle-items-wrap');
     if (!wrap) return;
 
     const row = document.createElement('div');
@@ -2716,42 +1672,6 @@ function addBundleItemRowTo(wrapId, initial = {}) {
     wrap.appendChild(row);
 }
 
-function addBundleItemRow(initial = {}) {
-    addBundleItemRowTo('bundle-items-wrap', initial);
-}
-
-function addEditBundleItemRow(initial = {}) {
-    const wrap = document.getElementById('edit-bundle-items-wrap');
-    if (!wrap) return;
-
-    const row = document.createElement('div');
-    row.className = 'bundle-item-row';
-    row.innerHTML = `
-        <div class="position-relative">
-            <div class="bundle-row-grid item-grid">
-                <div>
-                    <div class="bundle-row-label">Item</div>
-                    <input type="text" class="form-control bg-dark text-white border-secondary bundle-item-search"
-                        placeholder="Search item..." autocomplete="off" value="${escapeHtml(initial.name || '')}">
-                    <input type="hidden" class="bundle-item-id" value="${escapeHtml(String(initial.item_id || ''))}">
-                </div>
-                <div>
-                    <div class="bundle-row-label">Qty</div>
-                    <input type="number" min="1" step="1" class="form-control bg-dark text-white border-secondary bundle-item-qty"
-                        placeholder="Qty" value="${escapeHtml(String(initial.quantity || 1))}">
-                </div>
-                <button type="button" class="btn btn-outline-danger bundle-remove-btn" onclick="removeBundleRow(this)" title="Remove item">
-                    <i class="bi bi-x-lg"></i>
-                </button>
-            </div>
-            <div class="list-group position-absolute w-100 bundle-item-suggestions"
-                style="display:none; z-index:9999; background:#1a1a1a; border:1px solid #444; border-radius:0 0 8px 8px; max-height:180px; overflow-y:auto;">
-            </div>
-        </div>
-    `;
-    wrap.appendChild(row);
-}
-
 function removeBundleRow(button) {
     const row = button.closest('.bundle-variant-row, .bundle-service-row, .bundle-item-row');
     if (!row) return;
@@ -2761,21 +1681,6 @@ function removeBundleRow(button) {
     if (parent && parent.id === 'bundle-variants-wrap' && parent.children.length === 0) addBundleVariantRow();
     if (parent && parent.id === 'bundle-services-wrap' && parent.children.length === 0) addBundleServiceRow();
     if (parent && parent.id === 'bundle-items-wrap' && parent.children.length === 0) addBundleItemRow();
-    if (parent && parent.id === 'edit-bundle-variants-wrap' && parent.children.length === 0) addEditBundleVariantRow();
-    if (parent && parent.id === 'edit-bundle-services-wrap' && parent.children.length === 0) addEditBundleServiceRow();
-    if (parent && parent.id === 'edit-bundle-items-wrap' && parent.children.length === 0) addEditBundleItemRow();
-}
-
-function recalculateBundleVariantRow(row) {
-    if (!row) return;
-    const itemValue = parseFloat(row.querySelector('.bundle-item-value-input')?.value || 0) || 0;
-    const shopShare = parseFloat(row.querySelector('.bundle-shop-share-input')?.value || 0) || 0;
-    const mechanicShare = parseFloat(row.querySelector('.bundle-mechanic-share-input')?.value || 0) || 0;
-    const total = itemValue + shopShare + mechanicShare;
-    const totalInput = row.querySelector('.bundle-variant-total-price');
-    if (totalInput) {
-        totalInput.value = total.toFixed(2);
-    }
 }
 
 async function bundleAutocompleteSearch(input, type) {
@@ -2824,280 +1729,75 @@ async function bundleAutocompleteSearch(input, type) {
     suggestions.style.display = 'block';
 }
 
-function collectBundleFormData(scope, options = {}) {
-    const {
-        variantRowSelector,
-        serviceRowSelector,
-        itemRowSelector,
-        variantButtonSelector,
-        variantJsonId,
-        servicesJsonId,
-        itemsJsonId,
-    } = scope;
-
-    function showBundleValidation(message, targetSelector = null) {
-        if (window.A4Flash?.show) {
-            window.A4Flash.show(message, 'warning', {
-                replace: true,
-                clearExisting: true,
-                targetSelector,
-            });
-        }
-    }
-
+async function prepareBundleSubmission(event) {
     const variants = [];
     const services = [];
     const items = [];
 
-    for (const row of document.querySelectorAll(variantRowSelector)) {
+    for (const row of document.querySelectorAll('.bundle-variant-row')) {
         const variantName = row.querySelector('.bundle-variant-name').value.trim();
-        const itemValue = row.querySelector('.bundle-item-value-input').value.trim();
-        const shopShare = row.querySelector('.bundle-shop-share-input').value.trim();
-        const mechanicShare = row.querySelector('.bundle-mechanic-share-input').value.trim();
-        if (!variantName && !itemValue && !shopShare && !mechanicShare) continue;
+        const salePrice = row.querySelector('.bundle-variant-price').value.trim();
+        if (!variantName && !salePrice) continue;
         if (!variantName) {
-            showBundleValidation('Each bundle variant needs a name.', options.variantTargetSelector || '.bundle-variant-name');
+            event.preventDefault();
+            alert('Each bundle variant needs a name.');
             row.querySelector('.bundle-variant-name').focus();
-            return null;
+            return;
         }
-        if (itemValue === '' || shopShare === '' || mechanicShare === '') {
-            showBundleValidation(`Please complete the pricing breakdown for "${variantName}".`, options.variantPriceTargetSelector || '.bundle-item-value-input');
-            (row.querySelector('.bundle-item-value-input') || row.querySelector('.bundle-shop-share-input') || row.querySelector('.bundle-mechanic-share-input'))?.focus();
-            return null;
+        if (salePrice === '') {
+            event.preventDefault();
+            alert(`Please enter a price for variant "${variantName}".`);
+            row.querySelector('.bundle-variant-price').focus();
+            return;
         }
-        variants.push({
-            variant_name: variantName,
-            item_value_reference: itemValue,
-            shop_share: shopShare,
-            mechanic_share: mechanicShare,
-            sale_price: row.querySelector('.bundle-variant-total-price')?.value || '0.00',
-        });
+        variants.push({ variant_name: variantName, sale_price: salePrice });
     }
 
     if (variants.length === 0) {
-        showBundleValidation('Please add at least one bundle variant.', variantButtonSelector);
-        return null;
+        event.preventDefault();
+        alert('Please add at least one bundle variant.');
+        return;
     }
 
-    for (const row of document.querySelectorAll(serviceRowSelector)) {
+    for (const row of document.querySelectorAll('.bundle-service-row')) {
         const serviceName = row.querySelector('.bundle-service-search').value.trim();
         const serviceId = row.querySelector('.bundle-service-id').value.trim();
         if (!serviceName && !serviceId) continue;
         if (!serviceId) {
-            showBundleValidation(`Please select "${serviceName}" from the service search list.`, options.serviceTargetSelector || '.bundle-service-search');
+            event.preventDefault();
+            alert(`Please select "${serviceName}" from the service search list.`);
             row.querySelector('.bundle-service-search').focus();
-            return null;
+            return;
         }
         services.push(parseInt(serviceId, 10));
     }
 
-    for (const row of document.querySelectorAll(itemRowSelector)) {
+    for (const row of document.querySelectorAll('.bundle-item-row')) {
         const itemName = row.querySelector('.bundle-item-search').value.trim();
         const itemId = row.querySelector('.bundle-item-id').value.trim();
         const quantity = row.querySelector('.bundle-item-qty').value.trim();
         if (!itemName && !itemId && (!quantity || quantity === '1')) continue;
         if (!itemId) {
-            showBundleValidation(`Please select "${itemName}" from the item search list.`, options.itemTargetSelector || '.bundle-item-search');
+            event.preventDefault();
+            alert(`Please select "${itemName}" from the item search list.`);
             row.querySelector('.bundle-item-search').focus();
-            return null;
+            return;
         }
         if (!quantity || parseInt(quantity, 10) <= 0) {
-            showBundleValidation('Bundle item quantity must be at least 1.', options.itemQtyTargetSelector || '.bundle-item-qty');
+            event.preventDefault();
+            alert('Bundle item quantity must be at least 1.');
             row.querySelector('.bundle-item-qty').focus();
-            return null;
+            return;
         }
         items.push({ item_id: parseInt(itemId, 10), quantity: parseInt(quantity, 10) });
     }
 
-    document.getElementById(variantJsonId).value = JSON.stringify(variants);
-    document.getElementById(servicesJsonId).value = JSON.stringify(services);
-    document.getElementById(itemsJsonId).value = JSON.stringify(items);
-    return { variants, services, items };
-}
-
-async function prepareBundleSubmission(event) {
-    const result = collectBundleFormData({
-        variantRowSelector: '#bundle-variants-wrap .bundle-variant-row',
-        serviceRowSelector: '#bundle-services-wrap .bundle-service-row',
-        itemRowSelector: '#bundle-items-wrap .bundle-item-row',
-        variantButtonSelector: '#add-bundle-variant-btn',
-        variantJsonId: 'bundle-variants-json',
-        servicesJsonId: 'bundle-services-json',
-        itemsJsonId: 'bundle-items-json',
-    });
-    if (!result) {
-        event.preventDefault();
-    }
-}
-
-async function prepareEditBundleSubmission(event) {
-    const result = collectBundleFormData({
-        variantRowSelector: '#edit-bundle-variants-wrap .bundle-variant-row',
-        serviceRowSelector: '#edit-bundle-services-wrap .bundle-service-row',
-        itemRowSelector: '#edit-bundle-items-wrap .bundle-item-row',
-        variantButtonSelector: '#edit-add-bundle-variant-btn',
-        variantJsonId: 'edit-bundle-variants-json',
-        servicesJsonId: 'edit-bundle-services-json',
-        itemsJsonId: 'edit-bundle-items-json',
-    });
-    if (!result) {
-        event.preventDefault();
-    }
-}
-
-async function fetchBundlePayload(bundleId) {
-    const response = await fetch(`/api/bundles/${bundleId}`);
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.error || 'Failed to load bundle.');
-    }
-    return data;
-}
-
-async function openBundleDetails(bundleId) {
-    const body = document.getElementById('bundleDetailsBody');
-    const modalEl = document.getElementById('bundleDetailsModal');
-    if (!body || !modalEl) return;
-    body.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading bundle...</div>';
-    new bootstrap.Modal(modalEl).show();
-
-    try {
-        const data = await fetchBundlePayload(bundleId);
-        const variantsHtml = (data.variants || []).length
-            ? (data.variants || []).map(v => `
-                <tr>
-                    <td>${escapeHtml(v.variant_name)}</td>
-                    <td class="text-end">${formatPeso(v.item_value_reference)}</td>
-                    <td class="text-end">${formatPeso(v.shop_share)}</td>
-                    <td class="text-end">${formatPeso(v.mechanic_share)}</td>
-                    <td class="text-end">${formatPeso(v.sale_price)}</td>
-                </tr>
-            `).join('')
-            : '<tr><td colspan="5" class="text-center text-muted">No subcategories saved.</td></tr>';
-        const servicesHtml = (data.services || []).length
-            ? (data.services || []).map(s => `<li class="mb-1"><span class="text-info">${escapeHtml(s.name)}</span> <span class="text-white-50">(${escapeHtml(s.category || 'Uncategorized')})</span></li>`).join('')
-            : '<li class="text-muted">No services saved.</li>';
-        const itemsHtml = (data.items || []).length
-            ? (data.items || []).map(i => `<li class="mb-1"><span class="text-success">${escapeHtml(i.name)}</span> <span class="text-white-50">x${escapeHtml(String(i.quantity))}</span></li>`).join('')
-            : '<li class="text-muted">No items saved.</li>';
-
-        body.innerHTML = `
-            <div class="bundle-details-shell">
-                <div class="bundle-editor-card">
-                    <div class="bundle-editor-kicker">Bundle Snapshot</div>
-                    <div class="bundle-details-grid">
-                        <div class="bundle-details-pill">
-                            <div class="bundle-details-pill-title">Bundle</div>
-                            <div class="bundle-details-pill-value">${escapeHtml(data.name || '')}</div>
-                        </div>
-                        <div class="bundle-details-pill">
-                            <div class="bundle-details-pill-title">Vehicle Category</div>
-                            <div class="bundle-details-pill-value">${escapeHtml(data.vehicle_category || '')}</div>
-                        </div>
-                        <div class="bundle-details-pill">
-                            <div class="bundle-details-pill-title">Current Version</div>
-                            <div class="bundle-details-pill-value">Version ${escapeHtml(String(data.version_no || 1))}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bundle-editor-sections">
-                    <div class="bundle-editor-card">
-                        <div class="bundle-editor-section-title">
-                            <strong class="text-warning">Subcategories</strong>
-                            <span class="small text-white-50">${(data.variants || []).length} total</span>
-                        </div>
-                        <div class="bundle-details-table-wrap">
-                            <table class="table table-dark table-hover align-middle bundle-details-table mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Subcategory</th>
-                                        <th class="text-end">Item Value</th>
-                                        <th class="text-end">Shop Share</th>
-                                        <th class="text-end">Mechanic Share</th>
-                                        <th class="text-end">Price</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${variantsHtml}</tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div class="bundle-editor-card">
-                        <div class="bundle-editor-section-title">
-                            <strong class="text-info">Included Services</strong>
-                            <span class="small text-white-50">${(data.services || []).length} total</span>
-                        </div>
-                        <ul class="bundle-details-list">${servicesHtml}</ul>
-                    </div>
-
-                    <div class="bundle-editor-card">
-                        <div class="bundle-editor-section-title">
-                            <strong class="text-success">Included Items</strong>
-                            <span class="small text-white-50">${(data.items || []).length} total</span>
-                        </div>
-                        <ul class="bundle-details-list">${itemsHtml}</ul>
-                    </div>
-                </div>
-
-                <div class="bundle-editor-card">
-                    <div class="bundle-editor-kicker">Version Note</div>
-                    <div class="bundle-details-pill">
-                        <div class="bundle-details-pill-value" style="font-size:0.92rem; font-weight:600;">
-                            ${escapeHtml(data.change_notes || 'No change note saved.')}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    } catch (error) {
-        body.innerHTML = `<div class="text-danger text-center py-3">${escapeHtml(error.message || 'Failed to load bundle.')}</div>`;
-    }
-}
-
-async function openBundleEditModal(bundleId) {
-    const form = document.getElementById('edit-bundle-form');
-    const modalEl = document.getElementById('editBundleModal');
-    if (!form || !modalEl) return;
-
-    try {
-        const data = await fetchBundlePayload(bundleId);
-        form.action = `/bundles/${bundleId}/edit`;
-        document.getElementById('edit-bundle-name').value = data.name || '';
-        document.getElementById('edit-bundle-vehicle-category').value = data.vehicle_category || '';
-        document.getElementById('edit-bundle-version-display').value = `Version ${data.version_no || 1}`;
-        document.getElementById('edit-bundle-change-notes').value = '';
-        resetEditBundleDynamicRows();
-
-        (data.variants || []).forEach(variant => addEditBundleVariantRow(variant));
-        if (!(data.variants || []).length) addEditBundleVariantRow();
-
-        (data.services || []).forEach(service => addEditBundleServiceRow(service));
-        if (!(data.services || []).length) addEditBundleServiceRow();
-
-        (data.items || []).forEach(item => addEditBundleItemRow(item));
-        if (!(data.items || []).length) addEditBundleItemRow();
-
-        new bootstrap.Modal(modalEl).show();
-    } catch (error) {
-        if (window.A4Flash?.show) {
-            window.A4Flash.show(error.message || 'Failed to load bundle.', 'danger', {
-                replace: true,
-                clearExisting: true,
-            });
-        }
-    }
+    document.getElementById('bundle-variants-json').value = JSON.stringify(variants);
+    document.getElementById('bundle-services-json').value = JSON.stringify(services);
+    document.getElementById('bundle-items-json').value = JSON.stringify(items);
 }
 
 document.addEventListener('input', (event) => {
-    if (
-        event.target.classList.contains('bundle-item-value-input')
-        || event.target.classList.contains('bundle-shop-share-input')
-        || event.target.classList.contains('bundle-mechanic-share-input')
-    ) {
-        recalculateBundleVariantRow(event.target.closest('.bundle-variant-row'));
-    }
-
     if (event.target.classList.contains('bundle-service-search')) {
         const hiddenId = event.target.closest('.bundle-service-row').querySelector('.bundle-service-id');
         hiddenId.value = '';
@@ -3319,6 +2019,60 @@ function populateSaleDetails(data, saleID, displayNum) {
                     <td class="text-center"><div class="sale-line-name">${formatPeso(svc.price)}</div></td>
                     <td class="text-center">1</td>
                 </tr>`;
+        });
+    }
+
+    if (data.bundles && data.bundles.length > 0) {
+        data.bundles.forEach(bundle => {
+            list.innerHTML += `
+                <tr class="sale-section-row">
+                    <td colspan="3">Bundle - ${escapeHtml(bundle.bundle_name || 'Bundle')}</td>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="sale-line-name">${escapeHtml(bundle.subcategory_name || 'Subcategory')}</div>
+                        <div class="sale-line-note">
+                            ${escapeHtml(bundle.vehicle_category || 'Vehicle')} • Version ${Number(bundle.version_no || 0)}
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <div class="sale-line-name">${formatPeso(bundle.bundle_price)}</div>
+                        <div class="sale-line-note">Fixed bundle price</div>
+                    </td>
+                    <td class="text-center">1</td>
+                </tr>
+            `;
+
+            if (bundle.services && bundle.services.length > 0) {
+                list.innerHTML += `<tr><td colspan="3" class="sale-line-note" style="padding-top:0.85rem; color:#0f766e; font-weight:700;">Bundled Services</td></tr>`;
+                bundle.services.forEach(service => {
+                    list.innerHTML += `
+                        <tr>
+                            <td><div class="sale-line-name">${escapeHtml(service.name)}</div></td>
+                            <td class="text-center"><div class="sale-line-note">Included in bundle</div></td>
+                            <td class="text-center">1</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            if (bundle.items && bundle.items.length > 0) {
+                list.innerHTML += `<tr><td colspan="3" class="sale-line-note" style="padding-top:0.85rem; color:#0f766e; font-weight:700;">Bundled Items</td></tr>`;
+                bundle.items.forEach(item => {
+                    list.innerHTML += `
+                        <tr>
+                            <td>
+                                <div class="sale-line-name">${escapeHtml(item.name)}</div>
+                                <div class="sale-line-note ${item.is_included ? '' : 'refund'}">
+                                    ${item.is_included ? 'Included in stock deduction' : 'Excluded from stock deduction'}
+                                </div>
+                            </td>
+                            <td class="text-center"><div class="sale-line-note">Included in bundle</div></td>
+                            <td class="text-center fw-bold">${item.is_included ? Number(item.quantity || 0) : 0}</td>
+                        </tr>
+                    `;
+                });
+            }
         });
     }
 
@@ -4262,6 +3016,10 @@ document.addEventListener('DOMContentLoaded', () => {
         salesPage = 1;
         loadSalesAdmin();
     });
+
+    if (document.getElementById('sales-tab')?.classList.contains('show')) {
+        loadSalesAdmin();
+    }
 });
 
 function clearSalesFilters() {

@@ -40,12 +40,62 @@ def get_manage_users_context(active_tab="users-tab"):
         payment_methods = conn.execute(
             "SELECT * FROM payment_methods ORDER BY category ASC, name ASC"
         ).fetchall()
+        bundles = conn.execute(
+            """
+            SELECT
+                b.id,
+                b.name,
+                b.vehicle_category,
+                b.is_active,
+                b.created_at,
+                COALESCE(cv.version_no, 1) AS current_version_no,
+                COALESCE(v.variant_count, 0) AS variant_count,
+                COALESCE(s.service_count, 0) AS service_count,
+                COALESCE(i.item_count, 0) AS item_count
+            FROM bundles b
+            LEFT JOIN (
+                SELECT DISTINCT ON (bundle_id)
+                    id,
+                    bundle_id,
+                    version_no
+                FROM bundle_versions
+                WHERE is_current = 1
+                ORDER BY bundle_id, version_no DESC, id DESC
+            ) cv ON cv.bundle_id = b.id
+            LEFT JOIN (
+                SELECT bv.bundle_id, COUNT(bvv.id) AS variant_count
+                FROM bundle_versions bv
+                JOIN bundle_version_variants bvv ON bvv.bundle_version_id = bv.id
+                WHERE bv.is_current = 1
+                GROUP BY bv.bundle_id
+            ) v ON v.bundle_id = b.id
+            LEFT JOIN (
+                SELECT bv.bundle_id, COUNT(bvs.id) AS service_count
+                FROM bundle_versions bv
+                JOIN bundle_version_services bvs ON bvs.bundle_version_id = bv.id
+                WHERE bv.is_current = 1
+                GROUP BY bv.bundle_id
+            ) s ON s.bundle_id = b.id
+            LEFT JOIN (
+                SELECT bv.bundle_id, COUNT(bvi.id) AS item_count
+                FROM bundle_versions bv
+                JOIN bundle_version_items bvi ON bvi.bundle_version_id = bv.id
+                WHERE bv.is_current = 1
+                GROUP BY bv.bundle_id
+            ) i ON i.bundle_id = b.id
+            ORDER BY b.created_at DESC, b.id DESC
+            """
+        ).fetchall()
     finally:
         conn.close()
 
     formatted_users = [
         {**dict(user), "created_at": format_date(user["created_at"], show_time=True)}
         for user in users
+    ]
+    formatted_bundles = [
+        {**dict(bundle), "created_at": format_date(bundle["created_at"], show_time=True)}
+        for bundle in bundles
     ]
 
     return {
@@ -55,6 +105,7 @@ def get_manage_users_context(active_tab="users-tab"):
         "services_list": services_list,
         "categories": categories,
         "payment_methods": payment_methods,
+        "bundles": formatted_bundles,
         "active_tab": active_tab,
     }
 
@@ -293,6 +344,461 @@ def toggle_service_active_status(service_id):
         conn.close()
 
 
+def _normalize_bundle_payload(name, vehicle_category, variants, service_ids, items):
+    bundle_name = str(name or "").strip()
+    normalized_vehicle_category = str(vehicle_category or "").strip()
+
+    if not bundle_name:
+        raise ValueError("Bundle name is required.")
+    if not normalized_vehicle_category:
+        raise ValueError("Vehicle category is required.")
+
+    normalized_variants = []
+    seen_variant_names = set()
+    for index, raw in enumerate(variants or []):
+        variant_name = str((raw or {}).get("variant_name") or "").strip()
+        if not variant_name:
+            continue
+        try:
+            item_value_reference = round(float((raw or {}).get("item_value_reference", 0) or 0), 2)
+            shop_share = round(float((raw or {}).get("shop_share", 0) or 0), 2)
+            mechanic_share = round(float((raw or {}).get("mechanic_share", 0) or 0), 2)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid pricing breakdown for subcategory '{variant_name}'.")
+        if item_value_reference < 0 or shop_share < 0 or mechanic_share < 0:
+            raise ValueError(f"Pricing values cannot be negative for subcategory '{variant_name}'.")
+        sale_price = round(item_value_reference + shop_share + mechanic_share, 2)
+        dedupe_key = variant_name.lower()
+        if dedupe_key in seen_variant_names:
+            raise ValueError(f"Duplicate bundle variant detected: '{variant_name}'.")
+        seen_variant_names.add(dedupe_key)
+        normalized_variants.append({
+            "variant_name": variant_name,
+            "item_value_reference": item_value_reference,
+            "shop_share": shop_share,
+            "mechanic_share": mechanic_share,
+            "sale_price": sale_price,
+            "sort_order": index,
+        })
+
+    if not normalized_variants:
+        raise ValueError("At least one bundle variant is required.")
+
+    normalized_service_ids = []
+    seen_service_ids = set()
+    for raw_service_id in service_ids or []:
+        try:
+            service_id = int(raw_service_id)
+        except (TypeError, ValueError):
+            raise ValueError("One or more selected services are invalid.")
+        if service_id in seen_service_ids:
+            continue
+        seen_service_ids.add(service_id)
+        normalized_service_ids.append(service_id)
+
+    normalized_items = []
+    seen_item_ids = set()
+    for index, raw in enumerate(items or []):
+        raw = raw or {}
+        try:
+            item_id = int(raw.get("item_id"))
+        except (TypeError, ValueError):
+            raise ValueError("One or more selected items are invalid.")
+
+        try:
+            quantity = int(raw.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            raise ValueError("One or more bundle item quantities are invalid.")
+
+        if quantity <= 0:
+            raise ValueError("Bundle item quantities must be at least 1.")
+        if item_id in seen_item_ids:
+            raise ValueError("Duplicate bundle item detected. Please adjust quantity instead.")
+        seen_item_ids.add(item_id)
+        normalized_items.append({
+            "item_id": item_id,
+            "quantity": quantity,
+            "sort_order": index,
+        })
+
+    return {
+        "bundle_name": bundle_name,
+        "vehicle_category": normalized_vehicle_category,
+        "variants": normalized_variants,
+        "service_ids": normalized_service_ids,
+        "items": normalized_items,
+    }
+
+
+def _validate_bundle_component_refs(conn, service_ids, items):
+    if service_ids:
+        service_rows = conn.execute(
+            "SELECT id FROM services WHERE id = ANY(%s)",
+            (service_ids,),
+        ).fetchall()
+        existing_service_ids = {int(row["id"]) for row in service_rows}
+        if len(existing_service_ids) != len(service_ids):
+            raise ValueError("One or more selected services no longer exist.")
+
+    if items:
+        item_rows = conn.execute(
+            "SELECT id FROM items WHERE id = ANY(%s)",
+            ([item["item_id"] for item in items],),
+        ).fetchall()
+        existing_item_ids = {int(row["id"]) for row in item_rows}
+        if len(existing_item_ids) != len(items):
+            raise ValueError("One or more selected items no longer exist.")
+
+
+def _create_bundle_version(conn, bundle_id, variants, service_ids, items, change_notes, created_by=None, created_by_username=None):
+    current_version = conn.execute(
+        """
+        SELECT COALESCE(MAX(version_no), 0) AS latest_version
+        FROM bundle_versions
+        WHERE bundle_id = %s
+        """,
+        (bundle_id,),
+    ).fetchone()
+    next_version_no = int(current_version["latest_version"] or 0) + 1
+
+    conn.execute(
+        "UPDATE bundle_versions SET is_current = 0 WHERE bundle_id = %s AND is_current = 1",
+        (bundle_id,),
+    )
+    version_row = conn.execute(
+        """
+        INSERT INTO bundle_versions (
+            bundle_id, version_no, is_current, change_notes, created_by, created_by_username
+        ) VALUES (%s, %s, 1, %s, %s, %s)
+        RETURNING id, version_no
+        """,
+        (bundle_id, next_version_no, change_notes, created_by, created_by_username),
+    ).fetchone()
+    bundle_version_id = int(version_row["id"])
+
+    conn.executemany(
+        """
+        INSERT INTO bundle_version_variants (
+            bundle_version_id, subcategory_name,
+            item_value_reference, shop_share, mechanic_share,
+            sale_price, sort_order
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        [
+            (
+                bundle_version_id,
+                variant["variant_name"],
+                variant["item_value_reference"],
+                variant["shop_share"],
+                variant["mechanic_share"],
+                variant["sale_price"],
+                variant["sort_order"],
+            )
+            for variant in variants
+        ],
+    )
+
+    if service_ids:
+        conn.executemany(
+            """
+            INSERT INTO bundle_version_services (bundle_version_id, service_id, sort_order)
+            VALUES (%s, %s, %s)
+            """,
+            [
+                (bundle_version_id, service_id, index)
+                for index, service_id in enumerate(service_ids)
+            ],
+        )
+
+    if items:
+        conn.executemany(
+            """
+            INSERT INTO bundle_version_items (bundle_version_id, item_id, quantity, sort_order)
+            VALUES (%s, %s, %s, %s)
+            """,
+            [
+                (bundle_version_id, item["item_id"], item["quantity"], item["sort_order"])
+                for item in items
+            ],
+        )
+
+    return {"bundle_version_id": bundle_version_id, "version_no": int(version_row["version_no"])}
+
+
+def create_bundle_record(name, vehicle_category, variants, service_ids, items):
+    normalized = _normalize_bundle_payload(name, vehicle_category, variants, service_ids, items)
+    bundle_name = normalized["bundle_name"]
+    normalized_vehicle_category = normalized["vehicle_category"]
+    normalized_variants = normalized["variants"]
+    normalized_service_ids = normalized["service_ids"]
+    normalized_items = normalized["items"]
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM bundles
+            WHERE LOWER(TRIM(name)) = %s
+              AND LOWER(TRIM(vehicle_category)) = %s
+            LIMIT 1
+            """,
+            (bundle_name.lower(), normalized_vehicle_category.lower()),
+        ).fetchone()
+        if existing:
+            return {"status": "duplicate", "name": bundle_name, "vehicle_category": normalized_vehicle_category}
+
+        _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+
+        conn.execute("BEGIN")
+        bundle_row = conn.execute(
+            """
+            INSERT INTO bundles (name, vehicle_category, is_active)
+            VALUES (%s, %s, 1)
+            RETURNING id
+            """,
+            (bundle_name, normalized_vehicle_category),
+        ).fetchone()
+        bundle_id = int(bundle_row["id"])
+        version_result = _create_bundle_version(
+            conn=conn,
+            bundle_id=bundle_id,
+            variants=normalized_variants,
+            service_ids=normalized_service_ids,
+            items=normalized_items,
+            change_notes="Initial bundle version",
+            created_by=None,
+            created_by_username="System",
+        )
+
+        conn.commit()
+        return {
+            "status": "ok",
+            "bundle_id": bundle_id,
+            "bundle_version_id": version_result["bundle_version_id"],
+            "version_no": version_result["version_no"],
+            "name": bundle_name,
+            "vehicle_category": normalized_vehicle_category,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def toggle_bundle_active_status(bundle_id):
+    conn = get_db()
+    try:
+        bundle = conn.execute(
+            "SELECT id, name, is_active FROM bundles WHERE id = %s",
+            (bundle_id,),
+        ).fetchone()
+        if not bundle:
+            return {"status": "missing"}
+
+        new_status = 0 if bundle["is_active"] == 1 else 1
+        conn.execute(
+            "UPDATE bundles SET is_active = %s WHERE id = %s",
+            (new_status, bundle_id),
+        )
+        conn.commit()
+        return {"status": "ok", "name": bundle["name"], "new_status": new_status}
+    finally:
+        conn.close()
+
+
+def get_bundle_edit_payload(bundle_id):
+    conn = get_db()
+    try:
+        bundle = conn.execute(
+            """
+            SELECT
+                b.id,
+                b.name,
+                b.vehicle_category,
+                b.is_active,
+                cv.id AS bundle_version_id,
+                cv.version_no,
+                cv.change_notes,
+                cv.created_at,
+                cv.created_by_username
+            FROM bundles b
+            LEFT JOIN bundle_versions cv
+              ON cv.bundle_id = b.id
+             AND cv.is_current = 1
+            WHERE b.id = %s
+            LIMIT 1
+            """,
+            (bundle_id,),
+        ).fetchone()
+        if not bundle:
+            raise ValueError("Bundle not found.")
+
+        bundle_version_id = bundle["bundle_version_id"]
+        variants = []
+        services = []
+        items = []
+        if bundle_version_id:
+            variants = conn.execute(
+                """
+                SELECT
+                    subcategory_name,
+                    item_value_reference,
+                    shop_share,
+                    mechanic_share,
+                    sale_price,
+                    sort_order
+                FROM bundle_version_variants
+                WHERE bundle_version_id = %s
+                ORDER BY sort_order ASC, id ASC
+                """,
+                (bundle_version_id,),
+            ).fetchall()
+            services = conn.execute(
+                """
+                SELECT
+                    bvs.service_id,
+                    sv.name,
+                    sv.category,
+                    bvs.sort_order
+                FROM bundle_version_services bvs
+                JOIN services sv ON sv.id = bvs.service_id
+                WHERE bvs.bundle_version_id = %s
+                ORDER BY bvs.sort_order ASC, bvs.id ASC
+                """,
+                (bundle_version_id,),
+            ).fetchall()
+            items = conn.execute(
+                """
+                SELECT
+                    bvi.item_id,
+                    i.name,
+                    i.category,
+                    bvi.quantity,
+                    bvi.sort_order
+                FROM bundle_version_items bvi
+                JOIN items i ON i.id = bvi.item_id
+                WHERE bvi.bundle_version_id = %s
+                ORDER BY bvi.sort_order ASC, bvi.id ASC
+                """,
+                (bundle_version_id,),
+            ).fetchall()
+    finally:
+        conn.close()
+
+    return {
+        "bundle_id": int(bundle["id"]),
+        "name": bundle["name"],
+        "vehicle_category": bundle["vehicle_category"],
+        "is_active": int(bundle["is_active"] or 0),
+        "bundle_version_id": int(bundle_version_id) if bundle_version_id else None,
+        "version_no": int(bundle["version_no"] or 0),
+        "change_notes": bundle["change_notes"] or "",
+        "version_created_at": format_date(bundle["created_at"], show_time=True) if bundle["created_at"] else None,
+        "version_created_by_username": bundle["created_by_username"] or None,
+        "variants": [
+            {
+                "variant_name": row["subcategory_name"],
+                "item_value_reference": float(row["item_value_reference"] or 0),
+                "shop_share": float(row["shop_share"] or 0),
+                "mechanic_share": float(row["mechanic_share"] or 0),
+                "sale_price": float(row["sale_price"] or 0),
+            }
+            for row in variants
+        ],
+        "services": [
+            {
+                "service_id": int(row["service_id"]),
+                "name": row["name"],
+                "category": row["category"],
+            }
+            for row in services
+        ],
+        "items": [
+            {
+                "item_id": int(row["item_id"]),
+                "name": row["name"],
+                "category": row["category"],
+                "quantity": int(row["quantity"] or 0),
+            }
+            for row in items
+        ],
+    }
+
+
+def update_bundle_record(bundle_id, name, vehicle_category, variants, service_ids, items, changed_by=None, changed_by_username=None, change_notes=None):
+    normalized = _normalize_bundle_payload(name, vehicle_category, variants, service_ids, items)
+    bundle_name = normalized["bundle_name"]
+    normalized_vehicle_category = normalized["vehicle_category"]
+    normalized_variants = normalized["variants"]
+    normalized_service_ids = normalized["service_ids"]
+    normalized_items = normalized["items"]
+    normalized_change_notes = str(change_notes or "").strip() or "Updated bundle version"
+
+    conn = get_db()
+    try:
+        bundle = conn.execute(
+            "SELECT id FROM bundles WHERE id = %s LIMIT 1",
+            (bundle_id,),
+        ).fetchone()
+        if not bundle:
+            return {"status": "missing"}
+
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM bundles
+            WHERE LOWER(TRIM(name)) = %s
+              AND LOWER(TRIM(vehicle_category)) = %s
+              AND id <> %s
+            LIMIT 1
+            """,
+            (bundle_name.lower(), normalized_vehicle_category.lower(), bundle_id),
+        ).fetchone()
+        if existing:
+            return {"status": "duplicate", "name": bundle_name, "vehicle_category": normalized_vehicle_category}
+
+        _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+
+        conn.execute("BEGIN")
+        conn.execute(
+            """
+            UPDATE bundles
+            SET name = %s,
+                vehicle_category = %s
+            WHERE id = %s
+            """,
+            (bundle_name, normalized_vehicle_category, bundle_id),
+        )
+
+        version_result = _create_bundle_version(
+            conn=conn,
+            bundle_id=bundle_id,
+            variants=normalized_variants,
+            service_ids=normalized_service_ids,
+            items=normalized_items,
+            change_notes=normalized_change_notes,
+            created_by=changed_by,
+            created_by_username=changed_by_username,
+        )
+        conn.commit()
+        return {
+            "status": "ok",
+            "bundle_id": int(bundle_id),
+            "bundle_version_id": version_result["bundle_version_id"],
+            "version_no": version_result["version_no"],
+            "name": bundle_name,
+            "vehicle_category": normalized_vehicle_category,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def add_payment_method_record(name, category):
     normalized_name = norm_text(name)
     normalized_category = norm_text(category)
@@ -427,6 +933,8 @@ def get_item_details_payload(item_id):
 
 __all__ = [
     "_to_bool",
+    "create_bundle_record",
+    "get_bundle_edit_payload",
     "add_mechanic_record",
     "add_payment_method_record",
     "add_service_record",
@@ -438,8 +946,10 @@ __all__ = [
     "get_manual_in_details",
     "get_payables_audit_page",
     "get_sale_refund_context",
+    "toggle_bundle_active_status",
     "toggle_mechanic_active_status",
     "toggle_payment_method_active_status",
     "toggle_service_active_status",
     "toggle_user_active_status",
+    "update_bundle_record",
 ]

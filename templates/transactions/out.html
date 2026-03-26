@@ -412,6 +412,163 @@
     }
     .loyalty-redeem-btn:hover  { background: rgba(76,175,80,0.15); }
     .loyalty-redeem-btn.active { background: #4caf50; color: #0d1117; }
+
+    .bundle-sale-card {
+        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
+        border: 1px solid rgba(244,196,48,0.2);
+        border-radius: 16px;
+        padding: 18px 20px;
+    }
+
+    .bundle-sale-card.disabled {
+        opacity: 0.55;
+        pointer-events: none;
+    }
+
+    .bundle-sale-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.75fr);
+        gap: 18px;
+    }
+
+    .bundle-sale-pane {
+        background: rgba(17, 21, 29, 0.62);
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .bundle-sale-empty {
+        border: 1px dashed rgba(244,196,48,0.25);
+        border-radius: 14px;
+        padding: 18px;
+        color: var(--text-muted);
+        font-size: 0.84rem;
+        background: rgba(244,196,48,0.04);
+    }
+
+    .bundle-sale-list {
+        display: grid;
+        gap: 10px;
+    }
+
+    .bundle-sale-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border-soft);
+        background: rgba(255,255,255,0.02);
+    }
+
+    .bundle-sale-line.stock-problem {
+        border-color: rgba(248, 113, 113, 0.45);
+        background: rgba(127, 29, 29, 0.12);
+    }
+
+    .bundle-sale-warning {
+        display: none;
+        margin-top: 8px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        background: rgba(248, 113, 113, 0.14);
+        border: 1px solid rgba(248, 113, 113, 0.28);
+        color: #fca5a5;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    .bundle-sale-line small {
+        display: block;
+        color: var(--text-muted);
+        margin-top: 3px;
+        font-size: 0.72rem;
+    }
+
+    .bundle-sale-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+        font-size: 0.74rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .bundle-sale-toggle input {
+        accent-color: #f4c430;
+    }
+
+    .bundle-sale-summary {
+        display: grid;
+        gap: 10px;
+    }
+
+    .bundle-sale-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border-soft);
+        font-size: 0.8rem;
+    }
+
+    .bundle-sale-summary-row strong {
+        color: var(--text-primary);
+        font-family: 'Courier New', monospace;
+        font-size: 0.95rem;
+    }
+
+    .bundle-sale-summary-row.total {
+        border-color: rgba(244,196,48,0.25);
+        background: rgba(244,196,48,0.07);
+    }
+
+    .bundle-sale-summary-row.total strong {
+        color: #f4c430;
+        font-size: 1.05rem;
+    }
+
+    .bundle-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .bundle-meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: rgba(103,194,228,0.08);
+        border: 1px solid rgba(103,194,228,0.18);
+        color: #8ed8ef;
+        font-size: 0.74rem;
+    }
+
+    .bundle-total-display {
+        color: #f4c430;
+        font-family: 'Courier New', monospace;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    @media (max-width: 991px) {
+        .bundle-sale-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -512,6 +669,58 @@
             </div>
         </div>
 
+    </div>
+
+    <div id="bundle-sale-block">
+        <div class="form-section-divider accent">
+            <i class="bi bi-box2-heart"></i> Bundle
+        </div>
+
+        <div class="bundle-sale-card" id="bundle-sale-card">
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <label class="form-label accent">Bundle <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional, one bundle only)</span></label>
+                    <select class="form-select border-warn" id="bundle-select">
+                        <option value="">Choose bundle...</option>
+                    </select>
+                    <div class="bundle-meta" id="bundle-meta" style="display:none;"></div>
+                </div>
+                <div class="col-lg-5">
+                    <label class="form-label accent">Subcategory</label>
+                    <select class="form-select border-warn" id="bundle-variant-select" disabled>
+                        <option value="">Choose subcategory...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="bundle-sale-empty" class="bundle-sale-empty mt-3">
+                Select a bundle to preview its bundled services, bundled items, and fixed bundle price.
+            </div>
+
+            <div id="bundle-sale-details" class="bundle-sale-grid mt-3" style="display:none;">
+                <div class="bundle-sale-pane">
+                    <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+                        <div class="form-label accent mb-0">Bundle Contents</div>
+                        <div class="text-muted" style="font-size:0.74rem;">Bundled items can be excluded from stock deduction.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-label info">Included Services</div>
+                        <div id="bundle-services-list" class="bundle-sale-list"></div>
+                    </div>
+
+                    <div>
+                        <div class="form-label accent">Included Items</div>
+                        <div id="bundle-items-list" class="bundle-sale-list"></div>
+                    </div>
+                </div>
+
+                <div class="bundle-sale-pane">
+                    <div class="form-label accent mb-3">Bundle Breakdown</div>
+                    <div id="bundle-summary" class="bundle-sale-summary"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- SECTION: ITEMS -->
@@ -814,6 +1023,8 @@ const QUICK_SALE_MAX_PRICE = 100;
 const DEFAULT_CASH_PAYMENT_ID = "{{ cash_pm_id }}";
 let currentSaleMode = 'quick';
 let quickSaleOverLimitWarned = false;
+let bundleOptions = [];
+let selectedBundleConfig = null;
 
 function isQuickSaleMode() {
     return currentSaleMode === 'quick';
@@ -845,6 +1056,246 @@ function getGrandTotalValue() {
     return parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')) || 0;
 }
 
+function formatPeso(value) {
+    const numericValue = Number(value || 0);
+    return `₱${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getBundleSubtotalValue() {
+    const totalEl = document.getElementById('bundle-total');
+    if (!totalEl) return 0;
+    return parseFloat(totalEl.dataset.value || '0') || 0;
+}
+
+function renderBundleMeta(config) {
+    const meta = document.getElementById('bundle-meta');
+    if (!config) {
+        meta.style.display = 'none';
+        meta.innerHTML = '';
+        return;
+    }
+
+    meta.innerHTML = `
+        <span class="bundle-meta-pill"><i class="bi bi-tag"></i>${escapeHtml(config.vehicle_category || 'Uncategorized')}</span>
+        <span class="bundle-meta-pill"><i class="bi bi-clock-history"></i>Version ${Number(config.version_no || 0)}</span>
+        <span class="bundle-meta-pill"><i class="bi bi-layers"></i>${(config.variants || []).length} subcategory${(config.variants || []).length === 1 ? '' : 'ies'}</span>
+    `;
+    meta.style.display = 'flex';
+}
+
+function clearBundleSelection({ keepBundleChoice = false } = {}) {
+    selectedBundleConfig = null;
+    const bundleSelect = document.getElementById('bundle-select');
+    const variantSelect = document.getElementById('bundle-variant-select');
+    if (!keepBundleChoice) bundleSelect.value = '';
+    variantSelect.innerHTML = '<option value="">Choose subcategory...</option>';
+    variantSelect.disabled = true;
+    document.getElementById('bundle-sale-empty').style.display = 'block';
+    document.getElementById('bundle-sale-details').style.display = 'none';
+    document.getElementById('bundle-services-list').innerHTML = '';
+    document.getElementById('bundle-items-list').innerHTML = '';
+    document.getElementById('bundle-summary').innerHTML = '';
+    renderBundleMeta(null);
+    calculateGrandTotal();
+}
+
+function renderBundleVariantOptions(config) {
+    const variantSelect = document.getElementById('bundle-variant-select');
+    variantSelect.innerHTML = '<option value="">Choose subcategory...</option>';
+    (config?.variants || []).forEach(variant => {
+        const option = document.createElement('option');
+        option.value = variant.variant_id;
+        option.textContent = `${variant.subcategory_name} • ${formatPeso(variant.sale_price)}`;
+        variantSelect.appendChild(option);
+    });
+    variantSelect.disabled = !(config?.variants || []).length;
+}
+
+function renderBundleDetails() {
+    if (!selectedBundleConfig) {
+        clearBundleSelection({ keepBundleChoice: true });
+        return;
+    }
+
+    const variantId = document.getElementById('bundle-variant-select').value;
+    const selectedVariant = (selectedBundleConfig.variants || []).find(variant => String(variant.variant_id) === String(variantId));
+    const emptyEl = document.getElementById('bundle-sale-empty');
+    const detailsEl = document.getElementById('bundle-sale-details');
+    const servicesList = document.getElementById('bundle-services-list');
+    const itemsList = document.getElementById('bundle-items-list');
+    const summaryEl = document.getElementById('bundle-summary');
+
+    if (!selectedVariant) {
+        emptyEl.style.display = 'block';
+        detailsEl.style.display = 'none';
+        summaryEl.innerHTML = '';
+        calculateGrandTotal();
+        return;
+    }
+
+    emptyEl.style.display = 'none';
+    detailsEl.style.display = 'grid';
+
+    const services = selectedBundleConfig.services || [];
+    servicesList.innerHTML = services.length
+        ? services.map(service => `
+            <div class="bundle-sale-line">
+                <div>
+                    <strong>${escapeHtml(service.name)}</strong>
+                    <small>${escapeHtml(service.category || 'Service')}</small>
+                </div>
+                <span class="badge text-bg-info">Included</span>
+            </div>
+        `).join('')
+        : `<div class="bundle-sale-empty">No bundled services in this bundle.</div>`;
+
+    const items = selectedBundleConfig.items || [];
+    itemsList.innerHTML = items.length
+        ? items.map(item => `
+            <label class="bundle-sale-line"
+                data-required-stock="${Number(item.quantity || 0)}"
+                data-current-stock="${Number(item.current_stock || 0)}">
+                <div>
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <small>${escapeHtml(item.category || 'Item')} • Qty ${Number(item.quantity || 0)} • Current Stock: ${Number(item.current_stock || 0)}</small>
+                    <div class="bundle-sale-warning">
+                        This bundled item does not have enough stock for inclusion right now.
+                    </div>
+                </div>
+                <span class="bundle-sale-toggle">
+                    <input type="checkbox"
+                        class="bundle-item-include"
+                        data-item-id="${item.item_id}"
+                        ${item.is_included === false ? '' : 'checked'}>
+                    Include
+                </span>
+            </label>
+        `).join('')
+        : `<div class="bundle-sale-empty">No bundled items in this bundle.</div>`;
+
+    summaryEl.innerHTML = `
+        <div class="bundle-sale-summary-row"><span>Item Value</span><strong>${formatPeso(selectedVariant.item_value_reference)}</strong></div>
+        <div class="bundle-sale-summary-row"><span>Shop Share</span><strong>${formatPeso(selectedVariant.shop_share)}</strong></div>
+        <div class="bundle-sale-summary-row"><span>Mechanic Share</span><strong>${formatPeso(selectedVariant.mechanic_share)}</strong></div>
+        <div class="bundle-sale-summary-row total"><span>Bundle Price</span><strong id="bundle-total" data-value="${Number(selectedVariant.sale_price || 0)}">${formatPeso(selectedVariant.sale_price)}</strong></div>
+    `;
+
+    syncBundleItemWarnings();
+    calculateGrandTotal();
+}
+
+function syncBundleItemWarnings() {
+    document.querySelectorAll('#bundle-items-list .bundle-sale-line').forEach(line => {
+        const includeInput = line.querySelector('.bundle-item-include');
+        const warningEl = line.querySelector('.bundle-sale-warning');
+        const requiredStock = Number(line.dataset.requiredStock || 0);
+        const currentStock = Number(line.dataset.currentStock || 0);
+        const hasInsufficientStock = currentStock < requiredStock;
+        const shouldWarn = Boolean(includeInput?.checked) && hasInsufficientStock;
+
+        line.classList.toggle('stock-problem', shouldWarn);
+        if (warningEl) {
+            warningEl.style.display = shouldWarn ? 'block' : 'none';
+        }
+    });
+}
+
+function getIncludedBundleStockIssues() {
+    return [...document.querySelectorAll('#bundle-items-list .bundle-sale-line')]
+        .filter(line => {
+            const includeInput = line.querySelector('.bundle-item-include');
+            const requiredStock = Number(line.dataset.requiredStock || 0);
+            const currentStock = Number(line.dataset.currentStock || 0);
+            return Boolean(includeInput?.checked) && currentStock < requiredStock;
+        });
+}
+
+function getReservedBundleQtyForItem(itemId) {
+    if (!itemId) return 0;
+    let reservedQty = 0;
+    document.querySelectorAll('.bundle-item-include:checked').forEach(input => {
+        if (String(input.dataset.itemId || '') !== String(itemId)) {
+            return;
+        }
+        const line = input.closest('.bundle-sale-line');
+        reservedQty += Number(line?.dataset.requiredStock || 0);
+    });
+    return reservedQty;
+}
+
+function recalculateAllItemRows() {
+    document.querySelectorAll('.item-row').forEach(row => calculateRow(row));
+}
+
+async function loadBundleOptions() {
+    try {
+        const res = await fetch('/api/bundles/sale-options');
+        const data = await res.json();
+        bundleOptions = data.bundles || [];
+        const select = document.getElementById('bundle-select');
+        select.innerHTML = '<option value="">Choose bundle...</option>';
+        bundleOptions.forEach(bundle => {
+            const option = document.createElement('option');
+            option.value = bundle.id;
+            option.textContent = `${bundle.name} • ${bundle.vehicle_category}`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load bundle options:', error);
+    }
+}
+
+async function loadBundleConfig(bundleId) {
+    if (!bundleId) {
+        clearBundleSelection();
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/bundles/${bundleId}/sale-config`);
+        const data = await res.json();
+        if (!res.ok) {
+            showAlert(data.error || 'Unable to load bundle details right now.', 'warning');
+            clearBundleSelection();
+            return;
+        }
+
+        selectedBundleConfig = {
+            ...data,
+            variants: (data.variants || []).map(variant => ({ ...variant, variant_id: variant.variant_id })),
+            items: (data.items || []).map(item => ({ ...item, is_included: true })),
+        };
+        renderBundleMeta(selectedBundleConfig);
+        renderBundleVariantOptions(selectedBundleConfig);
+        if ((selectedBundleConfig.variants || []).length === 1) {
+            document.getElementById('bundle-variant-select').value = selectedBundleConfig.variants[0].variant_id;
+        }
+        renderBundleDetails();
+    } catch (error) {
+        console.error('Failed to load bundle config:', error);
+        showAlert('Unable to load the selected bundle. Please try again.', 'warning');
+        clearBundleSelection();
+    }
+}
+
+function getSelectedBundlePayload() {
+    if (!selectedBundleConfig) return null;
+    const variantId = document.getElementById('bundle-variant-select').value;
+    if (!variantId) return null;
+    const selectedVariant = (selectedBundleConfig.variants || []).find(variant => String(variant.variant_id) === String(variantId));
+    if (!selectedVariant) return null;
+
+    return {
+        bundle_id: selectedBundleConfig.bundle_id,
+        bundle_version_id: selectedBundleConfig.bundle_version_id,
+        bundle_variant_id: selectedVariant.variant_id,
+        items: [...document.querySelectorAll('.bundle-item-include')].map(input => ({
+            item_id: Number(input.dataset.itemId),
+            is_included: input.checked,
+        })),
+    };
+}
+
 function setSaleMode(mode) {
     currentSaleMode = mode === 'full' ? 'full' : 'quick';
 
@@ -856,9 +1307,11 @@ function setSaleMode(mode) {
     document.getElementById('quick-sale-customer-group').style.display = isQuick ? '' : 'none';
     document.getElementById('full-sale-customer-group').style.display = isQuick ? 'none' : '';
     document.getElementById('quick-sale-note').style.display = isQuick ? 'block' : 'none';
+    document.getElementById('bundle-sale-block').style.display = isQuick ? 'none' : '';
     document.getElementById('mechanic-services-block').style.display = isQuick ? 'none' : '';
     document.getElementById('payment-section-divider').style.display = isQuick ? 'none' : '';
     document.getElementById('payment-controls-col').style.display = isQuick ? 'none' : '';
+    document.getElementById('bundle-sale-card').classList.toggle('disabled', isQuick);
 
     const paymentTotalCol = document.getElementById('payment-total-col');
     paymentTotalCol.classList.toggle('col-md-12', isQuick);
@@ -873,6 +1326,7 @@ function setSaleMode(mode) {
         document.getElementById('mechanic-id').value = '';
         document.getElementById('services-section').style.display = 'none';
         clearServices();
+        clearBundleSelection();
         if (window.clearSelectedCustomer) {
             window.clearSelectedCustomer();
         }
@@ -900,10 +1354,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
     document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
+    document.getElementById('bundle-select').addEventListener('change', (e) => loadBundleConfig(e.target.value));
+    document.getElementById('bundle-variant-select').addEventListener('change', renderBundleDetails);
     document.querySelectorAll('.sale-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
     });
     document.getElementById('quick-customer-name').addEventListener('input', syncQuickCustomerName);
+    document.addEventListener('change', (event) => {
+        if (event.target.classList.contains('bundle-item-include')) {
+            syncBundleItemWarnings();
+            recalculateAllItemRows();
+            calculateGrandTotal();
+        }
+    });
+    loadBundleOptions();
     setSaleMode('quick');
 });
 
@@ -930,6 +1394,9 @@ function calculateRow(row) {
     const warningLabel = row.querySelector('.stock-warning-text');
     const qty = parseFloat(qtyInput.value) || 0;
     const stock = parseFloat(stockInput.value) || 0;
+    const selectedItemId = row.querySelector('.item-id-input').value;
+    const reservedBundleQty = getReservedBundleQtyForItem(selectedItemId);
+    const availableStockForStandalone = Math.max(0, stock - reservedBundleQty);
     const basePrice = parseFloat(row.dataset.basePrice) || 0;
     const priceInput = row.querySelector('.price-input');
     const discountInput = row.querySelector('.discount-input');
@@ -953,8 +1420,10 @@ function calculateRow(row) {
     let errorMessage = "";
     if (qty <= 0) {
         errorMessage = "Qty must be at least 1";
-    } else if (stockInput.value !== '--' && qty > stock) {
-        errorMessage = "Insufficient stock";
+    } else if (stockInput.value !== '--' && qty > availableStockForStandalone) {
+        errorMessage = reservedBundleQty > 0
+            ? "Insufficient stock after reserved bundle items"
+            : "Insufficient stock";
     }
 
     if (errorMessage) {
@@ -985,6 +1454,7 @@ function calculateServiceRow(row) {
 
 function calculateGrandTotal() {
     let total = 0;
+    total += getBundleSubtotalValue();
     document.querySelectorAll('.subtotal-display').forEach(d => {
         total += parseFloat(d.innerText.replace(/[₱,]/g, '')) || 0;
     });
@@ -2018,6 +2488,11 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         }
     }
 
+    const selectedBundlePayload = quickSaleMode ? null : getSelectedBundlePayload();
+    const hasBundleSelected = Boolean(selectedBundlePayload);
+    const bundleServicesCount = hasBundleSelected ? (selectedBundleConfig?.services || []).length : 0;
+    const bundleChosenWithoutVariant = !quickSaleMode && document.getElementById('bundle-select').value && !hasBundleSelected;
+
     let hasStockError = false;
     document.querySelectorAll('.item-row').forEach(row => {
         const warning = row.querySelector('.stock-warning-text');
@@ -2049,6 +2524,32 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
+    if (quickSaleMode && hasBundleSelected) {
+        showAlert('Quick Sale only supports item sales. Switch to New Sale to add a bundle.', 'warning');
+        return;
+    }
+
+    if (bundleChosenWithoutVariant) {
+        showAlert('Please choose a subcategory for the selected bundle before submitting.', 'warning');
+        document.getElementById('bundle-variant-select').focus();
+        return;
+    }
+
+    if (hasBundleSelected && !mechanicId) {
+        showAlert('Bundle sales require a selected mechanic before submitting.', 'warning');
+        const mechanicSelect = document.getElementById('mechanic-id');
+        mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        mechanicSelect.focus();
+        return;
+    }
+
+    const bundleStockIssues = hasBundleSelected ? getIncludedBundleStockIssues() : [];
+    if (bundleStockIssues.length > 0) {
+        bundleStockIssues[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showAlert('An item in the selected bundle is currently out of stock or insufficient for the required quantity. Exclude it or restock before submitting.', 'warning');
+        return;
+    }
+
     if (missingServicePriceInput) {
         showAlert('Please enter a price for every selected service before submitting.', 'warning');
         missingServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2063,14 +2564,14 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (mechanicId && validServices.length === 0) {
+    if (mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
         showAlert('Assigned mechanic requires at least one service entry.', 'warning');
         document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
-    if (validItems.length === 0 && validServices.length === 0) {
-        showAlert('Please add at least one item or service before submitting.', 'warning');
+    if (validItems.length === 0 && validServices.length === 0 && !hasBundleSelected) {
+        showAlert('Please add at least one item, service, or bundle before submitting.', 'warning');
         return;
     }
 
@@ -2092,10 +2593,10 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
 
-    await saveTransaction(validItems, validServices);
+    await saveTransaction(validItems, validServices, hasBundleSelected ? [selectedBundlePayload] : []);
 });
 
-async function saveTransaction(items, services) {
+async function saveTransaction(items, services, bundles) {
     const submitBtn = document.getElementById('submit-btn');
 
     function resetSubmitButton() {
@@ -2138,7 +2639,8 @@ async function saveTransaction(items, services) {
         notes:             quickSaleMode ? '' : document.getElementById('trans-notes').value,
         transaction_date:  finalDate,
         items,
-        services:          quickSaleMode ? [] : services
+        services:          quickSaleMode ? [] : services,
+        bundles:           quickSaleMode ? [] : bundles
     };
 
     try {

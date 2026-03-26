@@ -155,6 +155,79 @@ def init_db():
     )
     """)
 
+    # 10b. BUNDLES TABLES (Admin-maintained bundle master)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS bundles (
+        id                  SERIAL PRIMARY KEY,
+        name                TEXT NOT NULL,
+        vehicle_category    TEXT NOT NULL,
+        is_active           INTEGER DEFAULT 1,
+        created_at          TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_bundles_name_vehicle_unique
+    ON bundles ((LOWER(TRIM(name))), (LOWER(TRIM(vehicle_category))))
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS bundle_versions (
+        id                  SERIAL PRIMARY KEY,
+        bundle_id           INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+        version_no          INTEGER NOT NULL,
+        is_current          INTEGER NOT NULL DEFAULT 1,
+        change_notes        TEXT,
+        created_at          TIMESTAMP DEFAULT NOW(),
+        created_by          INTEGER REFERENCES users(id),
+        created_by_username TEXT
+    )
+    """)
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_bundle_versions_unique_version
+    ON bundle_versions (bundle_id, version_no)
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bundle_versions_bundle_current ON bundle_versions(bundle_id, is_current, version_no DESC)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS bundle_version_variants (
+        id                  SERIAL PRIMARY KEY,
+        bundle_version_id   INTEGER NOT NULL REFERENCES bundle_versions(id) ON DELETE CASCADE,
+        subcategory_name    TEXT NOT NULL,
+        item_value_reference NUMERIC(12,2) NOT NULL DEFAULT 0,
+        shop_share          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        mechanic_share      NUMERIC(12,2) NOT NULL DEFAULT 0,
+        sale_price          NUMERIC(12,2) NOT NULL DEFAULT 0,
+        sort_order          INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("ALTER TABLE bundle_version_variants ADD COLUMN IF NOT EXISTS item_value_reference NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE bundle_version_variants ADD COLUMN IF NOT EXISTS shop_share NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE bundle_version_variants ADD COLUMN IF NOT EXISTS mechanic_share NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_bundle_version_variants_unique_name
+    ON bundle_version_variants (bundle_version_id, (LOWER(TRIM(subcategory_name))))
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bundle_version_variants_sort ON bundle_version_variants(bundle_version_id, sort_order ASC, id ASC)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS bundle_version_services (
+        id                  SERIAL PRIMARY KEY,
+        bundle_version_id   INTEGER NOT NULL REFERENCES bundle_versions(id) ON DELETE CASCADE,
+        service_id          INTEGER NOT NULL REFERENCES services(id),
+        sort_order          INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bundle_version_services_unique ON bundle_version_services(bundle_version_id, service_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bundle_version_services_sort ON bundle_version_services(bundle_version_id, sort_order ASC, id ASC)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS bundle_version_items (
+        id                  SERIAL PRIMARY KEY,
+        bundle_version_id   INTEGER NOT NULL REFERENCES bundle_versions(id) ON DELETE CASCADE,
+        item_id             INTEGER NOT NULL REFERENCES items(id),
+        quantity            INTEGER NOT NULL DEFAULT 1,
+        sort_order          INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bundle_version_items_unique ON bundle_version_items(bundle_version_id, item_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_bundle_version_items_sort ON bundle_version_items(bundle_version_id, sort_order ASC, id ASC)")
+
     # 11. SALES SERVICES TABLE (The "Labor" Ledger)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sales_services (
@@ -189,6 +262,48 @@ def init_db():
     WHERE i.id = si.item_id
       AND COALESCE(si.cost_per_piece_snapshot, 0) = 0
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sales_bundles (
+        id                          SERIAL PRIMARY KEY,
+        sale_id                     INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        bundle_id                   INTEGER REFERENCES bundles(id),
+        bundle_version_id           INTEGER REFERENCES bundle_versions(id),
+        bundle_variant_id           INTEGER REFERENCES bundle_version_variants(id),
+        bundle_name_snapshot        TEXT NOT NULL,
+        vehicle_category_snapshot   TEXT,
+        bundle_version_no_snapshot  INTEGER,
+        subcategory_name_snapshot   TEXT NOT NULL,
+        item_value_reference_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0,
+        shop_share_snapshot         NUMERIC(12,2) NOT NULL DEFAULT 0,
+        mechanic_share_snapshot     NUMERIC(12,2) NOT NULL DEFAULT 0,
+        bundle_price_snapshot       NUMERIC(12,2) NOT NULL DEFAULT 0,
+        created_at                  TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_bundles_sale_id ON sales_bundles(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_bundles_bundle_id ON sales_bundles(bundle_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sales_bundle_services (
+        id                      SERIAL PRIMARY KEY,
+        sales_bundle_id         INTEGER NOT NULL REFERENCES sales_bundles(id) ON DELETE CASCADE,
+        service_id              INTEGER REFERENCES services(id),
+        service_name_snapshot   TEXT NOT NULL,
+        sort_order              INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_bundle_services_bundle_id ON sales_bundle_services(sales_bundle_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sales_bundle_items (
+        id                      SERIAL PRIMARY KEY,
+        sales_bundle_id         INTEGER NOT NULL REFERENCES sales_bundles(id) ON DELETE CASCADE,
+        item_id                 INTEGER REFERENCES items(id),
+        item_name_snapshot      TEXT NOT NULL,
+        quantity                INTEGER NOT NULL DEFAULT 1,
+        is_included             INTEGER NOT NULL DEFAULT 1,
+        sort_order              INTEGER NOT NULL DEFAULT 0
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_bundle_items_bundle_id ON sales_bundle_items(sales_bundle_id)")
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sale_refunds (
         id                    SERIAL PRIMARY KEY,
@@ -1260,7 +1375,7 @@ def init_db():
     cur.execute("SELECT COUNT(*) FROM services")
     if cur.fetchone()['count'] == 0:
         initial_services = [
-            ('Oil Change', 'Maintenance'),
+            ('Change Oil', 'Maintenance'),
             ('Tire Mounting', 'Labor'),
             ('Brake Cleaning', 'Maintenance'),
             ('Tune-up', 'Labor'),

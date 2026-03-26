@@ -9,6 +9,8 @@ from utils.formatters import format_date
 from services.transactions_service import (
     add_item_to_db,
     normalize_item_category,
+    get_active_bundles_for_sale,
+    get_bundle_sale_config,
     get_transaction_out_context,
     process_manual_stock_in,
     record_sale,
@@ -56,6 +58,24 @@ def _get_active_vendors():
 def transaction_out():
     context = get_transaction_out_context()
     return render_template("transactions/out.html", **context)
+
+
+@transaction_bp.route("/api/bundles/sale-options")
+def bundle_sale_options_api():
+    try:
+        return jsonify({"bundles": get_active_bundles_for_sale()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@transaction_bp.route("/api/bundles/<int:bundle_id>/sale-config")
+def bundle_sale_config_api(bundle_id):
+    try:
+        return jsonify(get_bundle_sale_config(bundle_id))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @transaction_bp.route("/transaction/refund")

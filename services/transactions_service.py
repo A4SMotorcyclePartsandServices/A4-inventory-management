@@ -194,6 +194,161 @@ def get_transaction_out_context():
     }
 
 
+def get_active_bundles_for_sale():
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                b.id,
+                b.name,
+                b.vehicle_category,
+                cv.id AS bundle_version_id,
+                cv.version_no
+            FROM bundles b
+            JOIN bundle_versions cv
+              ON cv.bundle_id = b.id
+             AND cv.is_current = 1
+            WHERE b.is_active = 1
+            ORDER BY b.name ASC, b.vehicle_category ASC
+            """
+        ).fetchall()
+        return [
+            {
+                "id": int(row["id"]),
+                "name": row["name"],
+                "vehicle_category": row["vehicle_category"],
+                "bundle_version_id": int(row["bundle_version_id"]),
+                "version_no": int(row["version_no"] or 0),
+            }
+            for row in rows
+        ]
+    finally:
+        conn.close()
+
+
+def get_bundle_sale_config(bundle_id):
+    conn = get_db()
+    try:
+        bundle = conn.execute(
+            """
+            SELECT
+                b.id,
+                b.name,
+                b.vehicle_category,
+                cv.id AS bundle_version_id,
+                cv.version_no
+            FROM bundles b
+            JOIN bundle_versions cv
+              ON cv.bundle_id = b.id
+             AND cv.is_current = 1
+            WHERE b.id = %s
+              AND b.is_active = 1
+            LIMIT 1
+            """,
+            (bundle_id,),
+        ).fetchone()
+        if not bundle:
+            raise ValueError("Bundle not found or inactive.")
+
+        bundle_version_id = int(bundle["bundle_version_id"])
+        variants = conn.execute(
+            """
+            SELECT
+                id,
+                subcategory_name,
+                item_value_reference,
+                shop_share,
+                mechanic_share,
+                sale_price,
+                sort_order
+            FROM bundle_version_variants
+            WHERE bundle_version_id = %s
+            ORDER BY sort_order ASC, id ASC
+            """,
+            (bundle_version_id,),
+        ).fetchall()
+        services = conn.execute(
+            """
+            SELECT
+                bvs.service_id,
+                sv.name,
+                sv.category,
+                bvs.sort_order
+            FROM bundle_version_services bvs
+            JOIN services sv ON sv.id = bvs.service_id
+            WHERE bvs.bundle_version_id = %s
+            ORDER BY bvs.sort_order ASC, bvs.id ASC
+            """,
+            (bundle_version_id,),
+        ).fetchall()
+        items = conn.execute(
+            """
+            SELECT
+                bvi.item_id,
+                i.name,
+                i.category,
+                bvi.quantity,
+                bvi.sort_order,
+                COALESCE((
+                    SELECT SUM(
+                        CASE
+                            WHEN it.transaction_type = 'IN' THEN it.quantity
+                            WHEN it.transaction_type = 'OUT' THEN -it.quantity
+                            ELSE 0
+                        END
+                    )
+                    FROM inventory_transactions it
+                    WHERE it.item_id = i.id
+                ), 0) AS current_stock
+            FROM bundle_version_items bvi
+            JOIN items i ON i.id = bvi.item_id
+            WHERE bvi.bundle_version_id = %s
+            ORDER BY bvi.sort_order ASC, bvi.id ASC
+            """,
+            (bundle_version_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return {
+        "bundle_id": int(bundle["id"]),
+        "name": bundle["name"],
+        "vehicle_category": bundle["vehicle_category"],
+        "bundle_version_id": bundle_version_id,
+        "version_no": int(bundle["version_no"] or 0),
+        "variants": [
+            {
+                "variant_id": int(row["id"]),
+                "subcategory_name": row["subcategory_name"],
+                "item_value_reference": float(row["item_value_reference"] or 0),
+                "shop_share": float(row["shop_share"] or 0),
+                "mechanic_share": float(row["mechanic_share"] or 0),
+                "sale_price": float(row["sale_price"] or 0),
+            }
+            for row in variants
+        ],
+        "services": [
+            {
+                "service_id": int(row["service_id"]),
+                "name": row["name"],
+                "category": row["category"],
+            }
+            for row in services
+        ],
+        "items": [
+            {
+                "item_id": int(row["item_id"]),
+                "name": row["name"],
+                "category": row["category"],
+                "quantity": int(row["quantity"] or 0),
+                "current_stock": int(row["current_stock"] or 0),
+            }
+            for row in items
+        ],
+    }
+
+
 # ─────────────────────────────────────────────
 # MANUAL STOCK IN
 # ─────────────────────────────────────────────
@@ -592,6 +747,557 @@ def record_sale(data, user_id, username):
 # ─────────────────────────────────────────────
 # PURCHASE ORDERS
 # ─────────────────────────────────────────────
+
+# Override of record_sale with bundle-aware sale support.
+def record_sale(data, user_id, username):
+    """
+    Records a full sale that may contain standalone items, services,
+    and at most one bundle.
+    """
+    try:
+        payment_method_id = int(data.get("payment_method_id"))
+    except (TypeError, ValueError):
+        raise ValueError("Invalid payment method selected.")
+
+    quick_sale = bool(data.get("quick_sale"))
+    raw_items = data.get("items", []) or []
+    raw_services = data.get("services", []) or []
+    raw_bundles = data.get("bundles", []) or []
+
+    conn = get_db()
+    try:
+        pm = conn.execute(
+            """
+            SELECT id, category, is_active
+            FROM payment_methods WHERE id = %s
+            """,
+            (payment_method_id,),
+        ).fetchone()
+        if not pm or pm["is_active"] != 1:
+            raise ValueError("Invalid or inactive payment method selected.")
+
+        payment_category = (pm["category"] or "").strip()
+        if quick_sale and payment_category != "Cash":
+            raise ValueError("Quick Sale must use a cash payment method.")
+        sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
+
+        now_obj = datetime.now()
+        raw_date = data.get("transaction_date")
+        current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
+        if raw_date:
+            clean_time = raw_date.replace("T", " ")
+            if clean_time[:16] == current_minute:
+                clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
+            elif len(clean_time) == 16:
+                clean_time += ":00"
+        else:
+            clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
+
+        seen_item_ids = set()
+        duplicate_item_ids = set()
+        for item in raw_items:
+            raw_item_id = item.get("item_id")
+            if raw_item_id in (None, ""):
+                continue
+            item_id_str = str(raw_item_id).strip()
+            if not item_id_str:
+                continue
+            if item_id_str in seen_item_ids:
+                duplicate_item_ids.add(item_id_str)
+            seen_item_ids.add(item_id_str)
+
+        if duplicate_item_ids:
+            placeholders = ",".join(["%s"] * len(duplicate_item_ids))
+            items_data = conn.execute(
+                f"SELECT id, name FROM items WHERE id IN ({placeholders})",
+                tuple(duplicate_item_ids),
+            ).fetchall()
+            labels = [f"{row['name']} (ID {row['id']})" for row in items_data]
+            raise ValueError(f"Duplicate item(s) detected: {', '.join(labels)}. Please adjust Qty Out instead.")
+
+        normalized_items = []
+        if raw_items:
+            item_ids = []
+            for item in raw_items:
+                try:
+                    item_ids.append(int(item.get("item_id")))
+                except (TypeError, ValueError):
+                    raise ValueError("One or more selected items are invalid.")
+
+            placeholders = ",".join(["%s"] * len(item_ids))
+            item_rows = conn.execute(
+                f"""
+                SELECT id, name, a4s_selling_price, cost_per_piece
+                FROM items
+                WHERE id IN ({placeholders})
+                """,
+                tuple(item_ids),
+            ).fetchall()
+            item_catalog = {int(row["id"]): dict(row) for row in item_rows}
+            missing_item_ids = [item_id for item_id in item_ids if item_id not in item_catalog]
+            if missing_item_ids:
+                raise ValueError("One or more selected items no longer exist.")
+
+            for item in raw_items:
+                item_id = int(item.get("item_id"))
+                item_row = item_catalog[item_id]
+                try:
+                    quantity = int(item.get("quantity", 0) or 0)
+                except (TypeError, ValueError):
+                    raise ValueError("One or more item quantities are invalid.")
+                if quantity <= 0:
+                    raise ValueError("Item quantities must be at least 1.")
+
+                try:
+                    discount_percent_whole = float(item.get("discount_percent", 0) or 0)
+                except (TypeError, ValueError):
+                    raise ValueError("One or more item discounts are invalid.")
+                if discount_percent_whole < 0 or discount_percent_whole > 50:
+                    raise ValueError("Item discount must be between 0 and 50 percent.")
+
+                master_price = round(float(item_row.get("a4s_selling_price") or 0), 2)
+                submitted_original_price = round(float(item.get("original_price", 0) or 0), 2)
+                submitted_final_price = round(float(item.get("final_price", 0) or 0), 2)
+                expected_final_price = round(master_price * (1 - (discount_percent_whole / 100)), 2)
+
+                if abs(submitted_original_price - master_price) > 0.01:
+                    raise ValueError(f"Price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
+                if abs(submitted_final_price - expected_final_price) > 0.01:
+                    raise ValueError(f"Discounted price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
+
+                normalized_items.append(
+                    {
+                        "item_id": item_id,
+                        "name": item_row["name"],
+                        "quantity": quantity,
+                        "original_price": master_price,
+                        "cost_per_piece_snapshot": round(float(item_row.get("cost_per_piece") or 0), 2),
+                        "discount_percent_whole": discount_percent_whole,
+                        "discount_percent_decimal": discount_percent_whole / 100,
+                        "final_price": expected_final_price,
+                        "discount_amount": round(master_price - expected_final_price, 2),
+                    }
+                )
+
+        normalized_services = []
+        if raw_services:
+            service_ids = []
+            for service in raw_services:
+                try:
+                    service_ids.append(int(service.get("service_id")))
+                except (TypeError, ValueError):
+                    raise ValueError("One or more selected services are invalid.")
+
+            placeholders = ",".join(["%s"] * len(service_ids))
+            service_rows = conn.execute(
+                f"""
+                SELECT id, name
+                FROM services
+                WHERE id IN ({placeholders})
+                """,
+                tuple(service_ids),
+            ).fetchall()
+            service_catalog = {int(row["id"]): dict(row) for row in service_rows}
+            missing_service_ids = [service_id for service_id in service_ids if service_id not in service_catalog]
+            if missing_service_ids:
+                raise ValueError("One or more selected services no longer exist.")
+
+            for service in raw_services:
+                service_id = int(service.get("service_id"))
+                raw_price = service.get("price")
+                if raw_price in (None, ""):
+                    raise ValueError("Price is required for each selected service.")
+                try:
+                    price = round(float(raw_price), 2)
+                except (TypeError, ValueError):
+                    raise ValueError("Invalid service price. Please enter a valid amount.")
+                if price < 0:
+                    raise ValueError("Service price cannot be negative.")
+
+                normalized_services.append(
+                    {
+                        "service_id": service_id,
+                        "name": service_catalog[service_id]["name"],
+                        "price": price,
+                    }
+                )
+
+        normalized_bundle = None
+        if raw_bundles:
+            if len(raw_bundles) > 1:
+                raise ValueError("Only one bundle is allowed per sale.")
+
+            submitted_bundle = raw_bundles[0] or {}
+            try:
+                bundle_id = int(submitted_bundle.get("bundle_id"))
+                bundle_version_id = int(submitted_bundle.get("bundle_version_id"))
+                bundle_variant_id = int(submitted_bundle.get("bundle_variant_id"))
+            except (TypeError, ValueError):
+                raise ValueError("Selected bundle is invalid. Please reselect the bundle.")
+
+            bundle_row = conn.execute(
+                """
+                SELECT
+                    b.id AS bundle_id,
+                    b.name AS bundle_name,
+                    b.vehicle_category,
+                    bv.id AS bundle_version_id,
+                    bv.version_no,
+                    bvv.id AS bundle_variant_id,
+                    bvv.subcategory_name,
+                    bvv.item_value_reference,
+                    bvv.shop_share,
+                    bvv.mechanic_share,
+                    bvv.sale_price
+                FROM bundles b
+                JOIN bundle_versions bv ON bv.bundle_id = b.id
+                JOIN bundle_version_variants bvv ON bvv.bundle_version_id = bv.id
+                WHERE b.id = %s
+                  AND bv.id = %s
+                  AND bvv.id = %s
+                LIMIT 1
+                """,
+                (bundle_id, bundle_version_id, bundle_variant_id),
+            ).fetchone()
+            if not bundle_row:
+                raise ValueError("Selected bundle configuration is no longer valid. Please reselect the bundle.")
+
+            bundle_service_rows = conn.execute(
+                """
+                SELECT
+                    bvs.service_id,
+                    sv.name,
+                    bvs.sort_order
+                FROM bundle_version_services bvs
+                JOIN services sv ON sv.id = bvs.service_id
+                WHERE bvs.bundle_version_id = %s
+                ORDER BY bvs.sort_order ASC, bvs.id ASC
+                """,
+                (bundle_version_id,),
+            ).fetchall()
+            bundle_item_rows = conn.execute(
+                """
+                SELECT
+                    bvi.item_id,
+                    i.name,
+                    bvi.quantity,
+                    bvi.sort_order,
+                    i.a4s_selling_price,
+                    i.cost_per_piece
+                FROM bundle_version_items bvi
+                JOIN items i ON i.id = bvi.item_id
+                WHERE bvi.bundle_version_id = %s
+                ORDER BY bvi.sort_order ASC, bvi.id ASC
+                """,
+                (bundle_version_id,),
+            ).fetchall()
+
+            bundle_item_flags = {}
+            for submitted_item in submitted_bundle.get("items", []) or []:
+                try:
+                    item_id = int(submitted_item.get("item_id"))
+                except (TypeError, ValueError):
+                    raise ValueError("One or more bundle items are invalid.")
+                if item_id in bundle_item_flags:
+                    raise ValueError("Duplicate bundle items detected. Please refresh and try again.")
+                bundle_item_flags[item_id] = bool(submitted_item.get("is_included", True))
+
+            normalized_bundle = {
+                "bundle_id": int(bundle_row["bundle_id"]),
+                "bundle_name": bundle_row["bundle_name"],
+                "vehicle_category": bundle_row["vehicle_category"],
+                "bundle_version_id": int(bundle_row["bundle_version_id"]),
+                "bundle_version_no": int(bundle_row["version_no"] or 0),
+                "bundle_variant_id": int(bundle_row["bundle_variant_id"]),
+                "subcategory_name": bundle_row["subcategory_name"],
+                "item_value_reference": round(float(bundle_row["item_value_reference"] or 0), 2),
+                "shop_share": round(float(bundle_row["shop_share"] or 0), 2),
+                "mechanic_share": round(float(bundle_row["mechanic_share"] or 0), 2),
+                "sale_price": round(float(bundle_row["sale_price"] or 0), 2),
+                "services": [
+                    {
+                        "service_id": int(row["service_id"]),
+                        "name": row["name"],
+                        "sort_order": int(row["sort_order"] or 0),
+                    }
+                    for row in bundle_service_rows
+                ],
+                "items": [
+                    {
+                        "item_id": int(row["item_id"]),
+                        "name": row["name"],
+                        "quantity": int(row["quantity"] or 0),
+                        "sort_order": int(row["sort_order"] or 0),
+                        "is_included": bundle_item_flags.get(int(row["item_id"]), True),
+                        "original_price": round(float(row["a4s_selling_price"] or 0), 2),
+                        "cost_per_piece_snapshot": round(float(row["cost_per_piece"] or 0), 2),
+                    }
+                    for row in bundle_item_rows
+                ],
+            }
+
+        if not (normalized_items or normalized_services or normalized_bundle):
+            raise ValueError("Please add at least one item, service, or bundle before submitting.")
+
+        if normalized_bundle and not data.get("mechanic_id"):
+            raise ValueError("Bundle sales require a selected mechanic before submitting.")
+
+        if quick_sale:
+            if raw_services or raw_bundles:
+                raise ValueError("Quick Sale only supports item sales.")
+            if data.get("mechanic_id"):
+                raise ValueError("Quick Sale cannot be assigned to a mechanic.")
+            customer_name = str(data.get("customer_name") or "").strip()
+            if not customer_name:
+                raise ValueError("Quick Sale requires a customer name.")
+            if not raw_items:
+                raise ValueError("Quick Sale requires at least one item.")
+
+            computed_quick_total = 0.0
+            for item in normalized_items:
+                master_price = float(item["original_price"] or 0)
+                final_price = float(item["final_price"] or 0)
+                quantity = int(item["quantity"] or 0)
+                if master_price >= 100:
+                    raise ValueError(f"'{item['name']}' is not eligible for Quick Sale because its catalog price is 100 pesos or more.")
+                if final_price >= 100:
+                    raise ValueError("Quick Sale only allows items priced below 100 pesos.")
+                computed_quick_total += quantity * final_price
+
+            if round(computed_quick_total, 2) > 100:
+                raise ValueError("Quick Sale total due cannot exceed 100 pesos.")
+
+        conn.execute("BEGIN")
+        sale_total_amount = 0.0
+
+        vehicle_id = data.get("vehicle_id")
+        if vehicle_id in ("", None):
+            vehicle_id = None
+        else:
+            try:
+                vehicle_id = int(vehicle_id)
+            except (TypeError, ValueError):
+                vehicle_id = None
+
+        if vehicle_id is not None and data.get("customer_id"):
+            valid_vehicle = conn.execute(
+                "SELECT id FROM vehicles WHERE id = %s AND customer_id = %s AND is_active = 1",
+                (vehicle_id, data.get("customer_id")),
+            ).fetchone()
+            if not valid_vehicle:
+                raise ValueError("Invalid vehicle selected for this customer.")
+
+        stock_requirements = {}
+        stock_name_lookup = {}
+        for item in normalized_items:
+            stock_requirements[item["item_id"]] = stock_requirements.get(item["item_id"], 0) + int(item["quantity"])
+            stock_name_lookup[item["item_id"]] = item["name"]
+        if normalized_bundle:
+            for item in normalized_bundle["items"]:
+                if not item["is_included"]:
+                    continue
+                stock_requirements[item["item_id"]] = stock_requirements.get(item["item_id"], 0) + int(item["quantity"])
+                stock_name_lookup[item["item_id"]] = item["name"]
+
+        for item_id, requested_quantity in stock_requirements.items():
+            stock_row = conn.execute(
+                """
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN transaction_type = 'IN' THEN quantity
+                        WHEN transaction_type = 'OUT' THEN -quantity
+                        ELSE 0
+                    END
+                ), 0) AS current_stock
+                FROM inventory_transactions
+                WHERE item_id = %s
+                """,
+                (item_id,),
+            ).fetchone()
+            current_stock = int(stock_row["current_stock"] or 0) if stock_row else 0
+            if requested_quantity > current_stock:
+                item_name = stock_name_lookup.get(item_id, f"Item ID {item_id}")
+                raise ValueError(f"Insufficient stock for '{item_name}'. Requested: {requested_quantity}, Available: {current_stock}.")
+
+        sale_row = conn.execute(
+            """
+            INSERT INTO sales (
+                sales_number, customer_name, customer_id, vehicle_id, total_amount,
+                payment_method_id, reference_no, status,
+                notes, user_id, transaction_date, mechanic_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                data.get("sales_number"),
+                data.get("customer_name"),
+                data.get("customer_id") or None,
+                vehicle_id,
+                sale_total_amount,
+                payment_method_id,
+                data.get("reference_no"),
+                sale_status,
+                data.get("notes"),
+                user_id,
+                clean_time,
+                data.get("mechanic_id") or None,
+            ),
+        ).fetchone()
+        new_sale_id = sale_row["id"]
+
+        item_total_amount = 0.0
+        for item in normalized_items:
+            quantity = int(item["quantity"])
+            original_price = float(item["original_price"])
+            final_price = float(item["final_price"])
+            item_total_amount += quantity * final_price
+
+            add_transaction(
+                item_id=item["item_id"],
+                quantity=quantity,
+                transaction_type="OUT",
+                user_id=user_id,
+                user_name=username,
+                reference_id=new_sale_id,
+                reference_type="SALE",
+                change_reason="CUSTOMER_PURCHASE",
+                unit_price=original_price,
+                transaction_date=clean_time,
+                external_conn=conn,
+            )
+
+            conn.execute(
+                """
+                INSERT INTO sales_items (
+                    sale_id, item_id, quantity,
+                    original_unit_price, discount_percent, discount_amount, final_unit_price,
+                    cost_per_piece_snapshot, discounted_by, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    new_sale_id,
+                    item["item_id"],
+                    quantity,
+                    original_price,
+                    float(item["discount_percent_decimal"]),
+                    float(item["discount_amount"]),
+                    final_price,
+                    float(item["cost_per_piece_snapshot"]),
+                    user_id if float(item["discount_percent_whole"]) > 0 else None,
+                    clean_time,
+                ),
+            )
+
+        service_subtotal = 0.0
+        for service in normalized_services:
+            service_subtotal += float(service["price"])
+            conn.execute(
+                """
+                INSERT INTO sales_services (sale_id, service_id, price)
+                VALUES (%s, %s, %s)
+                """,
+                (new_sale_id, service["service_id"], service["price"]),
+            )
+
+        bundle_total_amount = 0.0
+        bundle_service_ids = []
+        bundle_included_item_ids = []
+        if normalized_bundle:
+            bundle_total_amount = float(normalized_bundle["sale_price"])
+            sales_bundle_row = conn.execute(
+                """
+                INSERT INTO sales_bundles (
+                    sale_id, bundle_id, bundle_version_id, bundle_variant_id,
+                    bundle_name_snapshot, vehicle_category_snapshot, bundle_version_no_snapshot,
+                    subcategory_name_snapshot, item_value_reference_snapshot, shop_share_snapshot,
+                    mechanic_share_snapshot, bundle_price_snapshot, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    new_sale_id,
+                    normalized_bundle["bundle_id"],
+                    normalized_bundle["bundle_version_id"],
+                    normalized_bundle["bundle_variant_id"],
+                    normalized_bundle["bundle_name"],
+                    normalized_bundle["vehicle_category"],
+                    normalized_bundle["bundle_version_no"],
+                    normalized_bundle["subcategory_name"],
+                    normalized_bundle["item_value_reference"],
+                    normalized_bundle["shop_share"],
+                    normalized_bundle["mechanic_share"],
+                    normalized_bundle["sale_price"],
+                    clean_time,
+                ),
+            ).fetchone()
+            sales_bundle_id = int(sales_bundle_row["id"])
+
+            for service in normalized_bundle["services"]:
+                bundle_service_ids.append(service["service_id"])
+                conn.execute(
+                    """
+                    INSERT INTO sales_bundle_services (
+                        sales_bundle_id, service_id, service_name_snapshot, sort_order
+                    ) VALUES (%s, %s, %s, %s)
+                    """,
+                    (sales_bundle_id, service["service_id"], service["name"], service["sort_order"]),
+                )
+
+            for item in normalized_bundle["items"]:
+                conn.execute(
+                    """
+                    INSERT INTO sales_bundle_items (
+                        sales_bundle_id, item_id, item_name_snapshot, quantity, is_included, sort_order
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        sales_bundle_id,
+                        item["item_id"],
+                        item["name"],
+                        item["quantity"],
+                        1 if item["is_included"] else 0,
+                        item["sort_order"],
+                    ),
+                )
+
+                if not item["is_included"]:
+                    continue
+
+                bundle_included_item_ids.append(item["item_id"])
+                add_transaction(
+                    item_id=item["item_id"],
+                    quantity=int(item["quantity"]),
+                    transaction_type="OUT",
+                    user_id=user_id,
+                    user_name=username,
+                    reference_id=new_sale_id,
+                    reference_type="SALE",
+                    change_reason="BUNDLE_PURCHASE",
+                    unit_price=float(item["original_price"]),
+                    transaction_date=clean_time,
+                    external_conn=conn,
+                    notes=f"Bundle: {normalized_bundle['bundle_name']} - {normalized_bundle['subcategory_name']}",
+                )
+
+        sale_total_amount = round(item_total_amount + service_subtotal + bundle_total_amount, 2)
+        conn.execute(
+            "UPDATE sales SET total_amount = %s, service_fee = %s WHERE id = %s",
+            (sale_total_amount, service_subtotal, new_sale_id),
+        )
+
+        service_ids = [service["service_id"] for service in normalized_services] + bundle_service_ids
+        item_ids = [item["item_id"] for item in normalized_items] + bundle_included_item_ids
+        log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
+
+        conn.commit()
+        return data.get("sales_number"), new_sale_id
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 
 REFUND_WINDOW_DAYS = 7
 
@@ -997,6 +1703,60 @@ def get_sale_refund_context(sale_id):
             (sale_id,),
         ).fetchall()
 
+        bundle_rows = conn.execute(
+            """
+            SELECT
+                sb.id,
+                sb.bundle_id,
+                sb.bundle_version_id,
+                sb.bundle_variant_id,
+                sb.bundle_name_snapshot,
+                sb.vehicle_category_snapshot,
+                sb.bundle_version_no_snapshot,
+                sb.subcategory_name_snapshot,
+                sb.item_value_reference_snapshot,
+                sb.shop_share_snapshot,
+                sb.mechanic_share_snapshot,
+                sb.bundle_price_snapshot
+            FROM sales_bundles sb
+            WHERE sb.sale_id = %s
+            ORDER BY sb.id ASC
+            """,
+            (sale_id,),
+        ).fetchall()
+
+        bundle_service_rows = conn.execute(
+            """
+            SELECT
+                sbs.sales_bundle_id,
+                sbs.service_id,
+                sbs.service_name_snapshot,
+                sbs.sort_order
+            FROM sales_bundle_services sbs
+            JOIN sales_bundles sb ON sb.id = sbs.sales_bundle_id
+            WHERE sb.sale_id = %s
+            ORDER BY sbs.sales_bundle_id ASC, sbs.sort_order ASC, sbs.id ASC
+            """,
+            (sale_id,),
+        ).fetchall()
+
+        bundle_item_rows = conn.execute(
+            """
+            SELECT
+                sbi.sales_bundle_id,
+                sbi.item_id,
+                sbi.item_name_snapshot,
+                sbi.quantity,
+                sbi.is_included,
+                sbi.sort_order
+            FROM sales_bundle_items sbi
+            JOIN sales_bundles sb ON sb.id = sbi.sales_bundle_id
+            WHERE sb.sale_id = %s
+            ORDER BY sbi.sales_bundle_id ASC, sbi.sort_order ASC, sbi.id ASC
+            """,
+            (sale_id,),
+        ).fetchall()
+
         refund_rows = conn.execute(
             """
             SELECT
@@ -1054,6 +1814,42 @@ def get_sale_refund_context(sale_id):
     ]
     total_refunded = round(sum(row["refund_amount"] for row in refund_history), 2)
 
+    services_by_bundle = {}
+    for row in bundle_service_rows:
+        services_by_bundle.setdefault(int(row["sales_bundle_id"]), []).append({
+            "service_id": int(row["service_id"]) if row["service_id"] is not None else None,
+            "name": row["service_name_snapshot"],
+        })
+
+    items_by_bundle = {}
+    for row in bundle_item_rows:
+        items_by_bundle.setdefault(int(row["sales_bundle_id"]), []).append({
+            "item_id": int(row["item_id"]) if row["item_id"] is not None else None,
+            "name": row["item_name_snapshot"],
+            "quantity": int(row["quantity"] or 0),
+            "is_included": int(row["is_included"] or 0) == 1,
+        })
+
+    bundle_details = [
+        {
+            "sales_bundle_id": int(row["id"]),
+            "bundle_id": int(row["bundle_id"]) if row["bundle_id"] is not None else None,
+            "bundle_version_id": int(row["bundle_version_id"]) if row["bundle_version_id"] is not None else None,
+            "bundle_variant_id": int(row["bundle_variant_id"]) if row["bundle_variant_id"] is not None else None,
+            "bundle_name": row["bundle_name_snapshot"],
+            "vehicle_category": row["vehicle_category_snapshot"],
+            "version_no": int(row["bundle_version_no_snapshot"] or 0),
+            "subcategory_name": row["subcategory_name_snapshot"],
+            "item_value_reference": round(float(row["item_value_reference_snapshot"] or 0), 2),
+            "shop_share": round(float(row["shop_share_snapshot"] or 0), 2),
+            "mechanic_share": round(float(row["mechanic_share_snapshot"] or 0), 2),
+            "bundle_price": round(float(row["bundle_price_snapshot"] or 0), 2),
+            "services": services_by_bundle.get(int(row["id"]), []),
+            "items": items_by_bundle.get(int(row["id"]), []),
+        }
+        for row in bundle_rows
+    ]
+
     can_refund = True
     refund_block_reason = ""
     if sale_data["status"] != "Paid":
@@ -1090,6 +1886,7 @@ def get_sale_refund_context(sale_id):
             }
             for row in service_rows
         ],
+        "bundles": bundle_details,
         "refund_history": refund_history,
     })
     return sale_data

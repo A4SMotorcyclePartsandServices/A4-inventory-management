@@ -1042,8 +1042,12 @@
                         <i class="bi bi-speedometer2"></i> Item Analytics
                     </a>
                     <a href="{{ url_for('admin_users.manage_users') }}"
-                    class="{% if 'users' in request.path %}active-link{% endif %}">
+                    class="{% if request.path == url_for('admin_users.manage_users') %}active-link{% endif %}">
                         <i class="bi bi-shield-lock"></i> Admin Panel
+                    </a>
+                    <a href="{{ url_for('admin_users.audit_dashboard') }}"
+                    class="{% if request.path == url_for('admin_users.audit_dashboard') %}active-link{% endif %}">
+                        <i class="bi bi-clipboard-data"></i> Audit Panel
                     </a>
                 </div>
                 {% endif %}
