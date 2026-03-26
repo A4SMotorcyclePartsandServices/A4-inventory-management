@@ -142,6 +142,30 @@ def normalize_item_category(existing_cat, new_cat):
     return None
 
 
+def _calculate_markup_decimal(cost_per_piece, selling_price):
+    cost = round(float(cost_per_piece or 0), 4)
+    selling = round(float(selling_price or 0), 4)
+    if cost <= 0 or selling <= 0:
+        return 0.0
+    return round((selling - cost) / cost, 4)
+
+
+def _update_item_cost_and_markup(conn, item_id, new_cost):
+    item_row = conn.execute(
+        "SELECT cost_per_piece, a4s_selling_price FROM items WHERE id = %s",
+        (item_id,),
+    ).fetchone()
+    current_master_cost = float(item_row["cost_per_piece"] or 0) if item_row else 0.0
+    selling_price = float(item_row["a4s_selling_price"] or 0) if item_row else 0.0
+    recalculated_markup = _calculate_markup_decimal(new_cost, selling_price)
+
+    conn.execute(
+        "UPDATE items SET cost_per_piece = %s, markup = %s WHERE id = %s",
+        (new_cost, recalculated_markup, item_id),
+    )
+    return current_master_cost, recalculated_markup
+
+
 # ─────────────────────────────────────────────
 # TRANSACTION OUT PAGE DATA
 # ─────────────────────────────────────────────
@@ -361,8 +385,8 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
     """
     if qty_int <= 0:
         raise ValueError("Invalid quantity. Must be at least 1.")
-    if unit_price < 0:
-        raise ValueError("Invalid unit cost. Must be 0 or higher.")
+    if unit_price <= 0:
+        raise ValueError("Invalid unit cost. Must be greater than 0.")
 
     conn = get_db()
     try:
@@ -389,14 +413,10 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
         item_row = conn.execute(
             "SELECT cost_per_piece FROM items WHERE id = %s", (item_id,)
         ).fetchone()
-
         current_master_cost = float(item_row["cost_per_piece"] or 0) if item_row else 0.0
 
         if unit_price != current_master_cost:
-            conn.execute(
-                "UPDATE items SET cost_per_piece = %s WHERE id = %s",
-                (unit_price, item_id)
-            )
+            current_master_cost, _ = _update_item_cost_and_markup(conn, item_id, unit_price)
             add_transaction(
                 item_id=item_id,
                 quantity=0,
@@ -1247,14 +1267,18 @@ def record_sale(data, user_id, username):
                 conn.execute(
                     """
                     INSERT INTO sales_bundle_items (
-                        sales_bundle_id, item_id, item_name_snapshot, quantity, is_included, sort_order
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        sales_bundle_id, item_id, item_name_snapshot, quantity,
+                        cost_per_piece_snapshot, selling_price_snapshot, line_total_snapshot, is_included, sort_order
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         sales_bundle_id,
                         item["item_id"],
                         item["name"],
                         item["quantity"],
+                        float(item.get("cost_per_piece_snapshot") or 0),
+                        float(item["original_price"]),
+                        round(float(item["original_price"]) * int(item["quantity"]), 2) if item["is_included"] else 0.0,
                         1 if item["is_included"] else 0,
                         item["sort_order"],
                     ),
@@ -1747,6 +1771,8 @@ def get_sale_refund_context(sale_id):
                 sbi.item_id,
                 sbi.item_name_snapshot,
                 sbi.quantity,
+                sbi.selling_price_snapshot,
+                sbi.line_total_snapshot,
                 sbi.is_included,
                 sbi.sort_order
             FROM sales_bundle_items sbi
@@ -1827,6 +1853,8 @@ def get_sale_refund_context(sale_id):
             "item_id": int(row["item_id"]) if row["item_id"] is not None else None,
             "name": row["item_name_snapshot"],
             "quantity": int(row["quantity"] or 0),
+            "selling_price_snapshot": round(float(row["selling_price_snapshot"] or 0), 2),
+            "line_total_snapshot": round(float(row["line_total_snapshot"] or 0), 2),
             "is_included": int(row["is_included"] or 0) == 1,
         })
 
@@ -3666,6 +3694,9 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 raise ValueError(f"Cannot receive more than the remaining PO quantity for item ID {item_id}.")
 
             stock_qty_in = qty_in
+            if float(unit_cost or 0) <= 0:
+                raise ValueError(f"Unit cost must be greater than 0 before receiving item ID {item_id}.")
+
             effective_piece_cost = float(unit_cost or 0)
             receive_note_suffix = ""
 
@@ -3690,10 +3721,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             current_master_cost = float(item_row["cost_per_piece"] or 0)
 
             if effective_piece_cost != current_master_cost:
-                conn.execute(
-                    "UPDATE items SET cost_per_piece = %s WHERE id = %s",
-                    (effective_piece_cost, item_id)
-                )
+                current_master_cost, _ = _update_item_cost_and_markup(conn, item_id, effective_piece_cost)
                 add_transaction(
                     item_id=item_id, quantity=0, transaction_type='IN',
                     user_id=user_id, user_name=username,

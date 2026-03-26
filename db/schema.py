@@ -59,13 +59,22 @@ def init_db():
         vendor_price        NUMERIC(12,2),
         cost_per_piece      NUMERIC(12,2),
         a4s_selling_price   NUMERIC(12,2),
-        markup              NUMERIC(12,2),
+        markup              NUMERIC(12,4),
         reorder_level       INTEGER DEFAULT 0,
         vendor              TEXT,
         mechanic            TEXT
     )
     """)
+    cur.execute("ALTER TABLE items ALTER COLUMN markup TYPE NUMERIC(12,4)")
     cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES vendors(id)")
+    cur.execute("""
+        UPDATE items
+        SET markup = CASE
+            WHEN COALESCE(cost_per_piece, 0) > 0 AND COALESCE(a4s_selling_price, 0) > 0
+            THEN ROUND((a4s_selling_price - cost_per_piece) / cost_per_piece, 4)
+            ELSE 0
+        END
+    """)
 
     # 5. PAYMENT METHODS TABLE
     cur.execute("""
@@ -299,9 +308,22 @@ def init_db():
         item_id                 INTEGER REFERENCES items(id),
         item_name_snapshot      TEXT NOT NULL,
         quantity                INTEGER NOT NULL DEFAULT 1,
+        cost_per_piece_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0,
+        selling_price_snapshot  NUMERIC(12,2) NOT NULL DEFAULT 0,
+        line_total_snapshot     NUMERIC(12,2) NOT NULL DEFAULT 0,
         is_included             INTEGER NOT NULL DEFAULT 1,
         sort_order              INTEGER NOT NULL DEFAULT 0
     )
+    """)
+    cur.execute("ALTER TABLE sales_bundle_items ADD COLUMN IF NOT EXISTS cost_per_piece_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE sales_bundle_items ADD COLUMN IF NOT EXISTS selling_price_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("ALTER TABLE sales_bundle_items ADD COLUMN IF NOT EXISTS line_total_snapshot NUMERIC(12,2) NOT NULL DEFAULT 0")
+    cur.execute("""
+    UPDATE sales_bundle_items sbi
+    SET cost_per_piece_snapshot = COALESCE(i.cost_per_piece, 0)
+    FROM items i
+    WHERE i.id = sbi.item_id
+      AND COALESCE(sbi.cost_per_piece_snapshot, 0) = 0
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_bundle_items_bundle_id ON sales_bundle_items(sales_bundle_id)")
     cur.execute("""

@@ -3,7 +3,7 @@ from datetime import datetime
 from db.database import get_db
 
 # 🔒 Single source of truth for this import
-BASELINE_SNAPSHOT_DATE = "2026-01-21 00:00:00"
+BASELINE_SNAPSHOT_DATE = "2026-03-26 00:00:00"
 
 
 def normalize_name(value: str) -> str:
@@ -92,7 +92,7 @@ def import_inventory_csv(file):
         conn.execute("""
             INSERT INTO inventory_transactions
             (item_id, quantity, transaction_type, transaction_date)
-            VALUES (?, ?, 'IN', ?)
+            VALUES (%s, %s, 'IN', %s)
         """, (
             item_id,
             quantity,

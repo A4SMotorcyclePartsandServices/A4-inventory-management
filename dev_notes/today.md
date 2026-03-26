@@ -1,9 +1,9 @@
 # Today – March 26
 
 ## Tasks
-- [ ] Bundling Feature in Sales
+- [X] ~~*Bundling Feature in Sales*~~ [2026-03-26]
 - [ ] Edit Item information with history of item edits
-- [ ] Import new master item file
+- [X] ~~*Import new master item file*~~ [2026-03-26]
 - [ ] Stocktake modal in Audit trail tab in audit.html page. no own modal yet
 - [ ] new toggle in sales page for mechanic supplies. get cost per piece not selling price and then show in sales report as expense
 
@@ -19,8 +19,3 @@
   "If extra boxes arrive beyond the PO quantity, the system can accept the stock, but item cost should be reviewed first because the excess boxes may be free bonus stock or vendor-billed stock."
 
 ## Blockers
-- Possible clarification on how bundles are structured in the shop
-- Existing bundle sales that were saved before the new "mechanic required" rule may still distort report totals until those records are cleaned up or corrected.
-- In `OUT`, bundle sales now require a mechanic, but the page still also requires at least one service entry when a mechanic is assigned. This needs client confirmation for bundles that may have mechanic/share logic but no actual bundled service rows.
-- Bundle report math still needs a calmer reset pass. It is currently functional but has been patched heavily and should be re-verified with one clean test dataset before client demo/use.
-- Bundle financial snapshots on the sale side do not store bundled item selling-price snapshots per item. Some report calculations are currently using live item selling prices, which can drift if item prices are edited later.

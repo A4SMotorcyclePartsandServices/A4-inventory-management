@@ -58,17 +58,22 @@ def get_sales_analytics_snapshot(start_date, end_date):
     product_service_row = conn.execute(
         """
         SELECT
-            COALESCE(SUM(items_total), 0) AS product_revenue,
-            COALESCE(SUM(item_cost_total), 0) AS product_cost,
-            COALESCE(SUM(item_profit_total), 0) AS product_profit,
-            COALESCE(SUM(services_total), 0) AS service_revenue
+            COALESCE(SUM(items_total + bundle_product_revenue), 0) AS product_revenue,
+            COALESCE(SUM(item_cost_total + bundle_product_cost), 0) AS product_cost,
+            COALESCE(SUM(item_profit_total + bundle_product_profit), 0) AS product_profit,
+            COALESCE(SUM(services_total + bundle_service_total + bundle_shop_total), 0) AS service_revenue
         FROM (
             SELECT
                 s.id,
                 COALESCE(si.items_total, 0) AS items_total,
                 COALESCE(si.item_cost_total, 0) AS item_cost_total,
                 COALESCE(si.item_profit_total, 0) AS item_profit_total,
-                COALESCE(ss.services_total, 0) AS services_total
+                COALESCE(ss.services_total, 0) AS services_total,
+                COALESCE(sb.bundle_product_revenue, 0) AS bundle_product_revenue,
+                COALESCE(sb.bundle_product_cost, 0) AS bundle_product_cost,
+                COALESCE(sb.bundle_product_profit, 0) AS bundle_product_profit,
+                COALESCE(sb.bundle_service_total, 0) AS bundle_service_total,
+                COALESCE(sb.bundle_shop_total, 0) AS bundle_shop_total
             FROM sales s
             LEFT JOIN (
                 SELECT
@@ -86,6 +91,31 @@ def get_sales_analytics_snapshot(start_date, end_date):
                 FROM sales_services
                 GROUP BY sale_id
             ) ss ON ss.sale_id = s.id
+            LEFT JOIN (
+                SELECT
+                    sb.sale_id,
+                    SUM(COALESCE(sb.item_value_reference_snapshot, 0)) AS bundle_product_revenue,
+                    SUM(
+                        CASE
+                            WHEN COALESCE(sbi.is_included, 0) = 1
+                            THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
+                            ELSE 0
+                        END
+                    ) AS bundle_product_cost,
+                    SUM(COALESCE(sb.item_value_reference_snapshot, 0))
+                    - SUM(
+                        CASE
+                            WHEN COALESCE(sbi.is_included, 0) = 1
+                            THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
+                            ELSE 0
+                        END
+                    ) AS bundle_product_profit,
+                    SUM(COALESCE(sb.mechanic_share_snapshot, 0)) AS bundle_service_total,
+                    SUM(COALESCE(sb.shop_share_snapshot, 0)) AS bundle_shop_total
+                FROM sales_bundles sb
+                LEFT JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
+                GROUP BY sb.sale_id
+            ) sb ON sb.sale_id = s.id
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
         ) scoped_sales
@@ -153,21 +183,86 @@ def get_sales_analytics_snapshot(start_date, end_date):
     top_items = conn.execute(
         """
         SELECT
-            i.name AS item_name,
-            SUM(si.quantity) AS quantity_sold,
-            COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue,
-            COALESCE(SUM(si.quantity * si.cost_per_piece_snapshot), 0) AS total_cost,
-            COALESCE(SUM(si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)), 0) AS total_profit
-        FROM sales_items si
-        JOIN sales s ON s.id = si.sale_id
-        JOIN items i ON i.id = si.item_id
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND s.status = 'Paid'
-        GROUP BY i.id, i.name
-        ORDER BY quantity_sold DESC, total_revenue DESC, i.name ASC
+            item_name,
+            SUM(quantity_sold) AS quantity_sold,
+            COALESCE(SUM(total_revenue), 0) AS total_revenue,
+            COALESCE(SUM(total_cost), 0) AS total_cost,
+            COALESCE(SUM(total_profit), 0) AS total_profit
+        FROM (
+            SELECT
+                i.name AS item_name,
+                SUM(si.quantity) AS quantity_sold,
+                COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue,
+                COALESCE(SUM(si.quantity * si.cost_per_piece_snapshot), 0) AS total_cost,
+                COALESCE(SUM(si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)), 0) AS total_profit
+            FROM sales_items si
+            JOIN sales s ON s.id = si.sale_id
+            JOIN items i ON i.id = si.item_id
+            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+              AND s.status = 'Paid'
+            GROUP BY i.id, i.name
+
+            UNION ALL
+
+            SELECT
+                sbi.item_name_snapshot AS item_name,
+                SUM(COALESCE(sbi.quantity, 0)) AS quantity_sold,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(bundle_totals.bundle_reference_total, 0) > 0
+                        THEN COALESCE(sb.item_value_reference_snapshot, 0)
+                             * (
+                                 (COALESCE(sbi.selling_price_snapshot, 0) * COALESCE(sbi.quantity, 0))
+                                 / bundle_totals.bundle_reference_total
+                             )
+                        ELSE 0
+                    END
+                ), 0) AS total_revenue,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(sbi.is_included, 0) = 1
+                        THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
+                        ELSE 0
+                    END
+                ), 0) AS total_cost,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(bundle_totals.bundle_reference_total, 0) > 0
+                        THEN (
+                            COALESCE(sb.item_value_reference_snapshot, 0)
+                            * (
+                                (COALESCE(sbi.selling_price_snapshot, 0) * COALESCE(sbi.quantity, 0))
+                                / bundle_totals.bundle_reference_total
+                            )
+                        ) - (
+                            CASE
+                                WHEN COALESCE(sbi.is_included, 0) = 1
+                                THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
+                                ELSE 0
+                            END
+                        )
+                        ELSE 0
+                    END
+                ), 0) AS total_profit
+            FROM sales_bundles sb
+            JOIN sales s ON s.id = sb.sale_id
+            JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
+            LEFT JOIN (
+                SELECT
+                    sales_bundle_id,
+                    SUM(COALESCE(selling_price_snapshot, 0) * COALESCE(quantity, 0)) AS bundle_reference_total
+                FROM sales_bundle_items
+                GROUP BY sales_bundle_id
+            ) bundle_totals ON bundle_totals.sales_bundle_id = sb.id
+            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+              AND s.status = 'Paid'
+            GROUP BY sbi.item_name_snapshot
+        ) ranked_items
+        GROUP BY item_name
+        ORDER BY quantity_sold DESC, total_revenue DESC, item_name ASC
         LIMIT 10
         """,
-        (start_date, end_date),
+        (start_date, end_date, start_date, end_date),
     ).fetchall()
 
     top_services = conn.execute(

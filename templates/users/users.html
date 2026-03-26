@@ -1348,21 +1348,22 @@
     <div class="tab-pane fade {% if active_tab == 'mechanics-tab' %}show active{% endif %}" id="mechanics-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Mechanic</h5>
-            <form action="{{ url_for('admin_users.add_mechanic') }}" method="POST" class="row g-3">
+            <form action="{{ url_for('admin_users.add_mechanic') }}" method="POST" class="row g-3" id="addMechanicForm" novalidate>
                 <div class="col-md-5">
                     <input name="name" class="form-control" placeholder="Mechanic Name" required>
                 </div>
                 <div class="col-md-3">
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-white-50">Rate</span>
-                        <select name="commission" class="form-select border-secondary text-white bg-dark">
+                        <select name="commission" class="form-select border-secondary text-white bg-dark" required>
+                            <option value="">Select rate</option>
                             <option value="0.80">80%</option>
                             <option value="0.50">50%</option>
                         </select>
                     </div>
                 </div>
                 <div class="col-md-2">
-                    <input name="phone" class="form-control" placeholder="Phone #">
+                    <input name="phone" class="form-control" placeholder="Phone #" required>
                 </div>
                 <div class="col-md-2">
                     <button type="submit" class="btn btn-danger w-100">
@@ -2530,7 +2531,7 @@ function addBundleVariantRowTo(wrapId, initial = {}) {
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-warning">P</span>
                         <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-item-value-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}">
+                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}" readonly>
                     </div>
                 </div>
                 <div>
@@ -2566,7 +2567,7 @@ function addBundleVariantRowTo(wrapId, initial = {}) {
         </div>
     `;
     wrap.appendChild(row);
-    recalculateBundleVariantRow(row);
+    recalculateBundleItemValues();
 }
 
 function addBundleVariantRow(initial = {}) {
@@ -2592,7 +2593,7 @@ function addEditBundleVariantRow(initial = {}) {
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-warning">P</span>
                         <input type="number" min="0" step="0.01" class="form-control bg-dark text-white border-secondary bundle-item-value-input"
-                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}">
+                            placeholder="0.00" value="${escapeHtml(String(initial.item_value_reference || ''))}" readonly>
                     </div>
                 </div>
                 <div>
@@ -2612,7 +2613,7 @@ function addEditBundleVariantRow(initial = {}) {
                     </div>
                 </div>
                 <div>
-                    <div class="bundle-row-label">Auto Total Price</div>
+                    <div class="bundle-row-label">Total Price</div>
                     <div class="input-group">
                         <span class="input-group-text bg-dark border-secondary text-info">P</span>
                         <input type="text" class="form-control bg-dark text-white border-secondary bundle-variant-total-price"
@@ -2626,7 +2627,7 @@ function addEditBundleVariantRow(initial = {}) {
         </div>
     `;
     wrap.appendChild(row);
-    recalculateBundleVariantRow(row);
+    recalculateBundleItemValues();
 }
 
 function addBundleServiceRowTo(wrapId, initial = {}) {
@@ -2651,6 +2652,7 @@ function addBundleServiceRowTo(wrapId, initial = {}) {
         </div>
     `;
     wrap.appendChild(row);
+    recalculateBundleItemValues();
 }
 
 function addBundleServiceRow(initial = {}) {
@@ -2682,6 +2684,7 @@ function addEditBundleServiceRow(initial = {}) {
         </div>
     `;
     wrap.appendChild(row);
+    recalculateBundleItemValues();
 }
 
 function addBundleItemRowTo(wrapId, initial = {}) {
@@ -2697,6 +2700,7 @@ function addBundleItemRowTo(wrapId, initial = {}) {
                     <input type="text" class="form-control bg-dark text-white border-secondary bundle-item-search"
                         placeholder="Search item..." autocomplete="off" value="${escapeHtml(initial.name || '')}">
                     <input type="hidden" class="bundle-item-id" value="${escapeHtml(String(initial.item_id || ''))}">
+                    <input type="hidden" class="bundle-item-selling-price" value="${escapeHtml(String(initial.selling_price || '0'))}">
                 </div>
                 <div class="col-3">
                     <input type="number" min="1" step="1" class="form-control bg-dark text-white border-secondary bundle-item-qty"
@@ -2734,6 +2738,7 @@ function addEditBundleItemRow(initial = {}) {
                     <input type="text" class="form-control bg-dark text-white border-secondary bundle-item-search"
                         placeholder="Search item..." autocomplete="off" value="${escapeHtml(initial.name || '')}">
                     <input type="hidden" class="bundle-item-id" value="${escapeHtml(String(initial.item_id || ''))}">
+                    <input type="hidden" class="bundle-item-selling-price" value="${escapeHtml(String(initial.selling_price || '0'))}">
                 </div>
                 <div>
                     <div class="bundle-row-label">Qty</div>
@@ -2764,6 +2769,7 @@ function removeBundleRow(button) {
     if (parent && parent.id === 'edit-bundle-variants-wrap' && parent.children.length === 0) addEditBundleVariantRow();
     if (parent && parent.id === 'edit-bundle-services-wrap' && parent.children.length === 0) addEditBundleServiceRow();
     if (parent && parent.id === 'edit-bundle-items-wrap' && parent.children.length === 0) addEditBundleItemRow();
+    recalculateBundleItemValues();
 }
 
 function recalculateBundleVariantRow(row) {
@@ -2778,16 +2784,57 @@ function recalculateBundleVariantRow(row) {
     }
 }
 
+function getBundleComputedItemValue(itemsWrapSelector) {
+    let computedTotal = 0;
+    document.querySelectorAll(`${itemsWrapSelector} .bundle-item-row`).forEach(row => {
+        const itemId = row.querySelector('.bundle-item-id')?.value?.trim();
+        const quantity = parseInt(row.querySelector('.bundle-item-qty')?.value || 0, 10) || 0;
+        const sellingPrice = parseFloat(row.querySelector('.bundle-item-selling-price')?.value || 0) || 0;
+        if (!itemId || quantity <= 0) return;
+        computedTotal += quantity * sellingPrice;
+    });
+    return Number(computedTotal.toFixed(2));
+}
+
+function recalculateBundleItemValues() {
+    const scopes = [
+        {
+            itemsWrapSelector: '#bundle-items-wrap',
+            variantRowSelector: '#bundle-variants-wrap .bundle-variant-row',
+        },
+        {
+            itemsWrapSelector: '#edit-bundle-items-wrap',
+            variantRowSelector: '#edit-bundle-variants-wrap .bundle-variant-row',
+        },
+    ];
+
+    scopes.forEach(scope => {
+        const computedValue = getBundleComputedItemValue(scope.itemsWrapSelector);
+        document.querySelectorAll(scope.variantRowSelector).forEach(row => {
+            const itemValueInput = row.querySelector('.bundle-item-value-input');
+            if (itemValueInput) {
+                itemValueInput.value = computedValue.toFixed(2);
+            }
+            recalculateBundleVariantRow(row);
+        });
+    });
+}
+
 async function bundleAutocompleteSearch(input, type) {
     const query = input.value.trim();
     const row = input.closest(type === 'service' ? '.bundle-service-row' : '.bundle-item-row');
     if (!row) return;
 
     const hiddenId = row.querySelector(type === 'service' ? '.bundle-service-id' : '.bundle-item-id');
+    const sellingPriceInput = type === 'item' ? row.querySelector('.bundle-item-selling-price') : null;
     const suggestions = row.querySelector(type === 'service' ? '.bundle-service-suggestions' : '.bundle-item-suggestions');
 
     if (!query) {
         hiddenId.value = '';
+        if (sellingPriceInput) {
+            sellingPriceInput.value = '0';
+            recalculateBundleItemValues();
+        }
         suggestions.style.display = 'none';
         suggestions.innerHTML = '';
         return;
@@ -2815,8 +2862,12 @@ async function bundleAutocompleteSearch(input, type) {
         button.addEventListener('click', () => {
             input.value = entry.name || '';
             hiddenId.value = entry.id || '';
+            if (sellingPriceInput) {
+                sellingPriceInput.value = String(parseFloat(entry.a4s_selling_price || 0) || 0);
+            }
             suggestions.style.display = 'none';
             suggestions.innerHTML = '';
+            recalculateBundleItemValues();
         });
         suggestions.appendChild(button);
     });
@@ -3078,6 +3129,8 @@ async function openBundleEditModal(bundleId) {
         (data.items || []).forEach(item => addEditBundleItemRow(item));
         if (!(data.items || []).length) addEditBundleItemRow();
 
+        recalculateBundleItemValues();
+
         new bootstrap.Modal(modalEl).show();
     } catch (error) {
         if (window.A4Flash?.show) {
@@ -3091,8 +3144,7 @@ async function openBundleEditModal(bundleId) {
 
 document.addEventListener('input', (event) => {
     if (
-        event.target.classList.contains('bundle-item-value-input')
-        || event.target.classList.contains('bundle-shop-share-input')
+        event.target.classList.contains('bundle-shop-share-input')
         || event.target.classList.contains('bundle-mechanic-share-input')
     ) {
         recalculateBundleVariantRow(event.target.closest('.bundle-variant-row'));
@@ -3106,8 +3158,15 @@ document.addEventListener('input', (event) => {
 
     if (event.target.classList.contains('bundle-item-search')) {
         const hiddenId = event.target.closest('.bundle-item-row').querySelector('.bundle-item-id');
+        const priceInput = event.target.closest('.bundle-item-row').querySelector('.bundle-item-selling-price');
         hiddenId.value = '';
+        if (priceInput) priceInput.value = '0';
+        recalculateBundleItemValues();
         bundleAutocompleteSearch(event.target, 'item');
+    }
+
+    if (event.target.classList.contains('bundle-item-qty')) {
+        recalculateBundleItemValues();
     }
 });
 
@@ -5447,6 +5506,31 @@ async function loyaltySubmitProgram() {
 }
 if (document.getElementById('lf-program-mode')) {
     loyaltyModesChanged();
+}
+
+const addMechanicForm = document.getElementById('addMechanicForm');
+if (addMechanicForm) {
+    const mechanicFields = Array.from(addMechanicForm.querySelectorAll('input[name], select[name]'));
+
+    const markMechanicFieldValidity = (field) => {
+        const value = String(field.value || '').trim();
+        const isValid = value !== '';
+        field.classList.toggle('is-invalid', !isValid);
+        return isValid;
+    };
+
+    mechanicFields.forEach(field => {
+        field.addEventListener('input', () => markMechanicFieldValidity(field));
+        field.addEventListener('change', () => markMechanicFieldValidity(field));
+    });
+
+    addMechanicForm.addEventListener('submit', (event) => {
+        const invalidFields = mechanicFields.filter(field => !markMechanicFieldValidity(field));
+        if (invalidFields.length) {
+            event.preventDefault();
+            invalidFields[0].focus();
+        }
+    });
 }
 </script>
 {% endblock %}

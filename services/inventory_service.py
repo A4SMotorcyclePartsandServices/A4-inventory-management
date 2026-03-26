@@ -130,7 +130,7 @@ def get_items_with_stock(snapshot_date=None):
     conn.close()
     return items
 
-def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_id=None):
+def search_items_with_stock(search_query=None, snapshot_date="2026-03-26", item_id=None):
     from db.database import get_db
     conn = get_db()
     
@@ -214,7 +214,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-01-18", item_
     conn.close()
     return results
 
-def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-01-18"):
+def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-03-26"):
     conn = get_db()
     try:
         try:

@@ -3,7 +3,7 @@
 ## High Priority
 
 - [X] ~~*Admin page Sales tab: filter for payment status*~~ [2026-03-17]
-- [ ] Admin page Sales tab: print formatting (view + print)
+- [X] ~~*Admin page Sales tab: print formatting (view + print)*~~ [2026-03-27]
 - [ ] System tracking for all actions (audit improvements)
 - [ ] Database enforcement to prevent duplicate records
 - [X] ~~*Payabales Page*~~ [2026-03-21]

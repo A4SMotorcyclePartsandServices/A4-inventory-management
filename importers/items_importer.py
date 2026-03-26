@@ -66,7 +66,7 @@ def import_items_csv(file):
                 category,
                 reorder_level
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT(name) DO UPDATE SET
                 description = excluded.description,
                 pack_size = excluded.pack_size,

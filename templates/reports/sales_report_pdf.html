@@ -655,7 +655,7 @@
                         </div>
                         <div class="mechanic-block-row">
                             <span style="color: #2d6a4f;">Shop's share</span>
-                            <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.shop_commission_share) }}</span>
+                            <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.payout_shop_share) }}</span>
                         </div>
                         {% if mech.shop_topup > 0 %}
                         <div class="mechanic-block-row">
@@ -698,6 +698,12 @@
                         <span class="label">↳ Shop's Share</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
+                    {% if data.total_bundle_shop_share > 0 %}
+                    <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
+                        <span class="label">↳ Shop's Share (Bundle)</span>
+                        <span class="value">₱ {{ "%.2f"|format(data.total_bundle_shop_share) }}</span>
+                    </div>
+                    {% endif %}
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Mechanic Payout (from paid svc/bundles)</span>
                         <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
@@ -766,7 +772,7 @@
             <div class="report-row profit-metric cost">
                 <div class="profit-metric-label">Product Cost</div>
                 <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_cost) }}</div>
-                <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item selling-price totals.</div>
+                <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
             </div>
         </div>
     </div>

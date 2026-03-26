@@ -412,6 +412,7 @@ async function submitReception() {
         const itemId = row.getAttribute('data-item-id');
         const remaining = parseInt(row.dataset.remaining, 10);
         const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
+        const unitCost = parseFloat(row.dataset.unitCost || '0') || 0;
         const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
         const stockQtyInput = row.querySelector('.stock-qty-input');
         const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
@@ -430,6 +431,13 @@ async function submitReception() {
             return;
         }
 
+        if (qtyReceived > 0 && unitCost <= 0) {
+            row.querySelector('.qty-input').classList.add('border-danger');
+            row.querySelector('.qty-input').focus();
+            hasError = true;
+            return;
+        }
+
         items.push({
             item_id: itemId,
             qty_received: qtyReceived,
@@ -438,7 +446,7 @@ async function submitReception() {
     });
 
     if (hasError) {
-        showToastFlash("Please review the received quantity and counted-piece fields.", "warning");
+        showToastFlash("Please review the received quantity, counted pieces, and unit cost before confirming.", "warning");
         return;
     }
 

@@ -41,7 +41,7 @@ def _summarize_items_for_profit(paid_sales):
                     "profit_total": 0.0,
                 }
             bundle_revenue = _num(bundle.get("item_value_reference_snapshot"))
-            bundle_cost_total = _num(bundle.get("included_items_selling_total"))
+            bundle_cost_total = _num(bundle.get("included_items_cost_total"))
             items_summary[key]["quantity"] += 1
             items_summary[key]["total"] += bundle_revenue
             items_summary[key]["cost_total"] += bundle_cost_total
@@ -105,11 +105,12 @@ def _load_bundles_by_sale(conn, sale_ids):
             sbi.item_id,
             sbi.item_name_snapshot,
             sbi.quantity,
+            sbi.cost_per_piece_snapshot,
+            sbi.selling_price_snapshot,
+            sbi.line_total_snapshot,
             sbi.is_included,
-            sbi.sort_order,
-            COALESCE(i.a4s_selling_price, 0) AS current_selling_price
+            sbi.sort_order
         FROM sales_bundle_items sbi
-        LEFT JOIN items i ON i.id = sbi.item_id
         WHERE sbi.sales_bundle_id IN ({bundle_id_placeholders})
         ORDER BY sbi.sales_bundle_id ASC, sbi.sort_order ASC, sbi.id ASC
         """,
@@ -125,7 +126,11 @@ def _load_bundles_by_sale(conn, sale_ids):
     for row in bundle_item_rows:
         item_data = dict(row)
         item_data["estimated_selling_total"] = round(
-            _num(item_data.get("current_selling_price")) * int(item_data.get("quantity") or 0),
+            _num(item_data.get("line_total_snapshot")),
+            2,
+        )
+        item_data["estimated_cost_total"] = round(
+            _num(item_data.get("cost_per_piece_snapshot")) * int(item_data.get("quantity") or 0),
             2,
         )
         items_by_bundle.setdefault(row["sales_bundle_id"], []).append(item_data)
@@ -134,9 +139,9 @@ def _load_bundles_by_sale(conn, sale_ids):
     for row in bundle_rows:
         bundle = dict(row)
         bundle_items = items_by_bundle.get(bundle["id"], [])
-        included_items_selling_total = round(
+        included_items_cost_total = round(
             sum(
-                _num(item.get("estimated_selling_total"))
+                _num(item.get("estimated_cost_total"))
                 for item in bundle_items
                 if int(item.get("is_included") or 0) == 1
             ),
@@ -144,7 +149,7 @@ def _load_bundles_by_sale(conn, sale_ids):
         )
         bundle["services"] = services_by_bundle.get(bundle["id"], [])
         bundle["items"] = bundle_items
-        bundle["included_items_selling_total"] = included_items_selling_total
+        bundle["included_items_cost_total"] = included_items_cost_total
         bundle["service_component_total"] = round(_num(bundle.get("mechanic_share_snapshot")), 2)
         bundles_by_sale.setdefault(bundle["sale_id"], []).append(bundle)
 
@@ -260,7 +265,11 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
         else:
             shop_topup = 0.0
 
-        total_shop_share = round(regular_shop_share + bundle_shop_share + debt_shop_share, 2)
+        payout_shop_share = round(
+            (payout_base_total - regular_mech_cut) + debt_shop_share,
+            2,
+        )
+        total_shop_share = round(payout_shop_share + bundle_shop_share, 2)
         total_payout     = round(total_mech_cut_this + shop_topup, 2)
 
         total_mech_cut        += total_mech_cut_this
@@ -279,6 +288,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             "bundle_mech_share":     bundle_mech_share,
             "payout_base_total":     payout_base_total,
             "regular_mech_cut":      regular_mech_cut,
+            "payout_shop_share":     payout_shop_share,
             "shop_topup":            shop_topup,
             "debt_service_portion":  debt_service_portion,
             "debt_mech_cut":         debt_mech_cut,
@@ -753,7 +763,7 @@ def get_sales_report_by_date(report_date):
             total_amount = _num(sale["total_amount"])
             sale_products = items_by_sale.get(sale_id, [])
             bundle_product_cost = round(
-                sum(_num(bundle.get("included_items_selling_total")) for bundle in sale_bundles),
+                sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
             )
             sale_product_cost = round(
@@ -797,7 +807,14 @@ def get_sales_report_by_date(report_date):
         sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
-    total_shop_comm_from_paid = round(total_service_revenue - totals["total_mech_cut_from_paid"], 2)
+    total_bundle_shop_share = round(
+        sum(_num(sale.get("bundle_shop_total")) for sale in paid_sales),
+        2,
+    )
+    total_shop_comm_from_paid = round(
+        total_service_revenue - totals["total_mech_cut_from_paid"] - total_bundle_shop_share,
+        2,
+    )
 
     items_summary = _summarize_items_for_profit(paid_sales)
 
@@ -818,6 +835,7 @@ def get_sales_report_by_date(report_date):
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
+        "total_bundle_shop_share": total_bundle_shop_share,
         "total_shop_comm_from_paid": total_shop_comm_from_paid,
         "total_mech_cut_from_debt": totals["total_mech_cut_from_debt"],
         "refunds": refunds,
@@ -1024,7 +1042,7 @@ def get_sales_report_by_range(start_date, end_date):
             total_amount = _num(sale["total_amount"])
             sale_products = items_by_sale.get(sale_id, [])
             bundle_product_cost = round(
-                sum(_num(bundle.get("included_items_selling_total")) for bundle in sale_bundles),
+                sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
             )
             sale_product_cost = round(
@@ -1113,7 +1131,14 @@ def get_sales_report_by_range(start_date, end_date):
         sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
-    total_shop_comm_from_paid = round(total_service_revenue - totals["total_mech_cut_from_paid"], 2)
+    total_bundle_shop_share = round(
+        sum(_num(sale.get("bundle_shop_total")) for sale in paid_sales),
+        2,
+    )
+    total_shop_comm_from_paid = round(
+        total_service_revenue - totals["total_mech_cut_from_paid"] - total_bundle_shop_share,
+        2,
+    )
 
     items_summary = _summarize_items_for_profit(paid_sales)
 
@@ -1134,6 +1159,7 @@ def get_sales_report_by_range(start_date, end_date):
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
+        "total_bundle_shop_share": total_bundle_shop_share,
         "total_shop_comm_from_paid": total_shop_comm_from_paid,
         "total_mech_cut_from_debt": totals["total_mech_cut_from_debt"],
         "refunds": refunds,

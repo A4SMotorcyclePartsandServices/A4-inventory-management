@@ -438,6 +438,7 @@
             <tbody>
                 {% for item in items %}
                 <tr>
+                    {% set markup_percent = ((((item.markup or 0) * 100) * 100) | int) / 100 %}
                     <td class="fw-bold item-cell">{{ item.name }}</td>
                     <td class="description-cell text-center">{{ item.description }}</td>
                     <td class="price-text">₱{{ item.vendor_price }}</td>
@@ -445,7 +446,7 @@
                     <td class="price-text selling-price">₱{{ item.a4s_selling_price }}</td>
                     {% if session.get('role') == 'admin' %}
                     <td>
-                        <span class="markup-badge">{{ "%.2f"|format(item.markup * 100) }}%</span>
+                        <span class="markup-badge">{{ "%.2f"|format(markup_percent) }}%</span>
                     </td>
                     {% endif %}
                     <td class="stock-col">
@@ -465,6 +466,17 @@
 {% block scripts %}
 <script>
 let lastSuccessfulSearch = "";
+const inventorySearchInput = document.getElementById('inventorySearch');
+const inventoryTableBody = document.querySelector('table tbody');
+const itemCountBadge = document.getElementById('itemCountBadge');
+const initialTableMarkup = inventoryTableBody ? inventoryTableBody.innerHTML : "";
+const initialBadgeText = itemCountBadge ? itemCountBadge.textContent : "";
+
+function formatMarkupPercent(markup) {
+    const numericMarkup = Number(markup || 0) * 100;
+    const truncatedMarkup = Math.trunc(numericMarkup * 100) / 100;
+    return truncatedMarkup.toFixed(2);
+}
 
 /* ---- Row Builder ---- */
 function createRowHtml(item) {
@@ -477,7 +489,7 @@ function createRowHtml(item) {
             <td class="price-text">₱${item.vendor_price || 0}</td>
             <td class="price-text">₱${item.cost_per_piece || 0}</td>
             <td class="price-text selling-price">₱${item.a4s_selling_price || 0}</td>
-            ${isAdmin ? `<td><span class="markup-badge">${(item.markup * 100).toFixed(2)}%</span></td>` : ''}
+            ${isAdmin ? `<td><span class="markup-badge">${formatMarkupPercent(item.markup)}%</span></td>` : ''}
             <td><div class="stock-badge ${isLow ? 'low' : ''}">${item.current_stock}</div></td>
         </tr>
     `;
@@ -510,12 +522,14 @@ function debounce(func, delay) {
 
 /* ---- Search ---- */
 const performSearch = async () => {
-    const rawInput = document.getElementById('inventorySearch').value.trim();
-    const tbody = document.querySelector('table tbody');
-    const badge = document.getElementById('itemCountBadge');
+    const rawInput = inventorySearchInput.value.trim();
+    const tbody = inventoryTableBody;
+    const badge = itemCountBadge;
 
     if (rawInput.length === 0) {
-        location.reload();
+        if (tbody) tbody.innerHTML = initialTableMarkup;
+        if (badge) badge.textContent = initialBadgeText;
+        inventorySearchInput.focus();
         return;
     }
     if (rawInput.length < 2) return;
@@ -616,13 +630,13 @@ function removeRecentSearch(term) {
 }
 
 function applyRecentSearch(term) {
-    document.getElementById("inventorySearch").value = term;
+    inventorySearchInput.value = term;
     performSearch();
 }
 
-document.getElementById('inventorySearch').addEventListener('input', debounce(() => {
+inventorySearchInput.addEventListener('input', debounce(() => {
     performSearch();
-    const value = document.getElementById('inventorySearch').value.trim();
+    const value = inventorySearchInput.value.trim();
     const visibleRows = document.querySelectorAll('tbody tr:not([style*="display: none"])').length;
     if (value.length >= 3 && visibleRows > 0) saveRecentSearch(value);
 }, 500));

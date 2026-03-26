@@ -188,7 +188,7 @@ def index():
     
     # We still use your stock service, but we'll need to pass the IDs 
     # to avoid calculating stock for 5,000 items we aren't showing.
-    items_stock = get_items_with_stock(snapshot_date="2026-01-18")
+    items_stock = get_items_with_stock(snapshot_date="2026-03-26")
     stock_dict = {s["id"]: s["current_stock"] for s in items_stock}
 
     conn.close()
@@ -337,6 +337,7 @@ def export_transactions():
 # CSV import endpoints
 # ============================================================
 @app.route("/import/items", methods=["POST"])
+@admin_required
 def import_items():
     """
     Import item master list.
@@ -348,6 +349,7 @@ def import_items():
 
 
 @app.route("/import/sales", methods=["POST"])
+@admin_required
 def import_sales():
     """
     Import historical sales (OUT transactions).
@@ -364,6 +366,7 @@ def import_sales():
 
 
 @app.route("/import/inventory", methods=["POST"])
+@admin_required
 def import_inventory():
     """
     Import physical inventory count as baseline IN transactions.
@@ -465,7 +468,7 @@ def debug_integrity():
         ), 0) < 0
     """).fetchall()
 
-    snapshot_date = "2026-01-18"
+    snapshot_date = "2026-03-26"
 
     snapshot_check = conn.execute("""
         SELECT

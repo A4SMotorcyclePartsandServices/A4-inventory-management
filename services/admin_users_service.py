@@ -353,37 +353,6 @@ def _normalize_bundle_payload(name, vehicle_category, variants, service_ids, ite
     if not normalized_vehicle_category:
         raise ValueError("Vehicle category is required.")
 
-    normalized_variants = []
-    seen_variant_names = set()
-    for index, raw in enumerate(variants or []):
-        variant_name = str((raw or {}).get("variant_name") or "").strip()
-        if not variant_name:
-            continue
-        try:
-            item_value_reference = round(float((raw or {}).get("item_value_reference", 0) or 0), 2)
-            shop_share = round(float((raw or {}).get("shop_share", 0) or 0), 2)
-            mechanic_share = round(float((raw or {}).get("mechanic_share", 0) or 0), 2)
-        except (TypeError, ValueError):
-            raise ValueError(f"Invalid pricing breakdown for subcategory '{variant_name}'.")
-        if item_value_reference < 0 or shop_share < 0 or mechanic_share < 0:
-            raise ValueError(f"Pricing values cannot be negative for subcategory '{variant_name}'.")
-        sale_price = round(item_value_reference + shop_share + mechanic_share, 2)
-        dedupe_key = variant_name.lower()
-        if dedupe_key in seen_variant_names:
-            raise ValueError(f"Duplicate bundle variant detected: '{variant_name}'.")
-        seen_variant_names.add(dedupe_key)
-        normalized_variants.append({
-            "variant_name": variant_name,
-            "item_value_reference": item_value_reference,
-            "shop_share": shop_share,
-            "mechanic_share": mechanic_share,
-            "sale_price": sale_price,
-            "sort_order": index,
-        })
-
-    if not normalized_variants:
-        raise ValueError("At least one bundle variant is required.")
-
     normalized_service_ids = []
     seen_service_ids = set()
     for raw_service_id in service_ids or []:
@@ -421,6 +390,33 @@ def _normalize_bundle_payload(name, vehicle_category, variants, service_ids, ite
             "sort_order": index,
         })
 
+    normalized_variants = []
+    seen_variant_names = set()
+    for index, raw in enumerate(variants or []):
+        variant_name = str((raw or {}).get("variant_name") or "").strip()
+        if not variant_name:
+            continue
+        try:
+            shop_share = round(float((raw or {}).get("shop_share", 0) or 0), 2)
+            mechanic_share = round(float((raw or {}).get("mechanic_share", 0) or 0), 2)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid pricing breakdown for subcategory '{variant_name}'.")
+        if shop_share < 0 or mechanic_share < 0:
+            raise ValueError(f"Pricing values cannot be negative for subcategory '{variant_name}'.")
+        dedupe_key = variant_name.lower()
+        if dedupe_key in seen_variant_names:
+            raise ValueError(f"Duplicate bundle variant detected: '{variant_name}'.")
+        seen_variant_names.add(dedupe_key)
+        normalized_variants.append({
+            "variant_name": variant_name,
+            "shop_share": shop_share,
+            "mechanic_share": mechanic_share,
+            "sort_order": index,
+        })
+
+    if not normalized_variants:
+        raise ValueError("At least one bundle variant is required.")
+
     return {
         "bundle_name": bundle_name,
         "vehicle_category": normalized_vehicle_category,
@@ -442,12 +438,34 @@ def _validate_bundle_component_refs(conn, service_ids, items):
 
     if items:
         item_rows = conn.execute(
-            "SELECT id FROM items WHERE id = ANY(%s)",
+            "SELECT id, a4s_selling_price FROM items WHERE id = ANY(%s)",
             ([item["item_id"] for item in items],),
         ).fetchall()
         existing_item_ids = {int(row["id"]) for row in item_rows}
         if len(existing_item_ids) != len(items):
             raise ValueError("One or more selected items no longer exist.")
+        return {
+            int(row["id"]): round(float(row["a4s_selling_price"] or 0), 2)
+            for row in item_rows
+        }
+    return {}
+
+
+def _apply_bundle_item_value(variants, items, item_price_map):
+    computed_item_value = round(
+        sum(
+            int(item["quantity"] or 0) * round(float(item_price_map.get(int(item["item_id"]), 0) or 0), 2)
+            for item in items
+        ),
+        2,
+    )
+    for variant in variants:
+        variant["item_value_reference"] = computed_item_value
+        variant["sale_price"] = round(
+            computed_item_value + float(variant["shop_share"] or 0) + float(variant["mechanic_share"] or 0),
+            2,
+        )
+    return computed_item_value
 
 
 def _create_bundle_version(conn, bundle_id, variants, service_ids, items, change_notes, created_by=None, created_by_username=None):
@@ -549,7 +567,8 @@ def create_bundle_record(name, vehicle_category, variants, service_ids, items):
         if existing:
             return {"status": "duplicate", "name": bundle_name, "vehicle_category": normalized_vehicle_category}
 
-        _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+        item_price_map = _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+        _apply_bundle_item_value(normalized_variants, normalized_items, item_price_map)
 
         conn.execute("BEGIN")
         bundle_row = conn.execute(
@@ -676,6 +695,7 @@ def get_bundle_edit_payload(bundle_id):
                     bvi.item_id,
                     i.name,
                     i.category,
+                    i.a4s_selling_price,
                     bvi.quantity,
                     bvi.sort_order
                 FROM bundle_version_items bvi
@@ -721,6 +741,7 @@ def get_bundle_edit_payload(bundle_id):
                 "item_id": int(row["item_id"]),
                 "name": row["name"],
                 "category": row["category"],
+                "selling_price": float(row["a4s_selling_price"] or 0),
                 "quantity": int(row["quantity"] or 0),
             }
             for row in items
@@ -760,7 +781,8 @@ def update_bundle_record(bundle_id, name, vehicle_category, variants, service_id
         if existing:
             return {"status": "duplicate", "name": bundle_name, "vehicle_category": normalized_vehicle_category}
 
-        _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+        item_price_map = _validate_bundle_component_refs(conn, normalized_service_ids, normalized_items)
+        _apply_bundle_item_value(normalized_variants, normalized_items, item_price_map)
 
         conn.execute("BEGIN")
         conn.execute(

@@ -84,7 +84,7 @@ def import_sales_csv(file):
             conn.execute("""
                 INSERT INTO inventory_transactions
                 (item_id, quantity, transaction_type, transaction_date)
-                VALUES (?, ?, 'OUT', ?)
+                VALUES (%s, %s, 'OUT', %s)
             """, (item_id, quantity, date_raw))
 
             imported += 1
