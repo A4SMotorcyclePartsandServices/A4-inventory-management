@@ -524,23 +524,26 @@
 
 <div class="row g-3 mb-3">
     {% set product_profit = analytics.summary.product_profit or 0 %}
-    {% set profit_is_loss = product_profit < 0 %}
+    {% set shop_share_profit = analytics.summary.shop_share_profit or 0 %}
+    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit) %}
+    {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
-    {% set product_result_display = (product_profit * -1) if profit_is_loss else product_profit %}
+    {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
     <div class="col-12">
         <div class="profit-spotlight">
             <div class="profit-spotlight-head">
                 <div>
-                    <div class="profit-spotlight-title">Product Result</div>
+                    <div class="profit-spotlight-title">Profit Result</div>
                     <div class="profit-main-meta">
                         <span class="dot"></span>
-                        Paid item sales performance
+                        Product profit plus shop share
                     </div>
                     <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ product_result_label }}</div>
                     <div class="profit-spotlight-value">PHP {{ "{:,.2f}".format(product_result_display) }}</div>
                     <div class="profit-spotlight-formula">
                         Revenue (PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }})
                         - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
+                        + Shop Share (PHP {{ "{:,.2f}".format(shop_share_profit) }})
                         = {{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
                     </div>
                 </div>
@@ -557,6 +560,10 @@
                         <span class="profit-breakdown-label">Product Cost</span>
                         <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</span>
                     </div>
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Shop Share</span>
+                        <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</span>
+                    </div>
                 </div>
             </div>
             <div class="profit-spotlight-body">
@@ -569,6 +576,11 @@
                     <div class="profit-metric-label">Product Cost</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</div>
                     <div class="profit-metric-sub">Based on frozen sale-time item cost snapshots, not the current catalog cost.</div>
+                </div>
+                <div class="profit-metric revenue">
+                    <div class="profit-metric-label">Shop Share</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</div>
+                    <div class="profit-metric-sub">Includes shop earnings from services, bundles, and collected service debt portions.</div>
                 </div>
             </div>
         </div>

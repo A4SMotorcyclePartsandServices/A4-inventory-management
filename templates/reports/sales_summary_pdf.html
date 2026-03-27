@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.5;
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: #fff;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 20px;
+        }
+
+        .header-logo {
+            height: 60px;
+            width: auto;
+            margin-right: 18px;
+        }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 78px;
+        }
+
+        .report-title {
+            font-size: 24px;
+            font-weight: 800;
+            margin: 0;
+            letter-spacing: -0.3px;
+        }
+
+        .report-date {
+            font-size: 15px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .section {
+            margin-top: 18px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            background: #111;
+            color: #fff;
+            padding: 9px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            border-radius: 6px 6px 0 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #bbb;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            overflow: hidden;
+        }
+
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 9px 10px;
+            border: 1px solid #bbb;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        td {
+            padding: 9px 10px;
+            border: 1px solid #cfcfcf;
+            font-size: 12px;
+            vertical-align: top;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        .text-right { text-align: right; }
+        .muted { color: #666; }
+        .strong { font-weight: 700; }
+
+        .totals-row td {
+            font-weight: 800;
+            background: #f6f6f6;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .cash-summary {
+            border: 1px solid #b8d4e8;
+            border-radius: 0 0 6px 6px;
+            overflow: hidden;
+        }
+
+        .cash-summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 14px;
+            font-size: 14px;
+            font-weight: 700;
+            border-top: 1px solid #b8d4e8;
+        }
+
+        .cash-summary-row:first-child {
+            border-top: none;
+        }
+
+        .cash-summary-row.in {
+            color: #155724;
+            background: #f1fbf3;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .cash-summary-row.out {
+            color: #721c24;
+            background: #fff5f5;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .cash-summary-row.total {
+            background: #0a3d5e;
+            color: #fff;
+            font-size: 18px;
+            font-weight: 800;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .empty-state {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 24px;
+            text-align: center;
+            color: #777;
+            font-size: 14px;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { margin: 0; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <b>REPORT PREVIEW</b> &nbsp;-&nbsp; Press <b>Ctrl+P</b> or
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <div class="report-title">SALES REPORT SUMMARY</div>
+            <div class="report-date">Date: <strong>{{ report_date }}</strong></div>
+        </div>
+    </div>
+
+    {% set has_summary_data = data.sales or data.items_summary or data.mechanic_summary or cash_data.entries or cash_data.total_in or cash_data.total_out or cash_data.cash_on_hand %}
+
+    {% if has_summary_data %}
+    <div class="section">
+        <div class="section-title">Items Sold</div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="58%">Item</th>
+                    <th width="17%" class="text-right">Quantity</th>
+                    <th width="25%" class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if data.items_summary %}
+                    {% for item in data.items_summary %}
+                    <tr>
+                        <td>{{ item.item_name }}</td>
+                        <td class="text-right">{{ item.quantity }}</td>
+                        <td class="text-right">P {{ "%.2f"|format(item.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="totals-row">
+                        <td colspan="2">Total Items Sold</td>
+                        <td class="text-right">P {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="muted">No items sold for this period.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Services and Mechanic Payouts</div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="22%">Mechanic</th>
+                    <th width="15%" class="text-right">Services</th>
+                    <th width="15%" class="text-right">For Payout</th>
+                    <th width="14%" class="text-right">Rate</th>
+                    <th width="12%" class="text-right">Payout</th>
+                    <th width="10%" class="text-right">Shop Share</th>
+                    <th width="9%" class="text-right">Top-up</th>
+                    <th width="13%" class="text-right">Total Payout</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if data.mechanic_summary %}
+                    {% for mech in data.mechanic_summary %}
+                    <tr>
+                        <td>
+                            <div class="strong">{{ mech.mechanic_name }}</div>
+                            {% if mech.bundle_mech_share > 0 %}
+                            <div class="muted">Includes bundle service side.</div>
+                            {% endif %}
+                            {% if mech.debt_service_portion > 0 %}
+                            <div class="muted">Includes collected debt service portion.</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">P {{ "%.2f"|format(mech.paid_services_total) }}</td>
+                        <td class="text-right">P {{ "%.2f"|format(mech.services_total) }}</td>
+                        <td class="text-right">{{ (mech.commission_rate * 100) | int }}%</td>
+                        <td class="text-right strong">P {{ "%.2f"|format(mech.mechanic_cut) }}</td>
+                        <td class="text-right">P {{ "%.2f"|format(mech.payout_shop_share) }}</td>
+                        <td class="text-right">
+                            {% if mech.shop_topup > 0 %}
+                            P {{ "%.2f"|format(mech.shop_topup) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="text-right strong">P {{ "%.2f"|format(mech.total_payout) }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="totals-row">
+                        <td colspan="4">Totals</td>
+                        <td class="text-right">P {{ "%.2f"|format(data.total_mech_cut) }}</td>
+                        <td class="text-right">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</td>
+                        <td class="text-right">P {{ "%.2f"|format(data.total_shop_topup or 0) }}</td>
+                        <td class="text-right">P {{ "%.2f"|format((data.total_mech_cut or 0) + (data.total_shop_topup or 0)) }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="8" class="muted">No mechanic payouts recorded for this period.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Transaction Details</div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="70%">Metric</th>
+                    <th width="30%" class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Item Sales</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</td>
+                </tr>
+                <tr>
+                    <td>Product Cost</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_product_cost or 0) }}</td>
+                </tr>
+                <tr>
+                    <td>Service Revenue</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_service_revenue or 0) }}</td>
+                </tr>
+                <tr>
+                    <td>Shop Share</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</td>
+                </tr>
+                {% if data.total_refunds %}
+                <tr>
+                    <td>Sale Refunds</td>
+                    <td class="text-right">- P {{ "%.2f"|format(data.total_refunds) }}</td>
+                </tr>
+                {% endif %}
+                {% if data.total_debt_collected %}
+                <tr>
+                    <td>Debt Collected</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_debt_collected) }}</td>
+                </tr>
+                {% endif %}
+                {% if data.total_shop_topup %}
+                <tr>
+                    <td>Quota Top-up</td>
+                    <td class="text-right">- P {{ "%.2f"|format(data.total_shop_topup) }}</td>
+                </tr>
+                {% endif %}
+                {% if data.total_non_cash_floating %}
+                <tr>
+                    <td>Floating Non-Cash</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.total_non_cash_floating) }}</td>
+                </tr>
+                {% endif %}
+                <tr class="totals-row">
+                    <td>Net Revenue</td>
+                    <td class="text-right">P {{ "%.2f"|format(data.net_revenue or 0) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Cash Ledger Summary</div>
+        <div class="cash-summary">
+            <div class="cash-summary-row in">
+                <span>Total Cash In</span>
+                <span>+ P {{ "%.2f"|format(cash_data.total_in or 0) }}</span>
+            </div>
+            <div class="cash-summary-row out">
+                <span>Total Cash Out</span>
+                <span>- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
+            </div>
+            <div class="cash-summary-row total">
+                <span>Cash On Hand</span>
+                <span>P {{ "%.2f"|format(cash_data.cash_on_hand or 0) }}</span>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        No report data found for <strong>{{ report_date }}</strong>.
+    </div>
+    {% endif %}
+</body>
+</html>

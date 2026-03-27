@@ -30,6 +30,21 @@ def init_db():
         is_active       INTEGER DEFAULT 1
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS mechanic_quota_topup_overrides (
+        id                    SERIAL PRIMARY KEY,
+        mechanic_id           INTEGER NOT NULL REFERENCES mechanics(id) ON DELETE CASCADE,
+        quota_date            DATE NOT NULL,
+        applies_quota_topup   INTEGER NOT NULL DEFAULT 1,
+        created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at            TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mechanic_quota_topup_override_unique
+    ON mechanic_quota_topup_overrides (mechanic_id, quota_date)
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_mechanic_quota_topup_override_date ON mechanic_quota_topup_overrides(quota_date DESC, mechanic_id)")
 
     # 3. VENDORS TABLE
     cur.execute("""
@@ -790,6 +805,15 @@ def init_db():
     cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES users(id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_created ON cash_entries(branch_id, created_at DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_deleted ON cash_entries(branch_id, is_deleted, deleted_at DESC)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS cash_float_claims (
+        id              SERIAL PRIMARY KEY,
+        sale_id         INTEGER NOT NULL UNIQUE REFERENCES sales(id) ON DELETE CASCADE,
+        cash_entry_id   INTEGER NOT NULL REFERENCES cash_entries(id) ON DELETE CASCADE,
+        created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_float_claims_entry ON cash_float_claims(cash_entry_id)")
 
     # 22. PAYABLES TABLES
     cur.execute("""

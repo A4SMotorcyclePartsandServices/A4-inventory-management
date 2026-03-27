@@ -61,7 +61,8 @@ def get_sales_analytics_snapshot(start_date, end_date):
             COALESCE(SUM(items_total + bundle_product_revenue), 0) AS product_revenue,
             COALESCE(SUM(item_cost_total + bundle_product_cost), 0) AS product_cost,
             COALESCE(SUM(item_profit_total + bundle_product_profit), 0) AS product_profit,
-            COALESCE(SUM(services_total + bundle_service_total + bundle_shop_total), 0) AS service_revenue
+            COALESCE(SUM(services_total + bundle_service_total + bundle_shop_total), 0) AS service_revenue,
+            COALESCE(SUM(service_shop_share), 0) AS shop_share_profit
         FROM (
             SELECT
                 s.id,
@@ -73,8 +74,15 @@ def get_sales_analytics_snapshot(start_date, end_date):
                 COALESCE(sb.bundle_product_cost, 0) AS bundle_product_cost,
                 COALESCE(sb.bundle_product_profit, 0) AS bundle_product_profit,
                 COALESCE(sb.bundle_service_total, 0) AS bundle_service_total,
-                COALESCE(sb.bundle_shop_total, 0) AS bundle_shop_total
+                COALESCE(sb.bundle_shop_total, 0) AS bundle_shop_total,
+                (
+                    (
+                        COALESCE(ss.services_total, 0)
+                        + COALESCE(sb.bundle_service_total, 0)
+                    ) * (1 - COALESCE(m.commission_rate, 0))
+                ) + COALESCE(sb.bundle_shop_total, 0) AS service_shop_share
             FROM sales s
+            LEFT JOIN mechanics m ON m.id = s.mechanic_id
             LEFT JOIN (
                 SELECT
                     sale_id,
@@ -119,6 +127,21 @@ def get_sales_analytics_snapshot(start_date, end_date):
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
         ) scoped_sales
+        """,
+        (start_date, end_date),
+    ).fetchone()
+
+    debt_service_shop_row = conn.execute(
+        """
+        SELECT
+            COALESCE(SUM(
+                COALESCE(dp.service_portion, 0)
+                - (COALESCE(dp.service_portion, 0) * COALESCE(m.commission_rate, 0))
+            ), 0) AS debt_shop_share
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
         """,
         (start_date, end_date),
     ).fetchone()
@@ -358,6 +381,12 @@ def get_sales_analytics_snapshot(start_date, end_date):
         for row in payment_method_rows
     ]
 
+    shop_share_profit = round(
+        _num(product_service_row["shop_share_profit"]) + _num(debt_service_shop_row["debt_shop_share"]),
+        2,
+    )
+    profit_with_shop_share = round(_num(product_service_row["product_profit"]) + shop_share_profit, 2)
+
     return {
         "summary": {
             "gross_sales": gross_sales,
@@ -374,6 +403,8 @@ def get_sales_analytics_snapshot(start_date, end_date):
             "product_revenue": round(_num(product_service_row["product_revenue"]), 2),
             "product_cost": round(_num(product_service_row["product_cost"]), 2),
             "product_profit": round(_num(product_service_row["product_profit"]), 2),
+            "shop_share_profit": shop_share_profit,
+            "profit_with_shop_share": profit_with_shop_share,
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
         },
         "charts": {

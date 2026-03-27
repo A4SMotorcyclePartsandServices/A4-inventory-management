@@ -1373,6 +1373,40 @@
             </form>
         </div>
 
+        <div class="admin-card shadow-sm mt-3">
+            <h5 class="mb-2 text-white-50">Quota Top-up By Date</h5>
+            <p class="text-info small mb-3">
+                Default behavior is to apply quota top-up. Add a date override here when a mechanic should be excluded or explicitly included for a specific day.
+            </p>
+            <form action="{{ url_for('admin_users.save_mechanic_quota_topup') }}" method="POST" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label text-white-50">Mechanic</label>
+                    <select name="mechanic_id" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="">Select mechanic</option>
+                        {% for mechanic in mechanics %}
+                        <option value="{{ mechanic.id }}">{{ mechanic.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white-50">Date</label>
+                    <input type="date" name="quota_date" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-white-50">Behavior</label>
+                    <select name="applies_quota_topup" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="1">Apply top-up</option>
+                        <option value="0">Do not apply</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-calendar-check"></i> Save
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-dark table-striped align-middle">
                 <thead>
@@ -1412,6 +1446,45 @@
                     {% else %}
                     <tr>
                         <td colspan="4" class="text-center text-muted">No mechanics added yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-responsive mt-4">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Mechanic</th>
+                        <th>Quota Top-up</th>
+                        <th>Last Updated</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for override in mechanic_quota_topup_overrides %}
+                    <tr>
+                        <td class="fw-bold">{{ override.quota_date_display }}</td>
+                        <td>{{ override.mechanic_name }}</td>
+                        <td>
+                            {% if override.applies_quota_topup == 1 %}
+                                <span class="badge bg-success-subtle border border-success text-success">APPLY</span>
+                            {% else %}
+                                <span class="badge bg-warning-subtle border border-warning text-warning">SKIP</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">{{ override.updated_at_display }}</td>
+                        <td class="text-center">
+                            <form action="{{ url_for('admin_users.delete_mechanic_quota_topup', override_id=override.id) }}" method="POST">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No quota top-up date overrides yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -2014,7 +2087,7 @@
                         <div class="sale-receipt">
                             <div class="sale-receipt-top">
                                 <div>
-                                    <div class="sale-receipt-kicker">A4 Analytics System</div>
+                                    <div class="sale-receipt-kicker">A4s Analytics System</div>
                                     <div class="sale-receipt-no">Receipt #<span id="modalSaleID"></span></div>
                                 </div>
                                 <div id="saleDetailsPaymentPill" class="sale-payment-pill sale-payment-other">Payment</div>

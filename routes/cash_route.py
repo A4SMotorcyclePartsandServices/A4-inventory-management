@@ -8,6 +8,7 @@ from services.cash_service import (
     get_cash_entries,
     get_cash_entry_count,
     get_cash_entries_for_report,
+    get_pending_non_cash_collections,
     get_already_paid_mechanic_identifiers_for_dates,
     add_cash_entry,
     delete_cash_entry,
@@ -187,6 +188,7 @@ def cash_ledger():
     reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
     reminder_days = max(1, min(REMINDER_DAYS_MAX, reminder_days))
     pending_payouts = []
+    pending_non_cash_collections = {"groups": [], "total_amount": 0.0, "total_sales": 0}
     overdue_payout_groups = []
     total_overdue_payouts = 0
 
@@ -237,6 +239,7 @@ def cash_ledger():
             })
 
         total_overdue_payouts = sum(group["count"] for group in overdue_payout_groups)
+        pending_non_cash_collections = get_pending_non_cash_collections(branch_id=branch_id)
 
     return render_template(
         "cash/cash_ledger.html",
@@ -254,6 +257,7 @@ def cash_ledger():
         cash_in_categories=CASH_IN_CATEGORIES,
         cash_out_categories=CASH_OUT_CATEGORIES,
         pending_payouts=pending_payouts,
+        pending_non_cash_collections=pending_non_cash_collections,
         today_display=format_date(today),
         today=today,
         overdue_payout_groups=overdue_payout_groups,
@@ -373,6 +377,7 @@ def cash_add_api():
             payout_for_date=payout_for_date,
             user_id=session.get("user_id"),
             branch_id=_get_branch_id(),
+            claim_sale_ids=data.get("claim_sale_ids") or [],
         )
         return jsonify({"status": "success"}), 200
 

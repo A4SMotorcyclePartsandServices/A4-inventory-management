@@ -31,6 +31,22 @@ def get_manage_users_context(active_tab="users-tab"):
         mechanics = conn.execute(
             "SELECT * FROM mechanics ORDER BY name ASC"
         ).fetchall()
+        mechanic_quota_topup_overrides = conn.execute(
+            """
+            SELECT
+                o.id,
+                o.mechanic_id,
+                o.quota_date,
+                o.applies_quota_topup,
+                o.created_at,
+                o.updated_at,
+                m.name AS mechanic_name
+            FROM mechanic_quota_topup_overrides o
+            JOIN mechanics m ON m.id = o.mechanic_id
+            ORDER BY o.quota_date DESC, m.name ASC, o.id DESC
+            LIMIT 40
+            """
+        ).fetchall()
         services_list = conn.execute(
             "SELECT * FROM services ORDER BY category ASC, name ASC LIMIT 20"
         ).fetchall()
@@ -93,6 +109,14 @@ def get_manage_users_context(active_tab="users-tab"):
         {**dict(user), "created_at": format_date(user["created_at"], show_time=True)}
         for user in users
     ]
+    formatted_mechanic_quota_topup_overrides = [
+        {
+            **dict(row),
+            "quota_date_display": format_date(row["quota_date"]),
+            "updated_at_display": format_date(row["updated_at"], show_time=True),
+        }
+        for row in mechanic_quota_topup_overrides
+    ]
     formatted_bundles = [
         {**dict(bundle), "created_at": format_date(bundle["created_at"], show_time=True)}
         for bundle in bundles
@@ -101,6 +125,7 @@ def get_manage_users_context(active_tab="users-tab"):
     return {
         "users": formatted_users,
         "mechanics": mechanics,
+        "mechanic_quota_topup_overrides": formatted_mechanic_quota_topup_overrides,
         "password_reset_requests": list_password_reset_requests(),
         "services_list": services_list,
         "categories": categories,
@@ -205,6 +230,87 @@ def toggle_mechanic_active_status(mechanic_id):
             "name": mechanic["name"],
             "was_active": was_active,
             "new_status": new_status,
+        }
+    finally:
+        conn.close()
+
+
+def save_mechanic_quota_topup_override(mechanic_id, quota_date, applies_quota_topup):
+    normalized_date = str(quota_date or "").strip()
+    if not mechanic_id or not normalized_date:
+        raise ValueError("Mechanic and date are required.")
+
+    try:
+        mechanic_id = int(mechanic_id)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid mechanic selected.")
+
+    try:
+        datetime.strptime(normalized_date, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError("Invalid quota date.")
+
+    applies_flag = 1 if _to_bool(applies_quota_topup) else 0
+
+    conn = get_db()
+    try:
+        mechanic = conn.execute(
+            "SELECT id, name FROM mechanics WHERE id = %s",
+            (mechanic_id,),
+        ).fetchone()
+        if not mechanic:
+            raise ValueError("Mechanic not found.")
+
+        conn.execute(
+            """
+            INSERT INTO mechanic_quota_topup_overrides (
+                mechanic_id, quota_date, applies_quota_topup, updated_at
+            )
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT (mechanic_id, quota_date)
+            DO UPDATE SET
+                applies_quota_topup = EXCLUDED.applies_quota_topup,
+                updated_at = NOW()
+            """,
+            (mechanic_id, normalized_date, applies_flag),
+        )
+        conn.commit()
+        return {
+            "mechanic_name": mechanic["name"],
+            "quota_date": normalized_date,
+            "applies_quota_topup": applies_flag,
+        }
+    finally:
+        conn.close()
+
+
+def delete_mechanic_quota_topup_override(override_id):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                o.id,
+                o.quota_date,
+                m.name AS mechanic_name
+            FROM mechanic_quota_topup_overrides o
+            JOIN mechanics m ON m.id = o.mechanic_id
+            WHERE o.id = %s
+            """,
+            (override_id,),
+        ).fetchone()
+        if not row:
+            return {"status": "missing"}
+
+        conn.execute(
+            "DELETE FROM mechanic_quota_topup_overrides WHERE id = %s",
+            (override_id,),
+        )
+        conn.commit()
+        return {
+            "status": "ok",
+            "mechanic_name": row["mechanic_name"],
+            "quota_date": row["quota_date"],
         }
     finally:
         conn.close()
@@ -961,6 +1067,7 @@ __all__ = [
     "add_payment_method_record",
     "add_service_record",
     "create_staff_user",
+    "delete_mechanic_quota_topup_override",
     "get_admin_sales_page",
     "get_audit_trail_page",
     "get_item_details_payload",
@@ -968,6 +1075,7 @@ __all__ = [
     "get_manual_in_details",
     "get_payables_audit_page",
     "get_sale_refund_context",
+    "save_mechanic_quota_topup_override",
     "toggle_bundle_active_status",
     "toggle_mechanic_active_status",
     "toggle_payment_method_active_status",

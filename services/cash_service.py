@@ -4,14 +4,15 @@ from datetime import date as date_today, timedelta
 import re
 
 # --- CATEGORIES ---
-CASH_IN_CATEGORIES  = ['Petty Cash', 'From Gcash Account', 'From Bank Account', 'For Payables', 'Others']
-CASH_OUT_CATEGORIES = ['Parts Purchase', 'Staff Expense', 'Utilities', 'Supplies', 'Other Expenses', 'Mechanic Payout']
+CASH_IN_CATEGORIES  = ['For Payables', 'From Bank Account', 'From Gcash/E-Wallet Account', 'Others', 'Petty Cash']
+CASH_OUT_CATEGORIES = ['To Gcash/E-Wallet Account', 'Mechanic Payout', 'Other Expenses', 'PagIbig Payment', 'Parts Purchase', 'Philhealth Payment', 'SSS Payment', 'Staff Expense/Allowance', 'Staff Salary', 'Stationery/Office Supplies', 'Transportation', 'Utilities']
 
 # --- PHYSICAL CASH FILTER ---
 # Only payment methods in this category count as physical cash in the drawer.
 # If client later confirms GCash/PayMaya count too, add 'Online' here.
 # One constant, affects the entire service automatically.
 PHYSICAL_CASH_CATEGORIES = ('Cash',)
+FLOATING_PAYMENT_CATEGORIES = ('Bank', 'Online')
 
 
 def _money(value):
@@ -37,6 +38,65 @@ def _refund_parenthetical_label(refund_number, exchange_refund=False):
     if match:
         return match.group(1)
     return label
+
+
+def _suggest_cash_in_category(payment_category):
+    return 'From Bank Account' if payment_category == 'Bank' else 'From Gcash/E-Wallet Account'
+
+
+def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
+    params = list(FLOATING_PAYMENT_CATEGORIES)
+    placeholders = ','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))
+
+    query = f"""
+        SELECT
+            s.id AS sale_id,
+            s.sales_number,
+            s.customer_name,
+            s.total_amount AS amount,
+            s.transaction_date,
+            pm.name AS payment_method_name,
+            pm.category AS payment_method_category,
+            u.username AS recorded_by
+        FROM sales s
+        JOIN payment_methods pm ON pm.id = s.payment_method_id
+        LEFT JOIN users u ON u.id = s.user_id
+        WHERE s.status = 'Paid'
+          AND pm.category IN ({placeholders})
+    """
+
+    if date_from:
+        query += " AND DATE(s.transaction_date) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(s.transaction_date) <= %s"
+        params.append(date_to)
+
+    query += " ORDER BY s.transaction_date ASC, s.id ASC"
+    return conn.execute(query, params).fetchall()
+
+
+def _get_active_float_claimed_sale_ids(conn, sale_ids, claimed_on_or_before=None):
+    normalized_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
+    if not normalized_ids:
+        return set()
+
+    placeholders = ','.join(['%s'] * len(normalized_ids))
+    params = list(normalized_ids)
+    query = f"""
+        SELECT DISTINCT cfc.sale_id
+        FROM cash_float_claims cfc
+        JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
+        WHERE cfc.sale_id IN ({placeholders})
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+    """
+
+    if claimed_on_or_before:
+        query += " AND DATE(ce.created_at) <= %s"
+        params.append(claimed_on_or_before)
+
+    rows = conn.execute(query, params).fetchall()
+    return {int(row['sale_id']) for row in rows}
 
 
 # ─────────────────────────────────────────────
@@ -159,6 +219,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
             ce.amount,
             ce.category,
             ce.description,
+            ce.reference_type,
             ce.created_at,
             ce.deleted_at,
             u.username AS recorded_by,
@@ -167,7 +228,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
         LEFT JOIN users u ON u.id = ce.user_id
         LEFT JOIN users du ON du.id = ce.deleted_by
         WHERE ce.branch_id = %s
-        AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+        AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
     """
 
     if deleted_state == 'active':
@@ -256,7 +317,7 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
             'description': row['description'] or '—',
             'created_at':  format_date(row['created_at'], show_time=True),
             'recorded_by': row['recorded_by'] or '—',
-            'source':      'manual',
+            'source':      'float_collection' if row.get('reference_type') == 'FLOAT_COLLECTION' else 'manual',
             '_raw_date':   row['created_at'] or '',
         })
 
@@ -293,6 +354,11 @@ def get_cash_summary(branch_id=1):
     debt_rows   = _get_debt_cash_payments(conn, branch_id)
     refund_rows = _get_sale_refunds_cash(conn, branch_id)
     manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
+    pending_float_rows = _get_non_cash_paid_sales(conn)
+    claimed_float_ids = _get_active_float_claimed_sale_ids(
+        conn,
+        [row['sale_id'] for row in pending_float_rows],
+    )
     conn.close()
 
     total_in  = 0.0
@@ -312,11 +378,16 @@ def get_cash_summary(branch_id=1):
 
     total_in  = round(total_in,  2)
     total_out = round(total_out, 2)
+    floating_total = round(
+        sum(_money(row['amount']) for row in pending_float_rows if int(row['sale_id']) not in claimed_float_ids),
+        2,
+    )
 
     return {
         'total_in':     total_in,
         'total_out':    total_out,
         'cash_on_hand': round(total_in - total_out, 2),
+        'floating_total': floating_total,
     }
 
 
@@ -493,7 +564,74 @@ def get_already_paid_mechanic_names(date, branch_id=1):
 # WRITE
 # ─────────────────────────────────────────────
 
-def add_cash_entry(entry_type, amount, category, description, reference_id, payout_for_date, user_id, branch_id=1):
+def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
+    conn = get_db()
+    try:
+        sale_rows = _get_non_cash_paid_sales(conn)
+        claimed_sale_ids = _get_active_float_claimed_sale_ids(
+            conn,
+            [row['sale_id'] for row in sale_rows],
+        )
+    finally:
+        conn.close()
+
+    grouped = {}
+    total_amount = 0.0
+    total_sales = 0
+
+    for row in sale_rows:
+        sale_id = int(row['sale_id'])
+        if sale_id in claimed_sale_ids:
+            continue
+
+        transaction_date = str(row['transaction_date'])[:10]
+        payment_method_name = row['payment_method_name'] or 'Non-cash'
+        payment_category = row['payment_method_category'] or 'Online'
+        key = (transaction_date, payment_method_name, payment_category)
+
+        if key not in grouped:
+            grouped[key] = {
+                'transaction_date': transaction_date,
+                'date_display': format_date(transaction_date),
+                'payment_method_name': payment_method_name,
+                'payment_method_category': payment_category,
+                'cash_in_category': _suggest_cash_in_category(payment_category),
+                'sale_ids': [],
+                'sales_count': 0,
+                'total_amount': 0.0,
+                'auto_description': '',
+            }
+
+        amount = _money(row['amount'])
+        grouped[key]['sale_ids'].append(sale_id)
+        grouped[key]['sales_count'] += 1
+        grouped[key]['total_amount'] = round(grouped[key]['total_amount'] + amount, 2)
+        total_amount = round(total_amount + amount, 2)
+        total_sales += 1
+
+    groups = sorted(
+        grouped.values(),
+        key=lambda row: (row['transaction_date'], row['payment_method_name'].lower()),
+    )
+
+    for group in groups:
+        sale_word = 'sale' if group['sales_count'] == 1 else 'sales'
+        group['auto_description'] = (
+            f"Collected {group['payment_method_name']} sales for "
+            f"{group['date_display']} ({group['sales_count']} {sale_word})"
+        )
+
+    if limit_groups is not None:
+        groups = groups[:max(0, int(limit_groups))]
+
+    return {
+        'groups': groups,
+        'total_amount': round(total_amount, 2),
+        'total_sales': total_sales,
+    }
+
+
+def add_cash_entry(entry_type, amount, category, description, reference_id, payout_for_date, user_id, branch_id=1, claim_sale_ids=None):
     """
     Records a single manual petty cash movement only.
     Sales and debt cash is calculated live — never written here.
@@ -531,6 +669,14 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
         except (TypeError, ValueError):
             raise ValueError("Invalid mechanic reference.")
 
+    normalized_claim_sale_ids = []
+    for sale_id in (claim_sale_ids or []):
+        try:
+            normalized_claim_sale_ids.append(int(sale_id))
+        except (TypeError, ValueError):
+            raise ValueError("Invalid floating collection reference.")
+    normalized_claim_sale_ids = sorted(set(normalized_claim_sale_ids))
+
     reference_type = 'MANUAL'
     if category == 'Mechanic Payout' and normalized_reference_id is not None:
         reference_type = 'MECHANIC_PAYOUT'
@@ -539,13 +685,52 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
     else:
         payout_for_date = None
 
+    if normalized_claim_sale_ids:
+        if entry_type != 'CASH_IN':
+            raise ValueError("Floating collections must be recorded as cash in.")
+        if category not in {'From Bank Account', 'From Gcash/E-Wallet Account'}:
+            raise ValueError("Floating collections must use a bank or e-wallet cash-in category.")
+        if normalized_reference_id is not None:
+            raise ValueError("Floating collections cannot use a mechanic reference.")
+        reference_type = 'FLOAT_COLLECTION'
+
     conn = get_db()
     try:
-        conn.execute("""
+        if normalized_claim_sale_ids:
+            placeholders = ','.join(['%s'] * len(normalized_claim_sale_ids))
+            claimable_rows = conn.execute(
+                f"""
+                SELECT
+                    s.id AS sale_id,
+                    s.total_amount AS amount,
+                    pm.category AS payment_method_category
+                FROM sales s
+                JOIN payment_methods pm ON pm.id = s.payment_method_id
+                LEFT JOIN cash_float_claims cfc ON cfc.sale_id = s.id
+                LEFT JOIN cash_entries ce
+                    ON ce.id = cfc.cash_entry_id
+                   AND COALESCE(ce.is_deleted, FALSE) = FALSE
+                WHERE s.id IN ({placeholders})
+                  AND s.status = 'Paid'
+                  AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
+                  AND ce.id IS NULL
+                """,
+                normalized_claim_sale_ids + list(FLOATING_PAYMENT_CATEGORIES),
+            ).fetchall()
+
+            if len(claimable_rows) != len(normalized_claim_sale_ids):
+                raise ValueError("One or more floating collections were already claimed or are no longer eligible.")
+
+            claimable_total = round(sum(_money(row['amount']) for row in claimable_rows), 2)
+            if claimable_total != amount:
+                raise ValueError("Claim amount does not match the pending floating total.")
+
+        insert_row = conn.execute("""
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, category, description,
                 reference_type, reference_id, payout_for_date, user_id)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             branch_id,
             entry_type,
@@ -556,7 +741,19 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
             normalized_reference_id,
             payout_for_date,
             user_id
-        ))
+        )).fetchone()
+
+        entry_id = int(insert_row['id'])
+
+        if normalized_claim_sale_ids:
+            for sale_id in normalized_claim_sale_ids:
+                conn.execute(
+                    """
+                    INSERT INTO cash_float_claims (sale_id, cash_entry_id)
+                    VALUES (%s, %s)
+                    """,
+                    (sale_id, entry_id),
+                )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -568,7 +765,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
 def delete_cash_entry(entry_id, user_id, branch_id=1):
     """
     Soft deletes a manual cash entry.
-    reference_type in ('MANUAL', 'MECHANIC_PAYOUT') guard means sales and debt rows
+    reference_type in ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION') guard means sales and debt rows
     can never be deleted through this path even if called directly.
     Admin-only enforced at route level.
     """
@@ -581,7 +778,7 @@ def delete_cash_entry(entry_id, user_id, branch_id=1):
                 deleted_by = %s
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
               AND COALESCE(is_deleted, FALSE) = FALSE
         """, (user_id, entry_id, branch_id))
 
@@ -609,7 +806,7 @@ def restore_cash_entry(entry_id, branch_id=1):
                 deleted_by = NULL
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
               AND COALESCE(is_deleted, FALSE) = TRUE
         """, (entry_id, branch_id))
 

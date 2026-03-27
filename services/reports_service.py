@@ -13,6 +13,68 @@ def _num(value):
     return float(value or 0)
 
 
+def _bool_flag(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_non_cash_floating_metrics(conn, start_date, end_date):
+    sale_rows = conn.execute(
+        """
+        SELECT
+            s.id,
+            s.total_amount
+        FROM sales s
+        JOIN payment_methods pm ON pm.id = s.payment_method_id
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND s.status = 'Paid'
+          AND pm.category IN ('Bank', 'Online')
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sale_rows:
+        return {
+            "total_non_cash_sales": 0.0,
+            "total_non_cash_claimed": 0.0,
+            "total_non_cash_floating": 0.0,
+        }
+
+    sale_totals = {
+        int(row["id"]): round(_num(row["total_amount"]), 2)
+        for row in sale_rows
+    }
+    sale_ids = list(sale_totals.keys())
+    placeholders = ",".join(["%s"] * len(sale_ids))
+    claimed_rows = conn.execute(
+        f"""
+        SELECT DISTINCT cfc.sale_id
+        FROM cash_float_claims cfc
+        JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
+        WHERE cfc.sale_id IN ({placeholders})
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+          AND DATE(ce.created_at) <= %s
+        """,
+        sale_ids + [end_date],
+    ).fetchall()
+
+    claimed_ids = {int(row["sale_id"]) for row in claimed_rows}
+    total_non_cash_sales = round(sum(sale_totals.values()), 2)
+    total_non_cash_claimed = round(
+        sum(amount for sale_id, amount in sale_totals.items() if sale_id in claimed_ids),
+        2,
+    )
+
+    return {
+        "total_non_cash_sales": total_non_cash_sales,
+        "total_non_cash_claimed": total_non_cash_claimed,
+        "total_non_cash_floating": round(total_non_cash_sales - total_non_cash_claimed, 2),
+    }
+
+
 def _summarize_items_for_profit(paid_sales):
     items_summary = {}
     for sale in paid_sales:
@@ -175,6 +237,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
         mechanic_id     = sale["mechanic_id"]
         mechanic_name   = sale["mechanic_name"] or "—"
         commission_rate = _num(sale["commission_rate"])
+        applies_quota_topup = _bool_flag(sale.get("applies_quota_topup"), default=True)
         services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         bundle_shop_share = round(
             sum(_num(bundle.get("shop_share_snapshot")) for bundle in bundles_by_sale.get(sale_id, [])),
@@ -191,6 +254,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                 mechanic_map[mechanic_id] = {
                     "mechanic_name":            mechanic_name,
                     "commission_rate":          commission_rate,
+                    "applies_quota_topup":      applies_quota_topup,
                     "paid_services_total":      0.0,
                     "bundle_shop_share_total":  0.0,
                     "bundle_mech_share_total":  0.0,
@@ -207,6 +271,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                 debt_mechanic_map[mech_id] = {
                     "mechanic_name":      row["mechanic_name"] or "—",
                     "commission_rate":    _num(row["commission_rate"]),
+                    "applies_quota_topup": _bool_flag(row.get("applies_quota_topup"), default=True),
                     "debt_service_total": 0.0,
                 }
             debt_mechanic_map[mech_id]["debt_service_total"] += service_portion
@@ -241,6 +306,10 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
 
         mechanic_name   = regular.get("mechanic_name") or debt.get("mechanic_name") or "—"
         commission_rate = _num(regular.get("commission_rate") or debt.get("commission_rate"))
+        applies_quota_topup = _bool_flag(
+            regular.get("applies_quota_topup"),
+            default=_bool_flag(debt.get("applies_quota_topup"), default=True),
+        )
 
         paid_services        = round(_num(regular.get("paid_services_total", 0.0)), 2)
         bundle_shop_share    = round(_num(regular.get("bundle_shop_share_total", 0.0)), 2)
@@ -260,7 +329,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             2,
         )
 
-        if payout_base_total > 0 and combined_services < MECHANIC_QUOTA:
+        if applies_quota_topup and payout_base_total > 0 and combined_services < MECHANIC_QUOTA:
             shop_topup = max(0.0, round(MECHANIC_QUOTA - total_mech_cut_this, 2))
         else:
             shop_topup = 0.0
@@ -283,6 +352,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             "mechanic_id":           mech_id,
             "mechanic_name":         mechanic_name,
             "commission_rate":       commission_rate,
+            "applies_quota_topup":   1 if applies_quota_topup else 0,
             "paid_services_total":   paid_services,
             "bundle_shop_share":     bundle_shop_share,
             "bundle_mech_share":     bundle_mech_share,
@@ -313,6 +383,108 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
 # ─────────────────────────────────────────────
 # PUBLIC — Cash Ledger Panel
 # ─────────────────────────────────────────────
+
+def _aggregate_mechanic_summary_rows(summary_rows):
+    grouped = {}
+    numeric_fields = [
+        "paid_services_total",
+        "bundle_shop_share",
+        "bundle_mech_share",
+        "payout_base_total",
+        "regular_mech_cut",
+        "payout_shop_share",
+        "shop_topup",
+        "debt_service_portion",
+        "debt_mech_cut",
+        "services_total",
+        "mechanic_cut",
+        "shop_commission_share",
+        "total_payout",
+    ]
+
+    for row in summary_rows:
+        mech_id = row["mechanic_id"]
+        if mech_id not in grouped:
+            grouped[mech_id] = dict(row)
+            continue
+
+        aggregate = grouped[mech_id]
+        for field in numeric_fields:
+            aggregate[field] = round(_num(aggregate.get(field)) + _num(row.get(field)), 2)
+        aggregate["applies_quota_topup"] = 1 if (
+            _bool_flag(aggregate.get("applies_quota_topup"), default=True)
+            or _bool_flag(row.get("applies_quota_topup"), default=True)
+        ) else 0
+
+    return sorted(grouped.values(), key=lambda x: x["mechanic_name"])
+
+
+def _sum_mechanic_totals(total_rows):
+    totals = {
+        "total_mech_cut": 0.0,
+        "total_shop_topup": 0.0,
+        "total_shop_commission": 0.0,
+        "total_mech_cut_from_paid": 0.0,
+        "total_shop_comm_from_paid": 0.0,
+        "total_mech_cut_from_debt": 0.0,
+    }
+    for row in total_rows:
+        for key in totals:
+            totals[key] = round(totals[key] + _num(row.get(key)), 2)
+    return totals
+
+
+def _calculate_range_mechanic_rollups(sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale):
+    sales_by_day = {}
+    debt_by_day = {}
+
+    for row in sales_rows:
+        sale_day = str(row["transaction_date"])[:10]
+        sales_by_day.setdefault(sale_day, []).append(row)
+
+    for row in debt_collected_rows:
+        paid_day = str(row["paid_at"])[:10]
+        debt_by_day.setdefault(paid_day, []).append(row)
+
+    all_days = sorted(set(sales_by_day.keys()) | set(debt_by_day.keys()))
+    daily_summary_rows = []
+    daily_totals = []
+    quota_failures = []
+
+    for day in all_days:
+        day_mechanic_summary, day_totals = _calculate_mechanic_payouts(
+            *_build_mechanic_maps(
+                sales_by_day.get(day, []),
+                debt_by_day.get(day, []),
+                services_by_sale,
+                bundles_by_sale,
+            )
+        )
+        daily_summary_rows.extend(day_mechanic_summary)
+        daily_totals.append(day_totals)
+
+        for row in day_mechanic_summary:
+            if row["shop_topup"] > 0:
+                quota_failures.append({
+                    "date": day,
+                    "date_display": format_date(day),
+                    "mechanic_id": row["mechanic_id"],
+                    "mechanic_name": row["mechanic_name"],
+                    "commission_rate": row["commission_rate"],
+                    "paid_services_total": row["paid_services_total"],
+                    "debt_service_portion": row["debt_service_portion"],
+                    "services_total": row["services_total"],
+                    "mechanic_cut": row["mechanic_cut"],
+                    "shop_topup": row["shop_topup"],
+                    "total_payout": row["total_payout"],
+                })
+
+    return (
+        _aggregate_mechanic_summary_rows(daily_summary_rows),
+        _sum_mechanic_totals(daily_totals),
+        quota_failures,
+    )
+
 
 def _format_cash_panel_payout_rows(mechanic_summary):
     return [
@@ -351,9 +523,13 @@ def get_mechanic_payouts_for_dates(report_dates):
             s.status,
             m.id                     AS mechanic_id,
             m.name                   AS mechanic_name,
-            m.commission_rate
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
         FROM sales s
         LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(s.transaction_date)
         WHERE DATE(s.transaction_date) IN ({placeholders})
           AND s.mechanic_id IS NOT NULL
     """, normalized_dates).fetchall()
@@ -364,10 +540,14 @@ def get_mechanic_payouts_for_dates(report_dates):
             dp.service_portion,
             s.mechanic_id,
             m.name           AS mechanic_name,
-            m.commission_rate
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
         FROM debt_payments dp
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(dp.paid_at)
         WHERE DATE(dp.paid_at) IN ({placeholders})
           AND s.mechanic_id IS NOT NULL
     """, normalized_dates).fetchall()
@@ -389,7 +569,6 @@ def get_mechanic_payouts_for_dates(report_dates):
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append({"price": row["price"]})
         bundles_by_sale = _load_bundles_by_sale(conn, sale_ids)
-
     conn.close()
 
     sales_by_date = {}
@@ -583,11 +762,15 @@ def get_sales_report_by_date(report_date):
             m.id              AS mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
             pm.name           AS payment_method,
             se.exchange_number,
             se.original_sale_id
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) = %s
@@ -610,10 +793,14 @@ def get_sales_report_by_date(report_date):
             s.mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
             pm.name           AS payment_method
         FROM debt_payments dp
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(dp.paid_at)
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) = %s
         ORDER BY dp.paid_at ASC
@@ -709,6 +896,7 @@ def get_sales_report_by_date(report_date):
                 "line_total": round(_num(row["line_total"]), 2),
             })
 
+    non_cash_metrics = _get_non_cash_floating_metrics(conn, report_date, report_date)
     conn.close()
 
     debt_collected = [
@@ -817,6 +1005,7 @@ def get_sales_report_by_date(report_date):
     )
 
     items_summary = _summarize_items_for_profit(paid_sales)
+    total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
 
     return {
         "sales": paid_sales,
@@ -832,6 +1021,10 @@ def get_sales_report_by_date(report_date):
         "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),
+        "total_profit_with_shop_share": total_profit_with_shop_share,
+        "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
+        "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],
+        "total_non_cash_floating": non_cash_metrics["total_non_cash_floating"],
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
@@ -862,11 +1055,15 @@ def get_sales_report_by_range(start_date, end_date):
             m.id              AS mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
             pm.name           AS payment_method,
             se.exchange_number,
             se.original_sale_id
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
@@ -889,10 +1086,14 @@ def get_sales_report_by_range(start_date, end_date):
             s.mechanic_id,
             m.name            AS mechanic_name,
             m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
             pm.name           AS payment_method
         FROM debt_payments dp
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+            ON mqto.mechanic_id = s.mechanic_id
+           AND mqto.quota_date = DATE(dp.paid_at)
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
         ORDER BY dp.paid_at ASC
@@ -988,6 +1189,7 @@ def get_sales_report_by_range(start_date, end_date):
                 "line_total": round(_num(row["line_total"]), 2),
             })
 
+    non_cash_metrics = _get_non_cash_floating_metrics(conn, start_date, end_date)
     conn.close()
 
     debt_collected = [
@@ -1082,55 +1284,9 @@ def get_sales_report_by_range(start_date, end_date):
             total_product_cost += sale_product_cost
             total_product_profit += sale_product_profit
 
-    sales_by_day = {}
-    debt_by_day = {}
-
-    for row in sales_rows:
-        sale_day = str(row["transaction_date"])[:10]
-        sales_by_day.setdefault(sale_day, []).append(row)
-
-    for row in debt_collected_rows:
-        paid_day = str(row["paid_at"])[:10]
-        debt_by_day.setdefault(paid_day, []).append(row)
-
-    all_days = set(sales_by_day.keys()) | set(debt_by_day.keys())
-    quota_failures = []
-
-    for day in sorted(all_days):
-        day_mechanic_summary, _ = _calculate_mechanic_payouts(
-            *_build_mechanic_maps(
-                sales_by_day.get(day, []),
-                debt_by_day.get(day, []),
-                services_by_sale,
-                bundles_by_sale,
-            )
-        )
-
-        for row in day_mechanic_summary:
-            if row["shop_topup"] > 0:
-                quota_failures.append({
-                    "date": day,
-                    "date_display": format_date(day),
-                    "mechanic_id": row["mechanic_id"],
-                    "mechanic_name": row["mechanic_name"],
-                    "commission_rate": row["commission_rate"],
-                    "paid_services_total": row["paid_services_total"],
-                    "debt_service_portion": row["debt_service_portion"],
-                    "services_total": row["services_total"],
-                    "mechanic_cut": row["mechanic_cut"],
-                    "shop_topup": row["shop_topup"],
-                    "total_payout": row["total_payout"],
-                })
-
-    quota_failures = [
-        row for row in quota_failures
-        if start_date <= row["date"] <= end_date
-    ]
-
-    mechanic_map, debt_mechanic_map = _build_mechanic_maps(
+    mechanic_summary, totals, quota_failures = _calculate_range_mechanic_rollups(
         sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale
     )
-    mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
     total_bundle_shop_share = round(
         sum(_num(sale.get("bundle_shop_total")) for sale in paid_sales),
         2,
@@ -1141,6 +1297,7 @@ def get_sales_report_by_range(start_date, end_date):
     )
 
     items_summary = _summarize_items_for_profit(paid_sales)
+    total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
 
     return {
         "sales": paid_sales,
@@ -1156,6 +1313,10 @@ def get_sales_report_by_range(start_date, end_date):
         "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),
+        "total_profit_with_shop_share": total_profit_with_shop_share,
+        "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
+        "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],
+        "total_non_cash_floating": non_cash_metrics["total_non_cash_floating"],
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],

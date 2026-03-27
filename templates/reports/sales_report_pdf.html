@@ -316,9 +316,9 @@
         .cash-summary-row {
             display: flex;
             justify-content: space-between;
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 600;
-            padding: 5px 12px;
+            padding: 8px 12px;
             border-top: 1px solid #b8d4e8;
         }
         .cash-on-hand-bar {
@@ -326,9 +326,9 @@
             color: #fff;
             display: flex;
             justify-content: space-between;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 800;
-            padding: 8px 12px;
+            padding: 10px 12px;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -681,7 +681,7 @@
             <div class="summary-box-body fin-body">
                 <div class="fin-rows">
                     <div class="fin-row">
-                        <span class="label">Product Revenue</span>
+                        <span class="label">Item Sales</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</span>
                     </div>
                     {% if data.total_refunds > 0 %}
@@ -747,10 +747,13 @@
 
     </div>
 
+    {% if session.get('role') == 'admin' %}
     {% set product_profit = data.total_product_profit or 0 %}
-    {% set profit_is_loss = product_profit < 0 %}
-    {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
-    {% set product_result_display = (product_profit * -1) if profit_is_loss else product_profit %}
+    {% set shop_share_profit = data.total_shop_commission or 0 %}
+    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit) %}
+    {% set profit_is_loss = total_profit_result < 0 %}
+    {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
+    {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
     <div class="report-section profit-spotlight">
         <div class="report-section-title profit-spotlight-head">
             <div>
@@ -759,13 +762,14 @@
                 <div class="profit-spotlight-formula">
                     Revenue ₱ {{ "%.2f"|format(data.total_product_revenue) }}
                     - Cost ₱ {{ "%.2f"|format(data.total_product_cost) }}
+                    + Shop Share ₱ {{ "%.2f"|format(shop_share_profit) }}
                     = {{ product_result_label }} ₱ {{ "%.2f"|format(product_result_display) }}
                 </div>
             </div>
         </div>
         <div class="report-section-body profit-spotlight-body">
             <div class="report-row profit-metric revenue">
-                <div class="profit-metric-label">Product Revenue</div>
+                <div class="profit-metric-label">Product Sales</div>
                 <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</div>
                 <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
             </div>
@@ -774,8 +778,19 @@
                 <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_cost) }}</div>
                 <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
             </div>
+            <div class="report-row profit-metric revenue">
+                <div class="profit-metric-label">Shop Share</div>
+                <div class="profit-metric-value">₱ {{ "%.2f"|format(shop_share_profit) }}</div>
+                <div class="profit-metric-sub">Shop earnings from services, bundles, and collected service debt portions.</div>
+            </div>
+            <div class="report-row profit-metric revenue">
+                <div class="profit-metric-label">Floating Non-Cash</div>
+                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</div>
+                <div class="profit-metric-sub">Paid bank and e-wallet sales not yet claimed into the cash ledger by the report end date.</div>
+            </div>
         </div>
     </div>
+    {% endif %}
 
     
 

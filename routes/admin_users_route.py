@@ -10,6 +10,7 @@ from services.admin_users_service import (
     add_payment_method_record,
     add_service_record,
     create_staff_user,
+    delete_mechanic_quota_topup_override,
     get_admin_sales_page,
     get_audit_trail_page,
     get_bundle_edit_payload,
@@ -18,6 +19,7 @@ from services.admin_users_service import (
     get_manual_in_details,
     get_payables_audit_page,
     get_sale_refund_context,
+    save_mechanic_quota_topup_override,
     toggle_bundle_active_status,
     toggle_mechanic_active_status,
     toggle_payment_method_active_status,
@@ -190,6 +192,44 @@ def toggle_mechanic(mechanic_id):
         flash(f"Mechanic {result['name']} has been re-enabled.", "warning")
     else:
         flash(f"Mechanic {result['name']} has been activated.", "success")
+
+    return redirect(url_for("admin_users.manage_users", tab="mechanics-tab"))
+
+
+@admin_users_bp.route("/mechanics/quota-topup", methods=["POST"])
+def save_mechanic_quota_topup():
+    try:
+        result = save_mechanic_quota_topup_override(
+            mechanic_id=request.form.get("mechanic_id"),
+            quota_date=request.form.get("quota_date"),
+            applies_quota_topup=request.form.get("applies_quota_topup"),
+        )
+        action_text = "will apply" if result["applies_quota_topup"] == 1 else "will be skipped"
+        flash(
+            f"Quota top-up for {result['mechanic_name']} on {result['quota_date']} {action_text}.",
+            "success",
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error saving quota top-up override: {str(exc)}", "danger")
+
+    return redirect(url_for("admin_users.manage_users", tab="mechanics-tab"))
+
+
+@admin_users_bp.route("/mechanics/quota-topup/<int:override_id>/delete", methods=["POST"])
+def delete_mechanic_quota_topup(override_id):
+    try:
+        result = delete_mechanic_quota_topup_override(override_id)
+        if result["status"] == "missing":
+            flash("Quota top-up override not found.", "danger")
+        else:
+            flash(
+                f"Removed quota top-up override for {result['mechanic_name']} on {result['quota_date']}.",
+                "warning",
+            )
+    except Exception as exc:
+        flash(f"Error deleting quota top-up override: {str(exc)}", "danger")
 
     return redirect(url_for("admin_users.manage_users", tab="mechanics-tab"))
 

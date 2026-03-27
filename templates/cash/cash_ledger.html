@@ -234,6 +234,39 @@
         letter-spacing: 0.4px;
         vertical-align: middle;
     }
+
+    .floating-panel {
+        background: var(--bg-card);
+        border: 1px solid #4cc9f0;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .floating-header {
+        background: rgba(76, 201, 240, 0.08);
+        border-bottom: 1px solid rgba(76, 201, 240, 0.24);
+        padding: 14px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #4cc9f0;
+        font-size: 0.9rem;
+    }
+
+    .floating-row:hover {
+        background: rgba(76, 201, 240, 0.08);
+    }
+
+    .floating-pill {
+        font-size: 0.68rem;
+        background: rgba(76, 201, 240, 0.15);
+        color: #4cc9f0;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+    }
  
     .reminder-panel {
         background: var(--bg-card);
@@ -582,7 +615,7 @@
 
 <div class="row g-3 mb-4">
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="summary-card">
             <div class="summary-label">Total Cash In</div>
             <div class="summary-value cash-in-value">
@@ -591,7 +624,7 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="summary-card">
             <div class="summary-label">Total Cash Out</div>
             <div class="summary-value cash-out-value">
@@ -600,7 +633,16 @@
         </div>
     </div>
 
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <div class="summary-card">
+            <div class="summary-label">Floating Money</div>
+            <div class="summary-value" style="color:#4cc9f0;">
+                &#8369;{{ "{:,.2f}".format(summary.floating_total or 0) }}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
         <div class="summary-card cash-on-hand-card">
             <div class="summary-label">
                 <i class="bi bi-safe me-1"></i> Cash On Hand
@@ -643,6 +685,40 @@
             <div class="payout-amount">
                 &#8369;{{ "{:,.2f}".format(m.total_payout) }}
                 <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem;"></i>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% if pending_non_cash_collections.groups %}
+<div class="floating-panel mb-4">
+    <div class="floating-header">
+        <div>
+            <i class="bi bi-wallet2 me-2"></i>
+            <strong>Pending Non-Cash Collections</strong>
+            <span class="pending-count ms-2">{{ pending_non_cash_collections.total_sales }} sale{{ '' if pending_non_cash_collections.total_sales == 1 else 's' }}</span>
+        </div>
+        <span>Click a row to pre-fill cash in</span>
+    </div>
+    <div class="pending-payouts-body">
+        {% for group in pending_non_cash_collections.groups %}
+        <div class="payout-row floating-row"
+             data-float-sale-ids="{{ group.sale_ids|join(',') }}"
+             data-float-amount="{{ group.total_amount }}"
+             data-float-category="{{ group.cash_in_category }}"
+             data-float-description="{{ group.auto_description }}"
+             data-float-payment-method="{{ group.payment_method_name }}"
+             data-float-date="{{ group.transaction_date }}">
+            <div class="payout-name">
+                <i class="bi bi-phone me-2" style="color: var(--text-muted);"></i>
+                {{ group.payment_method_name }}
+                <span class="floating-pill ms-2">{{ group.date_display }}</span>
+                <div class="text-muted small mt-1">{{ group.sales_count }} pending sale{{ '' if group.sales_count == 1 else 's' }} · {{ group.cash_in_category }}</div>
+            </div>
+            <div class="payout-amount">
+                &#8369;{{ "{:,.2f}".format(group.total_amount) }}
+                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem; color:#4cc9f0;"></i>
             </div>
         </div>
         {% endfor %}
@@ -704,6 +780,7 @@
                 <input type="date" id="entry-payout-date" class="form-control">
             </div>
             <input type="hidden" id="entry-reference-id" value="">
+            <input type="hidden" id="entry-claim-sale-ids" value="">
 
             <button class="btn btn-primary w-100 fw-semibold" id="submit-entry-btn">
                 <i class="bi bi-plus-lg me-1"></i> Add Entry
@@ -965,9 +1042,16 @@ document.getElementById('entry-category').addEventListener('change', () => {
         document.getElementById('entry-payout-date').value = '';
         document.getElementById('payout-date-wrapper').style.display = 'none';
     } else {
+        document.getElementById('entry-claim-sale-ids').value = '';
         document.getElementById('payout-date-wrapper').style.display = 'block';
         document.getElementById('entry-payout-date').value = document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT;
         document.getElementById('entry-payout-date').max = TODAY_FOR_INPUT;
+    }
+    if (
+        document.querySelector('input[name="entry_type"]:checked')?.value === 'CASH_IN'
+        && !['From Bank Account', 'From Gcash/E-Wallet Account'].includes(category)
+    ) {
+        document.getElementById('entry-claim-sale-ids').value = '';
     }
     updateDescriptionFieldState();
 });
@@ -1002,6 +1086,8 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
         if (radio.value === 'CASH_IN') {
             document.getElementById('entry-reference-id').value = '';
             clearPayoutDate();
+        } else {
+            document.getElementById('entry-claim-sale-ids').value = '';
         }
 
         updateDescriptionFieldState();
@@ -1019,6 +1105,7 @@ initializeLedgerReportForm();
 initializeLedgerPagination();
 if (LEDGER_VIEW === 'active') {
     initializePendingPayoutRows();
+    initializePendingFloatRows();
 }
 
 
@@ -1032,6 +1119,10 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     const category    = document.getElementById('entry-category').value;
     const description = document.getElementById('entry-description').value.trim();
     const referenceId = document.getElementById('entry-reference-id').value || null;
+    const claimSaleIds = (document.getElementById('entry-claim-sale-ids').value || '')
+        .split(',')
+        .map(value => Number.parseInt(value, 10))
+        .filter(Number.isFinite);
     const payoutDate  = category === 'Mechanic Payout'
         ? (document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT)
         : null;
@@ -1074,6 +1165,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
                 description,
                 reference_id: referenceId,
                 payout_for_date: payoutDate,
+                claim_sale_ids: claimSaleIds,
             }),
         });
 
@@ -1210,6 +1302,7 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     document.getElementById('entry-description').value = autoDescription || mechanicName;
     const parsedId = Number.parseInt(mechanicId || '', 10);
     document.getElementById('entry-reference-id').value = Number.isFinite(parsedId) ? String(parsedId) : '';
+    document.getElementById('entry-claim-sale-ids').value = '';
     setPayoutDate(payoutForDate || TODAY_FOR_INPUT);
     showPayoutDateIfNeeded();
     updateDescriptionFieldState();
@@ -1222,8 +1315,36 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     setTimeout(() => { form.style.borderColor = ''; }, 1500);
 }
 
+function prefillFloatingCollection(saleIds, amount, category, autoDescription) {
+    document.getElementById('type_in').checked = true;
+    populateCategories('CASH_IN');
+
+    document.getElementById('entry-amount').value = amount.toFixed(2);
+
+    const select = document.getElementById('entry-category');
+    for (let opt of select.options) {
+        if (opt.value === category) {
+            opt.selected = true;
+            break;
+        }
+    }
+
+    document.getElementById('entry-description').value = autoDescription || '';
+    document.getElementById('entry-reference-id').value = '';
+    document.getElementById('entry-claim-sale-ids').value = (saleIds || []).join(',');
+    clearPayoutDate();
+    updateDescriptionFieldState();
+
+    const form = document.getElementById('submit-entry-btn').closest('.card');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.style.transition = 'border-color 0.2s ease';
+    form.style.borderColor = '#4cc9f0';
+    setTimeout(() => { form.style.borderColor = ''; }, 1500);
+}
+
 function initializePendingPayoutRows() {
     document.querySelectorAll('.pending-payouts-body .payout-row, .reminder-body .payout-row').forEach((row) => {
+        if (row.hasAttribute('data-float-sale-ids')) return;
         row.addEventListener('click', () => {
             const mechanicName = row.getAttribute('data-mechanic-name') || '';
             const amount = parseFloat(row.getAttribute('data-total-payout') || '0');
@@ -1236,6 +1357,27 @@ function initializePendingPayoutRows() {
                 Number.isFinite(parsedId) ? parsedId : '',
                 Number.isFinite(amount) ? amount : 0,
                 payoutForDate,
+                autoDescription
+            );
+        });
+    });
+}
+
+function initializePendingFloatRows() {
+    document.querySelectorAll('.floating-panel .payout-row[data-float-sale-ids]').forEach((row) => {
+        row.addEventListener('click', () => {
+            const saleIds = (row.getAttribute('data-float-sale-ids') || '')
+                .split(',')
+                .map(value => Number.parseInt(value, 10))
+                .filter(Number.isFinite);
+            const amount = parseFloat(row.getAttribute('data-float-amount') || '0');
+            const category = row.getAttribute('data-float-category') || 'From Gcash/E-Wallet Account';
+            const autoDescription = row.getAttribute('data-float-description') || '';
+
+            prefillFloatingCollection(
+                saleIds,
+                Number.isFinite(amount) ? amount : 0,
+                category,
                 autoDescription
             );
         });

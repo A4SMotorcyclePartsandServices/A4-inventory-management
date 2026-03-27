@@ -18,6 +18,65 @@ from utils.formatters import format_date
 reports_bp = Blueprint("reports", __name__)
 
 
+def _build_sales_report_context():
+    report_date = request.args.get("report_date")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    if report_date:
+        data = get_sales_report_by_date(report_date)
+        date_label = format_date(report_date)
+        is_range = False
+        cash_data = get_cash_entries_for_report(report_date, report_date)
+    elif start_date and end_date:
+        if end_date < start_date:
+            flash("End date cannot be before start date.", "warning")
+            return None
+        data = get_sales_report_by_range(start_date, end_date)
+        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
+        is_range = True
+        cash_data = get_cash_entries_for_report(start_date, end_date)
+    else:
+        flash("Please select a date.", "warning")
+        return None
+
+    if not data:
+        data = {
+            "sales": [],
+            "unresolved": [],
+            "mechanic_summary": [],
+            "quota_failures": [],
+            "items_summary": [],
+            "total_gross": 0.0,
+            "total_mech_cut": 0.0,
+            "total_shop_topup": 0.0,
+            "net_revenue": 0.0,
+            "total_product_revenue": 0.0,
+            "total_product_cost": 0.0,
+            "total_product_profit": 0.0,
+            "total_shop_commission": 0.0,
+            "total_non_cash_sales": 0.0,
+            "total_non_cash_claimed": 0.0,
+            "total_non_cash_floating": 0.0,
+            "debt_collected": [],
+            "total_debt_collected": 0.0,
+            "refunds": [],
+            "total_refunds": 0.0,
+            "total_service_revenue": 0.0,
+            "total_shop_comm_from_paid": 0.0,
+            "total_bundle_shop_share": 0.0,
+            "total_mech_cut_from_paid": 0.0,
+            "total_mech_cut_from_debt": 0.0,
+        }
+
+    return {
+        "report_date": date_label,
+        "data": data,
+        "is_range": is_range,
+        "cash_data": cash_data,
+    }
+
+
 @reports_bp.route("/reports/sales-receipt/<int:sale_id>")
 def sales_receipt_report(sale_id):
     try:
@@ -115,56 +174,18 @@ def range_report():
 
 @reports_bp.route("/reports/sales-summary")
 def sales_summary_report():
-    report_date = request.args.get("report_date")   # daily report button
-    start_date  = request.args.get("start_date")    # range modal
-    end_date    = request.args.get("end_date")      # range modal
-
-    # Single-date path (Generate Daily Report button)
-    if report_date:
-        data        = get_sales_report_by_date(report_date)
-        date_label  = format_date(report_date)
-        is_range    = False
-        # Daily: both bounds are the same date
-        cash_data   = get_cash_entries_for_report(report_date, report_date)
-
-    # Range path (Generate Sales Report modal)
-    elif start_date and end_date:
-        if end_date < start_date:
-            flash("End date cannot be before start date.", "warning")
-            return redirect(url_for("index"))
-        data        = get_sales_report_by_range(start_date, end_date)
-        date_label  = f"{format_date(start_date)} to {format_date(end_date)}"
-        is_range    = True
-        cash_data   = get_cash_entries_for_report(start_date, end_date)
-
-    else:
-        flash("Please select a date.", "warning")
+    context = _build_sales_report_context()
+    if context is None:
         return redirect(url_for("index"))
+    return render_template("reports/sales_report_pdf.html", **context)
 
-    if not data:
-        data = {
-            "sales":                [],
-            "unresolved":           [],
-            "mechanic_summary":     [],
-            "quota_failures":       [],
-            "items_summary":        [],
-            "total_gross":          0.0,
-            "total_mech_cut":       0.0,
-            "total_shop_topup":     0.0,
-            "net_revenue":          0.0,
-            "debt_collected":       [],
-            "total_debt_collected": 0.0,
-            "refunds":              [],
-            "total_refunds":        0.0,
-        }
 
-    return render_template(
-        "reports/sales_report_pdf.html",
-        report_date=date_label,
-        data=data,
-        is_range=is_range,
-        cash_data=cash_data,
-    )
+@reports_bp.route("/reports/sales-report-summary")
+def sales_report_summary_pdf():
+    context = _build_sales_report_context()
+    if context is None:
+        return redirect(url_for("index"))
+    return render_template("reports/sales_summary_pdf.html", **context)
 
 
 @reports_bp.route("/export/inventory-snapshot")
