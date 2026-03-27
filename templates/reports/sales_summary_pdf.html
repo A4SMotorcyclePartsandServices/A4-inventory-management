@@ -119,6 +119,10 @@
         .text-right { text-align: right; }
         .muted { color: #666; }
         .strong { font-weight: 700; }
+        .currency {
+            display: inline-block;
+            white-space: nowrap;
+        }
 
         .totals-row td {
             font-weight: 800;
@@ -167,6 +171,109 @@
             font-weight: 800;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+        }
+
+        .profit-spotlight {
+            border: 2px solid #14532d;
+            border-radius: 14px;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f7fff8 0%, #eefaf1 55%, #fdf7e3 100%);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .profit-spotlight-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px 18px 12px;
+            background: linear-gradient(90deg, #14532d 0%, #1f7a45 100%);
+            color: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .profit-spotlight-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            opacity: 0.86;
+            margin-bottom: 3px;
+        }
+
+        .profit-spotlight-value {
+            font-size: 34px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            line-height: 1;
+        }
+
+        .profit-spotlight-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.26);
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+        }
+
+        .profit-spotlight-formula {
+            margin-top: 9px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.88);
+            line-height: 1.45;
+        }
+
+        .profit-spotlight-body {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding: 14px 18px 18px;
+        }
+
+        .profit-metric {
+            border: 1px solid rgba(20, 83, 45, 0.16);
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.75);
+        }
+
+        .profit-metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #4b5563;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .profit-metric-value {
+            font-size: 21px;
+            font-weight: 800;
+            color: #111827;
+            line-height: 1.1;
+        }
+
+        .profit-metric-sub {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #5b6470;
+        }
+
+        .profit-metric.revenue .profit-metric-value {
+            color: #0f5132;
+        }
+
+        .profit-metric.cost .profit-metric-value {
+            color: #9a3412;
         }
 
         .empty-state {
@@ -225,12 +332,12 @@
                     <tr>
                         <td>{{ item.item_name }}</td>
                         <td class="text-right">{{ item.quantity }}</td>
-                        <td class="text-right">P {{ "%.2f"|format(item.total) }}</td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(item.total) }}</span></td>
                     </tr>
                     {% endfor %}
                     <tr class="totals-row">
                         <td colspan="2">Total Items Sold</td>
-                        <td class="text-right">P {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span></td>
                     </tr>
                 {% else %}
                     <tr>
@@ -269,27 +376,30 @@
                             <div class="muted">Includes collected debt service portion.</div>
                             {% endif %}
                         </td>
-                        <td class="text-right">P {{ "%.2f"|format(mech.paid_services_total) }}</td>
-                        <td class="text-right">P {{ "%.2f"|format(mech.services_total) }}</td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.paid_services_total) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.services_total) }}</span></td>
                         <td class="text-right">{{ (mech.commission_rate * 100) | int }}%</td>
-                        <td class="text-right strong">P {{ "%.2f"|format(mech.mechanic_cut) }}</td>
-                        <td class="text-right">P {{ "%.2f"|format(mech.payout_shop_share) }}</td>
+                        <td class="text-right strong"><span class="currency">P {{ "%.2f"|format(mech.mechanic_cut) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.payout_shop_share) }}</span></td>
                         <td class="text-right">
                             {% if mech.shop_topup > 0 %}
-                            P {{ "%.2f"|format(mech.shop_topup) }}
+                            <span class="currency">P {{ "%.2f"|format(mech.shop_topup) }}</span>
                             {% else %}
                             -
                             {% endif %}
                         </td>
-                        <td class="text-right strong">P {{ "%.2f"|format(mech.total_payout) }}</td>
+                        <td class="text-right strong"><span class="currency">P {{ "%.2f"|format(mech.total_payout) }}</span></td>
                     </tr>
                     {% endfor %}
                     <tr class="totals-row">
-                        <td colspan="4">Totals</td>
-                        <td class="text-right">P {{ "%.2f"|format(data.total_mech_cut) }}</td>
-                        <td class="text-right">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</td>
-                        <td class="text-right">P {{ "%.2f"|format(data.total_shop_topup or 0) }}</td>
-                        <td class="text-right">P {{ "%.2f"|format((data.total_mech_cut or 0) + (data.total_shop_topup or 0)) }}</td>
+                        <td>Totals</td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.mechanic_summary | sum(attribute='paid_services_total')) }}</span></td>
+                        <td class="text-right">-</td>
+                        <td class="text-right">-</td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_mech_cut) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_topup or 0) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format((data.total_mech_cut or 0) + (data.total_shop_topup or 0)) }}</span></td>
                     </tr>
                 {% else %}
                     <tr>
@@ -312,66 +422,112 @@
             <tbody>
                 <tr>
                     <td>Item Sales</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</span></td>
                 </tr>
                 <tr>
                     <td>Product Cost</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_product_cost or 0) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_product_cost or 0) }}</span></td>
                 </tr>
                 <tr>
                     <td>Service Revenue</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_service_revenue or 0) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_service_revenue or 0) }}</span></td>
                 </tr>
                 <tr>
                     <td>Shop Share</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</span></td>
                 </tr>
                 {% if data.total_refunds %}
                 <tr>
                     <td>Sale Refunds</td>
-                    <td class="text-right">- P {{ "%.2f"|format(data.total_refunds) }}</td>
+                    <td class="text-right"><span class="currency">- P {{ "%.2f"|format(data.total_refunds) }}</span></td>
                 </tr>
                 {% endif %}
                 {% if data.total_debt_collected %}
                 <tr>
                     <td>Debt Collected</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_debt_collected) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_debt_collected) }}</span></td>
                 </tr>
                 {% endif %}
                 {% if data.total_shop_topup %}
                 <tr>
                     <td>Quota Top-up</td>
-                    <td class="text-right">- P {{ "%.2f"|format(data.total_shop_topup) }}</td>
+                    <td class="text-right"><span class="currency">- P {{ "%.2f"|format(data.total_shop_topup) }}</span></td>
                 </tr>
                 {% endif %}
                 {% if data.total_non_cash_floating %}
                 <tr>
                     <td>Floating Non-Cash</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.total_non_cash_floating) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_non_cash_floating) }}</span></td>
                 </tr>
                 {% endif %}
                 <tr class="totals-row">
                     <td>Net Revenue</td>
-                    <td class="text-right">P {{ "%.2f"|format(data.net_revenue or 0) }}</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.net_revenue or 0) }}</span></td>
                 </tr>
             </tbody>
         </table>
     </div>
+
+    {% if session.get('role') == 'admin' %}
+    {% set product_profit = data.total_product_profit or 0 %}
+    {% set shop_share_profit = data.total_shop_commission or 0 %}
+    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit) %}
+    {% set profit_is_loss = total_profit_result < 0 %}
+    {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
+    {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
+    <div class="section profit-spotlight">
+        <div class="profit-spotlight-head">
+            <div>
+                <div class="profit-spotlight-title">Profit Summary</div>
+                <div class="profit-spotlight-status">{{ product_result_label }}</div>
+                <div class="profit-spotlight-value"><span class="currency">P {{ "%.2f"|format(product_result_display) }}</span></div>
+                <div class="profit-spotlight-formula">
+                    Revenue <span class="currency">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</span>
+                    - Cost <span class="currency">P {{ "%.2f"|format(data.total_product_cost or 0) }}</span>
+                    + Shop Share <span class="currency">P {{ "%.2f"|format(shop_share_profit) }}</span>
+                    = {{ product_result_label }} <span class="currency">P {{ "%.2f"|format(product_result_display) }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="profit-spotlight-body">
+            <div class="profit-metric revenue">
+                <div class="profit-metric-label">Product Sales</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</span></div>
+                <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
+            </div>
+            <div class="profit-metric cost">
+                <div class="profit-metric-label">Product Cost</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_product_cost or 0) }}</span></div>
+                <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
+            </div>
+            <div class="profit-metric revenue">
+                <div class="profit-metric-label">Shop Share</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(shop_share_profit) }}</span></div>
+                <div class="profit-metric-sub">Shop earnings from services, bundles, and collected service debt portions.</div>
+            </div>
+            <div class="profit-metric revenue">
+                <div class="profit-metric-label">Floating Non-Cash</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</span></div>
+                <div class="profit-metric-sub">Paid bank and e-wallet sales not yet claimed into the cash ledger by the report end date.</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="section">
         <div class="section-title">Cash Ledger Summary</div>
         <div class="cash-summary">
             <div class="cash-summary-row in">
                 <span>Total Cash In</span>
-                <span>+ P {{ "%.2f"|format(cash_data.total_in or 0) }}</span>
+                <span class="currency">+ P {{ "%.2f"|format(cash_data.total_in or 0) }}</span>
             </div>
             <div class="cash-summary-row out">
                 <span>Total Cash Out</span>
-                <span>- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
+                <span class="currency">- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
             </div>
             <div class="cash-summary-row total">
                 <span>Cash On Hand</span>
-                <span>P {{ "%.2f"|format(cash_data.cash_on_hand or 0) }}</span>
+                <span class="currency">P {{ "%.2f"|format(cash_data.cash_on_hand or 0) }}</span>
             </div>
         </div>
     </div>

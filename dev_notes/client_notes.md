@@ -190,3 +190,7 @@ Future upgrade: move to Redis or DB
 
 ## OUT PAGE
 - [ ] Services section, add one more feature to the search, set a keyword that when inputted, shows all the services present in the services table
+
+## Urgent
+- [ ] handover of system. we need a way to separate sales from inventory basically a way to reset the sales data and keep the current inventory at the time of handoff
+- [ ] customer database needs to keep current points and stamps from loyalty even after the sales data wipeout
