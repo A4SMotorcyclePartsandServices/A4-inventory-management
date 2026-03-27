@@ -179,17 +179,17 @@ Future upgrade: move to Redis or DB
 ## MARCH 27 2026
 ## Sales Report Page and Cash Ledger Page
 - [ ] We need a way to track other payment methdods during transactions as incoming so that we can track how much is still missing from the cash ledger. show this as well in the sales report. this is applied, check if it applies to utang/debt payments made
-- [ ] Sales report pdf, exclude profit card when user generates PDF
+- [X] ~~*Sales report pdf, exclude profit card when user generates PDF*~~ [2026-03-27]
 - [ ] check current service setup, make that the default starting point. found in services tab in users.html
 - [ ] services setup, go to excel file and search for category svc, those are shop services, include that in the starter pack
-- [ ] out page during item search, include item description and not only item name. same with receipt in sales modal in users.html. add a subfield for item description
+- [X] ~~*out page during item search, include item description and not only item name. same with receipt in sales modal in users.html. add a subfield for item description*~~ [2026-03-27]
 - [X] ~~*some mechanics don't need the top up logic applied, excluded them from top up calculation*~~ [2026-03-27]
 
 ## Reorder level
 - [ ] change reorder level checking to an algorithm that suggests when an item should be restocked. exclude svc in category
 
 ## OUT PAGE
-- [ ] Services section, add one more feature to the search, set a keyword that when inputted, shows all the services present in the services table
+- [X] ~~*Services section, add one more feature to the search, set a keyword that when inputted, shows all the services present in the services table*~~ [2026-03-27]
 
 ## Urgent
 - [ ] handover of system. we need a way to separate sales from inventory basically a way to reset the sales data and keep the current inventory at the time of handoff

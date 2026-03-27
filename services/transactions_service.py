@@ -1698,6 +1698,7 @@ def get_sale_refund_context(sale_id):
                 si.id AS sale_item_id,
                 si.item_id,
                 i.name,
+                i.description,
                 si.quantity AS sold_quantity,
                 si.original_unit_price,
                 si.discount_amount,
@@ -1770,6 +1771,7 @@ def get_sale_refund_context(sale_id):
                 sbi.sales_bundle_id,
                 sbi.item_id,
                 sbi.item_name_snapshot,
+                i.description,
                 sbi.quantity,
                 sbi.selling_price_snapshot,
                 sbi.line_total_snapshot,
@@ -1777,6 +1779,7 @@ def get_sale_refund_context(sale_id):
                 sbi.sort_order
             FROM sales_bundle_items sbi
             JOIN sales_bundles sb ON sb.id = sbi.sales_bundle_id
+            LEFT JOIN items i ON i.id = sbi.item_id
             WHERE sb.sale_id = %s
             ORDER BY sbi.sales_bundle_id ASC, sbi.sort_order ASC, sbi.id ASC
             """,
@@ -1820,6 +1823,7 @@ def get_sale_refund_context(sale_id):
             "sale_item_id": int(row["sale_item_id"]),
             "item_id": int(row["item_id"]),
             "name": row["name"],
+            "description": row["description"] or "",
             "sold_quantity": int(row["sold_quantity"] or 0),
             "refunded_quantity": refunded_qty,
             "refundable_quantity": max(0, int(row["sold_quantity"] or 0) - refunded_qty),
@@ -1852,6 +1856,7 @@ def get_sale_refund_context(sale_id):
         items_by_bundle.setdefault(int(row["sales_bundle_id"]), []).append({
             "item_id": int(row["item_id"]) if row["item_id"] is not None else None,
             "name": row["item_name_snapshot"],
+            "description": row["description"] or "",
             "quantity": int(row["quantity"] or 0),
             "selling_price_snapshot": round(float(row["selling_price_snapshot"] or 0), 2),
             "line_total_snapshot": round(float(row["line_total_snapshot"] or 0), 2),

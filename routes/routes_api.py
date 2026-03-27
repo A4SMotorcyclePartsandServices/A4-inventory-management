@@ -93,27 +93,30 @@ def top_items_chart():
 def search_services():
     query = request.args.get('q', '').strip()
     include_inactive = str(request.args.get('include_inactive', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
-    if not query:
+    show_all = str(request.args.get('show_all', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
+    if not query and not show_all:
         return jsonify({"services": []})
 
-    # Split the query into words for forgiving search
-    words = query.split()
-    # Create multiple ILIKE clauses: WHERE name ILIKE %word1% AND name ILIKE %word2%...
-    where_clause = " AND ".join(["(name ILIKE %s OR category ILIKE %s)" for _ in words])
-    params = []
-    for word in words:
-        params.extend([f'%{word}%', f'%{word}%'])
-
     active_clause = "" if include_inactive else "AND is_active = 1"
+    query_sql = f"""
+        SELECT id, name, category, is_active
+        FROM services
+        WHERE 1=1
+        {active_clause}
+    """
+    params = []
+
+    if not show_all:
+        words = query.split()
+        where_clause = " AND ".join(["(name ILIKE %s OR category ILIKE %s)" for _ in words])
+        query_sql += f" AND {where_clause}"
+        for word in words:
+            params.extend([f'%{word}%', f'%{word}%'])
+
+    query_sql += " ORDER BY category ASC, name ASC LIMIT 50"
 
     conn = get_db()
-    cursor = conn.execute(f"""
-        SELECT id, name, category, is_active
-        FROM services 
-        WHERE {where_clause}
-        {active_clause}
-        LIMIT 20
-    """, params)
+    cursor = conn.execute(query_sql, params)
     
     services = [dict(row) for row in cursor.fetchall()]
     conn.close()

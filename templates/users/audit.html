@@ -632,6 +632,10 @@
         color: #6b7280;
     }
 
+    .sale-line-description {
+        color: #94a3b8;
+    }
+
     .sale-line-note.discount {
         color: #166534;
         font-weight: 700;
@@ -1989,6 +1993,9 @@ function populateSaleDetails(data, saleID, displayNum) {
     (data.items || []).forEach(item => {
         const hasDisc = Number(item.discount_amount || 0) > 0;
         let itemLabel = `<div class="sale-line-name">${escapeHtml(item.name)}</div>`;
+        if (item.description) {
+            itemLabel += `<div class="sale-line-note sale-line-description">${escapeHtml(item.description)}</div>`;
+        }
         if (hasDisc) {
             itemLabel += `<div class="sale-line-note discount">Discount applied: -${formatPeso(item.discount_amount)}</div>`;
         }
@@ -2063,6 +2070,7 @@ function populateSaleDetails(data, saleID, displayNum) {
                         <tr>
                             <td>
                                 <div class="sale-line-name">${escapeHtml(item.name)}</div>
+                                ${item.description ? `<div class="sale-line-note sale-line-description">${escapeHtml(item.description)}</div>` : ''}
                                 <div class="sale-line-note ${item.is_included ? '' : 'refund'}">
                                     ${item.is_included ? 'Included in stock deduction' : 'Excluded from stock deduction'}
                                 </div>

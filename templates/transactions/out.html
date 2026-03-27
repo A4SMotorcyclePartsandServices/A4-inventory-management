@@ -308,6 +308,13 @@
         margin-top: 2px;
     }
 
+    .suggestion-description {
+        font-size: 0.72rem;
+        color: #c7cdd8;
+        margin-top: 3px;
+        line-height: 1.3;
+    }
+
     /* =====================
     TOTAL + SUBMIT AREA
     ===================== */
@@ -1531,6 +1538,7 @@ const handleTableSearch = async (input) => {
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
             const itemName = escapeHtml(item.name);
+            const itemDescription = item.description ? escapeHtml(item.description) : '';
 
             const itemIdStr = String(item.id);
             const currentRowSelectedId = String(idInput.value || '');
@@ -1542,6 +1550,7 @@ const handleTableSearch = async (input) => {
                     <strong>${itemName}</strong>
                     <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
                 </div>
+                ${itemDescription ? `<div class="suggestion-description">${itemDescription}</div>` : ``}
                 <div class="suggestion-stock">
                     <i class="bi bi-box me-1"></i>Stock: ${item.current_stock}
                     ${alreadySelectedElsewhere ? `<span style="margin-left:8px; color:#f4c430;">(already in cart)</span>` : ``}
@@ -1582,14 +1591,19 @@ SERVICE SEARCH
 ========================================================= */
 const handleServiceSearch = async (input) => {
     const query = input.value.trim();
+    const normalizedQuery = query.toLowerCase();
     const row = input.closest('tr');
     const suggestions = row.querySelector('.search-suggestions');
     const idInput = row.querySelector('.service-id-input');
+    const shouldShowAllActiveServices = normalizedQuery === 'service' || normalizedQuery === 'services';
 
-    if (query.length < 2) { idInput.value = ''; suggestions.style.display = 'none'; return; }
+    if (query.length < 2 && !shouldShowAllActiveServices) { idInput.value = ''; suggestions.style.display = 'none'; return; }
 
     try {
-        const res = await fetch(`/api/search/services?q=${encodeURIComponent(query)}`);
+        const endpoint = shouldShowAllActiveServices
+            ? '/api/search/services?show_all=1'
+            : `/api/search/services?q=${encodeURIComponent(query)}`;
+        const res = await fetch(endpoint);
         const data = await res.json();
         suggestions.innerHTML = '';
 
