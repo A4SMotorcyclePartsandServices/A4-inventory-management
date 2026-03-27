@@ -28,13 +28,14 @@ from routes.auth_route import auth_bp
 from routes.admin_users_route import admin_users_bp
 from routes.password_reset_route import password_reset_bp
 from auth.utils import ensure_authenticated_user, admin_required
-from services.inventory_service import get_items_with_stock, search_items_with_stock
+from services.inventory_service import attach_restock_recommendation, get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
     get_dashboard_stats,
     get_hot_items,
     get_dead_stock,
-    get_low_stock_items
+    get_low_stock_items,
+    get_restock_debug_items,
 )
 from services.sales_analytics_service import get_sales_analytics_snapshot
 
@@ -200,6 +201,10 @@ def index():
         item_data["current_stock"] = stock_dict.get(row["id"], 0)
         items_merged.append(item_data)
 
+    conn = get_db()
+    attach_restock_recommendation(conn, items_merged, item_id_key="id", category_key="category", current_stock_key="current_stock", snapshot_date="2026-03-26")
+    conn.close()
+
     return render_template("index.html", items=items_merged)
 
 @app.route("/api/search")
@@ -302,8 +307,15 @@ def low_stock():
     """
     Items at or below reorder level.
     """
+    debug_mode = (request.args.get("debug") or "").strip().lower() in {"1", "true", "yes", "on"}
     low_stock_items = get_low_stock_items()
-    return render_template("low_stock.html", low_stock_items=low_stock_items)
+    debug_items = get_restock_debug_items() if debug_mode else []
+    return render_template(
+        "low_stock.html",
+        low_stock_items=low_stock_items,
+        debug_mode=debug_mode,
+        debug_items=debug_items,
+    )
 
 
 # ============================================================

@@ -89,3 +89,95 @@ Recommended path if implemented:
 
 Main reminder:
 Do not treat this as a stocktake-page-only patch. The real leak is the shared stock visibility across the app.
+
+
+## Re order algorithm
+
+## Current algorithm status
+
+Applied:
+
+- [x] Centralized shared restock logic in `services/inventory_service.py`
+- [x] Excluded `svc` category from the reorder / restock algorithm
+- [x] Classified non-`svc` items by recent 60-day `OUT` movement
+  - `0 OUT` = `dead_stock`
+  - `1-2 OUT` = `recovering`
+  - `3+ OUT` = `active`
+- [x] Added different restock rules per class
+  - `dead_stock`
+    - only alerts when `current_stock <= 0`
+  - `recovering`
+    - uses a small fixed fallback floor of `1`
+  - `active`
+    - uses movement-based formula
+- [x] Removed `reorder_level` from the current low-history / recovering fallback path
+  - reason: stale historical reorder levels could trigger false restock alerts when an item moves from dead stock to recovering
+- [x] Added urgency / restock status output
+  - `excluded`
+  - `healthy`
+  - `warning`
+  - `critical`
+- [x] Added explainability fields in the shared output
+  - `history_status`
+  - `historical_out_last_60_days`
+  - `avg_daily_usage`
+  - `lead_time_demand`
+  - `safety_stock`
+  - `suggested_restock_point`
+  - `restock_basis`
+  - `restock_status`
+- [x] Wired the shared logic into the inventory page, low-stock page, dead-stock page, and search results
+- [x] Added temporary debug mode on `/low-stock?debug=1`
+
+## Current live formula
+
+- Shared defaults:
+  - lookback window = `60 days`
+  - default lead time = `7 days`
+  - default safety window = `7 days`
+- `dead_stock`
+  - `suggested_restock_point = 0`
+  - flagged only if `current_stock <= 0`
+- `recovering`
+  - `suggested_restock_point = 1`
+  - flagged only if `current_stock <= 1`
+- `active`
+  - `lead_time_demand = ceil(avg_daily_usage * 7)`
+  - `safety_stock = ceil(avg_daily_usage * 7)`
+  - `suggested_restock_point = lead_time_demand + safety_stock`
+  - `critical` if `current_stock <= 0` or `current_stock <= lead_time_demand`
+  - `warning` if `current_stock <= suggested_restock_point`
+
+## Remaining work
+
+- [ ] Add real per-item or per-vendor lead time
+  - current code still uses the fixed default `7` because there is no `lead_time_days` field in the schema yet
+  - needs schema / product decision:
+    - item-level lead time
+    - vendor-level lead time
+    - or both with item override
+- [ ] Decide whether debug mode should stay, be hidden, or be removed after validation
+- [ ] Clean up old `reorder_level` usage in the wider product
+  - the current algorithm no longer relies on it for restock alerts
+  - field still exists in DB/forms/imports for legacy reasons
+
+## Future upgrades
+
+- [ ] Improve safety stock calculation using demand variability instead of a fixed 7-day buffer
+- [ ] Filter demand sources more intelligently
+  - exclude adjustments, transfers, corrections, or other non-sales depletion if identifiable
+- [ ] Make the lookback window adaptive
+  - shorter for fast movers
+  - longer for slow movers
+- [ ] Add better inactivity / recovery rules
+  - for example require multiple sale days, not only total quantity, before a dead item is treated as active
+- [ ] Add recommended order quantity
+  - target coverage days
+  - current stock
+  - minimum order quantity
+  - case pack / purchase multiple
+- [ ] Add item-level restock controls
+  - `is_restock_exempt`
+  - `restock_strategy`
+  - `minimum_order_qty`
+  - `case_pack`

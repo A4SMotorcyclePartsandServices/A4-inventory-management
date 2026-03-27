@@ -8,6 +8,14 @@
     .text-warning-custom { color: #ffca3a; font-weight: bold; }
     .btn-outline-danger { border-color: #e63946; color: #e63946; }
     .btn-outline-danger:hover { background-color: #e63946; color: white; }
+    .debug-wrap-cell {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .status-badge-critical { background: #dc3545; color: #fff; }
+    .status-badge-warning { background: #ffc107; color: #111; }
+    .status-badge-healthy { background: #6c757d; color: #fff; }
 </style>
 
 <div class="text-center mb-4">
@@ -25,6 +33,11 @@
 
 <div class="text-center mt-4 mb-4">
     <a href="/" class="btn btn-outline-danger btn-sm"><i class="bi bi-arrow-left"></i> Back to Inventory</a>
+    {% if debug_mode %}
+    <a href="/low-stock" class="btn btn-outline-secondary btn-sm ms-2">Hide Debug</a>
+    {% else %}
+    <a href="/low-stock?debug=1" class="btn btn-outline-secondary btn-sm ms-2">Show Debug</a>
+    {% endif %}
 </div>
 
 <div class="table-responsive col-md-10 mx-auto">
@@ -34,7 +47,7 @@
             <tr>
                 <th>Item Name</th>
                 <th>Current Stock</th>
-                <th>Reorder Level</th>
+                <th>Suggested Restock Point</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -43,12 +56,16 @@
             <tr>
                 <td>{{ item.name }}</td>
                 <td class="text-danger fw-bold">{{ item.current_stock }}</td>
-                <td>{{ item.reorder_level }}</td>
+                <td>{{ item.suggested_restock_point or 0 }}</td>
                 <td>
-                    {% if item.current_stock <= 0 %}
-                        <span class="badge bg-danger">OUT OF STOCK</span>
+                    {% if item.restock_status == 'critical' %}
+                        <span class="badge status-badge-critical">
+                            {% if item.current_stock <= 0 %}OUT OF STOCK{% else %}CRITICAL{% endif %}
+                        </span>
+                    {% elif item.restock_status == 'warning' %}
+                        <span class="badge status-badge-warning">REORDER SOON</span>
                     {% else %}
-                        <span class="badge bg-warning text-dark">REORDER SOON</span>
+                        <span class="badge status-badge-healthy">HEALTHY</span>
                     {% endif %}
                 </td>
             </tr>
@@ -61,6 +78,56 @@
     </div>
     {% endif %}
 </div>
+
+{% if debug_mode %}
+<div class="table-responsive col-md-11 mx-auto mt-4">
+    <div class="alert alert-secondary text-center bg-dark text-light border-secondary">
+        Debug mode shows the internal restock fields for every item so we can verify why an item was or was not flagged. `recovering` means the item has started moving again, but not enough yet to trust the full movement-based formula.
+    </div>
+    <table class="table table-dark table-striped align-middle text-center">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>History Status</th>
+                <th>Out 60d</th>
+                <th>Avg / Day</th>
+                <th>Lead Demand</th>
+                <th>Safety Stock</th>
+                <th>Restock Point</th>
+                <th>Urgency</th>
+                <th>Basis</th>
+                <th>Flagged</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in debug_items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.category or '-' }}</td>
+                <td>{{ item.current_stock }}</td>
+                <td>{{ item.history_status or '-' }}</td>
+                <td>{{ item.historical_out_last_60_days or 0 }}</td>
+                <td>{{ item.avg_daily_usage or 0 }}</td>
+                <td>{{ item.lead_time_demand or 0 }}</td>
+                <td>{{ item.safety_stock or 0 }}</td>
+                <td>{{ item.suggested_restock_point if item.suggested_restock_point is not none else '-' }}</td>
+                <td>{{ item.restock_status or '-' }}</td>
+                <td class="debug-wrap-cell">{{ item.restock_basis or '-' }}</td>
+                <td>
+                    {% if item.should_restock %}
+                        <span class="badge bg-warning text-dark">YES</span>
+                    {% else %}
+                        <span class="badge bg-secondary">NO</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 
 <script>
 document.getElementById('inventorySearch').addEventListener('keyup', function() {

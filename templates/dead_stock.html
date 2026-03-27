@@ -69,9 +69,9 @@
                 {% for item in dead_items %}
                 <tr>
                     <td>{{ item.name }}</td>
-                    <td class="text-secondary">{{ item.last_sold or "Never Sold" }}</td>
+                    <td class="text-secondary">{{ item.last_sold_display or "Never Sold" }}</td>
                     <td>
-                        {% if not item.last_sold %}
+                        {% if not item.last_sold_at %}
                             <span class="badge bg-secondary status-badge">Never Actively Sold</span>
                         {% else %}
                             <span class="badge border border-secondary text-secondary status-badge">Inactive</span>

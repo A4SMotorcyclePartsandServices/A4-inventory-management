@@ -450,7 +450,7 @@
                     </td>
                     {% endif %}
                     <td class="stock-col">
-                        <div class="stock-badge {% if item.current_stock <= 5 %}low{% endif %}">
+                        <div class="stock-badge {% if item.should_restock %}low{% endif %}">
                             {{ item.current_stock }}
                         </div>
                     </td>
@@ -481,7 +481,7 @@ function formatMarkupPercent(markup) {
 /* ---- Row Builder ---- */
 function createRowHtml(item) {
     const isAdmin = "{{ session.get('role') }}" === "admin";
-    const isLow = item.current_stock <= 5;
+    const isLow = Boolean(item.should_restock);
     return `
         <tr>
             <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
