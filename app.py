@@ -10,7 +10,7 @@ import os
 import secrets
 from datetime import date, timedelta
 
-from flask import Flask, Response, g, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 import webbrowser
 import threading
@@ -307,15 +307,46 @@ def low_stock():
     """
     Items at or below reorder level.
     """
-    debug_mode = (request.args.get("debug") or "").strip().lower() in {"1", "true", "yes", "on"}
+    debug_mode = False
     low_stock_items = get_low_stock_items()
-    debug_items = get_restock_debug_items() if debug_mode else []
+    debug_total_count = 0
+    if debug_mode:
+        debug_result = get_restock_debug_items(offset=0, limit=100)
+        debug_total_count = debug_result["total_count"]
+    else:
+        debug_result = {"items": [], "total_count": 0}
     return render_template(
         "low_stock.html",
         low_stock_items=low_stock_items,
         debug_mode=debug_mode,
-        debug_items=debug_items,
+        debug_items=debug_result["items"],
+        debug_total_count=debug_total_count,
     )
+
+
+@app.route("/api/restock-debug")
+def restock_debug_api():
+    abort(404)
+    offset_raw = (request.args.get("offset") or "0").strip()
+    limit_raw = (request.args.get("limit") or "100").strip()
+    try:
+        offset = max(0, int(offset_raw))
+    except ValueError:
+        offset = 0
+    try:
+        limit = max(1, min(250, int(limit_raw)))
+    except ValueError:
+        limit = 100
+
+    result = get_restock_debug_items(offset=offset, limit=limit)
+    serialized_items = []
+    for item in result["items"]:
+        row = dict(item)
+        for key, value in list(row.items()):
+            if hasattr(value, "isoformat"):
+                row[key] = value.isoformat()
+        serialized_items.append(row)
+    return jsonify({"items": serialized_items, "total_count": result["total_count"]})
 
 
 # ============================================================

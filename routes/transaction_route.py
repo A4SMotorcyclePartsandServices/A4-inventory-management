@@ -130,7 +130,6 @@ def add_item():
         'cost_per_piece': cost_per_piece or 0,
         'selling_price': selling_price or 0,
         'markup': request.form.get("markup") or 0,
-        'reorder_level': request.form.get("reorder_level") or 0,
         'vendor_id': request.form.get("vendor_id") or None,
         'mechanic': request.form.get("mechanic")
     }

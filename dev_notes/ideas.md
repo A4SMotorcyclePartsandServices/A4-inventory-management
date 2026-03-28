@@ -99,10 +99,15 @@ Applied:
 
 - [x] Centralized shared restock logic in `services/inventory_service.py`
 - [x] Excluded `svc` category from the reorder / restock algorithm
-- [x] Classified non-`svc` items by recent 60-day `OUT` movement
-  - `0 OUT` = `dead_stock`
-  - `1-2 OUT` = `recovering`
-  - `3+ OUT` = `active`
+- [x] Classified non-`svc` items by filtered recent `OUT` movement using adaptive windows
+  - `active`
+    - `15+ OUT in 30 days` and at least `3` sale days
+    - or `3-14 OUT in 60 days` and at least `2` sale days
+  - `recovering`
+    - `1-2 OUT in 90 days`
+    - or weak recent movement that does not yet meet the active sale-day rule
+  - `dead_stock`
+    - `0 OUT in 90 days`
 - [x] Added different restock rules per class
   - `dead_stock`
     - only alerts when `current_stock <= 0`
@@ -119,8 +124,19 @@ Applied:
   - `critical`
 - [x] Added explainability fields in the shared output
   - `history_status`
+  - `historical_out_last_30_days`
   - `historical_out_last_60_days`
+  - `historical_out_last_90_days`
+  - `sale_days_last_30_days`
+  - `sale_days_last_60_days`
+  - `sale_days_last_90_days`
+  - `selected_lookback_days`
+  - `historical_out_in_selected_window`
+  - `selected_sale_days`
   - `avg_daily_usage`
+  - `effective_lead_time_days`
+  - `lead_time_source`
+  - `vendor_lead_time_sample_size`
   - `lead_time_demand`
   - `safety_stock`
   - `suggested_restock_point`
@@ -128,13 +144,37 @@ Applied:
   - `restock_status`
 - [x] Wired the shared logic into the inventory page, low-stock page, dead-stock page, and search results
 - [x] Added temporary debug mode on `/low-stock?debug=1`
+  - hidden again after validation
+- [x] Filtered demand sources more intelligently
+  - only demand-like `OUT` reasons count toward reorder demand
+  - currently includes:
+    - `CUSTOMER_PURCHASE`
+    - `BUNDLE_PURCHASE`
+- [x] Added vendor-derived lead time from completed PO history
+  - uses vendor-level median completed PO duration
+  - requires at least `3` completed POs
+  - falls back to default `7` days when PO history is too thin
+- [x] Added adaptive lookback windows
+  - fast movers use `30 days`
+  - standard movers use `60 days`
+  - slow movers / recovery checks use `90 days`
+- [x] Added better inactivity / recovery rules
+  - active classification now requires multiple distinct sale days, not only total quantity
+- [x] Added lazy-loaded debug table on `/low-stock?debug=1`
+  - reduces browser lag by loading debug rows in chunks
 
 ## Current live formula
 
 - Shared defaults:
-  - lookback window = `60 days`
   - default lead time = `7 days`
   - default safety window = `7 days`
+- Demand source filter:
+  - only `OUT` rows with approved demand reasons count toward movement history
+- Adaptive history windows:
+  - `active` in `30 days` if `OUT >= 15` and `sale_days >= 3`
+  - else `active` in `60 days` if `OUT = 3-14` and `sale_days >= 2`
+  - else `recovering` in `90 days` if `OUT >= 1`
+  - else `dead_stock`
 - `dead_stock`
   - `suggested_restock_point = 0`
   - flagged only if `current_stock <= 0`
@@ -142,7 +182,7 @@ Applied:
   - `suggested_restock_point = 1`
   - flagged only if `current_stock <= 1`
 - `active`
-  - `lead_time_demand = ceil(avg_daily_usage * 7)`
+  - `lead_time_demand = ceil(avg_daily_usage * effective_lead_time_days)`
   - `safety_stock = ceil(avg_daily_usage * 7)`
   - `suggested_restock_point = lead_time_demand + safety_stock`
   - `critical` if `current_stock <= 0` or `current_stock <= lead_time_demand`
@@ -150,13 +190,8 @@ Applied:
 
 ## Remaining work
 
-- [ ] Add real per-item or per-vendor lead time
-  - current code still uses the fixed default `7` because there is no `lead_time_days` field in the schema yet
-  - needs schema / product decision:
-    - item-level lead time
-    - vendor-level lead time
-    - or both with item override
-- [ ] Decide whether debug mode should stay, be hidden, or be removed after validation
+- [x] Decide whether debug mode should stay, be hidden, or be removed after validation
+  - hidden after validation
 - [ ] Clean up old `reorder_level` usage in the wider product
   - the current algorithm no longer relies on it for restock alerts
   - field still exists in DB/forms/imports for legacy reasons
@@ -164,13 +199,6 @@ Applied:
 ## Future upgrades
 
 - [ ] Improve safety stock calculation using demand variability instead of a fixed 7-day buffer
-- [ ] Filter demand sources more intelligently
-  - exclude adjustments, transfers, corrections, or other non-sales depletion if identifiable
-- [ ] Make the lookback window adaptive
-  - shorter for fast movers
-  - longer for slow movers
-- [ ] Add better inactivity / recovery rules
-  - for example require multiple sale days, not only total quantity, before a dead item is treated as active
 - [ ] Add recommended order quantity
   - target coverage days
   - current stock
@@ -181,3 +209,6 @@ Applied:
   - `restock_strategy`
   - `minimum_order_qty`
   - `case_pack`
+- [ ] Optional future upgrade: item-level lead time override
+  - current live version uses vendor-level completed PO history only
+  - if needed later, item-level lead time can override vendor lead time

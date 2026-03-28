@@ -6,11 +6,17 @@ from utils.formatters import format_date
 
 
 STOCKTAKE_WARNING_DAYS = 30
-RESTOCK_LOOKBACK_DAYS = 60
+RESTOCK_FAST_LOOKBACK_DAYS = 30
+RESTOCK_DEFAULT_LOOKBACK_DAYS = 60
+RESTOCK_SLOW_LOOKBACK_DAYS = 90
 RESTOCK_LEAD_TIME_DAYS = 7
 RESTOCK_SAFETY_DAYS = 7
 LOW_HISTORY_MAX_OUT = 2
 LOW_HISTORY_FALLBACK_FLOOR = 1
+MIN_VENDOR_LEAD_TIME_SAMPLE = 3
+DEMAND_OUT_REASONS = ("CUSTOMER_PURCHASE", "BUNDLE_PURCHASE")
+FAST_MOVER_MIN_SALE_DAYS = 3
+DEFAULT_MOVER_MIN_SALE_DAYS = 2
 RESTOCK_STATUS_EXCLUDED = "excluded"
 RESTOCK_STATUS_HEALTHY = "healthy"
 RESTOCK_STATUS_WARNING = "warning"
@@ -33,7 +39,9 @@ def attach_inventory_history_profile(conn, items, item_id_key="id", category_key
         return items
 
     anchor_date = _normalize_anchor_date(snapshot_date)
-    window_start = anchor_date - timedelta(days=RESTOCK_LOOKBACK_DAYS - 1)
+    fast_window_start = anchor_date - timedelta(days=RESTOCK_FAST_LOOKBACK_DAYS - 1)
+    default_window_start = anchor_date - timedelta(days=RESTOCK_DEFAULT_LOOKBACK_DAYS - 1)
+    slow_window_start = anchor_date - timedelta(days=RESTOCK_SLOW_LOOKBACK_DAYS - 1)
 
     item_ids = []
     for item in items:
@@ -51,14 +59,56 @@ def attach_inventory_history_profile(conn, items, item_id_key="id", category_key
                 COALESCE(SUM(
                     CASE
                         WHEN transaction_type = 'OUT'
+                         AND change_reason = ANY(%s)
                          AND DATE(transaction_date) BETWEEN %s AND %s
                         THEN quantity
                         ELSE 0
                     END
-                ), 0) AS total_out_last_lookback,
+                ), 0) AS total_out_last_30_days,
+                COALESCE(SUM(
+                    CASE
+                        WHEN transaction_type = 'OUT'
+                         AND change_reason = ANY(%s)
+                         AND DATE(transaction_date) BETWEEN %s AND %s
+                        THEN quantity
+                        ELSE 0
+                    END
+                ), 0) AS total_out_last_60_days,
+                COALESCE(SUM(
+                    CASE
+                        WHEN transaction_type = 'OUT'
+                         AND change_reason = ANY(%s)
+                         AND DATE(transaction_date) BETWEEN %s AND %s
+                        THEN quantity
+                        ELSE 0
+                    END
+                ), 0) AS total_out_last_90_days,
+                COUNT(DISTINCT CASE
+                    WHEN transaction_type = 'OUT'
+                     AND change_reason = ANY(%s)
+                     AND DATE(transaction_date) BETWEEN %s AND %s
+                    THEN DATE(transaction_date)
+                    ELSE NULL
+                END) AS sale_days_last_30_days,
+                COUNT(DISTINCT CASE
+                    WHEN transaction_type = 'OUT'
+                     AND change_reason = ANY(%s)
+                     AND DATE(transaction_date) BETWEEN %s AND %s
+                    THEN DATE(transaction_date)
+                    ELSE NULL
+                END) AS sale_days_last_60_days,
+                COUNT(DISTINCT CASE
+                    WHEN transaction_type = 'OUT'
+                     AND change_reason = ANY(%s)
+                     AND DATE(transaction_date) BETWEEN %s AND %s
+                    THEN DATE(transaction_date)
+                    ELSE NULL
+                END) AS sale_days_last_90_days,
                 MAX(
                     CASE
-                        WHEN transaction_type = 'OUT' THEN transaction_date
+                        WHEN transaction_type = 'OUT'
+                         AND change_reason = ANY(%s)
+                        THEN transaction_date
                         ELSE NULL
                     END
                 ) AS last_sold_at
@@ -66,7 +116,28 @@ def attach_inventory_history_profile(conn, items, item_id_key="id", category_key
             WHERE item_id = ANY(%s)
             GROUP BY item_id
             """,
-            (window_start.isoformat(), anchor_date.isoformat(), item_ids),
+            (
+                list(DEMAND_OUT_REASONS),
+                fast_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                default_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                slow_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                fast_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                default_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                slow_window_start.isoformat(),
+                anchor_date.isoformat(),
+                list(DEMAND_OUT_REASONS),
+                item_ids,
+            ),
         ).fetchall()
         history_map = {int(row["item_id"]): dict(row) for row in rows}
 
@@ -78,24 +149,122 @@ def attach_inventory_history_profile(conn, items, item_id_key="id", category_key
 
         category = str(item.get(category_key) or "").strip().lower()
         history = history_map.get(item_id, {}) if item_id is not None else {}
-        total_out = float(history.get("total_out_last_lookback") or 0)
+        total_out_30 = float(history.get("total_out_last_30_days") or 0)
+        total_out_60 = float(history.get("total_out_last_60_days") or 0)
+        total_out_90 = float(history.get("total_out_last_90_days") or 0)
+        sale_days_30 = int(history.get("sale_days_last_30_days") or 0)
+        sale_days_60 = int(history.get("sale_days_last_60_days") or 0)
+        sale_days_90 = int(history.get("sale_days_last_90_days") or 0)
         last_sold_at = history.get("last_sold_at")
 
         if category == "svc":
             history_status = "excluded"
-        elif total_out <= 0:
-            history_status = "dead_stock"
-        elif total_out <= LOW_HISTORY_MAX_OUT:
-            history_status = "recovering"
-        else:
+            selected_lookback_days = RESTOCK_DEFAULT_LOOKBACK_DAYS
+            selected_total_out = 0.0
+            selected_sale_days = 0
+        elif total_out_30 >= 15 and sale_days_30 >= FAST_MOVER_MIN_SALE_DAYS:
             history_status = "active"
+            selected_lookback_days = RESTOCK_FAST_LOOKBACK_DAYS
+            selected_total_out = total_out_30
+            selected_sale_days = sale_days_30
+        elif 3 <= total_out_60 <= 14 and sale_days_60 >= DEFAULT_MOVER_MIN_SALE_DAYS:
+            history_status = "active"
+            selected_lookback_days = RESTOCK_DEFAULT_LOOKBACK_DAYS
+            selected_total_out = total_out_60
+            selected_sale_days = sale_days_60
+        elif total_out_90 >= 1:
+            history_status = "recovering"
+            selected_lookback_days = RESTOCK_SLOW_LOOKBACK_DAYS
+            selected_total_out = total_out_90
+            selected_sale_days = sale_days_90
+        else:
+            history_status = "dead_stock"
+            selected_lookback_days = RESTOCK_SLOW_LOOKBACK_DAYS
+            selected_total_out = 0.0
+            selected_sale_days = 0
 
-        item["historical_out_last_60_days"] = round(total_out, 2)
+        item["historical_out_last_30_days"] = round(total_out_30, 2)
+        item["historical_out_last_60_days"] = round(total_out_60, 2)
+        item["historical_out_last_90_days"] = round(total_out_90, 2)
+        item["sale_days_last_30_days"] = sale_days_30
+        item["sale_days_last_60_days"] = sale_days_60
+        item["sale_days_last_90_days"] = sale_days_90
+        item["selected_lookback_days"] = selected_lookback_days
+        item["historical_out_in_selected_window"] = round(selected_total_out, 2)
+        item["selected_sale_days"] = selected_sale_days
         item["last_sold_at"] = last_sold_at
         item["last_sold_display"] = format_date(last_sold_at) if last_sold_at else None
         item["history_status"] = history_status
         item["is_dead_stock"] = history_status == "dead_stock"
         item["is_recovering"] = history_status == "recovering"
+
+    return items
+
+
+def attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id"):
+    if not items:
+        return items
+
+    vendor_ids = []
+    for item in items:
+        try:
+            vendor_id = int(item.get(vendor_id_key) or 0)
+        except (TypeError, ValueError):
+            vendor_id = 0
+        if vendor_id > 0:
+            vendor_ids.append(vendor_id)
+
+    vendor_ids = sorted(set(vendor_ids))
+    lead_time_map = {}
+
+    if vendor_ids:
+        rows = conn.execute(
+            """
+            SELECT
+                po.vendor_id,
+                COUNT(*) AS completed_po_count,
+                PERCENTILE_CONT(0.5) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (po.received_at - po.created_at)) / 86400.0
+                ) AS median_lead_time_days
+            FROM purchase_orders po
+            WHERE po.vendor_id = ANY(%s)
+              AND po.status = 'COMPLETED'
+              AND po.created_at IS NOT NULL
+              AND po.received_at IS NOT NULL
+              AND po.received_at >= po.created_at
+            GROUP BY po.vendor_id
+            """,
+            (vendor_ids,),
+        ).fetchall()
+
+        lead_time_map = {
+            int(row["vendor_id"]): {
+                "sample_size": int(row["completed_po_count"] or 0),
+                "median_lead_time_days": float(row["median_lead_time_days"] or 0),
+            }
+            for row in rows
+        }
+
+    for item in items:
+        try:
+            vendor_id = int(item.get(vendor_id_key) or 0)
+        except (TypeError, ValueError):
+            vendor_id = 0
+
+        vendor_profile = lead_time_map.get(vendor_id, {})
+        sample_size = int(vendor_profile.get("sample_size") or 0)
+        vendor_median = float(vendor_profile.get("median_lead_time_days") or 0)
+
+        if vendor_id > 0 and sample_size >= MIN_VENDOR_LEAD_TIME_SAMPLE and vendor_median > 0:
+            effective_lead_time_days = max(1, math.ceil(vendor_median))
+            lead_time_source = "vendor_completed_po_history"
+        else:
+            effective_lead_time_days = RESTOCK_LEAD_TIME_DAYS
+            lead_time_source = "default"
+
+        item["vendor_lead_time_sample_size"] = sample_size
+        item["effective_lead_time_days"] = effective_lead_time_days
+        item["lead_time_source"] = lead_time_source
 
     return items
 
@@ -111,17 +280,18 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         category_key=category_key,
         snapshot_date=snapshot_date,
     )
-
-    coverage_days = RESTOCK_LEAD_TIME_DAYS + RESTOCK_SAFETY_DAYS
+    attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id")
 
     for item in items:
         current_stock = float(item.get(current_stock_key) or 0)
-        total_out = float(item.get("historical_out_last_60_days") or 0)
-        avg_daily_usage = total_out / RESTOCK_LOOKBACK_DAYS
+        selected_lookback_days = int(item.get("selected_lookback_days") or RESTOCK_DEFAULT_LOOKBACK_DAYS)
+        total_out = float(item.get("historical_out_in_selected_window") or 0)
+        avg_daily_usage = total_out / selected_lookback_days if selected_lookback_days > 0 else 0
+        effective_lead_time_days = int(item.get("effective_lead_time_days") or RESTOCK_LEAD_TIME_DAYS)
+        safety_days = RESTOCK_SAFETY_DAYS
 
         item["avg_daily_usage"] = round(avg_daily_usage, 4)
-        item["restock_coverage_days"] = coverage_days
-        item["effective_lead_time_days"] = RESTOCK_LEAD_TIME_DAYS
+        item["restock_coverage_days"] = effective_lead_time_days + safety_days
         item["lead_time_demand"] = 0
         item["safety_stock"] = 0
         item["restock_status"] = RESTOCK_STATUS_HEALTHY
@@ -152,8 +322,8 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
             )
             continue
 
-        lead_time_demand = math.ceil(avg_daily_usage * RESTOCK_LEAD_TIME_DAYS)
-        safety_stock = math.ceil(avg_daily_usage * RESTOCK_SAFETY_DAYS)
+        lead_time_demand = math.ceil(avg_daily_usage * effective_lead_time_days)
+        safety_stock = math.ceil(avg_daily_usage * safety_days)
         suggested_restock_point = lead_time_demand + safety_stock
         item["lead_time_demand"] = lead_time_demand
         item["safety_stock"] = safety_stock

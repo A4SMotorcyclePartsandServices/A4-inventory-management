@@ -16,6 +16,19 @@
     .status-badge-critical { background: #dc3545; color: #fff; }
     .status-badge-warning { background: #ffc107; color: #111; }
     .status-badge-healthy { background: #6c757d; color: #fff; }
+    .debug-table {
+        table-layout: auto;
+        font-size: 0.84rem;
+    }
+    .debug-table th,
+    .debug-table td {
+        white-space: nowrap;
+        vertical-align: top;
+    }
+    .debug-table .debug-wrap-cell,
+    .debug-table .debug-item-name {
+        white-space: normal !important;
+    }
 </style>
 
 <div class="text-center mb-4">
@@ -33,16 +46,11 @@
 
 <div class="text-center mt-4 mb-4">
     <a href="/" class="btn btn-outline-danger btn-sm"><i class="bi bi-arrow-left"></i> Back to Inventory</a>
-    {% if debug_mode %}
-    <a href="/low-stock" class="btn btn-outline-secondary btn-sm ms-2">Hide Debug</a>
-    {% else %}
-    <a href="/low-stock?debug=1" class="btn btn-outline-secondary btn-sm ms-2">Show Debug</a>
-    {% endif %}
 </div>
 
 <div class="table-responsive col-md-10 mx-auto">
     {% if low_stock_items %}
-    <table class="table table-dark table-striped align-middle text-center">
+    <table id="lowStockTable" class="table table-dark table-striped align-middle text-center">
         <thead>
             <tr>
                 <th>Item Name</th>
@@ -84,15 +92,26 @@
     <div class="alert alert-secondary text-center bg-dark text-light border-secondary">
         Debug mode shows the internal restock fields for every item so we can verify why an item was or was not flagged. `recovering` means the item has started moving again, but not enough yet to trust the full movement-based formula.
     </div>
-    <table class="table table-dark table-striped align-middle text-center">
+    <table class="table table-dark table-striped align-middle text-center debug-table">
         <thead>
             <tr>
                 <th>Item Name</th>
                 <th>Category</th>
                 <th>Stock</th>
                 <th>History Status</th>
+                <th>Lookback</th>
+                <th>Sale Days</th>
+                <th>30d Days</th>
+                <th>60d Days</th>
+                <th>90d Days</th>
+                <th>Out Selected</th>
+                <th>Out 30d</th>
                 <th>Out 60d</th>
+                <th>Out 90d</th>
                 <th>Avg / Day</th>
+                <th>Lead Days</th>
+                <th>Lead Source</th>
+                <th>Lead Samples</th>
                 <th>Lead Demand</th>
                 <th>Safety Stock</th>
                 <th>Restock Point</th>
@@ -101,42 +120,98 @@
                 <th>Flagged</th>
             </tr>
         </thead>
-        <tbody>
-            {% for item in debug_items %}
-            <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.category or '-' }}</td>
-                <td>{{ item.current_stock }}</td>
-                <td>{{ item.history_status or '-' }}</td>
-                <td>{{ item.historical_out_last_60_days or 0 }}</td>
-                <td>{{ item.avg_daily_usage or 0 }}</td>
-                <td>{{ item.lead_time_demand or 0 }}</td>
-                <td>{{ item.safety_stock or 0 }}</td>
-                <td>{{ item.suggested_restock_point if item.suggested_restock_point is not none else '-' }}</td>
-                <td>{{ item.restock_status or '-' }}</td>
-                <td class="debug-wrap-cell">{{ item.restock_basis or '-' }}</td>
-                <td>
-                    {% if item.should_restock %}
-                        <span class="badge bg-warning text-dark">YES</span>
-                    {% else %}
-                        <span class="badge bg-secondary">NO</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+        <tbody id="debugRestockTableBody"></tbody>
     </table>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <div id="debugRestockStatus" class="small text-muted">
+            Loading debug rows...
+        </div>
+        <button type="button" id="debugLoadMoreBtn" class="btn btn-outline-secondary btn-sm" style="display:none;">
+            Load More
+        </button>
+    </div>
 </div>
 {% endif %}
 
 <script>
 document.getElementById('inventorySearch').addEventListener('keyup', function() {
     let filter = this.value.toLowerCase();
-    let rows = document.querySelectorAll('table tbody tr');
+    let rows = document.querySelectorAll('#lowStockTable tbody tr, #debugRestockTableBody tr');
     rows.forEach(row => {
         let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
         row.style.display = itemName.includes(filter) ? "" : "none";
     });
 });
+
+{% if debug_mode %}
+const debugRestockTableBody = document.getElementById('debugRestockTableBody');
+const debugLoadMoreBtn = document.getElementById('debugLoadMoreBtn');
+const debugRestockStatus = document.getElementById('debugRestockStatus');
+const debugTotalCount = Number('{{ debug_total_count or 0 }}');
+let debugOffset = 0;
+const debugPageSize = 100;
+
+function renderDebugBadge(flagged) {
+    return flagged
+        ? '<span class="badge bg-warning text-dark">YES</span>'
+        : '<span class="badge bg-secondary">NO</span>';
+}
+
+function renderDebugCell(value) {
+    if (value === null || value === undefined || value === '') return '-';
+    return String(value);
+}
+
+async function loadDebugRows() {
+    debugLoadMoreBtn.disabled = true;
+    debugRestockStatus.textContent = `Loading ${Math.min(debugOffset + debugPageSize, debugTotalCount)} of ${debugTotalCount} debug rows...`;
+
+    const response = await fetch(`/api/restock-debug?offset=${debugOffset}&limit=${debugPageSize}`);
+    const data = await response.json();
+    const rows = data.items || [];
+
+    rows.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="debug-wrap-cell debug-item-name">${renderDebugCell(item.name)}</td>
+            <td>${renderDebugCell(item.category)}</td>
+            <td>${renderDebugCell(item.current_stock)}</td>
+            <td>${renderDebugCell(item.history_status)}</td>
+            <td>${renderDebugCell(item.selected_lookback_days)}</td>
+            <td>${renderDebugCell(item.selected_sale_days)}</td>
+            <td>${renderDebugCell(item.sale_days_last_30_days)}</td>
+            <td>${renderDebugCell(item.sale_days_last_60_days)}</td>
+            <td>${renderDebugCell(item.sale_days_last_90_days)}</td>
+            <td>${renderDebugCell(item.historical_out_in_selected_window)}</td>
+            <td>${renderDebugCell(item.historical_out_last_30_days)}</td>
+            <td>${renderDebugCell(item.historical_out_last_60_days)}</td>
+            <td>${renderDebugCell(item.historical_out_last_90_days)}</td>
+            <td>${renderDebugCell(item.avg_daily_usage)}</td>
+            <td>${renderDebugCell(item.effective_lead_time_days)}</td>
+            <td class="debug-wrap-cell">${renderDebugCell(item.lead_time_source)}</td>
+            <td>${renderDebugCell(item.vendor_lead_time_sample_size)}</td>
+            <td>${renderDebugCell(item.lead_time_demand)}</td>
+            <td>${renderDebugCell(item.safety_stock)}</td>
+            <td>${renderDebugCell(item.suggested_restock_point)}</td>
+            <td>${renderDebugCell(item.restock_status)}</td>
+            <td class="debug-wrap-cell">${renderDebugCell(item.restock_basis)}</td>
+            <td>${renderDebugBadge(Boolean(item.should_restock))}</td>
+        `;
+        debugRestockTableBody.appendChild(tr);
+    });
+
+    debugOffset += rows.length;
+    debugRestockStatus.textContent = `Showing ${debugOffset} of ${debugTotalCount} debug rows`;
+    debugLoadMoreBtn.style.display = debugOffset < debugTotalCount ? 'inline-block' : 'none';
+    debugLoadMoreBtn.disabled = false;
+}
+
+if (debugTotalCount > 0) {
+    loadDebugRows();
+    debugLoadMoreBtn.addEventListener('click', loadDebugRows);
+} else {
+    debugRestockStatus.textContent = 'No debug rows available.';
+}
+{% endif %}
 </script>
 {% endblock %}

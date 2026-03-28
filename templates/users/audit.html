@@ -3181,7 +3181,6 @@ function viewItemCreated(itemId) {
                 ['Cost per Piece', data.cost_per_piece != null ? '&#8369;' + parseFloat(data.cost_per_piece).toFixed(2) : '-'],
                 ['Selling Price',  data.a4s_selling_price != null ? '&#8369;' + parseFloat(data.a4s_selling_price).toFixed(2) : '-'],
                 ['Markup',         markup],
-                ['Reorder Level',  data.reorder_level  != null ? data.reorder_level : '-'],
                 ['Vendor',         data.vendor         || '-'],
             ].map(([label, value]) => `
                 <tr>

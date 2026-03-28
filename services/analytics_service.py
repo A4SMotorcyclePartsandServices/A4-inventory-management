@@ -115,7 +115,7 @@ def get_low_stock_items():
     return rows
 
 
-def get_restock_debug_items():
+def get_restock_debug_items(offset=0, limit=None):
     conn = get_db()
     item_rows = conn.execute("SELECT * FROM items").fetchall()
     stock_rows = get_items_with_stock()
@@ -137,6 +137,11 @@ def get_restock_debug_items():
             item.get("name") or "",
         )
     )
+    total_count = len(rows)
+    if offset:
+        rows = rows[offset:]
+    if limit is not None:
+        rows = rows[:limit]
     conn.close()
-    return rows
+    return {"items": rows, "total_count": total_count}
 

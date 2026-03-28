@@ -94,7 +94,7 @@ def add_item_to_db(data, user_id=None, username=None):
         """, (
             data['name'], data['category'], data['description'], data['pack_size'],
             data['vendor_price'], data['cost_per_piece'], data['selling_price'],
-            data['markup'], data['reorder_level'], None, vendor_id, data['mechanic']
+            data['markup'], data.get('reorder_level', 0), None, vendor_id, data['mechanic']
         )).fetchone()
 
         new_id = row["id"]
