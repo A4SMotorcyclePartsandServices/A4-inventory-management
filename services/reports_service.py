@@ -31,6 +31,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         JOIN payment_methods pm ON pm.id = s.payment_method_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND pm.category IN ('Bank', 'Online')
         """,
         (start_date, end_date),
@@ -109,6 +110,124 @@ def _summarize_items_for_profit(paid_sales):
             items_summary[key]["cost_total"] += bundle_cost_total
             items_summary[key]["profit_total"] += round(bundle_revenue - bundle_cost_total, 2)
     return sorted(items_summary.values(), key=lambda x: x["item_name"])
+
+
+def _summarize_mechanic_supply_items(mechanic_supply_sales):
+    items_summary = {}
+    for sale in mechanic_supply_sales:
+        for item in sale.get("products", []):
+            key = item["item_name"]
+            if key not in items_summary:
+                items_summary[key] = {
+                    "item_name": key,
+                    "quantity": 0,
+                    "total": 0.0,
+                }
+            items_summary[key]["quantity"] += int(item.get("quantity") or 0)
+            items_summary[key]["total"] += _num(item.get("line_total"))
+    return sorted(items_summary.values(), key=lambda x: x["item_name"])
+
+
+def _summarize_mechanic_supply_items_with_cost(mechanic_supply_sales):
+    items_summary = {}
+    for sale in mechanic_supply_sales:
+        for item in sale.get("products", []):
+            key = item["item_name"]
+            if key not in items_summary:
+                items_summary[key] = {
+                    "item_name": key,
+                    "quantity": 0,
+                    "revenue_total": 0.0,
+                    "cost_total": 0.0,
+                }
+            items_summary[key]["quantity"] += int(item.get("quantity") or 0)
+            items_summary[key]["revenue_total"] += _num(item.get("line_total"))
+            items_summary[key]["cost_total"] += _num(item.get("cost_total"))
+    return sorted(items_summary.values(), key=lambda x: x["item_name"])
+
+
+def _build_mechanic_supply_report_context(start_date, end_date):
+    conn = get_db()
+    sales_rows = conn.execute(
+        """
+        SELECT
+            s.id,
+            s.sales_number,
+            s.transaction_date,
+            s.total_amount,
+            s.notes,
+            m.name AS mechanic_name
+        FROM sales s
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+        ORDER BY s.transaction_date ASC, s.id ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sales_rows:
+        conn.close()
+        return {
+            "transactions": [],
+            "items_summary": [],
+            "total_transactions": 0,
+            "total_revenue_reference": 0.0,
+            "total_cost": 0.0,
+        }
+
+    sale_ids = [row["id"] for row in sales_rows]
+    placeholders = ",".join(["%s"] * len(sale_ids))
+    item_rows = conn.execute(
+        f"""
+        SELECT
+            si.sale_id,
+            i.name AS item_name,
+            si.quantity,
+            si.final_unit_price,
+            si.cost_per_piece_snapshot,
+            (si.quantity * si.final_unit_price) AS line_total,
+            (si.quantity * si.cost_per_piece_snapshot) AS cost_total
+        FROM sales_items si
+        JOIN items i ON i.id = si.item_id
+        WHERE si.sale_id IN ({placeholders})
+        ORDER BY si.sale_id ASC, i.name ASC
+        """,
+        sale_ids,
+    ).fetchall()
+    conn.close()
+
+    items_by_sale = {}
+    for row in item_rows:
+        items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+
+    transactions = []
+    total_revenue_reference = 0.0
+    total_cost = 0.0
+    for sale in sales_rows:
+        sale_id = int(sale["id"])
+        products = items_by_sale.get(sale_id, [])
+        sale_cost = round(sum(_num(item.get("cost_total")) for item in products), 2)
+        sale_revenue_reference = round(_num(sale.get("total_amount")), 2)
+        total_revenue_reference += sale_revenue_reference
+        total_cost += sale_cost
+        transactions.append({
+            "sales_number": sale["sales_number"] or f"#{sale_id}",
+            "mechanic_name": sale["mechanic_name"] or "-",
+            "transaction_date": format_date(sale["transaction_date"], show_time=True),
+            "products": products,
+            "revenue_reference_total": sale_revenue_reference,
+            "cost_total": sale_cost,
+            "notes": sale["notes"] or "",
+        })
+
+    return {
+        "transactions": transactions,
+        "items_summary": _summarize_mechanic_supply_items_with_cost(transactions),
+        "total_transactions": len(transactions),
+        "total_revenue_reference": round(total_revenue_reference, 2),
+        "total_cost": round(total_cost, 2),
+    }
 
 
 def _load_bundles_by_sale(conn, sale_ids):
@@ -662,6 +781,7 @@ def get_all_unresolved_sales(conn):
             s.id,
             s.sales_number,
             s.customer_name,
+            COALESCE(s.transaction_class, 'NEW_SALE') AS transaction_class,
             s.total_amount,
             s.status,
             s.notes,
@@ -674,6 +794,7 @@ def get_all_unresolved_sales(conn):
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY s.id, m.name, pm.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
@@ -755,6 +876,7 @@ def get_sales_report_by_date(report_date):
             s.id,
             s.sales_number,
             s.customer_name,
+            COALESCE(s.transaction_class, 'NEW_SALE') AS transaction_class,
             s.total_amount,
             s.status,
             s.notes,
@@ -803,6 +925,7 @@ def get_sales_report_by_date(report_date):
            AND mqto.quota_date = DATE(dp.paid_at)
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) = %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY dp.paid_at ASC
     """, (report_date,)).fetchall()
 
@@ -823,6 +946,7 @@ def get_sales_report_by_date(report_date):
         JOIN sales s ON s.id = sr.sale_id
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) = %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY sr.refund_date ASC, sr.id ASC
     """, (report_date,)).fetchall()
 
@@ -933,6 +1057,7 @@ def get_sales_report_by_date(report_date):
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales = []
+    financial_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
     total_product_cost = 0.0
@@ -940,6 +1065,8 @@ def get_sales_report_by_date(report_date):
 
     for sale in sales_rows:
         sale_id = sale["id"]
+        transaction_class = sale.get("transaction_class") or "NEW_SALE"
+        is_mechanic_supply = transaction_class == "MECHANIC_SUPPLY"
         sale_bundles = bundles_by_sale.get(sale_id, [])
         standalone_services_total = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         bundle_service_total = round(sum(_num(bundle.get("service_component_total")) for bundle in sale_bundles), 2)
@@ -964,10 +1091,9 @@ def get_sales_report_by_date(report_date):
                 - bundle_product_cost,
                 2,
             )
-            total_service_revenue += service_revenue_total
-            paid_sales.append({
+            sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
-                "customer_name": sale["customer_name"] or "Walk-in",
+                "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
                 "mechanic_name": sale["mechanic_name"] or "-",
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
@@ -984,19 +1110,28 @@ def get_sales_report_by_date(report_date):
                 "products": sale_products,
                 "services": services_by_sale.get(sale_id, []),
                 "bundles": sale_bundles,
-                "report_label": "Exchange/Replacement" if sale["exchange_number"] else "Sale",
+                "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
                 "exchange_number": sale["exchange_number"] or "",
-            })
-            total_gross += total_amount
-            total_product_cost += sale_product_cost
-            total_product_profit += sale_product_profit
+                "transaction_class": transaction_class,
+                "exclude_from_calculations": 1 if is_mechanic_supply else 0,
+            }
+            paid_sales.append(sale_payload)
+            if not is_mechanic_supply:
+                financial_paid_sales.append(sale_payload)
+                total_service_revenue += service_revenue_total
+                total_gross += total_amount
+                total_product_cost += sale_product_cost
+                total_product_profit += sale_product_profit
 
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
-        sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale
+        [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
+        debt_collected_rows,
+        services_by_sale,
+        bundles_by_sale,
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
     total_bundle_shop_share = round(
-        sum(_num(sale.get("bundle_shop_total")) for sale in paid_sales),
+        sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
         2,
     )
     total_shop_comm_from_paid = round(
@@ -1004,11 +1139,17 @@ def get_sales_report_by_date(report_date):
         2,
     )
 
-    items_summary = _summarize_items_for_profit(paid_sales)
+    items_summary = _summarize_items_for_profit(financial_paid_sales)
+    mechanic_supply_sales = [
+        sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
+    ]
+    mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
     total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
 
     return {
         "sales": paid_sales,
+        "mechanic_supply_sales": mechanic_supply_sales,
+        "mechanic_supply_items_summary": mechanic_supply_items_summary,
         "unresolved": all_unresolved,
         "mechanic_summary": mechanic_summary,
         "items_summary": items_summary,
@@ -1048,6 +1189,7 @@ def get_sales_report_by_range(start_date, end_date):
             s.id,
             s.sales_number,
             s.customer_name,
+            COALESCE(s.transaction_class, 'NEW_SALE') AS transaction_class,
             s.total_amount,
             s.status,
             s.notes,
@@ -1096,6 +1238,7 @@ def get_sales_report_by_range(start_date, end_date):
            AND mqto.quota_date = DATE(dp.paid_at)
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY dp.paid_at ASC
     """, (start_date, end_date)).fetchall()
 
@@ -1116,6 +1259,7 @@ def get_sales_report_by_range(start_date, end_date):
         JOIN sales s ON s.id = sr.sale_id
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY sr.refund_date ASC, sr.id ASC
     """, (start_date, end_date)).fetchall()
 
@@ -1226,6 +1370,7 @@ def get_sales_report_by_range(start_date, end_date):
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales = []
+    financial_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
     total_product_cost = 0.0
@@ -1233,6 +1378,8 @@ def get_sales_report_by_range(start_date, end_date):
 
     for sale in sales_rows:
         sale_id = sale["id"]
+        transaction_class = sale.get("transaction_class") or "NEW_SALE"
+        is_mechanic_supply = transaction_class == "MECHANIC_SUPPLY"
         sale_bundles = bundles_by_sale.get(sale_id, [])
         standalone_services_total = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
         bundle_service_total = round(sum(_num(bundle.get("service_component_total")) for bundle in sale_bundles), 2)
@@ -1257,10 +1404,9 @@ def get_sales_report_by_range(start_date, end_date):
                 - bundle_product_cost,
                 2,
             )
-            total_service_revenue += service_revenue_total
-            paid_sales.append({
+            sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
-                "customer_name": sale["customer_name"] or "Walk-in",
+                "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
                 "mechanic_name": sale["mechanic_name"] or "-",
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
@@ -1277,18 +1423,27 @@ def get_sales_report_by_range(start_date, end_date):
                 "products": sale_products,
                 "services": services_by_sale.get(sale_id, []),
                 "bundles": sale_bundles,
-                "report_label": "Exchange/Replacement" if sale["exchange_number"] else "Sale",
+                "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
                 "exchange_number": sale["exchange_number"] or "",
-            })
-            total_gross += total_amount
-            total_product_cost += sale_product_cost
-            total_product_profit += sale_product_profit
+                "transaction_class": transaction_class,
+                "exclude_from_calculations": 1 if is_mechanic_supply else 0,
+            }
+            paid_sales.append(sale_payload)
+            if not is_mechanic_supply:
+                financial_paid_sales.append(sale_payload)
+                total_service_revenue += service_revenue_total
+                total_gross += total_amount
+                total_product_cost += sale_product_cost
+                total_product_profit += sale_product_profit
 
     mechanic_summary, totals, quota_failures = _calculate_range_mechanic_rollups(
-        sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale
+        [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
+        debt_collected_rows,
+        services_by_sale,
+        bundles_by_sale,
     )
     total_bundle_shop_share = round(
-        sum(_num(sale.get("bundle_shop_total")) for sale in paid_sales),
+        sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
         2,
     )
     total_shop_comm_from_paid = round(
@@ -1296,11 +1451,17 @@ def get_sales_report_by_range(start_date, end_date):
         2,
     )
 
-    items_summary = _summarize_items_for_profit(paid_sales)
+    items_summary = _summarize_items_for_profit(financial_paid_sales)
+    mechanic_supply_sales = [
+        sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
+    ]
+    mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
     total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
 
     return {
         "sales": paid_sales,
+        "mechanic_supply_sales": mechanic_supply_sales,
+        "mechanic_supply_items_summary": mechanic_supply_items_summary,
         "unresolved": all_unresolved,
         "mechanic_summary": mechanic_summary,
         "items_summary": items_summary,

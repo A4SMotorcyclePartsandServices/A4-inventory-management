@@ -142,9 +142,20 @@ def init_db():
         customer_id         INTEGER REFERENCES customers(id),
         vehicle_id          INTEGER REFERENCES vehicles(id),
         mechanic_id         INTEGER REFERENCES mechanics(id),
+        transaction_class   TEXT NOT NULL DEFAULT 'NEW_SALE'
+                            CHECK(transaction_class IN ('QUICK_SALE', 'NEW_SALE', 'MECHANIC_SUPPLY')),
         service_fee         NUMERIC(12,2) DEFAULT 0,
         paid_at             TIMESTAMP
     )
+    """)
+    cur.execute("""
+    ALTER TABLE sales
+    ADD COLUMN IF NOT EXISTS transaction_class TEXT NOT NULL DEFAULT 'NEW_SALE'
+    """)
+    cur.execute("""
+    UPDATE sales
+    SET transaction_class = 'NEW_SALE'
+    WHERE transaction_class IS NULL
     """)
 
     # 9. INVENTORY TRANSACTIONS

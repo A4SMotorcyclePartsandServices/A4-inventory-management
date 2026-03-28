@@ -82,6 +82,8 @@
             border-radius: 6px 6px 0 0;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            page-break-after: avoid;
+            break-after: avoid-page;
         }
 
         table {
@@ -289,12 +291,17 @@
             .no-print { display: none; }
             body { margin: 0; padding: 0; }
             .section {
-                page-break-inside: auto;
-                break-inside: auto;
+                page-break-inside: avoid;
+                break-inside: avoid-page;
             }
             table {
                 page-break-inside: auto;
                 break-inside: auto;
+            }
+            .section-title + table,
+            .section-title + .cash-summary {
+                page-break-before: avoid;
+                break-before: avoid-page;
             }
         }
     </style>
@@ -353,14 +360,13 @@
         <table>
             <thead>
                 <tr>
-                    <th width="22%">Mechanic</th>
-                    <th width="15%" class="text-right">Services</th>
-                    <th width="15%" class="text-right">For Payout</th>
+                    <th width="24%">Mechanic</th>
+                    <th width="17%" class="text-right">Services</th>
                     <th width="14%" class="text-right">Rate</th>
-                    <th width="12%" class="text-right">Payout</th>
-                    <th width="10%" class="text-right">Shop Share</th>
-                    <th width="9%" class="text-right">Top-up</th>
-                    <th width="13%" class="text-right">Total Payout</th>
+                    <th width="16%" class="text-right">Payout (No Quota Top-up)</th>
+                    <th width="11%" class="text-right">Shop Share</th>
+                    <th width="8%" class="text-right">Top-up</th>
+                    <th width="10%" class="text-right">Total Payout</th>
                 </tr>
             </thead>
             <tbody>
@@ -377,7 +383,6 @@
                             {% endif %}
                         </td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.paid_services_total) }}</span></td>
-                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.services_total) }}</span></td>
                         <td class="text-right">{{ (mech.commission_rate * 100) | int }}%</td>
                         <td class="text-right strong"><span class="currency">P {{ "%.2f"|format(mech.mechanic_cut) }}</span></td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.payout_shop_share) }}</span></td>
@@ -395,7 +400,6 @@
                         <td>Totals</td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.mechanic_summary | sum(attribute='paid_services_total')) }}</span></td>
                         <td class="text-right">-</td>
-                        <td class="text-right">-</td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_mech_cut) }}</span></td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</span></td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_topup or 0) }}</span></td>
@@ -403,7 +407,7 @@
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="8" class="muted">No mechanic payouts recorded for this period.</td>
+                        <td colspan="7" class="muted">No mechanic payouts recorded for this period.</td>
                     </tr>
                 {% endif %}
             </tbody>
@@ -467,6 +471,46 @@
             </tbody>
         </table>
     </div>
+
+    {% if data.mechanic_supply_sales %}
+    <div class="section">
+        <div class="section-title">Mechanic Supply Transactions</div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="14%">Reference</th>
+                    <th width="16%">Mechanic</th>
+                    <th width="50%">Items</th>
+                    <th width="20%" class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in data.mechanic_supply_sales %}
+                <tr>
+                    <td>
+                        {{ sale.sales_number }}
+                        <div class="muted">Excluded from sales calculations</div>
+                    </td>
+                    <td>{{ sale.mechanic_name }}</td>
+                    <td>
+                        {% for item in sale.products %}
+                        <div>
+                            {{ item.quantity }}x {{ item.item_name }}
+                            <span class="muted">at <span class="currency">P {{ "%.2f"|format(item.final_unit_price) }}</span></span>
+                        </div>
+                        {% endfor %}
+                    </td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(sale.total_amount or 0) }}</span></td>
+                </tr>
+                {% endfor %}
+                <tr class="totals-row">
+                    <td colspan="3"><strong>Total Mechanic Supply</strong></td>
+                    <td class="text-right"><strong><span class="currency">P {{ "%.2f"|format(data.mechanic_supply_sales | sum(attribute='total_amount')) }}</span></strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 
     {% if session.get('role') == 'admin' %}
     {% set product_profit = data.total_product_profit or 0 %}

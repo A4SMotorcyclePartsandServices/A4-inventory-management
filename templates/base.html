@@ -1185,6 +1185,13 @@
                         <span>Sales Report Summary</span>
                     </button>
 
+                    <button class="dropdown-item profile-action"
+                            data-bs-toggle="modal"
+                            data-bs-target="#mechanicSupplyReportModal">
+                        <i class="bi bi-wrench-adjustable-circle me-2"></i>
+                        <span>Mechanic Supply</span>
+                    </button>
+
                     <a class="dropdown-item profile-action" href="/export/items-sold-today">
                         <i class="bi bi-receipt-cutoff me-2"></i>
                         <span>Export Item Sales CSV</span>
@@ -1326,6 +1333,43 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-file-earmark-pdf me-1"></i> Preview Summary
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="mechanicSupplyReportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Generate Mechanic Supply Report</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/reports/mechanic-supply" method="GET" target="_blank">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Date Range</label>
+                        <div class="input-group">
+                            <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                                <i class="bi bi-calendar-range"></i>
+                            </span>
+                            <input type="text" id="mechanic-supply-date-range"
+                                class="form-control"
+                                placeholder="Select date range..."
+                                style="background:#141720; border-color:#333; color:#fff;"
+                                readonly>
+                        </div>
+                        <input type="hidden" name="start_date" id="mechanic-supply-start-hidden">
+                        <input type="hidden" name="end_date" id="mechanic-supply-end-hidden">
+                    </div>
+                    <p class="text small">The report will generate a dedicated PDF of mechanic supply transactions, attributed mechanics, item revenue references, and item cost totals for the selected date range.</p>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-pdf me-1"></i> Preview Report
                     </button>
                 </div>
             </form>
@@ -1967,6 +2011,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializeReportRangePicker('#report-date-range', '#report-start-hidden', '#report-end-hidden');
     initializeReportRangePicker('#summary-report-date-range', '#summary-report-start-hidden', '#summary-report-end-hidden');
+    initializeReportRangePicker('#mechanic-supply-date-range', '#mechanic-supply-start-hidden', '#mechanic-supply-end-hidden');
 });
 </script>
 

@@ -5,7 +5,7 @@
 - [ ] Edit Item information with history of item edits
 - [X] ~~*Import new master item file*~~ [2026-03-26]
 - [ ] Stocktake modal in Audit trail tab in audit.html page. no own modal yet
-- [ ] new toggle in sales page for mechanic supplies. get cost per piece not selling price and then show in sales report as expense
+- [X] ~~*new toggle in sales page for mechanic supplies. get cost per piece not selling price and then show in sales report as expense*~~ [2026-03-28]
 
 ## Notes
 - for meeting tomorrow, ask client if they want staff to access deleted history. we can even make it similar to PO wherein restoring a deleted entry needs admin approval

@@ -53,6 +53,12 @@
         box-shadow: 0 8px 22px rgba(244,196,48,0.22);
     }
 
+    .sale-mode-btn.mechanic.active {
+        background: #67c2e4;
+        color: #0f1720;
+        box-shadow: 0 8px 22px rgba(103,194,228,0.24);
+    }
+
     .quick-sale-note {
         display: none;
         margin: -28px -32px 22px;
@@ -73,6 +79,52 @@
 
     .quick-sale-note i {
         color: #f4c430;
+        margin-right: 8px;
+    }
+
+    .mechanic-supply-note {
+        display: none;
+        margin: -28px -32px 22px;
+        padding: 16px 32px 14px;
+        border-radius: 16px 16px 0 0;
+        background:
+            linear-gradient(180deg, rgba(103,194,228,0.13) 0%, rgba(103,194,228,0.06) 100%),
+            linear-gradient(90deg, rgba(103,194,228,0.18) 0%, rgba(103,194,228,0.02) 45%, rgba(103,194,228,0.10) 100%);
+        border-bottom: 1px solid rgba(103,194,228,0.2);
+        color: #9ce3f7;
+        font-size: 0.8rem;
+        box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
+    }
+
+    .mechanic-supply-note strong {
+        color: #c9f1fb;
+    }
+
+    .mechanic-supply-note i {
+        color: #67c2e4;
+        margin-right: 8px;
+    }
+
+    .new-sale-note {
+        display: none;
+        margin: -28px -32px 22px;
+        padding: 16px 32px 14px;
+        border-radius: 16px 16px 0 0;
+        background:
+            linear-gradient(180deg, rgba(193,18,31,0.13) 0%, rgba(193,18,31,0.06) 100%),
+            linear-gradient(90deg, rgba(193,18,31,0.18) 0%, rgba(193,18,31,0.02) 45%, rgba(193,18,31,0.10) 100%);
+        border-bottom: 1px solid rgba(193,18,31,0.18);
+        color: #f5a0a7;
+        font-size: 0.8rem;
+        box-shadow: inset 0 -1px 0 rgba(255,255,255,0.03);
+    }
+
+    .new-sale-note strong {
+        color: #ffd0d4;
+    }
+
+    .new-sale-note i {
+        color: var(--accent);
         margin-right: 8px;
     }
 
@@ -588,12 +640,20 @@
     <div class="sale-mode-toggle" id="sale-mode-toggle">
         <button type="button" class="sale-mode-btn quick active" data-sale-mode="quick">Quick Sale</button>
         <button type="button" class="sale-mode-btn" data-sale-mode="full">New Sale</button>
+        <button type="button" class="sale-mode-btn mechanic" data-sale-mode="mechanic_supply">Mechanic Supply</button>
     </div>
+    <input type="hidden" id="sale-mode-state" value="quick">
 </div>
 
 <div class="form-card">
     <div class="quick-sale-note" id="quick-sale-note">
         <i class="bi bi-lightning-charge-fill"></i><strong>Quick Sale rule:</strong> items only, each item must be priced below &#8369;100, and total due must not exceed &#8369;100.
+    </div>
+    <div class="new-sale-note" id="new-sale-note">
+        <i class="bi bi-receipt-cutoff"></i><strong>New Sale rule:</strong> use the full sales form for regular customer transactions
+    </div>
+    <div class="mechanic-supply-note" id="mechanic-supply-note">
+        <i class="bi bi-wrench-adjustable-circle-fill"></i><strong>Mechanic Supply rule:</strong> item stock-out is attributed to the selected mechanic and is tracked separately from customer sales.
     </div>
     <div class="row g-3">
 
@@ -610,9 +670,9 @@
         </div>
 
         <!-- RECEIPT # -->
-        <div class="col-md-4">
-            <label class="form-label accent">
-                OR No # <span class="req">*</span>
+        <div class="col-md-4" id="sales-number-group">
+            <label class="form-label accent" id="sales-number-label">
+                OR No # <span class="req" id="sales-number-required">*</span>
             </label>
             <input type="text" class="form-control border-warn" id="sales-number" placeholder="e.g. 4052">
         </div>
@@ -742,7 +802,7 @@
                     <th style="width:38%;">Item</th>
                     <th style="width:10%;">Stock</th>
                     <th style="width:13%;">Qty Out</th>
-                    <th style="width:10%;">Disc %</th>
+                    <th style="width:10%;" class="discount-column">Disc %</th>
                     <th style="width:14%;">Price</th>
                     <th style="width:13%;">Subtotal</th>
                     <th style="width:5%;"></th>
@@ -769,7 +829,7 @@
                         <input type="number" class="form-control form-control-sm qty-input" min="1" step="1" value="1">
                         <div class="stock-warning-text" style="display:none;">Insufficient stock</div>
                     </td>
-                    <td>
+                    <td class="discount-column">
                         <input type="number" class="form-control form-control-sm discount-input" min="0" max="50" step="1" value="0">
                     </td>
                     <td>
@@ -798,7 +858,7 @@
 
     <div class="row g-3">
         <div class="col-md-4">
-            <label class="form-label info">Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
+            <label class="form-label info" id="mechanic-label">Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
             <select class="form-select border-info-soft" id="mechanic-id">
                 <option value="">-- No Mechanic --</option>
                 {% for mech in mechanics %}
@@ -1001,7 +1061,7 @@ function showAlert(message, type = 'danger') {
 ========================================================= */
 function clearFieldErrors() {
     document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no'].forEach(id => {
+    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no', 'mechanic-id'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.classList.remove('border-danger');
@@ -1033,8 +1093,29 @@ let quickSaleOverLimitWarned = false;
 let bundleOptions = [];
 let selectedBundleConfig = null;
 
+function getActiveSaleMode() {
+    return document.querySelector('.sale-mode-btn.active')?.dataset.saleMode
+        || document.getElementById('sale-mode-state')?.value
+        || currentSaleMode
+        || 'quick';
+}
+
 function isQuickSaleMode() {
-    return currentSaleMode === 'quick';
+    return getActiveSaleMode() === 'quick';
+}
+
+function isMechanicSupplyMode() {
+    return getActiveSaleMode() === 'mechanic_supply';
+}
+
+function isFullSaleMode() {
+    return getActiveSaleMode() === 'full';
+}
+
+function getTransactionClass() {
+    if (isQuickSaleMode()) return 'QUICK_SALE';
+    if (isMechanicSupplyMode()) return 'MECHANIC_SUPPLY';
+    return 'NEW_SALE';
 }
 
 function syncQuickCustomerName() {
@@ -1304,25 +1385,45 @@ function getSelectedBundlePayload() {
 }
 
 function setSaleMode(mode) {
-    currentSaleMode = mode === 'full' ? 'full' : 'quick';
+    currentSaleMode = ['quick', 'full', 'mechanic_supply'].includes(mode) ? mode : 'quick';
+    document.getElementById('sale-mode-state').value = currentSaleMode;
 
     document.querySelectorAll('.sale-mode-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.saleMode === currentSaleMode);
     });
 
     const isQuick = isQuickSaleMode();
+    const isMechanicSupply = isMechanicSupplyMode();
+    const isFull = isFullSaleMode();
+    const showDiscountColumn = !isMechanicSupply;
     document.getElementById('quick-sale-customer-group').style.display = isQuick ? '' : 'none';
-    document.getElementById('full-sale-customer-group').style.display = isQuick ? 'none' : '';
+    document.getElementById('full-sale-customer-group').style.display = isFull ? '' : 'none';
     document.getElementById('quick-sale-note').style.display = isQuick ? 'block' : 'none';
-    document.getElementById('bundle-sale-block').style.display = isQuick ? 'none' : '';
+    document.getElementById('new-sale-note').style.display = isFull ? 'block' : 'none';
+    document.getElementById('mechanic-supply-note').style.display = isMechanicSupply ? 'block' : 'none';
+    document.getElementById('loyalty-banner-wrapper').style.display = isFull ? document.getElementById('loyalty-banner-wrapper').style.display : 'none';
+    document.getElementById('bundle-sale-block').style.display = isFull ? '' : 'none';
     document.getElementById('mechanic-services-block').style.display = isQuick ? 'none' : '';
-    document.getElementById('payment-section-divider').style.display = isQuick ? 'none' : '';
-    document.getElementById('payment-controls-col').style.display = isQuick ? 'none' : '';
+    document.getElementById('payment-section-divider').style.display = isFull ? '' : 'none';
+    document.getElementById('payment-controls-col').style.display = isFull ? '' : 'none';
     document.getElementById('bundle-sale-card').classList.toggle('disabled', isQuick);
+    document.getElementById('sales-number-group').style.display = isMechanicSupply ? 'none' : '';
+    document.querySelectorAll('.discount-column').forEach(el => {
+        el.style.display = showDiscountColumn ? '' : 'none';
+    });
 
     const paymentTotalCol = document.getElementById('payment-total-col');
-    paymentTotalCol.classList.toggle('col-md-12', isQuick);
-    paymentTotalCol.classList.toggle('col-md-6', !isQuick);
+    paymentTotalCol.classList.toggle('col-md-12', !isFull);
+    paymentTotalCol.classList.toggle('col-md-6', isFull);
+
+    const salesNumberLabel = document.getElementById('sales-number-label');
+    const salesNumberInput = document.getElementById('sales-number');
+    if (isMechanicSupply) {
+        salesNumberInput.value = '';
+    } else {
+        salesNumberLabel.innerHTML = 'OR No # <span class="req" id="sales-number-required">*</span>';
+        salesNumberInput.placeholder = 'e.g. 4052';
+    }
 
     if (isQuick) {
         quickSaleOverLimitWarned = false;
@@ -1341,10 +1442,39 @@ function setSaleMode(mode) {
     } else {
         document.getElementById('quick-customer-name').classList.remove('border-danger');
         document.getElementById('quick-customer-name').style.boxShadow = '';
+        if (!isFull) {
+            document.getElementById('customer-id').value = '';
+            document.getElementById('customer-name').value = '';
+            document.getElementById('payment-category').value = DEFAULT_CASH_PAYMENT_ID;
+            document.getElementById('payment-method').value = '';
+            document.getElementById('ref-no').value = '';
+            document.getElementById('trans-notes').value = '';
+            document.getElementById('vehicle-id').value = '';
+            clearServices();
+            clearBundleSelection();
+            document.querySelectorAll('.discount-input').forEach(input => {
+                input.value = 0;
+            });
+        }
     }
 
+    if (isMechanicSupply) {
+        document.querySelectorAll('.discount-input').forEach(input => {
+            input.value = 0;
+        });
+    }
+
+    const mechanicLabelHint = document.getElementById('mechanic-label');
+    if (mechanicLabelHint) {
+        mechanicLabelHint.innerHTML = isMechanicSupply
+            ? 'Assigned Mechanic <span class="req">*</span>'
+            : 'Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span>';
+    }
+
+    document.getElementById('services-section').style.display = (!isQuick && !isMechanicSupply && document.getElementById('mechanic-id').value !== '') ? 'block' : 'none';
     updatePaymentCategoryUI();
     updateQuickSaleItemHints();
+    recalculateAllItemRows();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1404,14 +1534,21 @@ function calculateRow(row) {
     const selectedItemId = row.querySelector('.item-id-input').value;
     const reservedBundleQty = getReservedBundleQtyForItem(selectedItemId);
     const availableStockForStandalone = Math.max(0, stock - reservedBundleQty);
-    const basePrice = parseFloat(row.dataset.basePrice) || 0;
+    const sellingPrice = parseFloat(row.dataset.sellingPrice);
+    const costPrice = parseFloat(row.dataset.costPrice);
+    const fallbackBasePrice = parseFloat(row.dataset.basePrice) || 0;
+    const basePrice = isMechanicSupplyMode()
+        ? (!Number.isNaN(costPrice) ? costPrice : fallbackBasePrice)
+        : (!Number.isNaN(sellingPrice) ? sellingPrice : fallbackBasePrice);
     const priceInput = row.querySelector('.price-input');
     const discountInput = row.querySelector('.discount-input');
 
     let discount = parseFloat(discountInput.value) || 0;
     if (discount < 0) discount = 0;
     if (discount > 50) discount = 50;
+    if (isMechanicSupplyMode()) discount = 0;
     discountInput.value = discount;
+    row.dataset.basePrice = basePrice.toFixed(2);
 
     const discountedPrice = basePrice * (1 - discount / 100);
     priceInput.value = discountedPrice.toFixed(2);
@@ -1548,7 +1685,7 @@ const handleTableSearch = async (input) => {
             btn.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center">
                     <strong>${itemName}</strong>
-                    <span class="suggestion-price-badge">₱${item.a4s_selling_price}</span>
+                    <span class="suggestion-price-badge">₱${isMechanicSupplyMode() ? item.cost_per_piece : item.a4s_selling_price}</span>
                 </div>
                 ${itemDescription ? `<div class="suggestion-description">${itemDescription}</div>` : ``}
                 <div class="suggestion-stock">
@@ -1567,8 +1704,12 @@ const handleTableSearch = async (input) => {
                     input.value = item.name;
                     input.dataset.confirmedName = item.name;
                     row.querySelector('.item-id-input').value = item.id;
-                    row.querySelector('.price-input').value = item.a4s_selling_price;
-                    row.dataset.basePrice = item.a4s_selling_price;
+                    row.dataset.sellingPrice = Number(item.a4s_selling_price || 0).toFixed(2);
+                    row.dataset.costPrice = Number(item.cost_per_piece || 0).toFixed(2);
+                    row.dataset.basePrice = isMechanicSupplyMode()
+                        ? row.dataset.costPrice
+                        : row.dataset.sellingPrice;
+                    row.querySelector('.price-input').value = row.dataset.basePrice;
                     row.querySelector('.stock-input').value = item.current_stock;
                     rebuildSelectedItemIds();
                     suggestions.style.display = 'none';
@@ -2250,6 +2391,8 @@ function clearItemRow(row) {
     row.querySelector('.stock-input').value = '--';
     row.querySelector('.discount-input').value = 0;
     delete row.dataset.basePrice;
+    delete row.dataset.sellingPrice;
+    delete row.dataset.costPrice;
 
     const originalPriceEl = row.querySelector('.original-price');
     if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
@@ -2268,7 +2411,7 @@ function clearItemRow(row) {
 // Mechanic toggle
 document.getElementById('mechanic-id').addEventListener('change', function () {
     const servicesSection = document.getElementById('services-section');
-    if (this.value !== "") {
+    if (!isMechanicSupplyMode() && this.value !== "") {
         servicesSection.style.display = 'block';
         applyPendingRedeemedServices();
     } else {
@@ -2386,6 +2529,8 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     newRow.querySelector('.subtotal-display').innerText = '₱0.00';
     newRow.querySelector('.discount-input').value = 0;
     delete newRow.dataset.basePrice;
+    delete newRow.dataset.sellingPrice;
+    delete newRow.dataset.costPrice;
 
     const originalPriceEl = newRow.querySelector('.original-price');
     if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
@@ -2419,21 +2564,23 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     syncQuickCustomerName();
 
     const quickSaleMode = isQuickSaleMode();
+    const mechanicSupplyMode = isMechanicSupplyMode();
+    const fullSaleMode = isFullSaleMode();
     const salesNum      = document.getElementById('sales-number').value.trim();
     const customerName  = quickSaleMode
         ? document.getElementById('quick-customer-name').value.trim()
-        : document.getElementById('customer-name').value.trim();
+        : (fullSaleMode ? document.getElementById('customer-name').value.trim() : '');
     const paymentCat    = document.getElementById('payment-category').value;
     const mechanicId    = document.getElementById('mechanic-id').value;
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo         = document.getElementById('ref-no').value.trim();
     const notes         = document.getElementById('trans-notes').value.trim();
-    const needsProvider = !quickSaleMode && (paymentCat === 'Online' || paymentCat === 'Bank');
-    const needsNotes    = !quickSaleMode && isOthersPaymentCategory();
+    const needsProvider = fullSaleMode && (paymentCat === 'Online' || paymentCat === 'Bank');
+    const needsNotes    = fullSaleMode && isOthersPaymentCategory();
     const vehicleId     = document.getElementById('vehicle-id').value;
     const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
     const vehicleIsActive  = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
-    const vehicleRequired  = !quickSaleMode && document.getElementById('vehicle-id').dataset.required === '1';
+    const vehicleRequired  = fullSaleMode && document.getElementById('vehicle-id').dataset.required === '1';
 
     let firstErrorEl = null;
     function markError(el, message) {
@@ -2441,8 +2588,9 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         if (!firstErrorEl) firstErrorEl = el;
     }
 
-    if (!salesNum)                                markError(document.getElementById('sales-number'), 'OR No. is required.');
-    if (!customerName)                            markError(document.getElementById(quickSaleMode ? 'quick-customer-name' : 'customer-search'), 'Customer is required.');
+    if (!mechanicSupplyMode && !salesNum)         markError(document.getElementById('sales-number'), 'OR No. is required.');
+    if (!mechanicSupplyMode && !customerName)     markError(document.getElementById(quickSaleMode ? 'quick-customer-name' : 'customer-search'), 'Customer is required.');
+    if (mechanicSupplyMode && !mechanicId)        markError(document.getElementById('mechanic-id'), 'Assigned mechanic is required.');
     if (vehicleRequired && !vehicleId)            markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
     if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
     if (needsProvider && !selectedProvider)       markError(document.getElementById('payment-method'), 'Please select a provider.');
@@ -2502,10 +2650,10 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         }
     }
 
-    const selectedBundlePayload = quickSaleMode ? null : getSelectedBundlePayload();
+    const selectedBundlePayload = fullSaleMode ? getSelectedBundlePayload() : null;
     const hasBundleSelected = Boolean(selectedBundlePayload);
     const bundleServicesCount = hasBundleSelected ? (selectedBundleConfig?.services || []).length : 0;
-    const bundleChosenWithoutVariant = !quickSaleMode && document.getElementById('bundle-select').value && !hasBundleSelected;
+    const bundleChosenWithoutVariant = fullSaleMode && document.getElementById('bundle-select').value && !hasBundleSelected;
 
     let hasStockError = false;
     document.querySelectorAll('.item-row').forEach(row => {
@@ -2540,6 +2688,16 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
     if (quickSaleMode && hasBundleSelected) {
         showAlert('Quick Sale only supports item sales. Switch to New Sale to add a bundle.', 'warning');
+        return;
+    }
+
+    if (mechanicSupplyMode && validServices.length > 0) {
+        showAlert('Mechanic Supply only supports item stock-outs.', 'warning');
+        return;
+    }
+
+    if (mechanicSupplyMode && hasBundleSelected) {
+        showAlert('Mechanic Supply does not support bundles.', 'warning');
         return;
     }
 
@@ -2578,7 +2736,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
+    if (fullSaleMode && mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
         showAlert('Assigned mechanic requires at least one service entry.', 'warning');
         document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -2621,6 +2779,7 @@ async function saveTransaction(items, services, bundles) {
     let paymentId = document.getElementById('payment-category').value;
     let refNo = null;
     const quickSaleMode = isQuickSaleMode();
+    const fullSaleMode = isFullSaleMode();
 
     if (quickSaleMode) {
         syncQuickCustomerName();
@@ -2635,26 +2794,27 @@ async function saveTransaction(items, services, bundles) {
         finalDate = new Date(now - offset).toISOString().slice(0, 19);
     }
 
-    if (!quickSaleMode && (paymentId === 'Online' || paymentId === 'Bank')) {
+    if (fullSaleMode && (paymentId === 'Online' || paymentId === 'Bank')) {
         paymentId = document.getElementById('payment-method').value;
         refNo = document.getElementById('ref-no').value || null;
     }
 
     const payload = {
+        transaction_class: getTransactionClass(),
         quick_sale:        quickSaleMode,
-        sales_number:      document.getElementById('sales-number').value,
-        customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : document.getElementById('customer-name').value,
-        customer_id:       quickSaleMode ? null : (document.getElementById('customer-id').value || null),
+        sales_number:      document.getElementById('sales-number').value.trim() || null,
+        customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : (fullSaleMode ? document.getElementById('customer-name').value : ''),
+        customer_id:       fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
         mechanic_id:       quickSaleMode ? null : (document.getElementById('mechanic-id').value || null),
-        vehicle_id:        quickSaleMode ? null : (document.getElementById('vehicle-id').value || null),
-        payment_method_id: quickSaleMode ? DEFAULT_CASH_PAYMENT_ID : paymentId,
+        vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
+        payment_method_id: fullSaleMode ? paymentId : DEFAULT_CASH_PAYMENT_ID,
         reference_no:      refNo,
         total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
-        notes:             quickSaleMode ? '' : document.getElementById('trans-notes').value,
+        notes:             fullSaleMode ? document.getElementById('trans-notes').value : '',
         transaction_date:  finalDate,
         items,
-        services:          quickSaleMode ? [] : services,
-        bundles:           quickSaleMode ? [] : bundles
+        services:          fullSaleMode ? services : [],
+        bundles:           fullSaleMode ? bundles : []
     };
 
     try {

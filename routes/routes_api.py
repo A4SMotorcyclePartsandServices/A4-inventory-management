@@ -142,7 +142,12 @@ def search_items():
 
     conn = get_db()
     cursor = conn.execute(f"""
-        SELECT id, name, category, COALESCE(a4s_selling_price, 0) AS a4s_selling_price
+        SELECT
+            id,
+            name,
+            category,
+            COALESCE(a4s_selling_price, 0) AS a4s_selling_price,
+            COALESCE(cost_per_piece, 0) AS cost_per_piece
         FROM items
         WHERE {where_clause}
         ORDER BY name ASC

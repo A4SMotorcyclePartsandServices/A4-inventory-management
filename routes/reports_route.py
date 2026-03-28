@@ -10,6 +10,7 @@ from services.reports_service import (
     get_sales_by_range,
     get_sales_report_by_date,
     get_sales_report_by_range,
+    _build_mechanic_supply_report_context,
 )
 from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
 from services.cash_service import get_cash_entries_for_report
@@ -186,6 +187,32 @@ def sales_report_summary_pdf():
     if context is None:
         return redirect(url_for("index"))
     return render_template("reports/sales_summary_pdf.html", **context)
+
+
+@reports_bp.route("/reports/mechanic-supply")
+def mechanic_supply_report():
+    report_date = request.args.get("report_date")
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    if report_date:
+        data = _build_mechanic_supply_report_context(report_date, report_date)
+        date_label = format_date(report_date)
+    elif start_date and end_date:
+        if end_date < start_date:
+            flash("End date cannot be before start date.", "warning")
+            return redirect(url_for("index"))
+        data = _build_mechanic_supply_report_context(start_date, end_date)
+        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
+    else:
+        flash("Please select a date.", "warning")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "reports/mechanic_supply_pdf.html",
+        report_date=date_label,
+        data=data,
+    )
 
 
 @reports_bp.route("/export/inventory-snapshot")

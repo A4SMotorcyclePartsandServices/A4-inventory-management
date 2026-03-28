@@ -165,9 +165,23 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     rows = conn.execute(data_query, inv_params + sale_params + [PER_PAGE, offset]).fetchall()
     conn.close()
 
+    def _build_display_reference(row):
+        if row["reference_type"] == "PURCHASE_ORDER":
+            return row["po_number"] or row["reference_id"]
+        if row["reference_type"] == "SALE":
+            if row["sales_number"]:
+                return row["sales_number"]
+            if str(row.get("change_reason") or "").strip().upper() == "MECHANIC_SUPPLY":
+                try:
+                    return f"MS-{int(row['reference_id']):06d}"
+                except (TypeError, ValueError):
+                    return f"MS-{row['reference_id']}"
+        return row["reference_id"]
+
     formatted = [
         {
             **dict(r),
+            "display_reference": _build_display_reference(r),
             "transaction_date_raw": r["transaction_date"].isoformat() if r["transaction_date"] else None,
             "transaction_date": format_date(r["transaction_date"], show_time=True),
         }

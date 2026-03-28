@@ -186,7 +186,7 @@ Future upgrade: move to Redis or DB
 - [X] ~~*some mechanics don't need the top up logic applied, excluded them from top up calculation*~~ [2026-03-27]
 
 ## Reorder level
-- [ ] change reorder level checking to an algorithm that suggests when an item should be restocked. exclude svc in category
+- [X] ~~*change reorder level checking to an algorithm that suggests when an item should be restocked. exclude svc in category*~~ [2026-03-28]
 
 ## OUT PAGE
 - [X] ~~*Services section, add one more feature to the search, set a keyword that when inputted, shows all the services present in the services table*~~ [2026-03-27]

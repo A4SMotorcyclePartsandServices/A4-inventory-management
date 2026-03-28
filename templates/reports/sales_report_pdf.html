@@ -110,22 +110,29 @@
         .badge-paid       { background: #d4edda; color: #155724; border: 1px solid #a3cfbb; }
         .badge-unresolved { background: #f8d7da; color: #721c24; border: 1px solid #f1aeb5; }
 
-        /* ── Three summary boxes ── */
+        /* ── Summary boxes ── */
         /* Force onto a new page so the grid never splits mid-print */
         .summary-grid {
             display: flex;
+            flex-direction: column;
             gap: 14px;
             margin-top: 30px;
             page-break-before: always;
             break-before: always;
         }
+        .summary-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            align-items: stretch;
+        }
         .summary-box {
-            flex: 1;
             border: 1px solid #bbb;
             border-radius: 6px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 260px;
         }
         .summary-box-title {
             background: #e8e8e8;
@@ -145,6 +152,11 @@
             flex-direction: column;
         }
         .summary-box-body.fin-body { padding: 0; }
+        .summary-box-body.mechanics-body {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
 
         /* Items box */
         .summary-item-row {
@@ -195,6 +207,12 @@
         /* Services / mechanic box */
         .mechanic-block { margin-bottom: 12px; }
         .mechanic-block:last-child { margin-bottom: 0; }
+        .mechanics-rows {
+            flex-grow: 1;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+        }
         .mechanic-block-name { font-weight: 700; font-size: 13px; margin-bottom: 3px; }
         .mechanic-block-row {
             display: flex;
@@ -213,6 +231,21 @@
             padding-top: 4px;
             border-top: 1px solid #eee;
         }
+        .mechanic-total {
+            margin-top: auto;
+            background: #111;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 800;
+            padding: 10px 12px;
+            border-radius: 0 0 6px 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .mechanic-total .label { color: #eee; }
+        .mechanic-total .value { color: #fff; }
 
         /* Financials box */
         .fin-rows {
@@ -230,7 +263,7 @@
             border-bottom: 1px solid #eee;
         }
         .fin-row .label { color: #444; }
-        .fin-row .value { font-weight: 600; }
+        .fin-row .value { font-weight: 600; white-space: nowrap; }
         .fin-row.mech .label { color: #c1121f; }
         .fin-row.mech .value { color: #c1121f; font-weight: 700; }
         .fin-row.shop .label { color: #2d6a4f; }
@@ -251,6 +284,13 @@
         }
         .fin-row.net .label { color: #eee; }
         .fin-row.net .value { color: #fff; }
+        .summary-item-row span:last-child,
+        .mechanic-block-row span:last-child,
+        .mechanic-block-cut span:last-child,
+        .items-total .value,
+        .mechanic-total .value {
+            white-space: nowrap;
+        }
 
         /* ── Empty state ── */
         .empty-state { text-align: center; padding: 50px; color: #888; font-size: 15px; }
@@ -298,6 +338,7 @@
             border-radius: 6px;
             overflow: hidden;
             page-break-inside: avoid;
+            break-inside: avoid-page;
         }
         .cash-section-title {
             background: #d0e8f5;
@@ -310,6 +351,13 @@
             border-bottom: 1px solid #b8d4e8;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            page-break-after: avoid;
+            break-after: avoid-page;
+        }
+        .cash-section-title + table,
+        .cash-section-title + .cash-summary {
+            page-break-before: avoid;
+            break-before: avoid-page;
         }
         .cash-type-in  { color: #155724; font-weight: 700; }
         .cash-type-out { color: #721c24; font-weight: 700; }
@@ -331,6 +379,12 @@
             padding: 10px 12px;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+        }
+        .cash-totals {
+            page-break-inside: avoid;
+            break-inside: avoid-page;
+            page-break-before: avoid;
+            break-before: avoid-page;
         }
         .report-section {
             margin-top: 14px;
@@ -573,9 +627,13 @@
                     {% endif %}
                 </td>
                 <td>
+                    {% if sale.transaction_class != 'MECHANIC_SUPPLY' %}
                     {{ sale.payment_method }}
+                    {% endif %}
                     <div style="margin-top: 5px;">
-                        <span class="badge badge-paid">Paid</span>
+                        <span class="badge {{ 'badge-unresolved' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'badge-paid' }}">
+                            {{ 'Expense' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'Paid' }}
+                        </span>
                     </div>
                         {% if sale.notes %}
                             <div class="notes-cell">Notes: {{ sale.notes }}</div>
@@ -589,97 +647,132 @@
         </tbody>
     </table>
 
-    {# ── Three summary boxes — always starts on a new page ── #}
+    {# ── Summary boxes — always starts on a new page ── #}
     <div class="summary-grid">
+        <div class="summary-row">
+            {# Box 1: Items sold #}
+            <div class="summary-box">
+            <div class="summary-box-title">Items Sold</div>
 
-        {# Box 1: Items sold #}
-        <div class="summary-box">
-        <div class="summary-box-title">Items Sold</div>
+            <div class="summary-box-body items-body">
+                {% if data.items_summary %}
 
-        <div class="summary-box-body items-body">
-            {% if data.items_summary %}
-
-            <div class="items-rows">
-                {% for item in data.items_summary %}
-                <div class="summary-item-row">
-                <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
-                <span>₱ {{ "%.2f"|format(item.total) }}</span>
-                </div>
-                {% endfor %}
-            </div>
-
-            <div class="items-total">
-                <span class="label">TOTAL</span>
-                <span class="value">₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
-            </div>
-
-            {% else %}
-            <div style="padding: 10px 12px; color: #aaa; font-size: 12px;">No items sold.</div>
-            {% endif %}
-        </div>
-        </div>
-
-        {# Box 2: Services & mechanic payouts (quota applied per mechanic per day) #}
-        <div class="summary-box">
-            <div class="summary-box-title">Services & Mechanic Payouts</div>
-            <div class="summary-box-body">
-                {% if data.mechanic_summary %}
-                    {% for mech in data.mechanic_summary %}
-                    <div class="mechanic-block">
-                        <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
-                    <div class="mechanic-block-row">
-                        <span>Services rendered</span>
-                        <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
-                    </div>
-                    {% if mech.bundle_mech_share > 0 %}
-                    <div class="mechanic-block-row">
-                        <span>Bundle service side</span>
-                        <span>₱ {{ "%.2f"|format(mech.bundle_mech_share) }}</span>
-                    </div>
-                    {% endif %}
-                    {% if mech.debt_service_portion > 0 %}
-                    <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
-                        <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
-                        <span></span>
-                    </div>
-                    {% endif %}
-                    {% if mech.bundle_mech_share > 0 or mech.debt_service_portion > 0 %}
-                    <div class="mechanic-block-row" style="font-weight: 700;">
-                        <span>Total for payout</span>
-                        <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
-                    </div>
-                    {% endif %}
-                        <div class="mechanic-block-cut">
-                            <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
-                            <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
-                        </div>
-                        <div class="mechanic-block-row">
-                            <span style="color: #2d6a4f;">Shop's share</span>
-                            <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.payout_shop_share) }}</span>
-                        </div>
-                        {% if mech.shop_topup > 0 %}
-                        <div class="mechanic-block-row">
-                            <span style="color: #b45309;">Quota top-up (shop expense)</span>
-                            <span style="color: #b45309;">+₱ {{ "%.2f"|format(mech.shop_topup) }}</span>
-                        </div>
-                        <div class="mechanic-block-cut">
-                            <span>Total Payout</span>
-                            <span>₱ {{ "%.2f"|format(mech.total_payout) }}</span>
-                        </div>
-                        {% endif %}
+                <div class="items-rows">
+                    {% for item in data.items_summary %}
+                    <div class="summary-item-row">
+                    <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
+                    <span>₱ {{ "%.2f"|format(item.total) }}</span>
                     </div>
                     {% endfor %}
+                </div>
+
+                <div class="items-total">
+                    <span class="label">TOTAL</span>
+                    <span class="value">₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
+                </div>
+
                 {% else %}
-                    <div style="color: #aaa; font-size: 12px;">No services recorded.</div>
+                <div style="padding: 10px 12px; color: #aaa; font-size: 12px;">No items sold.</div>
                 {% endif %}
+            </div>
+            </div>
+
+            {# Box 2: Services & mechanic payouts (quota applied per mechanic per day) #}
+            <div class="summary-box">
+                <div class="summary-box-title">Services & Mechanic Payouts</div>
+                <div class="summary-box-body mechanics-body">
+                    {% if data.mechanic_summary %}
+                        <div class="mechanics-rows">
+                        {% for mech in data.mechanic_summary %}
+                        <div class="mechanic-block">
+                            <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
+                        <div class="mechanic-block-row">
+                            <span>Services rendered</span>
+                            <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
+                        </div>
+                        {% if mech.bundle_mech_share > 0 %}
+                        <div class="mechanic-block-row">
+                            <span>Bundle service side</span>
+                            <span>₱ {{ "%.2f"|format(mech.bundle_mech_share) }}</span>
+                        </div>
+                        {% endif %}
+                        {% if mech.debt_service_portion > 0 %}
+                        <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
+                            <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
+                            <span></span>
+                        </div>
+                        {% endif %}
+                        {% if mech.bundle_mech_share > 0 or mech.debt_service_portion > 0 %}
+                        <div class="mechanic-block-row" style="font-weight: 700;">
+                            <span>Total for payout</span>
+                            <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
+                        </div>
+                        {% endif %}
+                            <div class="mechanic-block-cut">
+                                <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
+                                <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
+                            </div>
+                            <div class="mechanic-block-row">
+                                <span style="color: #2d6a4f;">Shop's share</span>
+                                <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.payout_shop_share) }}</span>
+                            </div>
+                            {% if mech.shop_topup > 0 %}
+                            <div class="mechanic-block-row">
+                                <span style="color: #b45309;">Quota top-up (shop expense)</span>
+                                <span style="color: #b45309;">+₱ {{ "%.2f"|format(mech.shop_topup) }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        </div>
+                        <div class="mechanic-total">
+                            <span class="label">TOTAL MECHANIC PAYOUT</span>
+                            <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut or 0) }}</span>
+                        </div>
+                    {% else %}
+                        <div class="mechanics-rows" style="color: #aaa; font-size: 12px;">No services recorded.</div>
+                        <div class="mechanic-total">
+                            <span class="label">TOTAL MECHANIC PAYOUT</span>
+                            <span class="value">₱ 0.00</span>
+                        </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
-        {# Box 3: Financials #}
-        <div class="summary-box">
-            <div class="summary-box-title">Transaction Details</div>
-            <div class="summary-box-body fin-body">
-                <div class="fin-rows">
+        <div class="summary-row">
+            {# Box 3: Mechanic supply items #}
+            <div class="summary-box">
+            <div class="summary-box-title">Mechanic Supply</div>
+
+            <div class="summary-box-body items-body">
+                {% if data.mechanic_supply_items_summary %}
+
+                <div class="items-rows">
+                    {% for item in data.mechanic_supply_items_summary %}
+                    <div class="summary-item-row">
+                    <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
+                    <span>₱ {{ "%.2f"|format(item.total) }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="items-total" style="background: #0f3d4a;">
+                    <span class="label">TOTAL</span>
+                    <span class="value">₱ {{ "%.2f"|format(data.mechanic_supply_items_summary | sum(attribute='total')) }}</span>
+                </div>
+
+                {% else %}
+                <div style="padding: 10px 12px; color: #aaa; font-size: 12px;">No mechanic supply items.</div>
+                {% endif %}
+            </div>
+            </div>
+
+            {# Box 4: Financials #}
+            <div class="summary-box">
+                <div class="summary-box-title">Transaction Details</div>
+                <div class="summary-box-body fin-body">
+                    <div class="fin-rows">
                     <div class="fin-row">
                         <span class="label">Item Sales</span>
                         <span class="value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</span>
@@ -744,7 +837,7 @@
                 </div>
             </div>
         </div>
-
+        </div>
     </div>
 
     {% if session.get('role') == 'admin' %}
@@ -945,17 +1038,19 @@
             </tbody>
         </table>
 
-        <div class="cash-summary-row" style="color: #155724;">
-            <span>Total Cash In</span>
-            <span>+ ₱ {{ "%.2f"|format(cash_data.total_in) }}</span>
-        </div>
-        <div class="cash-summary-row" style="color: #721c24;">
-            <span>Total Cash Out</span>
-            <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
-        </div>
-        <div class="cash-on-hand-bar">
-            <span>CASH ON HAND — {{ report_date }}</span>
-            <span>₱ {{ "%.2f"|format(cash_data.cash_on_hand) }}</span>
+        <div class="cash-totals">
+            <div class="cash-summary-row" style="color: #155724;">
+                <span>Total Cash In</span>
+                <span>+ ₱ {{ "%.2f"|format(cash_data.total_in) }}</span>
+            </div>
+            <div class="cash-summary-row" style="color: #721c24;">
+                <span>Total Cash Out</span>
+                <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
+            </div>
+            <div class="cash-on-hand-bar">
+                <span>CASH ON HAND — {{ report_date }}</span>
+                <span>₱ {{ "%.2f"|format(cash_data.cash_on_hand) }}</span>
+            </div>
         </div>
 
         {% else %}

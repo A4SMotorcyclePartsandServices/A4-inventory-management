@@ -444,331 +444,12 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
 # RECORD SALE
 # ─────────────────────────────────────────────
 
-def record_sale(data, user_id, username):
-    """
-    Records a full sale: validates payment method, inserts sale row,
-    logs all item OUT transactions, inserts services.
-    Raises ValueError for business logic errors.
-    NOTE (future branches): add branch_id filter to payment method lookup.
-    """
-    # 1) Validate payment method
-    try:
-        payment_method_id = int(data.get("payment_method_id"))
-    except (TypeError, ValueError):
-        raise ValueError("Invalid payment method selected.")
-
-    quick_sale = bool(data.get("quick_sale"))
-
-    conn = get_db()
-    try:
-        pm = conn.execute("""
-            SELECT id, category, is_active
-            FROM payment_methods WHERE id = %s
-        """, (payment_method_id,)).fetchone()
-
-        if not pm or pm["is_active"] != 1:
-            raise ValueError("Invalid or inactive payment method selected.")
-
-        payment_category = (pm["category"] or "").strip()
-        if quick_sale and payment_category != "Cash":
-            raise ValueError("Quick Sale must use a cash payment method.")
-        sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
-
-        # 2) Normalize time
-        now_obj = datetime.now()
-        raw_date = data.get('transaction_date')
-        current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
-
-        if raw_date:
-            clean_time = raw_date.replace('T', ' ')
-            if clean_time[:16] == current_minute or not raw_date:
-                clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
-            elif len(clean_time) == 16:
-                clean_time += ":00"
-        else:
-            clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
-
-        # 3) Duplicate item guard
-        raw_items = data.get("items", []) or []
-        seen = set()
-        dupes = set()
-
-        for it in raw_items:
-            iid = it.get("item_id")
-            if iid is None:
-                continue
-            iid = str(iid).strip()
-            if not iid:
-                continue
-            if iid in seen:
-                dupes.add(iid)
-            seen.add(iid)
-
-        if dupes:
-            placeholders = ",".join(["%s"] * len(dupes))
-            items_data = conn.execute(
-                f"SELECT id, name FROM items WHERE id IN ({placeholders})",
-                tuple(dupes)
-            ).fetchall()
-            labels = [f"{r['name']} (ID {r['id']})" for r in items_data]
-            raise ValueError(f"Duplicate item(s) detected: {', '.join(labels)}. Please adjust Qty Out instead.")
-
-        item_catalog = {}
-        normalized_items = []
-        if raw_items:
-            normalized_item_ids = []
-            for item in raw_items:
-                try:
-                    normalized_item_ids.append(int(item.get("item_id")))
-                except (TypeError, ValueError):
-                    raise ValueError("One or more selected items are invalid.")
-
-            placeholders = ",".join(["%s"] * len(normalized_item_ids))
-            item_rows = conn.execute(
-                f"""
-                SELECT id, name, a4s_selling_price
-                FROM items
-                WHERE id IN ({placeholders})
-                """,
-                tuple(normalized_item_ids),
-            ).fetchall()
-            item_catalog = {int(row["id"]): dict(row) for row in item_rows}
-
-            missing_item_ids = [iid for iid in normalized_item_ids if iid not in item_catalog]
-            if missing_item_ids:
-                raise ValueError("One or more selected items no longer exist.")
-
-            for item in raw_items:
-                item_id = int(item.get("item_id"))
-                item_row = item_catalog.get(item_id)
-                if not item_row:
-                    raise ValueError("One or more selected items no longer exist.")
-
-                try:
-                    qty = int(item.get("quantity", 0) or 0)
-                except (TypeError, ValueError):
-                    raise ValueError("One or more item quantities are invalid.")
-                if qty <= 0:
-                    raise ValueError("Item quantities must be at least 1.")
-
-                try:
-                    discount_percent_whole = float(item.get("discount_percent", 0) or 0)
-                except (TypeError, ValueError):
-                    raise ValueError("One or more item discounts are invalid.")
-                if discount_percent_whole < 0 or discount_percent_whole > 50:
-                    raise ValueError("Item discount must be between 0 and 50 percent.")
-
-                master_price = round(float(item_row.get("a4s_selling_price") or 0), 2)
-                submitted_original_price = round(float(item.get("original_price", 0) or 0), 2)
-                submitted_final_price = round(float(item.get("final_price", 0) or 0), 2)
-                expected_final_price = round(master_price * (1 - (discount_percent_whole / 100)), 2)
-
-                if abs(submitted_original_price - master_price) > 0.01:
-                    raise ValueError(f"Price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
-                if abs(submitted_final_price - expected_final_price) > 0.01:
-                    raise ValueError(f"Discounted price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
-
-                normalized_items.append({
-                    "item_id": item_id,
-                    "name": item_row["name"],
-                    "quantity": qty,
-                    "original_price": master_price,
-                    "cost_per_piece_snapshot": round(float(item_row.get("cost_per_piece") or 0), 2),
-                    "discount_percent_whole": discount_percent_whole,
-                    "discount_percent_decimal": discount_percent_whole / 100,
-                    "final_price": expected_final_price,
-                    "discount_amount": round(master_price - expected_final_price, 2),
-                })
-
-        if quick_sale:
-            raw_services = data.get("services", []) or []
-            if raw_services:
-                raise ValueError("Quick Sale only supports item sales.")
-            if data.get("mechanic_id"):
-                raise ValueError("Quick Sale cannot be assigned to a mechanic.")
-            customer_name = str(data.get("customer_name") or "").strip()
-            if not customer_name:
-                raise ValueError("Quick Sale requires a customer name.")
-            if not raw_items:
-                raise ValueError("Quick Sale requires at least one item.")
-
-            computed_quick_total = 0.0
-            for item in normalized_items:
-                master_price = float(item["original_price"] or 0)
-                final_price = float(item["final_price"] or 0)
-                qty = int(item["quantity"] or 0)
-
-                if master_price >= 100:
-                    raise ValueError(f"'{item['name']}' is not eligible for Quick Sale because its catalog price is 100 pesos or more.")
-                if final_price >= 100:
-                    raise ValueError("Quick Sale only allows items priced below 100 pesos.")
-                computed_quick_total += qty * final_price
-
-            if round(computed_quick_total, 2) > 100:
-                raise ValueError("Quick Sale total due cannot exceed 100 pesos.")
-
-        conn.execute("BEGIN")
-        sale_total_amount = 0.0
-
-        # 4) Insert sale
-        vehicle_id = data.get("vehicle_id")
-        if vehicle_id in ("", None):
-            vehicle_id = None
-        else:
-            try:
-                vehicle_id = int(vehicle_id)
-            except (TypeError, ValueError):
-                vehicle_id = None
-
-        if vehicle_id is not None and data.get("customer_id"):
-            valid_vehicle = conn.execute(
-                "SELECT id FROM vehicles WHERE id = %s AND customer_id = %s AND is_active = 1",
-                (vehicle_id, data.get("customer_id"))
-            ).fetchone()
-            if not valid_vehicle:
-                raise ValueError("Invalid vehicle selected for this customer.")
-
-        sale_row = conn.execute("""
-            INSERT INTO sales (
-                sales_number, customer_name, customer_id, vehicle_id, total_amount,
-                payment_method_id, reference_no, status,
-                notes, user_id, transaction_date, mechanic_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            data.get('sales_number'),
-            data.get('customer_name'),
-            data.get('customer_id') or None,
-            vehicle_id,
-            sale_total_amount,
-            payment_method_id,
-            data.get('reference_no'),
-            sale_status,
-            data.get('notes'),
-            user_id,
-            clean_time,
-            data.get('mechanic_id') or None
-        )).fetchone()
-
-        new_sale_id = sale_row["id"]
-
-        # 5a) Stock validation — enforced at service level, cannot be bypassed via API
-        # NOTE (future branches): filter stock calc by branch_id when ready.
-        for item in raw_items:
-            item_id = item['item_id']
-            qty_requested = int(item['quantity'])
-
-            stock_row = conn.execute("""
-                SELECT COALESCE(SUM(
-                    CASE
-                        WHEN transaction_type = 'IN' THEN quantity
-                        WHEN transaction_type = 'OUT' THEN -quantity
-                        ELSE 0
-                    END
-                ), 0) AS current_stock
-                FROM inventory_transactions
-                WHERE item_id = %s
-            """, (item_id,)).fetchone()
-
-            current_stock = int(stock_row['current_stock']) if stock_row else 0
-
-            if qty_requested > current_stock:
-                name_row = conn.execute("SELECT name FROM items WHERE id = %s", (item_id,)).fetchone()
-                item_name = name_row['name'] if name_row else f"Item ID {item_id}"
-                raise ValueError(
-                    f"Insufficient stock for '{item_name}'. "
-                    f"Requested: {qty_requested}, Available: {current_stock}."
-                )
-
-        # 5) Items OUT
-        item_total_amount = 0.0
-        for item in normalized_items:
-            original_price = float(item["original_price"])
-            final_price = float(item["final_price"])
-            cost_per_piece_snapshot = float(item["cost_per_piece_snapshot"])
-            discount_percent_whole = float(item["discount_percent_whole"])
-            discount_percent_decimal = float(item["discount_percent_decimal"])
-            discount_amount = float(item["discount_amount"])
-            quantity = int(item["quantity"])
-            item_total_amount += quantity * final_price
-
-            add_transaction(
-                item_id=item['item_id'],
-                quantity=quantity,
-                transaction_type='OUT',
-                user_id=user_id,
-                user_name=username,
-                reference_id=new_sale_id,
-                reference_type='SALE',
-                change_reason='CUSTOMER_PURCHASE',
-                unit_price=original_price,
-                transaction_date=clean_time,
-                external_conn=conn
-            )
-
-            conn.execute("""
-                INSERT INTO sales_items (
-                    sale_id, item_id, quantity,
-                    original_unit_price, discount_percent, discount_amount, final_unit_price,
-                    cost_per_piece_snapshot, discounted_by, created_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                new_sale_id, item['item_id'], quantity,
-                original_price, discount_percent_decimal, discount_amount, final_price,
-                cost_per_piece_snapshot,
-                user_id if discount_percent_whole > 0 else None,
-                clean_time
-            ))
-
-        # 6) Services
-        service_subtotal = 0.0
-        for service in data.get('services', []):
-            service_id = service.get('service_id')
-            if not service_id:
-                raise ValueError("Selected service is missing service_id.")
-
-            raw_price = service.get('price')
-            if raw_price in (None, ""):
-                raise ValueError("Price is required for each selected service.")
-
-            try:
-                price = float(raw_price)
-            except (TypeError, ValueError):
-                raise ValueError("Invalid service price. Please enter a valid amount.")
-
-            if price < 0:
-                raise ValueError("Service price cannot be negative.")
-
-            service_subtotal += price
-            conn.execute("""
-                INSERT INTO sales_services (sale_id, service_id, price)
-                VALUES (%s, %s, %s)
-            """, (new_sale_id, service_id, price))
-
-        sale_total_amount = round(item_total_amount + service_subtotal, 2)
-        conn.execute(
-            "UPDATE sales SET total_amount = %s, service_fee = %s WHERE id = %s",
-            (sale_total_amount, service_subtotal, new_sale_id)
-        )
-        service_ids = [s["service_id"] for s in data.get("services", [])]
-        item_ids    = [i["item_id"] for i in normalized_items]
-        log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
-
-        conn.commit()
-        return data.get('sales_number'), new_sale_id
-
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-
 # ─────────────────────────────────────────────
 # PURCHASE ORDERS
 # ─────────────────────────────────────────────
 
-# Override of record_sale with bundle-aware sale support.
+# Single source of truth for all OUT sale saves, including quick sales,
+# regular sales, mechanic supply, services, and bundle-aware sales.
 def record_sale(data, user_id, username):
     """
     Records a full sale that may contain standalone items, services,
@@ -779,10 +460,33 @@ def record_sale(data, user_id, username):
     except (TypeError, ValueError):
         raise ValueError("Invalid payment method selected.")
 
-    quick_sale = bool(data.get("quick_sale"))
+    requested_transaction_class = str(data.get("transaction_class") or "").strip().upper()
     raw_items = data.get("items", []) or []
     raw_services = data.get("services", []) or []
     raw_bundles = data.get("bundles", []) or []
+    raw_customer_name = str(data.get("customer_name") or "").strip()
+    raw_sales_number = str(data.get("sales_number") or "").strip()
+    raw_mechanic_id = data.get("mechanic_id")
+
+    if not requested_transaction_class:
+        requested_transaction_class = "QUICK_SALE" if bool(data.get("quick_sale")) else "NEW_SALE"
+
+    if (
+        requested_transaction_class == "NEW_SALE"
+        and raw_mechanic_id
+        and not raw_customer_name
+        and not raw_sales_number
+        and not raw_services
+        and not raw_bundles
+    ):
+        requested_transaction_class = "MECHANIC_SUPPLY"
+
+    valid_transaction_classes = {"QUICK_SALE", "NEW_SALE", "MECHANIC_SUPPLY"}
+    if requested_transaction_class not in valid_transaction_classes:
+        raise ValueError("Invalid transaction class selected.")
+
+    quick_sale = requested_transaction_class == "QUICK_SALE"
+    mechanic_supply = requested_transaction_class == "MECHANIC_SUPPLY"
 
     conn = get_db()
     try:
@@ -799,6 +503,8 @@ def record_sale(data, user_id, username):
         payment_category = (pm["category"] or "").strip()
         if quick_sale and payment_category != "Cash":
             raise ValueError("Quick Sale must use a cash payment method.")
+        if mechanic_supply and payment_category != "Cash":
+            raise ValueError("Mechanic Supply must use a cash payment method.")
         sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
 
         now_obj = datetime.now()
@@ -875,10 +581,19 @@ def record_sale(data, user_id, username):
                 if discount_percent_whole < 0 or discount_percent_whole > 50:
                     raise ValueError("Item discount must be between 0 and 50 percent.")
 
-                master_price = round(float(item_row.get("a4s_selling_price") or 0), 2)
+                cost_per_piece_snapshot = round(float(item_row.get("cost_per_piece") or 0), 2)
+                master_price = round(
+                    cost_per_piece_snapshot if mechanic_supply else float(item_row.get("a4s_selling_price") or 0),
+                    2,
+                )
+                if mechanic_supply and discount_percent_whole != 0:
+                    raise ValueError("Mechanic Supply item discounts are not allowed.")
                 submitted_original_price = round(float(item.get("original_price", 0) or 0), 2)
                 submitted_final_price = round(float(item.get("final_price", 0) or 0), 2)
-                expected_final_price = round(master_price * (1 - (discount_percent_whole / 100)), 2)
+                expected_final_price = round(
+                    master_price if mechanic_supply else master_price * (1 - (discount_percent_whole / 100)),
+                    2,
+                )
 
                 if abs(submitted_original_price - master_price) > 0.01:
                     raise ValueError(f"Price mismatch detected for '{item_row['name']}'. Please refresh and try again.")
@@ -891,11 +606,11 @@ def record_sale(data, user_id, username):
                         "name": item_row["name"],
                         "quantity": quantity,
                         "original_price": master_price,
-                        "cost_per_piece_snapshot": round(float(item_row.get("cost_per_piece") or 0), 2),
-                        "discount_percent_whole": discount_percent_whole,
-                        "discount_percent_decimal": discount_percent_whole / 100,
+                        "cost_per_piece_snapshot": cost_per_piece_snapshot,
+                        "discount_percent_whole": 0.0 if mechanic_supply else discount_percent_whole,
+                        "discount_percent_decimal": 0.0 if mechanic_supply else (discount_percent_whole / 100),
                         "final_price": expected_final_price,
-                        "discount_amount": round(master_price - expected_final_price, 2),
+                        "discount_amount": 0.0 if mechanic_supply else round(master_price - expected_final_price, 2),
                     }
                 )
 
@@ -1086,11 +801,20 @@ def record_sale(data, user_id, username):
 
             if round(computed_quick_total, 2) > 100:
                 raise ValueError("Quick Sale total due cannot exceed 100 pesos.")
+        elif mechanic_supply:
+            if raw_services:
+                raise ValueError("Mechanic Supply only supports item stock-outs.")
+            if raw_bundles:
+                raise ValueError("Mechanic Supply does not support bundle entries.")
+            if not data.get("mechanic_id"):
+                raise ValueError("Mechanic Supply requires an assigned mechanic.")
+            if not raw_items:
+                raise ValueError("Mechanic Supply requires at least one item.")
 
         conn.execute("BEGIN")
         sale_total_amount = 0.0
 
-        vehicle_id = data.get("vehicle_id")
+        vehicle_id = None if mechanic_supply else data.get("vehicle_id")
         if vehicle_id in ("", None):
             vehicle_id = None
         else:
@@ -1139,19 +863,21 @@ def record_sale(data, user_id, username):
                 item_name = stock_name_lookup.get(item_id, f"Item ID {item_id}")
                 raise ValueError(f"Insufficient stock for '{item_name}'. Requested: {requested_quantity}, Available: {current_stock}.")
 
+        submitted_sales_number = str(data.get("sales_number") or "").strip() or None
+
         sale_row = conn.execute(
             """
             INSERT INTO sales (
                 sales_number, customer_name, customer_id, vehicle_id, total_amount,
                 payment_method_id, reference_no, status,
-                notes, user_id, transaction_date, mechanic_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                notes, user_id, transaction_date, mechanic_id, transaction_class
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
-                data.get("sales_number"),
-                data.get("customer_name"),
-                data.get("customer_id") or None,
+                submitted_sales_number,
+                None if mechanic_supply else data.get("customer_name"),
+                None if mechanic_supply else (data.get("customer_id") or None),
                 vehicle_id,
                 sale_total_amount,
                 payment_method_id,
@@ -1161,6 +887,7 @@ def record_sale(data, user_id, username):
                 user_id,
                 clean_time,
                 data.get("mechanic_id") or None,
+                requested_transaction_class,
             ),
         ).fetchone()
         new_sale_id = sale_row["id"]
@@ -1180,7 +907,7 @@ def record_sale(data, user_id, username):
                 user_name=username,
                 reference_id=new_sale_id,
                 reference_type="SALE",
-                change_reason="CUSTOMER_PURCHASE",
+                change_reason="MECHANIC_SUPPLY" if mechanic_supply else "CUSTOMER_PURCHASE",
                 unit_price=original_price,
                 transaction_date=clean_time,
                 external_conn=conn,
@@ -1203,7 +930,7 @@ def record_sale(data, user_id, username):
                     float(item["discount_amount"]),
                     final_price,
                     float(item["cost_per_piece_snapshot"]),
-                    user_id if float(item["discount_percent_whole"]) > 0 else None,
+                    None if mechanic_supply else (user_id if float(item["discount_percent_whole"]) > 0 else None),
                     clean_time,
                 ),
             )
@@ -1311,10 +1038,11 @@ def record_sale(data, user_id, username):
 
         service_ids = [service["service_id"] for service in normalized_services] + bundle_service_ids
         item_ids = [item["item_id"] for item in normalized_items] + bundle_included_item_ids
-        log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
+        if not mechanic_supply:
+            log_stamps_for_sale(new_sale_id, data.get("customer_id"), service_ids, item_ids, clean_time, conn)
 
         conn.commit()
-        return data.get("sales_number"), new_sale_id
+        return submitted_sales_number, new_sale_id
 
     except Exception:
         conn.rollback()
@@ -1665,6 +1393,7 @@ def get_sale_refund_context(sale_id):
             SELECT
                 s.id,
                 s.sales_number,
+                COALESCE(s.transaction_class, 'NEW_SALE') AS transaction_class,
                 s.customer_name,
                 s.customer_id,
                 s.vehicle_id,

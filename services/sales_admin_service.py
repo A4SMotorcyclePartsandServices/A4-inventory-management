@@ -18,6 +18,8 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
     conditions = []
     params = []
 
+    conditions.append("COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'")
+
     if start_date:
         conditions.append("DATE(s.transaction_date) >= %s")
         params.append(start_date)

@@ -192,7 +192,13 @@ def save_transaction_out():
             user_id=session.get('user_id'),
             username=session.get('username')
         )
-        flash(f"Sale #{sales_number} recorded successfully!", "success")
+        transaction_class = str((data or {}).get("transaction_class") or "").strip().upper()
+        if transaction_class == "MECHANIC_SUPPLY":
+            flash("Mechanic supply transaction recorded successfully!", "success")
+        elif sales_number:
+            flash(f"Sale #{sales_number} recorded successfully!", "success")
+        else:
+            flash("Sale recorded successfully!", "success")
         return jsonify({"status": "success", "sale_id": sale_id}), 200   # <── add sale_id
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400

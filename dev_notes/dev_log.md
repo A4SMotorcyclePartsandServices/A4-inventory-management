@@ -29,6 +29,53 @@ reports_services
 reports_routes
 - reporting endpoints
 
+## Audit Dashboard Flow
+
+Implemented 2026-03-28
+
+Page
+- `templates/users/audit.html`
+- This page is a multi-tab admin dashboard, not a single shared data source.
+
+Tabs and backend wiring
+- `Sales` tab
+- Frontend loader: `loadSalesAdmin()`
+- API: `/api/admin/sales`
+- Route: `routes/admin_users_route.py`
+- Wrapper: `services/admin_users_service.py -> get_admin_sales_page()`
+- Query service: `services/sales_admin_service.py -> get_sales_paginated()`
+
+- `Debt Payments` tab
+- Frontend loader: `loadDebtSummary()`
+- API: `/api/debt/summary`
+- Route: `routes/debt_route.py`
+- Logic currently lives in the debt feature path rather than the admin service wrapper.
+
+- `Audit Trail` tab
+- Frontend loader: `loadAuditTrail()`
+- API: `/api/audit/trail`
+- Route: `routes/admin_users_route.py`
+- Wrapper: `services/admin_users_service.py -> get_audit_trail_page()`
+- Query service: `services/audit_service.py -> get_audit_trail()`
+
+- `Payables Audit` tab
+- Frontend loader: `loadPayablesAudit()`
+- API: `/api/payables/audit`
+- Route: `routes/admin_users_route.py`
+- Wrapper: `services/admin_users_service.py -> get_payables_audit_page()`
+- Query service: `services/payables_service.py -> get_payables_audit_log()`
+
+Why Sales and Audit use separate services
+- `Sales` tab is sales-history data from the `sales` table.
+- `Audit Trail` tab is inventory / movement audit data built mainly from `inventory_transactions` plus related joins.
+- They look similar in the UI, but they are different business views with different source tables and filters.
+
+Current mechanic supply rule
+- `MECHANIC_SUPPLY` must be hidden only in the `Sales` tab.
+- That filter lives in `services/sales_admin_service.py`.
+- `MECHANIC_SUPPLY` must remain visible in the `Audit Trail` tab for audit visibility.
+- No mechanic-supply exclusion should live in `services/audit_service.py` unless requirements change later.
+
 utils
 - date formatting utilities
 

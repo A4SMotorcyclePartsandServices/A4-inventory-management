@@ -62,6 +62,7 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
         JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN users u ON u.id = s.user_id
         WHERE s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND pm.category IN ({placeholders})
     """
 
@@ -126,6 +127,7 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
         LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
         WHERE pm.category IN ({placeholders})
         AND s.status = 'Paid'
+        AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
     """
 
     if date_from:
@@ -712,6 +714,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
                    AND COALESCE(ce.is_deleted, FALSE) = FALSE
                 WHERE s.id IN ({placeholders})
                   AND s.status = 'Paid'
+                  AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
                   AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
                   AND ce.id IS NULL
                 """,
