@@ -7,6 +7,93 @@ def _num(value):
     return float(value or 0)
 
 
+def _get_non_cash_floating_metrics(conn, start_date, end_date):
+    sale_rows = conn.execute(
+        """
+        SELECT
+            s.id,
+            s.total_amount
+        FROM sales s
+        JOIN payment_methods pm ON pm.id = s.payment_method_id
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND pm.category IN ('Bank', 'Online')
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    debt_payment_rows = conn.execute(
+        """
+        SELECT
+            dp.id,
+            dp.amount_paid
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND pm.category IN ('Bank', 'Online')
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sale_rows and not debt_payment_rows:
+        return 0.0
+
+    sale_totals = {
+        int(row["id"]): round(_num(row["total_amount"]), 2)
+        for row in sale_rows
+    }
+    claimed_sale_ids = set()
+    if sale_totals:
+        sale_ids = list(sale_totals.keys())
+        placeholders = ",".join(["%s"] * len(sale_ids))
+        claimed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT cfc.sale_id
+            FROM cash_float_claims cfc
+            JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
+            WHERE cfc.sale_id IN ({placeholders})
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            sale_ids + [end_date],
+        ).fetchall()
+        claimed_sale_ids = {int(row["sale_id"]) for row in claimed_rows}
+
+    debt_payment_totals = {
+        int(row["id"]): round(_num(row["amount_paid"]), 2)
+        for row in debt_payment_rows
+    }
+    claimed_debt_payment_ids = set()
+    if debt_payment_totals:
+        debt_payment_ids = list(debt_payment_totals.keys())
+        placeholders = ",".join(["%s"] * len(debt_payment_ids))
+        claimed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT cdpc.debt_payment_id
+            FROM cash_debt_payment_claims cdpc
+            JOIN cash_entries ce ON ce.id = cdpc.cash_entry_id
+            WHERE cdpc.debt_payment_id IN ({placeholders})
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            debt_payment_ids + [end_date],
+        ).fetchall()
+        claimed_debt_payment_ids = {int(row["debt_payment_id"]) for row in claimed_rows}
+
+    return round(
+        sum(amount for sale_id, amount in sale_totals.items() if sale_id not in claimed_sale_ids)
+        + sum(
+            amount
+            for debt_payment_id, amount in debt_payment_totals.items()
+            if debt_payment_id not in claimed_debt_payment_ids
+        ),
+        2,
+    )
+
+
 def _parse_iso_date(value):
     return datetime.strptime(str(value), "%Y-%m-%d").date()
 
@@ -33,6 +120,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             COALESCE(SUM(CASE WHEN s.status = 'Unresolved' THEN s.total_amount ELSE 0 END), 0) AS unresolved_sales_amount
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         """,
         (start_date, end_date),
     ).fetchone()
@@ -41,7 +129,9 @@ def get_sales_analytics_snapshot(start_date, end_date):
         """
         SELECT COALESCE(SUM(dp.amount_paid), 0) AS total_debt_collected
         FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         """,
         (start_date, end_date),
     ).fetchone()
@@ -126,6 +216,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             ) sb ON sb.sale_id = s.id
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ) scoped_sales
         """,
         (start_date, end_date),
@@ -142,9 +233,12 @@ def get_sales_analytics_snapshot(start_date, end_date):
         JOIN sales s ON s.id = dp.sale_id
         LEFT JOIN mechanics m ON m.id = s.mechanic_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         """,
         (start_date, end_date),
     ).fetchone()
+
+    total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
 
     status_rows = conn.execute(
         """
@@ -154,6 +248,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             COALESCE(SUM(s.total_amount), 0) AS total_amount
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY s.status
         ORDER BY s.status ASC
         """,
@@ -170,6 +265,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY COALESCE(pm.name, 'N/A')
         ORDER BY total_amount DESC, payment_method ASC
         """,
@@ -184,6 +280,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             COALESCE(SUM(CASE WHEN s.status = 'Paid' THEN s.total_amount ELSE 0 END), 0) AS gross_sales
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY DATE(s.transaction_date)
         ORDER BY day ASC
         """,
@@ -223,6 +320,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             JOIN items i ON i.id = si.item_id
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
             GROUP BY i.id, i.name
 
             UNION ALL
@@ -279,6 +377,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             ) bundle_totals ON bundle_totals.sales_bundle_id = sb.id
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
             GROUP BY sbi.item_name_snapshot
         ) ranked_items
         GROUP BY item_name
@@ -299,6 +398,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
         JOIN services sv ON sv.id = ss.service_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY sv.id, sv.name
         ORDER BY total_revenue DESC, times_sold DESC, sv.name ASC
         LIMIT 10
@@ -316,11 +416,62 @@ def get_sales_analytics_snapshot(start_date, end_date):
         LEFT JOIN customers c ON c.id = s.customer_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         GROUP BY COALESCE(c.customer_name, s.customer_name, 'Walk-in')
         ORDER BY total_revenue DESC, sale_count DESC, customer_name ASC
         LIMIT 10
         """,
         (start_date, end_date),
+    ).fetchall()
+
+    mechanic_supply_analytics = conn.execute(
+        """
+        WITH mechanic_supply_item_totals AS (
+            SELECT
+                COALESCE(s.mechanic_id, 0) AS mechanic_key,
+                COALESCE(m.name, 'Unassigned') AS mechanic_name,
+                i.name AS item_name,
+                SUM(si.quantity) AS total_quantity
+            FROM sales s
+            LEFT JOIN mechanics m ON m.id = s.mechanic_id
+            JOIN sales_items si ON si.sale_id = s.id
+            JOIN items i ON i.id = si.item_id
+            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+              AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+            GROUP BY COALESCE(s.mechanic_id, 0), COALESCE(m.name, 'Unassigned'), i.name
+        ),
+        mechanic_supply_item_ranked AS (
+            SELECT
+                mechanic_key,
+                mechanic_name,
+                item_name,
+                total_quantity,
+                ROW_NUMBER() OVER (
+                    PARTITION BY mechanic_key
+                    ORDER BY total_quantity DESC, item_name ASC
+                ) AS row_no
+            FROM mechanic_supply_item_totals
+        )
+        SELECT
+            COALESCE(m.name, 'Unassigned') AS mechanic_name,
+            COUNT(DISTINCT s.id) AS transaction_count,
+            COALESCE(SUM(si.quantity), 0) AS total_items,
+            COUNT(DISTINCT si.item_id) AS distinct_items,
+            MAX(CASE WHEN ranked.row_no = 1 THEN ranked.item_name END) AS most_requested_item,
+            COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_cost
+        FROM sales s
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN sales_items si ON si.sale_id = s.id
+        LEFT JOIN mechanic_supply_item_ranked ranked
+            ON ranked.mechanic_key = COALESCE(s.mechanic_id, 0)
+           AND ranked.row_no = 1
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+        GROUP BY COALESCE(s.mechanic_id, 0), COALESCE(m.name, 'Unassigned')
+        ORDER BY total_cost DESC, transaction_count DESC, mechanic_name ASC
+        LIMIT 10
+        """,
+        (start_date, end_date, start_date, end_date),
     ).fetchall()
 
     conn.close()
@@ -406,6 +557,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             "shop_share_profit": shop_share_profit,
             "profit_with_shop_share": profit_with_shop_share,
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
+            "total_non_cash_floating": total_non_cash_floating,
         },
         "charts": {
             "sales_trend": {
@@ -460,5 +612,16 @@ def get_sales_analytics_snapshot(start_date, end_date):
             ],
             "payment_methods": payment_method_breakdown,
             "status_breakdown": status_breakdown,
+            "mechanic_supply_analytics": [
+                {
+                    "mechanic_name": row["mechanic_name"],
+                    "transaction_count": int(row["transaction_count"] or 0),
+                    "total_items": int(row["total_items"] or 0),
+                    "distinct_items": int(row["distinct_items"] or 0),
+                    "most_requested_item": row["most_requested_item"] or "-",
+                    "total_cost": round(_num(row["total_cost"]), 2),
+                }
+                for row in mechanic_supply_analytics
+            ],
         },
     }

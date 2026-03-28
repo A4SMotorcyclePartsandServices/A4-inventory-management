@@ -522,7 +522,6 @@
     <div class="section profit-spotlight">
         <div class="profit-spotlight-head">
             <div>
-                <div class="profit-spotlight-title">Profit Summary</div>
                 <div class="profit-spotlight-status">{{ product_result_label }}</div>
                 <div class="profit-spotlight-value"><span class="currency">P {{ "%.2f"|format(product_result_display) }}</span></div>
                 <div class="profit-spotlight-formula">
@@ -552,7 +551,7 @@
             <div class="profit-metric revenue">
                 <div class="profit-metric-label">Floating Non-Cash</div>
                 <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</span></div>
-                <div class="profit-metric-sub">Paid bank and e-wallet sales not yet claimed into the cash ledger by the report end date.</div>
+                <div class="profit-metric-sub">Paid bank and e-wallet sales and debt payments not yet claimed into the cash ledger by the report end date.</div>
             </div>
         </div>
     </div>

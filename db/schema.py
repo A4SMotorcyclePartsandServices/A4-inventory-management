@@ -825,6 +825,15 @@ def init_db():
     )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_float_claims_entry ON cash_float_claims(cash_entry_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS cash_debt_payment_claims (
+        id                  SERIAL PRIMARY KEY,
+        debt_payment_id     INTEGER NOT NULL UNIQUE REFERENCES debt_payments(id) ON DELETE CASCADE,
+        cash_entry_id       INTEGER NOT NULL REFERENCES cash_entries(id) ON DELETE CASCADE,
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_debt_payment_claims_entry ON cash_debt_payment_claims(cash_entry_id)")
 
     # 22. PAYABLES TABLES
     cur.execute("""

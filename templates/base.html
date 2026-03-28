@@ -81,14 +81,54 @@
             position: relative;
         }
 
+        .nav-group-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: transparent;
+            border: 0;
+            color: #b48a6b;
+            padding: 0 10px 7px;
+            border-bottom: 1px solid rgba(180,138,107,0.12);
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .nav-group-toggle:hover {
+            color: #d5a985;
+        }
+
+        .nav-group-toggle:focus-visible {
+            outline: 2px solid rgba(180,138,107,0.35);
+            outline-offset: 2px;
+            border-radius: 8px;
+        }
+
         .nav-group-title {
             font-size: 0.66rem;
             font-weight: 800;
             letter-spacing: 1.4px;
             text-transform: uppercase;
-            color: #b48a6b;
-            padding: 0 10px 7px;
-            border-bottom: 1px solid rgba(180,138,107,0.12);
+        }
+
+        .nav-group-caret {
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-group.is-open .nav-group-caret {
+            transform: rotate(180deg);
+        }
+
+        .nav-group-links {
+            display: none;
+            padding-top: 4px;
+        }
+
+        .nav-group.is-open .nav-group-links {
+            display: block;
         }
 
         .sidebar a {
@@ -116,9 +156,8 @@
         }
 
         .sidebar .admin-section {
-            margin-top: auto;
-            padding-top: 14px;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            padding-top: 0;
+            border-top: 0;
         }
 
         .sidebar {
@@ -984,85 +1023,115 @@
         {% if session.get('user_id') %}
             <div class="sidebar-nav">
                 <div class="nav-group">
-                    <div class="nav-group-title">Setup</div>
-                    <a href="/" class="{% if request.path == '/' %}active-link{% endif %}">
-                        <i class="bi bi-box"></i> Items
-                    </a>
-                    <a href="/customers" class="{% if request.path == '/customers' %}active-link{% endif %}">
-                        <i class="bi bi-people"></i> Customers
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if request.path == '/' or request.path == '/customers' %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Setup</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="/" class="{% if request.path == '/' %}active-link{% endif %}">
+                            <i class="bi bi-box"></i> Items
+                        </a>
+                        <a href="/customers" class="{% if request.path == '/customers' %}active-link{% endif %}">
+                            <i class="bi bi-people"></i> Customers
+                        </a>
+                    </div>
                 </div>
 
                 <div class="nav-group">
-                    <div class="nav-group-title">Daily Counter</div>
-                    <a href="{{ url_for('transaction.transaction_out') }}"
-                    class="{% if '/out' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-cart-plus"></i> New Sale
-                    </a>
-                    <a href="{{ url_for('transaction.transaction_refund') }}"
-                    class="{% if '/refund' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-arrow-counterclockwise"></i> Refunds
-                    </a>
-                    <a href="{{ url_for('debt.utang_list') }}" 
-                    class="{% if 'utang' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
-                    </a>
-                    <a href="{{ url_for('cash.cash_ledger') }}"
-                    class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-safe2"></i> Cash Ledger
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if '/out' in request.path or '/refund' in request.path or 'utang' in request.path or 'cash-ledger' in request.path %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Daily Counter</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="{{ url_for('transaction.transaction_out') }}"
+                        class="{% if '/out' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-cart-plus"></i> New Sale
+                        </a>
+                        <a href="{{ url_for('transaction.transaction_refund') }}"
+                        class="{% if '/refund' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-arrow-counterclockwise"></i> Refunds
+                        </a>
+                        <a href="{{ url_for('debt.utang_list') }}" 
+                        class="{% if 'utang' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-person-lines-fill"></i> Receivables (Pautang)
+                        </a>
+                        <a href="{{ url_for('cash.cash_ledger') }}"
+                        class="{% if 'cash-ledger' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-safe2"></i> Cash Ledger
+                        </a>
+                    </div>
                 </div>
 
                 <div class="nav-group">
-                    <div class="nav-group-title">Purchasing</div>
-                    <a href="{{ url_for('transaction.list_orders') }}"
-                    class="{% if 'orders' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-box-arrow-in-down"></i> Stock In (PO)
-                    </a>
-                    <a href="{{ url_for('payables.payables_page') }}"
-                    class="{% if 'payables' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-journal-check"></i> Payables
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'orders' in request.path or 'payables' in request.path %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Purchasing</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="{{ url_for('transaction.list_orders') }}"
+                        class="{% if 'orders' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-box-arrow-in-down"></i> Stock In (PO)
+                        </a>
+                        <a href="{{ url_for('payables.payables_page') }}"
+                        class="{% if 'payables' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-journal-check"></i> Payables
+                        </a>
+                    </div>
                 </div>
 
                 <div class="nav-group">
-                    <div class="nav-group-title">Inventory Control</div>
-                    <a href="{{ url_for('stocktake.stocktake_list') }}"
-                    class="{% if 'stocktake' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-clipboard2-check"></i> Stock Variance
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'stocktake' in request.path %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Inventory Control</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="{{ url_for('stocktake.stocktake_list') }}"
+                        class="{% if 'stocktake' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-clipboard2-check"></i> Stock Variance
+                        </a>
+                    </div>
                 </div>
 
                 <div class="nav-group">
-                    <div class="nav-group-title">Insights</div>
-                    <a href="/analytics" class="{% if 'analytics' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-fire"></i> Hot Items
-                    </a>
-                    <a href="/dead-stock" class="{% if 'dead-stock' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-emoji-frown"></i> Dead Stock
-                    </a>
-                    <a href="/low-stock" class="{% if 'low-stock' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-exclamation-triangle"></i> Low Stock
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if request.path == '/analytics' or 'dead-stock' in request.path or 'low-stock' in request.path %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Insights</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="/analytics" class="{% if request.path == '/analytics' %}active-link{% endif %}">
+                            <i class="bi bi-fire"></i> Hot Items
+                        </a>
+                        <a href="/dead-stock" class="{% if 'dead-stock' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-emoji-frown"></i> Dead Stock
+                        </a>
+                        <a href="/low-stock" class="{% if 'low-stock' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-exclamation-triangle"></i> Low Stock
+                        </a>
+                    </div>
                 </div>
 
                 {% if session.get('role') == 'admin' %}
                 <div class="nav-group admin-section">
-                    <div class="nav-group-title">Admin</div>
-                    <a href="/sales-analytics" class="{% if 'sales-analytics' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-graph-up"></i> Sales Analytics
-                    </a>
-                    <a href="/items-analytics" class="{% if 'items-analytics' in request.path %}active-link{% endif %}">
-                        <i class="bi bi-speedometer2"></i> Item Analytics
-                    </a>
-                    <a href="{{ url_for('admin_users.manage_users') }}"
-                    class="{% if request.path == url_for('admin_users.manage_users') %}active-link{% endif %}">
-                        <i class="bi bi-shield-lock"></i> Admin Panel
-                    </a>
-                    <a href="{{ url_for('admin_users.audit_dashboard') }}"
-                    class="{% if request.path == url_for('admin_users.audit_dashboard') %}active-link{% endif %}">
-                        <i class="bi bi-clipboard-data"></i> Audit Panel
-                    </a>
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'sales-analytics' in request.path or 'items-analytics' in request.path or request.path == url_for('admin_users.manage_users') or request.path == url_for('admin_users.audit_dashboard') %}true{% else %}false{% endif %}">
+                        <span class="nav-group-title">Admin</span>
+                        <i class="bi bi-chevron-down nav-group-caret"></i>
+                    </button>
+                    <div class="nav-group-links">
+                        <a href="/sales-analytics" class="{% if 'sales-analytics' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-graph-up"></i> Sales Analytics
+                        </a>
+                        <a href="/items-analytics" class="{% if 'items-analytics' in request.path %}active-link{% endif %}">
+                            <i class="bi bi-speedometer2"></i> Item Analytics
+                        </a>
+                        <a href="{{ url_for('admin_users.manage_users') }}"
+                        class="{% if request.path == url_for('admin_users.manage_users') %}active-link{% endif %}">
+                            <i class="bi bi-shield-lock"></i> Admin Panel
+                        </a>
+                        <a href="{{ url_for('admin_users.audit_dashboard') }}"
+                        class="{% if request.path == url_for('admin_users.audit_dashboard') %}active-link{% endif %}">
+                            <i class="bi bi-clipboard-data"></i> Audit Panel
+                        </a>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -1382,6 +1451,27 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+document.querySelectorAll('.sidebar .nav-group').forEach((group, index) => {
+    const toggle = group.querySelector('.nav-group-toggle');
+    if (!toggle) return;
+
+    const storageKey = `sidebar-group-${index}`;
+    const activeLink = group.querySelector('.active-link');
+    const savedState = sessionStorage.getItem(storageKey);
+    const shouldOpen = savedState === null
+        ? Boolean(activeLink)
+        : savedState === 'open';
+
+    group.classList.toggle('is-open', shouldOpen);
+    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+    toggle.addEventListener('click', () => {
+        const isOpen = group.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        sessionStorage.setItem(storageKey, isOpen ? 'open' : 'closed');
+    });
+});
+
 const APP_CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
 function escapeHtml(value) {

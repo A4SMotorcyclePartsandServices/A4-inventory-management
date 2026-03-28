@@ -77,6 +77,40 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
     return conn.execute(query, params).fetchall()
 
 
+def _get_non_cash_debt_payments(conn, date_from=None, date_to=None):
+    params = list(FLOATING_PAYMENT_CATEGORIES)
+    placeholders = ','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))
+
+    query = f"""
+        SELECT
+            dp.id AS debt_payment_id,
+            dp.sale_id,
+            s.sales_number,
+            s.customer_name,
+            dp.amount_paid AS amount,
+            dp.paid_at AS transaction_date,
+            pm.name AS payment_method_name,
+            pm.category AS payment_method_category,
+            u.username AS recorded_by
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        LEFT JOIN users u ON u.id = dp.paid_by
+        WHERE COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND pm.category IN ({placeholders})
+    """
+
+    if date_from:
+        query += " AND DATE(dp.paid_at) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(dp.paid_at) <= %s"
+        params.append(date_to)
+
+    query += " ORDER BY dp.paid_at ASC, dp.id ASC"
+    return conn.execute(query, params).fetchall()
+
+
 def _get_active_float_claimed_sale_ids(conn, sale_ids, claimed_on_or_before=None):
     normalized_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
     if not normalized_ids:
@@ -98,6 +132,29 @@ def _get_active_float_claimed_sale_ids(conn, sale_ids, claimed_on_or_before=None
 
     rows = conn.execute(query, params).fetchall()
     return {int(row['sale_id']) for row in rows}
+
+
+def _get_active_float_claimed_debt_payment_ids(conn, debt_payment_ids, claimed_on_or_before=None):
+    normalized_ids = [int(payment_id) for payment_id in (debt_payment_ids or []) if payment_id is not None]
+    if not normalized_ids:
+        return set()
+
+    placeholders = ','.join(['%s'] * len(normalized_ids))
+    params = list(normalized_ids)
+    query = f"""
+        SELECT DISTINCT cdpc.debt_payment_id
+        FROM cash_debt_payment_claims cdpc
+        JOIN cash_entries ce ON ce.id = cdpc.cash_entry_id
+        WHERE cdpc.debt_payment_id IN ({placeholders})
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+    """
+
+    if claimed_on_or_before:
+        query += " AND DATE(ce.created_at) <= %s"
+        params.append(claimed_on_or_before)
+
+    rows = conn.execute(query, params).fetchall()
+    return {int(row['debt_payment_id']) for row in rows}
 
 
 # ─────────────────────────────────────────────
@@ -357,9 +414,14 @@ def get_cash_summary(branch_id=1):
     refund_rows = _get_sale_refunds_cash(conn, branch_id)
     manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
     pending_float_rows = _get_non_cash_paid_sales(conn)
+    pending_float_debt_rows = _get_non_cash_debt_payments(conn)
     claimed_float_ids = _get_active_float_claimed_sale_ids(
         conn,
         [row['sale_id'] for row in pending_float_rows],
+    )
+    claimed_float_debt_ids = _get_active_float_claimed_debt_payment_ids(
+        conn,
+        [row['debt_payment_id'] for row in pending_float_debt_rows],
     )
     conn.close()
 
@@ -381,7 +443,12 @@ def get_cash_summary(branch_id=1):
     total_in  = round(total_in,  2)
     total_out = round(total_out, 2)
     floating_total = round(
-        sum(_money(row['amount']) for row in pending_float_rows if int(row['sale_id']) not in claimed_float_ids),
+        sum(_money(row['amount']) for row in pending_float_rows if int(row['sale_id']) not in claimed_float_ids)
+        + sum(
+            _money(row['amount'])
+            for row in pending_float_debt_rows
+            if int(row['debt_payment_id']) not in claimed_float_debt_ids
+        ),
         2,
     )
 
@@ -570,14 +637,19 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
     conn = get_db()
     try:
         sale_rows = _get_non_cash_paid_sales(conn)
+        debt_payment_rows = _get_non_cash_debt_payments(conn)
         claimed_sale_ids = _get_active_float_claimed_sale_ids(
             conn,
             [row['sale_id'] for row in sale_rows],
         )
+        claimed_debt_payment_ids = _get_active_float_claimed_debt_payment_ids(
+            conn,
+            [row['debt_payment_id'] for row in debt_payment_rows],
+        )
     finally:
         conn.close()
 
-    grouped = {}
+    groups = []
     total_amount = 0.0
     total_sales = 0
 
@@ -586,42 +658,60 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
         if sale_id in claimed_sale_ids:
             continue
 
+        sales_number = (row['sales_number'] or '').strip()
+        customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
         transaction_date = str(row['transaction_date'])[:10]
         payment_method_name = row['payment_method_name'] or 'Non-cash'
         payment_category = row['payment_method_category'] or 'Online'
-        key = (transaction_date, payment_method_name, payment_category)
-
-        if key not in grouped:
-            grouped[key] = {
-                'transaction_date': transaction_date,
-                'date_display': format_date(transaction_date),
-                'payment_method_name': payment_method_name,
-                'payment_method_category': payment_category,
-                'cash_in_category': _suggest_cash_in_category(payment_category),
-                'sale_ids': [],
-                'sales_count': 0,
-                'total_amount': 0.0,
-                'auto_description': '',
-            }
-
         amount = _money(row['amount'])
-        grouped[key]['sale_ids'].append(sale_id)
-        grouped[key]['sales_count'] += 1
-        grouped[key]['total_amount'] = round(grouped[key]['total_amount'] + amount, 2)
+
+        groups.append({
+            'transaction_date': transaction_date,
+            'date_display': format_date(transaction_date),
+            'payment_method_name': payment_method_name,
+            'payment_method_category': payment_category,
+            'cash_in_category': _suggest_cash_in_category(payment_category),
+            'sale_ids': [sale_id],
+            'debt_payment_ids': [],
+            'sales_count': 1,
+            'total_amount': amount,
+            'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
+            'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
+        })
+
         total_amount = round(total_amount + amount, 2)
         total_sales += 1
 
-    groups = sorted(
-        grouped.values(),
-        key=lambda row: (row['transaction_date'], row['payment_method_name'].lower()),
-    )
+    for row in debt_payment_rows:
+        debt_payment_id = int(row['debt_payment_id'])
+        if debt_payment_id in claimed_debt_payment_ids:
+            continue
 
-    for group in groups:
-        sale_word = 'sale' if group['sales_count'] == 1 else 'sales'
-        group['auto_description'] = (
-            f"Collected {group['payment_method_name']} sales for "
-            f"{group['date_display']} ({group['sales_count']} {sale_word})"
-        )
+        sales_number = (row['sales_number'] or '').strip()
+        customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
+        transaction_date = str(row['transaction_date'])[:10]
+        payment_method_name = row['payment_method_name'] or 'Non-cash'
+        payment_category = row['payment_method_category'] or 'Online'
+        amount = _money(row['amount'])
+
+        groups.append({
+            'transaction_date': transaction_date,
+            'date_display': format_date(transaction_date),
+            'payment_method_name': payment_method_name,
+            'payment_method_category': payment_category,
+            'cash_in_category': _suggest_cash_in_category(payment_category),
+            'sale_ids': [],
+            'debt_payment_ids': [debt_payment_id],
+            'sales_count': 1,
+            'total_amount': amount,
+            'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
+            'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
+        })
+
+        total_amount = round(total_amount + amount, 2)
+        total_sales += 1
+
+    groups.sort(key=lambda row: (row['transaction_date'], row['payment_method_name'].lower(), row['display_source_label'].lower()))
 
     if limit_groups is not None:
         groups = groups[:max(0, int(limit_groups))]
@@ -633,7 +723,42 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
     }
 
 
-def add_cash_entry(entry_type, amount, category, description, reference_id, payout_for_date, user_id, branch_id=1, claim_sale_ids=None):
+def get_pending_non_cash_collection_count(branch_id=1):
+    conn = get_db()
+    try:
+        sale_rows = _get_non_cash_paid_sales(conn)
+        debt_payment_rows = _get_non_cash_debt_payments(conn)
+        claimed_sale_ids = _get_active_float_claimed_sale_ids(
+            conn,
+            [row['sale_id'] for row in sale_rows],
+        )
+        claimed_debt_payment_ids = _get_active_float_claimed_debt_payment_ids(
+            conn,
+            [row['debt_payment_id'] for row in debt_payment_rows],
+        )
+    finally:
+        conn.close()
+
+    sale_count = sum(1 for row in sale_rows if int(row['sale_id']) not in claimed_sale_ids)
+    debt_count = sum(
+        1 for row in debt_payment_rows
+        if int(row['debt_payment_id']) not in claimed_debt_payment_ids
+    )
+    return sale_count + debt_count
+
+
+def add_cash_entry(
+    entry_type,
+    amount,
+    category,
+    description,
+    reference_id,
+    payout_for_date,
+    user_id,
+    branch_id=1,
+    claim_sale_ids=None,
+    claim_debt_payment_ids=None,
+):
     """
     Records a single manual petty cash movement only.
     Sales and debt cash is calculated live — never written here.
@@ -679,6 +804,14 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
             raise ValueError("Invalid floating collection reference.")
     normalized_claim_sale_ids = sorted(set(normalized_claim_sale_ids))
 
+    normalized_claim_debt_payment_ids = []
+    for debt_payment_id in (claim_debt_payment_ids or []):
+        try:
+            normalized_claim_debt_payment_ids.append(int(debt_payment_id))
+        except (TypeError, ValueError):
+            raise ValueError("Invalid debt floating collection reference.")
+    normalized_claim_debt_payment_ids = sorted(set(normalized_claim_debt_payment_ids))
+
     reference_type = 'MANUAL'
     if category == 'Mechanic Payout' and normalized_reference_id is not None:
         reference_type = 'MECHANIC_PAYOUT'
@@ -687,7 +820,7 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
     else:
         payout_for_date = None
 
-    if normalized_claim_sale_ids:
+    if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
         if entry_type != 'CASH_IN':
             raise ValueError("Floating collections must be recorded as cash in.")
         if category not in {'From Bank Account', 'From Gcash/E-Wallet Account'}:
@@ -698,6 +831,8 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
 
     conn = get_db()
     try:
+        claimable_total = 0.0
+
         if normalized_claim_sale_ids:
             placeholders = ','.join(['%s'] * len(normalized_claim_sale_ids))
             claimable_rows = conn.execute(
@@ -724,7 +859,43 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
             if len(claimable_rows) != len(normalized_claim_sale_ids):
                 raise ValueError("One or more floating collections were already claimed or are no longer eligible.")
 
-            claimable_total = round(sum(_money(row['amount']) for row in claimable_rows), 2)
+            claimable_total = round(
+                claimable_total + sum(_money(row['amount']) for row in claimable_rows),
+                2,
+            )
+
+        if normalized_claim_debt_payment_ids:
+            placeholders = ','.join(['%s'] * len(normalized_claim_debt_payment_ids))
+            claimable_rows = conn.execute(
+                f"""
+                SELECT
+                    dp.id AS debt_payment_id,
+                    dp.amount_paid AS amount,
+                    pm.category AS payment_method_category
+                FROM debt_payments dp
+                JOIN sales s ON s.id = dp.sale_id
+                JOIN payment_methods pm ON pm.id = dp.payment_method_id
+                LEFT JOIN cash_debt_payment_claims cdpc ON cdpc.debt_payment_id = dp.id
+                LEFT JOIN cash_entries ce
+                    ON ce.id = cdpc.cash_entry_id
+                   AND COALESCE(ce.is_deleted, FALSE) = FALSE
+                WHERE dp.id IN ({placeholders})
+                  AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
+                  AND ce.id IS NULL
+                """,
+                normalized_claim_debt_payment_ids + list(FLOATING_PAYMENT_CATEGORIES),
+            ).fetchall()
+
+            if len(claimable_rows) != len(normalized_claim_debt_payment_ids):
+                raise ValueError("One or more debt floating collections were already claimed or are no longer eligible.")
+
+            claimable_total = round(
+                claimable_total + sum(_money(row['amount']) for row in claimable_rows),
+                2,
+            )
+
+        if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
             if claimable_total != amount:
                 raise ValueError("Claim amount does not match the pending floating total.")
 
@@ -756,6 +927,15 @@ def add_cash_entry(entry_type, amount, category, description, reference_id, payo
                     VALUES (%s, %s)
                     """,
                     (sale_id, entry_id),
+                )
+        if normalized_claim_debt_payment_ids:
+            for debt_payment_id in normalized_claim_debt_payment_ids:
+                conn.execute(
+                    """
+                    INSERT INTO cash_debt_payment_claims (debt_payment_id, cash_entry_id)
+                    VALUES (%s, %s)
+                    """,
+                    (debt_payment_id, entry_id),
                 )
         conn.commit()
     except Exception:

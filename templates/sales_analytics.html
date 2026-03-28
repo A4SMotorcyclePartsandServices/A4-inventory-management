@@ -120,6 +120,15 @@
         box-shadow: none;
     }
 
+    .stack-column {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stack-column .panel-card {
+        flex: 1;
+    }
+
     .panel-card h3 {
         margin: 0 0 0.3rem;
         font-size: 1rem;
@@ -582,6 +591,11 @@
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</div>
                     <div class="profit-metric-sub">Includes shop earnings from services, bundles, and collected service debt portions.</div>
                 </div>
+                <div class="profit-metric revenue">
+                    <div class="profit-metric-label">Floating Non-Cash</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.total_non_cash_floating or 0) }}</div>
+                    <div class="profit-metric-sub">Paid bank and e-wallet sales and debt payments not yet claimed into the cash ledger by the range end date.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -748,58 +762,100 @@
     </div>
 </div>
 
-<div class="row g-3">
+<div class="row g-3 align-items-stretch">
     <div class="col-xl-6">
-        <div class="panel-card">
-            <h3>Payment status details</h3>
-            <div class="panel-meta">Counts and booked amounts by sale status.</div>
-            <div class="table-responsive">
-                <table class="table table-dark table-striped align-middle text-center mb-0">
-                    <thead>
-                        <tr>
-                            <th>Status</th>
-                            <th>Count</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in analytics.tables.status_breakdown %}
-                        <tr>
-                            <td>{{ row.status }}</td>
-                            <td>{{ row.sale_count }}</td>
-                            <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <div class="row g-3 h-100">
+            <div class="col-12">
+                <div class="panel-card">
+                    <h3>Payment status details</h3>
+                    <div class="panel-meta">Counts and booked amounts by sale status.</div>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped align-middle text-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Count</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in analytics.tables.status_breakdown %}
+                                <tr>
+                                    <td>{{ row.status }}</td>
+                                    <td>{{ row.sale_count }}</td>
+                                    <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="panel-card">
+                    <h3>Payment method details</h3>
+                    <div class="panel-meta">Paid-sale amounts grouped by payment method.</div>
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped align-middle text-center mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Method</th>
+                                    <th>Paid Sales</th>
+                                    <th>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if analytics.tables.payment_methods %}
+                                    {% for row in analytics.tables.payment_methods %}
+                                    <tr>
+                                        <td>{{ row.payment_method }}</td>
+                                        <td>{{ row.sale_count }}</td>
+                                        <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="empty-table">No paid sales in this range.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-xl-6">
+    <div class="col-xl-6 stack-column">
         <div class="panel-card">
-            <h3>Payment method details</h3>
-            <div class="panel-meta">Paid-sale amounts grouped by payment method.</div>
+            <h3>Mechanic supply analytics</h3>
+            <div class="panel-meta">Separate operational stock-out activity grouped by mechanic.</div>
             <div class="table-responsive">
                 <table class="table table-dark table-striped align-middle text-center mb-0">
                     <thead>
                         <tr>
-                            <th>Method</th>
-                            <th>Paid Sales</th>
-                            <th>Amount</th>
+                            <th>Mechanic</th>
+                            <th>Transactions</th>
+                            <th>Items</th>
+                            <th>Distinct Items</th>
+                            <th>Most Requested Item</th>
+                            <th>Total Cost Per Piece</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% if analytics.tables.payment_methods %}
-                            {% for row in analytics.tables.payment_methods %}
+                        {% if analytics.tables.mechanic_supply_analytics %}
+                            {% for row in analytics.tables.mechanic_supply_analytics %}
                             <tr>
-                                <td>{{ row.payment_method }}</td>
-                                <td>{{ row.sale_count }}</td>
-                                <td>PHP {{ "{:,.2f}".format(row.total_amount) }}</td>
+                                <td>{{ row.mechanic_name }}</td>
+                                <td>{{ row.transaction_count }}</td>
+                                <td>{{ row.total_items }}</td>
+                                <td>{{ row.distinct_items }}</td>
+                                <td>{{ row.most_requested_item }}</td>
+                                <td>PHP {{ "{:,.2f}".format(row.total_cost) }}</td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="3" class="empty-table">No paid sales in this range.</td>
+                                <td colspan="6" class="empty-table">No mechanic supply activity in this range.</td>
                             </tr>
                         {% endif %}
                     </tbody>

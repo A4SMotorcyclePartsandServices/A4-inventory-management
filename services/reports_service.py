@@ -37,7 +37,22 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         (start_date, end_date),
     ).fetchall()
 
-    if not sale_rows:
+    debt_payment_rows = conn.execute(
+        """
+        SELECT
+            dp.id,
+            dp.amount_paid
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        JOIN payment_methods pm ON pm.id = dp.payment_method_id
+        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND pm.category IN ('Bank', 'Online')
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sale_rows and not debt_payment_rows:
         return {
             "total_non_cash_sales": 0.0,
             "total_non_cash_claimed": 0.0,
@@ -48,24 +63,52 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         int(row["id"]): round(_num(row["total_amount"]), 2)
         for row in sale_rows
     }
-    sale_ids = list(sale_totals.keys())
-    placeholders = ",".join(["%s"] * len(sale_ids))
-    claimed_rows = conn.execute(
-        f"""
-        SELECT DISTINCT cfc.sale_id
-        FROM cash_float_claims cfc
-        JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
-        WHERE cfc.sale_id IN ({placeholders})
-          AND COALESCE(ce.is_deleted, FALSE) = FALSE
-          AND DATE(ce.created_at) <= %s
-        """,
-        sale_ids + [end_date],
-    ).fetchall()
+    claimed_sale_ids = set()
+    if sale_totals:
+        sale_ids = list(sale_totals.keys())
+        placeholders = ",".join(["%s"] * len(sale_ids))
+        claimed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT cfc.sale_id
+            FROM cash_float_claims cfc
+            JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
+            WHERE cfc.sale_id IN ({placeholders})
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            sale_ids + [end_date],
+        ).fetchall()
+        claimed_sale_ids = {int(row["sale_id"]) for row in claimed_rows}
 
-    claimed_ids = {int(row["sale_id"]) for row in claimed_rows}
-    total_non_cash_sales = round(sum(sale_totals.values()), 2)
+    debt_payment_totals = {
+        int(row["id"]): round(_num(row["amount_paid"]), 2)
+        for row in debt_payment_rows
+    }
+    claimed_debt_payment_ids = set()
+    if debt_payment_totals:
+        debt_payment_ids = list(debt_payment_totals.keys())
+        placeholders = ",".join(["%s"] * len(debt_payment_ids))
+        claimed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT cdpc.debt_payment_id
+            FROM cash_debt_payment_claims cdpc
+            JOIN cash_entries ce ON ce.id = cdpc.cash_entry_id
+            WHERE cdpc.debt_payment_id IN ({placeholders})
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            debt_payment_ids + [end_date],
+        ).fetchall()
+        claimed_debt_payment_ids = {int(row["debt_payment_id"]) for row in claimed_rows}
+
+    total_non_cash_sales = round(sum(sale_totals.values()) + sum(debt_payment_totals.values()), 2)
     total_non_cash_claimed = round(
-        sum(amount for sale_id, amount in sale_totals.items() if sale_id in claimed_ids),
+        sum(amount for sale_id, amount in sale_totals.items() if sale_id in claimed_sale_ids)
+        + sum(
+            amount
+            for debt_payment_id, amount in debt_payment_totals.items()
+            if debt_payment_id in claimed_debt_payment_ids
+        ),
         2,
     )
 

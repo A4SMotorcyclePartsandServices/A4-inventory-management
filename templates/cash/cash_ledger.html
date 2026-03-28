@@ -181,6 +181,48 @@
         font-size: 0.9rem;
     }
 
+    .panel-toggle {
+        width: 100%;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-align: left;
+    }
+
+    .panel-toggle:focus-visible {
+        outline: 2px solid rgba(255,255,255,0.35);
+        outline-offset: 4px;
+        border-radius: 10px;
+    }
+
+    .panel-toggle-copy {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .panel-toggle-meta {
+        font-size: 0.82rem;
+        font-weight: 600;
+        opacity: 0.9;
+        white-space: nowrap;
+    }
+
+    .panel-toggle-caret {
+        font-size: 1rem;
+        transition: transform 0.2s ease;
+    }
+
+    .panel-toggle[aria-expanded="true"] .panel-toggle-caret {
+        transform: rotate(180deg);
+    }
+
     .pending-count {
         background: rgba(244, 196, 48, 0.15);
         color: #f4c430;
@@ -191,8 +233,29 @@
         letter-spacing: 0.5px;
     }
 
+    .pending-count.pending-count-info {
+        background: rgba(76, 201, 240, 0.16);
+        color: #4cc9f0;
+    }
+
     .pending-payouts-body {
         padding: 8px 12px;
+    }
+
+    .lazy-panel-body {
+        display: none;
+    }
+
+    .lazy-panel-body.is-open {
+        display: block;
+    }
+
+    .lazy-panel-empty,
+    .lazy-panel-loading {
+        padding: 18px 12px;
+        color: var(--text-muted);
+        text-align: center;
+        font-size: 0.88rem;
     }
 
     .payout-row {
@@ -567,48 +630,22 @@
 {% if overdue_payout_total > 0 %}
 <div class="reminder-panel mb-4">
     <div class="reminder-header">
-        <div>
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <strong>Reminder:</strong>
-            <span class="ms-2">Unpaid mechanic payouts in the last {{ reminder_days }} day{{ 's' if reminder_days > 1 }}</span>
-        </div>
-        {% if overdue_payout_total > 0 %}
-        <span>Click any row to pre-fill the form</span>
-        {% endif %}
+        <button type="button"
+                class="panel-toggle js-lazy-panel-toggle"
+                data-panel-target="overdue-payouts-panel-body"
+                data-panel-url="{{ url_for('cash.cash_overdue_payouts_panel_api', reminder_days=reminder_days) }}"
+                data-panel-renderer="overdue-payouts"
+                aria-expanded="false">
+            <span class="panel-toggle-copy">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>Reminder:</strong>
+                <span>Unpaid mechanic payouts in the last {{ reminder_days }} day{{ 's' if reminder_days > 1 }}</span>
+                <span class="pending-count">{{ overdue_payout_total }} unpaid</span>
+            </span>
+            <span class="panel-toggle-meta">Expand to load rows <i class="bi bi-chevron-down panel-toggle-caret"></i></span>
+        </button>
     </div>
-    <div class="reminder-body">
-        {% for day in overdue_payout_groups %}
-        {% if day.count > 0 %}
-        <div class="reminder-date-segment">
-            <div class="reminder-date-header">
-                <span class="reminder-date-label">{{ day.date_display }}</span>
-                <span>
-                    <a class="reminder-action" href="{{ url_for('cash.cash_ledger', start_date=day.date, end_date=day.date, type='CASH_OUT') }}">
-                        Review entries
-                    </a>
-                    <span class="reminder-count ms-2">{{ day.count }} unpaid</span>
-                </span>
-            </div>
-            {% if day.overdue_payouts %}
-            {% for m in day.overdue_payouts %}
-            <div class="payout-row reminder-row"
-                 data-mechanic-id="{{ m.mechanic_id }}"
-                 data-mechanic-name="{{ m.mechanic_name }}"
-                 data-total-payout="{{ m.total_payout }}"
-                 data-auto-description="{{ m.auto_description }}"
-                 data-payout-date="{{ day.date }}">
-                <div class="payout-name">
-                    <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
-                    {{ m.mechanic_name }}
-                </div>
-            <div class="payout-amount">&#8369;{{ "{:,.2f}".format(m.total_payout) }}</div>
-            </div>
-            {% endfor %}
-            {% endif %}
-        </div>
-        {% endif %}
-        {% endfor %}
-    </div>
+    <div class="reminder-body lazy-panel-body" id="overdue-payouts-panel-body"></div>
 </div>
 {% endif %}
 {% endif %}
@@ -656,73 +693,44 @@
 </div>
 
 {% if selected_view == 'active' %}
-{% if pending_payouts %}
-<!-- Ã¢â€â‚¬Ã¢â€â‚¬ Pending Mechanic Payouts Panel Ã¢â€â‚¬Ã¢â€â‚¬ -->
-<div class="pending-payouts-panel mb-4">
-    <div class="pending-payouts-header">
-        <div>
-            <i class="bi bi-person-check me-2"></i>
-            <strong>Pending Mechanic Payouts — Today ({{ today_display }})</strong>
-            <span class="pending-count ms-2">{{ pending_payouts|length }} pending</span>
-        </div>
-        <span>Click a row to pre-fill the form below</span>
-    </div>
-    <div class="pending-payouts-body">
-        {% for m in pending_payouts %}
-        <div class="payout-row"
-             data-mechanic-id="{{ m.mechanic_id }}"
-             data-mechanic-name="{{ m.mechanic_name }}"
-             data-total-payout="{{ m.total_payout }}"
-             data-auto-description="{{ m.auto_description }}"
-             data-payout-date="{{ today }}">
-            <div class="payout-name">
-                <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
-                {{ m.mechanic_name }}
-                {% if m.has_topup %}
-                <span class="topup-badge ms-2">Quota Top-up Applied</span>
-                {% endif %}
-            </div>
-            <div class="payout-amount">
-                &#8369;{{ "{:,.2f}".format(m.total_payout) }}
-                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem;"></i>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
-{% if pending_non_cash_collections.groups %}
+{% if pending_non_cash_count > 0 %}
 <div class="floating-panel mb-4">
     <div class="floating-header">
-        <div>
-            <i class="bi bi-wallet2 me-2"></i>
-            <strong>Pending Non-Cash Collections</strong>
-            <span class="pending-count ms-2">{{ pending_non_cash_collections.total_sales }} sale{{ '' if pending_non_cash_collections.total_sales == 1 else 's' }}</span>
-        </div>
-        <span>Click a row to pre-fill cash in</span>
+        <button type="button"
+                class="panel-toggle js-lazy-panel-toggle"
+                data-panel-target="pending-non-cash-panel-body"
+                data-panel-url="{{ url_for('cash.cash_pending_non_cash_panel_api') }}"
+                data-panel-renderer="pending-non-cash"
+                aria-expanded="false">
+            <span class="panel-toggle-copy">
+                <i class="bi bi-wallet2 me-2"></i>
+                <strong>Pending Non-Cash Collections</strong>
+                <span class="pending-count pending-count-info ms-2">{{ pending_non_cash_count }} item{{ '' if pending_non_cash_count == 1 else 's' }}</span>
+            </span>
+            <span class="panel-toggle-meta">Expand to load rows <i class="bi bi-chevron-down panel-toggle-caret"></i></span>
+        </button>
     </div>
-    <div class="pending-payouts-body">
-        {% for group in pending_non_cash_collections.groups %}
-        <div class="payout-row floating-row"
-             data-float-sale-ids="{{ group.sale_ids|join(',') }}"
-             data-float-amount="{{ group.total_amount }}"
-             data-float-category="{{ group.cash_in_category }}"
-             data-float-description="{{ group.auto_description }}"
-             data-float-payment-method="{{ group.payment_method_name }}"
-             data-float-date="{{ group.transaction_date }}">
-            <div class="payout-name">
-                <i class="bi bi-phone me-2" style="color: var(--text-muted);"></i>
-                {{ group.payment_method_name }}
-                <span class="floating-pill ms-2">{{ group.date_display }}</span>
-                <div class="text-muted small mt-1">{{ group.sales_count }} pending sale{{ '' if group.sales_count == 1 else 's' }} · {{ group.cash_in_category }}</div>
-            </div>
-            <div class="payout-amount">
-                &#8369;{{ "{:,.2f}".format(group.total_amount) }}
-                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem; color:#4cc9f0;"></i>
-            </div>
-        </div>
-        {% endfor %}
+    <div class="pending-payouts-body lazy-panel-body" id="pending-non-cash-panel-body"></div>
+</div>
+{% endif %}
+{% if pending_payout_count > 0 %}
+<div class="pending-payouts-panel mb-4">
+    <div class="pending-payouts-header">
+        <button type="button"
+                class="panel-toggle js-lazy-panel-toggle"
+                data-panel-target="pending-payouts-panel-body"
+                data-panel-url="{{ url_for('cash.cash_pending_payouts_panel_api') }}"
+                data-panel-renderer="pending-payouts"
+                aria-expanded="false">
+            <span class="panel-toggle-copy">
+                <i class="bi bi-person-check me-2"></i>
+                <strong>Pending Mechanic Payouts — Today ({{ today_display }})</strong>
+                <span class="pending-count ms-2">{{ pending_payout_count }} pending</span>
+            </span>
+            <span class="panel-toggle-meta">Expand to load rows <i class="bi bi-chevron-down panel-toggle-caret"></i></span>
+        </button>
     </div>
+    <div class="pending-payouts-body lazy-panel-body" id="pending-payouts-panel-body"></div>
 </div>
 {% endif %}
 {% endif %}
@@ -781,6 +789,7 @@
             </div>
             <input type="hidden" id="entry-reference-id" value="">
             <input type="hidden" id="entry-claim-sale-ids" value="">
+            <input type="hidden" id="entry-claim-debt-payment-ids" value="">
 
             <button class="btn btn-primary w-100 fw-semibold" id="submit-entry-btn">
                 <i class="bi bi-plus-lg me-1"></i> Add Entry
@@ -987,6 +996,7 @@ let ledgerDateFlatpickr = null;
 let ledgerTypeFilter = LEDGER_SELECTED_TYPE || '';
 let ledgerCurrentPage = LEDGER_INITIAL_PAGE || 1;
 let ledgerRequestInFlight = false;
+let floatingCollectionAmountLocked = false;
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1034,6 +1044,19 @@ function updateDescriptionFieldState() {
     }
 }
 
+function setFloatingCollectionAmountLock(locked) {
+    const amountInput = document.getElementById('entry-amount');
+    floatingCollectionAmountLocked = Boolean(locked);
+    amountInput.readOnly = floatingCollectionAmountLocked;
+    amountInput.classList.toggle('bg-dark', floatingCollectionAmountLocked);
+    amountInput.classList.toggle('text-info', floatingCollectionAmountLocked);
+    if (floatingCollectionAmountLocked) {
+        amountInput.title = 'Amount is locked for pending non-cash collections.';
+    } else {
+        amountInput.removeAttribute('title');
+    }
+}
+
 if (LEDGER_VIEW === 'active') {
 document.getElementById('entry-category').addEventListener('change', () => {
     const category = document.getElementById('entry-category').value;
@@ -1043,6 +1066,7 @@ document.getElementById('entry-category').addEventListener('change', () => {
         document.getElementById('payout-date-wrapper').style.display = 'none';
     } else {
         document.getElementById('entry-claim-sale-ids').value = '';
+        document.getElementById('entry-claim-debt-payment-ids').value = '';
         document.getElementById('payout-date-wrapper').style.display = 'block';
         document.getElementById('entry-payout-date').value = document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT;
         document.getElementById('entry-payout-date').max = TODAY_FOR_INPUT;
@@ -1052,6 +1076,8 @@ document.getElementById('entry-category').addEventListener('change', () => {
         && !['From Bank Account', 'From Gcash/E-Wallet Account'].includes(category)
     ) {
         document.getElementById('entry-claim-sale-ids').value = '';
+        document.getElementById('entry-claim-debt-payment-ids').value = '';
+        setFloatingCollectionAmountLock(false);
     }
     updateDescriptionFieldState();
 });
@@ -1088,6 +1114,8 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
             clearPayoutDate();
         } else {
             document.getElementById('entry-claim-sale-ids').value = '';
+            document.getElementById('entry-claim-debt-payment-ids').value = '';
+            setFloatingCollectionAmountLock(false);
         }
 
         updateDescriptionFieldState();
@@ -1098,14 +1126,15 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
 populateCategories('CASH_IN');
 setPayoutDate(TODAY_FOR_INPUT);
 showPayoutDateIfNeeded();
+setFloatingCollectionAmountLock(false);
 }
 showPendingFlashAfterReload();
 initializeLedgerFilters();
 initializeLedgerReportForm();
 initializeLedgerPagination();
 if (LEDGER_VIEW === 'active') {
-    initializePendingPayoutRows();
-    initializePendingFloatRows();
+    initializeLazyPanels();
+    initializeCashPanelRowActions();
 }
 
 
@@ -1120,6 +1149,10 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     const description = document.getElementById('entry-description').value.trim();
     const referenceId = document.getElementById('entry-reference-id').value || null;
     const claimSaleIds = (document.getElementById('entry-claim-sale-ids').value || '')
+        .split(',')
+        .map(value => Number.parseInt(value, 10))
+        .filter(Number.isFinite);
+    const claimDebtPaymentIds = (document.getElementById('entry-claim-debt-payment-ids').value || '')
         .split(',')
         .map(value => Number.parseInt(value, 10))
         .filter(Number.isFinite);
@@ -1166,6 +1199,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
                 reference_id: referenceId,
                 payout_for_date: payoutDate,
                 claim_sale_ids: claimSaleIds,
+                claim_debt_payment_ids: claimDebtPaymentIds,
             }),
         });
 
@@ -1303,6 +1337,8 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     const parsedId = Number.parseInt(mechanicId || '', 10);
     document.getElementById('entry-reference-id').value = Number.isFinite(parsedId) ? String(parsedId) : '';
     document.getElementById('entry-claim-sale-ids').value = '';
+    document.getElementById('entry-claim-debt-payment-ids').value = '';
+    setFloatingCollectionAmountLock(false);
     setPayoutDate(payoutForDate || TODAY_FOR_INPUT);
     showPayoutDateIfNeeded();
     updateDescriptionFieldState();
@@ -1315,7 +1351,7 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     setTimeout(() => { form.style.borderColor = ''; }, 1500);
 }
 
-function prefillFloatingCollection(saleIds, amount, category, autoDescription) {
+function prefillFloatingCollection(saleIds, debtPaymentIds, amount, category, autoDescription) {
     document.getElementById('type_in').checked = true;
     populateCategories('CASH_IN');
 
@@ -1332,6 +1368,8 @@ function prefillFloatingCollection(saleIds, amount, category, autoDescription) {
     document.getElementById('entry-description').value = autoDescription || '';
     document.getElementById('entry-reference-id').value = '';
     document.getElementById('entry-claim-sale-ids').value = (saleIds || []).join(',');
+    document.getElementById('entry-claim-debt-payment-ids').value = (debtPaymentIds || []).join(',');
+    setFloatingCollectionAmountLock(true);
     clearPayoutDate();
     updateDescriptionFieldState();
 
@@ -1342,15 +1380,153 @@ function prefillFloatingCollection(saleIds, amount, category, autoDescription) {
     setTimeout(() => { form.style.borderColor = ''; }, 1500);
 }
 
-function initializePendingPayoutRows() {
-    document.querySelectorAll('.pending-payouts-body .payout-row, .reminder-body .payout-row').forEach((row) => {
-        if (row.hasAttribute('data-float-sale-ids')) return;
-        row.addEventListener('click', () => {
-            const mechanicName = row.getAttribute('data-mechanic-name') || '';
-            const amount = parseFloat(row.getAttribute('data-total-payout') || '0');
-            const mechanicId = row.getAttribute('data-mechanic-id') || '';
-            const autoDescription = row.getAttribute('data-auto-description') || mechanicName;
-            const payoutForDate = row.getAttribute('data-payout-date') || CASH_LEDGER_TODAY;
+function renderPendingPayoutRows(data) {
+    const rows = data.pending_payouts || [];
+    if (!rows.length) {
+        return '<div class="lazy-panel-empty">No pending mechanic payouts right now.</div>';
+    }
+
+    return rows.map((m) => `
+        <div class="payout-row js-payout-prefill-row"
+             data-mechanic-id="${escapeHtml(m.mechanic_id != null ? m.mechanic_id : '')}"
+             data-mechanic-name="${escapeHtml(m.mechanic_name || '')}"
+             data-total-payout="${escapeHtml(m.total_payout != null ? m.total_payout : 0)}"
+             data-auto-description="${escapeHtml(m.auto_description || m.mechanic_name || '')}"
+             data-payout-date="${escapeHtml(data.date || CASH_LEDGER_TODAY)}">
+            <div class="payout-name">
+                <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
+                ${escapeHtml(m.mechanic_name || 'Mechanic')}
+                ${m.has_topup ? '<span class="topup-badge ms-2">Quota Top-up Applied</span>' : ''}
+            </div>
+            <div class="payout-amount">
+                &#8369;${Number(m.total_payout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem;"></i>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderOverduePayoutRows(data) {
+    const groups = (data.groups || []).filter(group => Number(group.count || 0) > 0);
+    if (!groups.length) {
+        return '<div class="lazy-panel-empty">No overdue mechanic payouts found in this range.</div>';
+    }
+
+    return groups.map((day) => `
+        <div class="reminder-date-segment">
+            <div class="reminder-date-header">
+                <span class="reminder-date-label">${escapeHtml(day.date_display || day.date || '')}</span>
+                <span>
+                    <a class="reminder-action" href="/cash-ledger?start_date=${encodeURIComponent(day.date || '')}&end_date=${encodeURIComponent(day.date || '')}&type=CASH_OUT">
+                        Review entries
+                    </a>
+                    <span class="reminder-count ms-2">${Number(day.count || 0)} unpaid</span>
+                </span>
+            </div>
+            ${(day.overdue_payouts || []).map((m) => `
+                <div class="payout-row reminder-row js-payout-prefill-row"
+                     data-mechanic-id="${escapeHtml(m.mechanic_id != null ? m.mechanic_id : '')}"
+                     data-mechanic-name="${escapeHtml(m.mechanic_name || '')}"
+                     data-total-payout="${escapeHtml(m.total_payout != null ? m.total_payout : 0)}"
+                     data-auto-description="${escapeHtml(m.auto_description || m.mechanic_name || '')}"
+                     data-payout-date="${escapeHtml(day.date || '')}">
+                    <div class="payout-name">
+                        <i class="bi bi-person-fill me-2" style="color: var(--text-muted);"></i>
+                        ${escapeHtml(m.mechanic_name || 'Mechanic')}
+                    </div>
+                    <div class="payout-amount">&#8369;${Number(m.total_payout || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+            `).join('')}
+        </div>
+    `).join('');
+}
+
+function renderPendingNonCashRows(data) {
+    const groups = data.groups || [];
+    if (!groups.length) {
+        return '<div class="lazy-panel-empty">No pending non-cash collections right now.</div>';
+    }
+
+    return groups.map((group) => `
+        <div class="payout-row floating-row js-floating-prefill-row"
+             data-float-sale-ids="${escapeHtml((group.sale_ids || []).join(','))}"
+             data-float-debt-payment-ids="${escapeHtml((group.debt_payment_ids || []).join(','))}"
+             data-float-amount="${escapeHtml(group.total_amount != null ? group.total_amount : 0)}"
+             data-float-category="${escapeHtml(group.cash_in_category || 'From Gcash/E-Wallet Account')}"
+             data-float-description="${escapeHtml(group.auto_description || '')}"
+             data-float-payment-method="${escapeHtml(group.payment_method_name || '')}"
+             data-float-date="${escapeHtml(group.transaction_date || '')}">
+            <div class="payout-name">
+                <i class="bi bi-phone me-2" style="color: var(--text-muted);"></i>
+                ${escapeHtml(group.payment_method_name || 'Non-cash')}
+                <span class="floating-pill ms-2">${escapeHtml(group.date_display || group.transaction_date || '')}</span>
+                <div class="small mt-1" style="color: var(--text-primary);">${Number(group.sales_count || 0)} pending collection${Number(group.sales_count || 0) === 1 ? '' : 's'} · ${escapeHtml(group.display_source_label || '')}</div>
+            </div>
+            <div class="payout-amount">
+                &#8369;${Number(group.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <i class="bi bi-arrow-right-circle ms-2" style="font-size: 0.85rem; color:#4cc9f0;"></i>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getPanelRenderer(name) {
+    if (name === 'pending-payouts') return renderPendingPayoutRows;
+    if (name === 'overdue-payouts') return renderOverduePayoutRows;
+    return renderPendingNonCashRows;
+}
+
+async function toggleLazyPanel(button) {
+    const targetId = button.getAttribute('data-panel-target');
+    const panelBody = targetId ? document.getElementById(targetId) : null;
+    if (!panelBody) return;
+
+    const isOpen = panelBody.classList.contains('is-open');
+    if (isOpen) {
+        panelBody.classList.remove('is-open');
+        button.setAttribute('aria-expanded', 'false');
+        return;
+    }
+
+    panelBody.classList.add('is-open');
+    button.setAttribute('aria-expanded', 'true');
+
+    if (panelBody.dataset.loaded === 'true') {
+        return;
+    }
+
+    panelBody.innerHTML = '<div class="lazy-panel-loading"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>';
+
+    try {
+        const res = await fetch(button.getAttribute('data-panel-url'));
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.message || 'Failed to load panel data.');
+        }
+
+        const renderer = getPanelRenderer(button.getAttribute('data-panel-renderer'));
+        panelBody.innerHTML = renderer(data);
+        panelBody.dataset.loaded = 'true';
+    } catch (err) {
+        panelBody.innerHTML = '<div class="lazy-panel-empty text-danger">Failed to load this section. Please try again.</div>';
+    }
+}
+
+function initializeLazyPanels() {
+    document.querySelectorAll('.js-lazy-panel-toggle').forEach((button) => {
+        button.addEventListener('click', () => toggleLazyPanel(button));
+    });
+}
+
+function initializeCashPanelRowActions() {
+    document.addEventListener('click', (event) => {
+        const payoutRow = event.target.closest('.js-payout-prefill-row');
+        if (payoutRow) {
+            const mechanicName = payoutRow.getAttribute('data-mechanic-name') || '';
+            const amount = parseFloat(payoutRow.getAttribute('data-total-payout') || '0');
+            const mechanicId = payoutRow.getAttribute('data-mechanic-id') || '';
+            const autoDescription = payoutRow.getAttribute('data-auto-description') || mechanicName;
+            const payoutForDate = payoutRow.getAttribute('data-payout-date') || CASH_LEDGER_TODAY;
             const parsedId = Number.parseInt(mechanicId, 10);
             prefillPayout(
                 mechanicName,
@@ -1359,28 +1535,31 @@ function initializePendingPayoutRows() {
                 payoutForDate,
                 autoDescription
             );
-        });
-    });
-}
+            return;
+        }
 
-function initializePendingFloatRows() {
-    document.querySelectorAll('.floating-panel .payout-row[data-float-sale-ids]').forEach((row) => {
-        row.addEventListener('click', () => {
-            const saleIds = (row.getAttribute('data-float-sale-ids') || '')
-                .split(',')
-                .map(value => Number.parseInt(value, 10))
-                .filter(Number.isFinite);
-            const amount = parseFloat(row.getAttribute('data-float-amount') || '0');
-            const category = row.getAttribute('data-float-category') || 'From Gcash/E-Wallet Account';
-            const autoDescription = row.getAttribute('data-float-description') || '';
+        const floatRow = event.target.closest('.js-floating-prefill-row');
+        if (!floatRow) return;
 
-            prefillFloatingCollection(
-                saleIds,
-                Number.isFinite(amount) ? amount : 0,
-                category,
-                autoDescription
-            );
-        });
+        const saleIds = (floatRow.getAttribute('data-float-sale-ids') || '')
+            .split(',')
+            .map(value => Number.parseInt(value, 10))
+            .filter(Number.isFinite);
+        const debtPaymentIds = (floatRow.getAttribute('data-float-debt-payment-ids') || '')
+            .split(',')
+            .map(value => Number.parseInt(value, 10))
+            .filter(Number.isFinite);
+        const amount = parseFloat(floatRow.getAttribute('data-float-amount') || '0');
+        const category = floatRow.getAttribute('data-float-category') || 'From Gcash/E-Wallet Account';
+        const autoDescription = floatRow.getAttribute('data-float-description') || '';
+
+        prefillFloatingCollection(
+            saleIds,
+            debtPaymentIds,
+            Number.isFinite(amount) ? amount : 0,
+            category,
+            autoDescription
+        );
     });
 }
 
