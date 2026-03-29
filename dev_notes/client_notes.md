@@ -194,3 +194,12 @@ Future upgrade: move to Redis or DB
 ## Urgent
 - [ ] handover of system. we need a way to separate sales from inventory basically a way to reset the sales data and keep the current inventory at the time of handoff
 - [ ] customer database needs to keep current points and stamps from loyalty even after the sales data wipeout
+
+
+## March 29, 2026
+- [ ] stocktake report page changes, need total card for overage and shortage items then 
+- [ ] new pdf report for stocktake. aggregate based on date range. show totals for items counted, items w variance, items with shortages and items with overage. then show total cost of inventory formula is add everything in counted stock column. same with variance column, total all item cost of both overage and shortages. also csv
+- [ ] Edit page and index page. wait for confirmation to hide cost per piece and vendor price column from users. in edit item page hide markup input. do the same for add item page
+- [ ] Stocktake page needs admin approval. expiration of approval is by date range
+- [ ] hide variance items column in staff side
+- [ ] sales analytics page for top items put filter by category, also add extra from top 10 to top 50
