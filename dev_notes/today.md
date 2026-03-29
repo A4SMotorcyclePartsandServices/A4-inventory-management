@@ -2,7 +2,7 @@
 
 ## Tasks
 - [X] ~~*Bundling Feature in Sales*~~ [2026-03-26]
-- [ ] Edit Item information with history of item edits
+- [X] ~~*Edit Item information with history of item edits*~~ [2026-03-29]
 - [X] ~~*Import new master item file*~~ [2026-03-26]
 - [ ] Stocktake modal in Audit trail tab in audit.html page. no own modal yet
 - [X] ~~*new toggle in sales page for mechanic supplies. get cost per piece not selling price and then show in sales report as expense*~~ [2026-03-28]

@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime
 
@@ -16,18 +17,20 @@ def _to_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def get_manage_users_context(active_tab="users-tab"):
+def get_manage_users_context(active_tab="users-tab", include_audit_data=False):
     conn = get_db()
     try:
-        users = conn.execute(
-            """
-            SELECT u.id, u.username, u.phone_no, u.role, u.created_at, u.is_active,
-                   creator.username AS creator_name
-            FROM users u
-            LEFT JOIN users creator ON u.created_by = creator.id
-            ORDER BY u.created_at DESC
-            """
-        ).fetchall()
+        users = []
+        if include_audit_data:
+            users = conn.execute(
+                """
+                SELECT u.id, u.username, u.phone_no, u.role, u.created_at, u.is_active,
+                       creator.username AS creator_name
+                FROM users u
+                LEFT JOIN users creator ON u.created_by = creator.id
+                ORDER BY u.created_at DESC
+                """
+            ).fetchall()
         mechanics = conn.execute(
             "SELECT * FROM mechanics ORDER BY name ASC"
         ).fetchall()
@@ -122,17 +125,21 @@ def get_manage_users_context(active_tab="users-tab"):
         for bundle in bundles
     ]
 
-    return {
-        "users": formatted_users,
+    context = {
         "mechanics": mechanics,
         "mechanic_quota_topup_overrides": formatted_mechanic_quota_topup_overrides,
-        "password_reset_requests": list_password_reset_requests(),
         "services_list": services_list,
         "categories": categories,
         "payment_methods": payment_methods,
         "bundles": formatted_bundles,
         "active_tab": active_tab,
     }
+
+    if include_audit_data:
+        context["users"] = formatted_users
+        context["password_reset_requests"] = list_password_reset_requests()
+
+    return context
 
 
 def create_staff_user(username, password, phone_no, created_by):
@@ -1034,6 +1041,143 @@ def get_payables_audit_page(
     )
 
 
+def _normalize_json_payload(value):
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value or "{}")
+        except json.JSONDecodeError:
+            return {}
+    return dict(value)
+
+
+def get_item_edit_trail_page(page, start_date, end_date, search):
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    page = max(1, page)
+
+    per_page = 20
+    offset = (page - 1) * per_page
+
+    conditions = []
+    params = []
+
+    if start_date:
+        conditions.append("DATE(h.changed_at) >= %s")
+        params.append(start_date)
+    if end_date:
+        conditions.append("DATE(h.changed_at) <= %s")
+        params.append(end_date)
+    if search:
+        like = f"%{search.strip()}%"
+        conditions.append(
+            """
+            (
+                i.name ILIKE %s ESCAPE '\\'
+                OR COALESCE(h.changed_by_username, '') ILIKE %s ESCAPE '\\'
+                OR COALESCE(h.change_reason, '') ILIKE %s ESCAPE '\\'
+            )
+            """
+        )
+        params.extend([like, like, like])
+
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+    conn = get_db()
+    try:
+        total_row = conn.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM item_edit_history h
+            JOIN items i ON i.id = h.item_id
+            {where_clause}
+            """,
+            params,
+        ).fetchone()
+        total = int(total_row[0] or 0)
+        total_pages = max(1, -(-total // per_page))
+        if total and page > total_pages:
+            page = total_pages
+            offset = (page - 1) * per_page
+
+        rows = conn.execute(
+            f"""
+            SELECT
+                h.id,
+                h.item_id,
+                i.name AS item_name,
+                h.changed_at,
+                h.changed_by,
+                h.changed_by_username,
+                h.change_reason,
+                h.before_payload,
+                h.after_payload
+            FROM item_edit_history h
+            JOIN items i ON i.id = h.item_id
+            {where_clause}
+            ORDER BY h.changed_at DESC, h.id DESC
+            LIMIT %s OFFSET %s
+            """,
+            params + [per_page, offset],
+        ).fetchall()
+    finally:
+        conn.close()
+
+    formatted_rows = []
+    for row in rows:
+        before_payload = _normalize_json_payload(row["before_payload"])
+        after_payload = _normalize_json_payload(row["after_payload"])
+        changed_fields = []
+        change_preview = []
+        for field_name in (
+            "name",
+            "category",
+            "description",
+            "pack_size",
+            "vendor_price",
+            "cost_per_piece",
+            "a4s_selling_price",
+            "markup",
+            "reorder_level",
+            "vendor_name",
+            "mechanic",
+        ):
+            before_value = before_payload.get(field_name)
+            after_value = after_payload.get(field_name)
+            if before_value == after_value:
+                continue
+            changed_fields.append(field_name)
+            if len(change_preview) < 3:
+                label = field_name.replace("_", " ").title()
+                before_text = "-" if before_value in (None, "") else str(before_value)
+                after_text = "-" if after_value in (None, "") else str(after_value)
+                change_preview.append(f"{label}: {before_text} -> {after_text}")
+
+        formatted_rows.append({
+            "id": int(row["id"]),
+            "item_id": int(row["item_id"]),
+            "item_name": row["item_name"] or "-",
+            "changed_at": format_date(row["changed_at"], show_time=True),
+            "changed_by_username": row["changed_by_username"] or "System",
+            "change_reason": row["change_reason"] or "",
+            "changed_fields": changed_fields,
+            "change_preview": change_preview,
+        })
+
+    return {
+        "rows": formatted_rows,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+    }
+
+
 def get_item_details_payload(item_id):
     conn = get_db()
     try:
@@ -1070,6 +1214,7 @@ __all__ = [
     "delete_mechanic_quota_topup_override",
     "get_admin_sales_page",
     "get_audit_trail_page",
+    "get_item_edit_trail_page",
     "get_item_details_payload",
     "get_manage_users_context",
     "get_manual_in_details",

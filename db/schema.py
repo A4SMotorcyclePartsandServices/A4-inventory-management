@@ -82,6 +82,7 @@ def init_db():
     """)
     cur.execute("ALTER TABLE items ALTER COLUMN markup TYPE NUMERIC(12,4)")
     cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES vendors(id)")
+    cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()")
     cur.execute("""
         UPDATE items
         SET markup = CASE
@@ -90,6 +91,20 @@ def init_db():
             ELSE 0
         END
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS item_edit_history (
+        id                  SERIAL PRIMARY KEY,
+        item_id             INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+        changed_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        changed_by          INTEGER REFERENCES users(id),
+        changed_by_username TEXT,
+        change_reason       TEXT NOT NULL,
+        before_payload      JSONB NOT NULL,
+        after_payload       JSONB NOT NULL
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_item_edit_history_item_id ON item_edit_history(item_id, changed_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_item_edit_history_changed_at ON item_edit_history(changed_at DESC)")
 
     # 5. PAYMENT METHODS TABLE
     cur.execute("""

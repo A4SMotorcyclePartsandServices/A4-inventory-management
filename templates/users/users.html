@@ -1111,7 +1111,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-shield-lock-fill"></i> Admin Panel</h2>
+    <h2><i class="bi bi-plus-circle-dotted"></i> User Panel</h2>
     <a href="/" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
     </a>
@@ -1120,18 +1120,8 @@
 <!-- TABS -->
 <ul class="nav nav-tabs mb-0" role="tablist">
     <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'users-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
-            <i class="bi bi-people-fill"></i> Users
-        </button>
-    </li>
-    <li class="nav-item">
         <button class="nav-link {% if active_tab == 'mechanics-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#mechanics-tab" type="button">
             <i class="bi bi-tools"></i> Mechanics
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if active_tab == 'password-resets-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#password-resets-tab" type="button">
-            <i class="bi bi-key-fill"></i> Password Resets
         </button>
     </li>
     <li class="nav-item">
@@ -1158,191 +1148,6 @@
 </ul>
 
 <div class="tab-content">
-
-    <!-- USERS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'users-tab' %}show active{% endif %}" id="users-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
-            <form method="post" class="row g-3">
-                <div class="col-md-4">
-                    <input name="username" class="form-control" placeholder="New staff username" required>
-                </div>
-                <div class="col-md-4">
-                    <input name="phone_no" type="tel" inputmode="numeric" class="form-control" placeholder="Phone number" required>
-                </div>
-                <div class="col-md-3">
-                    <input name="password" type="password" class="form-control" placeholder="Temporary password" required>
-                </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-danger w-100">
-                        <i class="bi bi-person-plus-fill"></i> Create
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Username</th>
-                        <th>Phone #</th>
-                        <th>Role</th>
-                        <th>Created At</th>
-                        <th>Created By</th>
-                        <th class="text-center">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for user in users %}
-                    <tr>
-                        <td class="fw-bold">{{ user.username }}</td>
-                        <td class="text-white-50">{{ user.phone_no or '---' }}</td>
-                        <td>
-                            {% if user.role == 'admin' %}
-                                <span class="badge bg-danger role-badge">Admin</span>
-                            {% else %}
-                                <span class="badge bg-secondary role-badge">Staff</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">{{ user.created_at }}</td>
-                        <td class="text-white-50">
-                            {% if user.creator_name %}
-                                <i class="bi bi-person-badge"></i> {{ user.creator_name }}
-                            {% else %}
-                                <span class="text-muted small">System</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center">
-                            {% if user.role == 'admin' %}
-                                <span class="text-success small fw-bold">
-                                    <i class="bi bi-shield-check"></i> PROTECTED
-                                </span>
-                            {% else %}
-                                <form action="{{ url_for('admin_users.toggle_user', user_id=user.id) }}" method="POST">
-                                    {% if user.is_active == 1 %}
-                                        <button type="submit" class="toggle-btn p-0 text-success">
-                                            <i class="bi bi-toggle-on fs-4"></i>
-                                            <small class="d-block">ACTIVE</small>
-                                        </button>
-                                    {% else %}
-                                        <button type="submit" class="toggle-btn p-0 text-muted">
-                                            <i class="bi bi-toggle-off fs-4"></i>
-                                            <small class="d-block">DISABLED</small>
-                                        </button>
-                                    {% endif %}
-                                </form>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- PASSWORD RESETS TAB -->
-    <div class="tab-pane fade {% if active_tab == 'password-resets-tab' %}show active{% endif %}" id="password-resets-tab">
-        <div class="admin-card shadow-sm">
-            <h5 class="mb-2 text-white-50">Staff Password Reset Requests</h5>
-            <p class="text-info mb-0 small">
-                Staff users can request a reset from the login page. Admins set a temporary password here, then the user is forced to change it after signing in.
-            </p>
-        </div>
-
-        <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
-                <thead>
-                    <tr>
-                        <th>Requested</th>
-                        <th>Username</th>
-                        <th>Note</th>
-                        <th>Status</th>
-                        <th>Handled By</th>
-                        <th>Admin Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for req in password_reset_requests %}
-                    <tr>
-                        <td class="text-white-50">
-                            <div>{{ req.requested_at }}</div>
-                            {% if req.repeat_request_count > 0 %}
-                            <div class="small text-warning">
-                                Asked again {{ req.repeat_request_count }} more time{{ 's' if req.repeat_request_count != 1 else '' }}
-                            </div>
-                            <div class="small text-muted">
-                                Latest repeat: {{ req.last_requested_at }}
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="fw-bold">{{ req.matched_username or req.username_submitted }}</div>
-                            {% if req.requested_by_ip %}
-                            <div class="small text-muted">IP: {{ req.requested_by_ip }}</div>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">
-                            {{ req.request_note or 'No note provided.' }}
-                            {% if req.repeat_request_count > 0 %}
-                            <div class="mt-2 small text-info">
-                                Deduped into this same request record. Total submissions: {{ req.total_request_count }}.
-                            </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if req.status == 'PENDING' %}
-                                <span class="badge bg-warning text-dark">Pending</span>
-                            {% elif req.status == 'COMPLETED' %}
-                                <span class="badge bg-success">Completed</span>
-                            {% elif req.status == 'REJECTED' %}
-                                <span class="badge bg-danger">Rejected</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ req.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-white-50">
-                            {% if req.handled_by_username %}
-                                <div>{{ req.handled_by_username }}</div>
-                                <div class="small text">{{ req.handled_at or '' }}</div>
-                            {% else %}
-                                <span class="text-muted">Waiting for admin</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-center actions-cell">
-                            <button
-                                type="button"
-                                class="btn btn-sm btn-outline-info"
-                                title="Review password reset request"
-                                data-request-id="{{ req.id }}"
-                                data-username="{{ req.matched_username or req.username_submitted }}"
-                                data-requested-at="{{ req.requested_at }}"
-                                data-last-requested-at="{{ req.last_requested_at or '' }}"
-                                data-repeat-count="{{ req.repeat_request_count }}"
-                                data-total-count="{{ req.total_request_count }}"
-                                data-request-ip="{{ req.requested_by_ip or '' }}"
-                                data-request-note="{{ req.request_note or '' }}"
-                                data-status="{{ req.status }}"
-                                data-handled-by="{{ req.handled_by_username or '' }}"
-                                data-handled-at="{{ req.handled_at or '' }}"
-                                data-admin-note="{{ req.admin_note or '' }}"
-                                data-can-complete="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
-                                data-can-reject="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
-                                data-has-match="{{ 1 if req.matched_username else 0 }}"
-                                onclick="openPasswordResetReviewModal(this)">
-                                <i class="bi bi-eye"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted">No password reset requests yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
 
     <!-- MECHANICS TAB -->
     <div class="tab-pane fade {% if active_tab == 'mechanics-tab' %}show active{% endif %}" id="mechanics-tab">

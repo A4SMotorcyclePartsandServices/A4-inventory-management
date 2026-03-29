@@ -347,11 +347,50 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 14px;
         background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
-        padding: 1rem 1.1rem;
+        padding: 1.2rem 1.25rem;
     }
 
     .password-reset-review-card + .password-reset-review-card {
-        margin-top: 1rem;
+        margin-top: 1.15rem;
+    }
+
+    #passwordResetReviewActions .password-reset-review-card + .password-reset-review-card {
+        margin-top: 0;
+    }
+
+    .password-reset-modal-dialog {
+        max-width: 920px;
+    }
+
+    .password-reset-modal-content {
+        border-radius: 18px;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at top right, rgba(230, 57, 70, 0.10), transparent 24%),
+            linear-gradient(180deg, #252a31, #1e2329) !important;
+    }
+
+    .audit-modal-content {
+        border-radius: 18px;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at top right, rgba(230, 57, 70, 0.10), transparent 24%),
+            linear-gradient(180deg, #252a31, #1e2329) !important;
+    }
+
+    .audit-modal-content .modal-header,
+    .audit-modal-content .modal-footer {
+        background: rgba(255,255,255,0.02);
+    }
+
+    .password-reset-modal-content .modal-header,
+    .password-reset-modal-content .modal-footer {
+        padding: 1rem 1.25rem;
+        background: rgba(255,255,255,0.02);
+    }
+
+    .password-reset-modal-content .modal-body {
+        padding: 1.25rem;
     }
 
     .password-reset-review-kicker {
@@ -360,33 +399,35 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
         color: #9ca3af;
-        margin-bottom: 0.45rem;
+        margin-bottom: 0.55rem;
     }
 
     .password-reset-review-title {
-        font-size: 1rem;
+        font-size: 1.08rem;
         font-weight: 700;
         color: #f5f5f5;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.3rem;
     }
 
     .password-reset-review-subtitle {
-        font-size: 0.82rem;
+        font-size: 0.86rem;
         color: #9ca3af;
         margin-bottom: 0;
+        line-height: 1.5;
     }
 
     .password-reset-meta-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.85rem;
+        gap: 0.95rem;
+        margin-top: 1rem;
     }
 
     .password-reset-meta-item {
-        padding: 0.8rem 0.9rem;
+        padding: 0.95rem 1rem;
         border-radius: 12px;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .password-reset-meta-label {
@@ -403,6 +444,7 @@
         color: #f5f5f5;
         font-weight: 600;
         overflow-wrap: anywhere;
+        line-height: 1.45;
     }
 
     .password-reset-status-pill {
@@ -442,6 +484,128 @@
         border: 1px dashed rgba(255,255,255,0.1);
         color: #9ca3af;
         font-size: 0.88rem;
+    }
+
+    #passwordResetReviewActions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1.15rem;
+        margin-top: 1.25rem;
+    }
+
+    #passwordResetReviewActions form {
+        margin-top: 1.1rem !important;
+    }
+
+    #passwordResetReviewActions .form-label {
+        margin-bottom: 0.45rem;
+        color: #c8cdd7;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    #passwordResetReviewActions .form-control {
+        min-height: 46px;
+        border-radius: 10px;
+        background: #171b25;
+        border-color: rgba(255,255,255,0.08);
+        color: #f5f5f5;
+    }
+
+    #passwordResetReviewActions .form-control:focus {
+        background: #1a1f2a;
+        color: #fff;
+        border-color: rgba(230, 57, 70, 0.55);
+        box-shadow: 0 0 0 0.2rem rgba(230, 57, 70, 0.15);
+    }
+
+    #passwordResetReviewActions .btn {
+        min-height: 44px;
+        border-radius: 10px;
+        font-weight: 700;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .password-reset-review-action-card {
+        position: relative;
+        min-height: 100%;
+        padding-top: 1.3rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .password-reset-review-action-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 1.25rem;
+        right: 1.25rem;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0));
+    }
+
+    .password-reset-review-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin-top: 1.1rem;
+        flex: 1 1 auto;
+        align-content: start;
+    }
+
+    .password-reset-review-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .password-reset-review-form-grid > .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .password-reset-review-submit {
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        margin-top: auto;
+        padding-top: 0.35rem;
+    }
+
+    .password-reset-review-submit .btn {
+        min-width: 210px;
+    }
+
+    .password-reset-review-action-card.secondary .password-reset-review-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .password-reset-review-action-card.secondary .password-reset-review-submit {
+        margin-top: auto;
+    }
+
+    .password-reset-review-action-card.secondary .form-control {
+        min-height: 52px;
+    }
+
+    .password-reset-modal-content .modal-footer .btn {
+        min-width: 82px;
+    }
+
+    #passwordResetReviewReadOnly {
+        margin-top: 1.15rem;
+    }
+
+    @media (max-width: 991.98px) {
+        #passwordResetReviewActions,
+        .password-reset-review-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .password-reset-review-submit .btn {
+            width: 100%;
+            min-width: 0;
+        }
     }
 
     .mechanic-supply-detail-card {
@@ -519,6 +683,33 @@
         border: 1px solid rgba(103, 194, 228, 0.24);
         background: rgba(103, 194, 228, 0.12);
         color: #7dd3fc;
+    }
+
+    .item-edit-field-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+
+    .item-edit-field-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.9rem;
+        border-radius: 999px;
+        border: 1px solid rgba(96, 165, 250, 0.38);
+        background: linear-gradient(180deg, rgba(37, 99, 235, 0.18), rgba(30, 64, 175, 0.14));
+        color: #e0f2fe;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+
+    .item-edit-field-chip i {
+        color: #93c5fd;
+        font-size: 0.8rem;
     }
 
     .mechanic-supply-lines {
@@ -922,7 +1113,7 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-clipboard-data"></i> Audit Panel</h2>
+    <h2><i class="bi bi-shield-lock-fill"></i> Admin Panel</h2>
     <a href="/" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
     </a>
@@ -930,6 +1121,16 @@
 
 <!-- TABS -->
 <ul class="nav nav-tabs mb-0" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'users-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
+            <i class="bi bi-people-fill"></i> Users
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'password-resets-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#password-resets-tab" type="button">
+            <i class="bi bi-key-fill"></i> Password Resets
+        </button>
+    </li>
     <li class="nav-item">
         <button class="nav-link {% if active_tab == 'sales-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
             <i class="bi bi-cash-stack"></i> Sales
@@ -946,6 +1147,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'item-edit-trail-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#item-edit-trail-tab" type="button">
+            <i class="bi bi-pencil-square"></i> Item Edit Trail
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link {% if active_tab == 'payables-audit-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#payables-audit-tab" type="button">
             <i class="bi bi-journal-check"></i> Payables Audit
         </button>
@@ -953,6 +1159,191 @@
 </ul>
 
 <div class="tab-content">
+    <!-- USERS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'users-tab' %}show active{% endif %}" id="users-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
+            <form method="post" action="{{ url_for('admin_users.manage_users') }}" class="row g-3">
+                <div class="col-md-4">
+                    <input name="username" class="form-control" placeholder="New staff username" required>
+                </div>
+                <div class="col-md-4">
+                    <input name="phone_no" type="tel" inputmode="numeric" class="form-control" placeholder="Phone number" required>
+                </div>
+                <div class="col-md-3">
+                    <input name="password" type="password" class="form-control" placeholder="Temporary password" required>
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-person-plus-fill"></i> Create
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Phone #</th>
+                        <th>Role</th>
+                        <th>Created At</th>
+                        <th>Created By</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td class="fw-bold">{{ user.username }}</td>
+                        <td class="text-white-50">{{ user.phone_no or '---' }}</td>
+                        <td>
+                            {% if user.role == 'admin' %}
+                                <span class="badge bg-danger role-badge">Admin</span>
+                            {% else %}
+                                <span class="badge bg-secondary role-badge">Staff</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">{{ user.created_at }}</td>
+                        <td class="text-white-50">
+                            {% if user.creator_name %}
+                                <i class="bi bi-person-badge"></i> {{ user.creator_name }}
+                            {% else %}
+                                <span class="text-muted small">System</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if user.role == 'admin' %}
+                                <span class="text-success small fw-bold">
+                                    <i class="bi bi-shield-check"></i> PROTECTED
+                                </span>
+                            {% else %}
+                                <form action="{{ url_for('admin_users.toggle_user', user_id=user.id) }}" method="POST">
+                                    {% if user.is_active == 1 %}
+                                        <button type="submit" class="toggle-btn p-0 text-success">
+                                            <i class="bi bi-toggle-on fs-4"></i>
+                                            <small class="d-block">ACTIVE</small>
+                                        </button>
+                                    {% else %}
+                                        <button type="submit" class="toggle-btn p-0 text-muted">
+                                            <i class="bi bi-toggle-off fs-4"></i>
+                                            <small class="d-block">DISABLED</small>
+                                        </button>
+                                    {% endif %}
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PASSWORD RESETS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'password-resets-tab' %}show active{% endif %}" id="password-resets-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-2 text-white-50">Staff Password Reset Requests</h5>
+            <p class="text-info mb-0 small">
+                Staff users can request a reset from the login page. Admins set a temporary password here, then the user is forced to change it after signing in.
+            </p>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Requested</th>
+                        <th>Username</th>
+                        <th>Note</th>
+                        <th>Status</th>
+                        <th>Handled By</th>
+                        <th>Admin Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in password_reset_requests %}
+                    <tr>
+                        <td class="text-white-50">
+                            <div>{{ req.requested_at }}</div>
+                            {% if req.repeat_request_count > 0 %}
+                            <div class="small text-warning">
+                                Asked again {{ req.repeat_request_count }} more time{{ 's' if req.repeat_request_count != 1 else '' }}
+                            </div>
+                            <div class="small text-muted">
+                                Latest repeat: {{ req.last_requested_at }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ req.matched_username or req.username_submitted }}</div>
+                            {% if req.requested_by_ip %}
+                            <div class="small text-muted">IP: {{ req.requested_by_ip }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">
+                            {{ req.request_note or 'No note provided.' }}
+                            {% if req.repeat_request_count > 0 %}
+                            <div class="mt-2 small text-info">
+                                Deduped into this same request record. Total submissions: {{ req.total_request_count }}.
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if req.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif req.status == 'COMPLETED' %}
+                                <span class="badge bg-success">Completed</span>
+                            {% elif req.status == 'REJECTED' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ req.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">
+                            {% if req.handled_by_username %}
+                                <div>{{ req.handled_by_username }}</div>
+                                <div class="small text">{{ req.handled_at or '' }}</div>
+                            {% else %}
+                                <span class="text-muted">Waiting for admin</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center actions-cell">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-info"
+                                title="Review password reset request"
+                                data-request-id="{{ req.id }}"
+                                data-username="{{ req.matched_username or req.username_submitted }}"
+                                data-requested-at="{{ req.requested_at }}"
+                                data-last-requested-at="{{ req.last_requested_at or '' }}"
+                                data-repeat-count="{{ req.repeat_request_count }}"
+                                data-total-count="{{ req.total_request_count }}"
+                                data-request-ip="{{ req.requested_by_ip or '' }}"
+                                data-request-note="{{ req.request_note or '' }}"
+                                data-status="{{ req.status }}"
+                                data-handled-by="{{ req.handled_by_username or '' }}"
+                                data-handled-at="{{ req.handled_at or '' }}"
+                                data-admin-note="{{ req.admin_note or '' }}"
+                                data-can-complete="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
+                                data-can-reject="{{ 1 if req.status == 'PENDING' and req.matched_username else 0 }}"
+                                data-has-match="{{ 1 if req.matched_username else 0 }}"
+                                onclick="openPasswordResetReviewModal(this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No password reset requests yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <!-- SALES TAB -->
     <div class="tab-pane fade {% if active_tab == 'sales-tab' %}show active{% endif %}" id="sales-tab">
 
@@ -1223,6 +1614,76 @@
         </div>
 
     </div>
+
+    <!-- ITEM EDIT TRAIL TAB -->
+    <div class="tab-pane fade {% if active_tab == 'item-edit-trail-tab' %}show active{% endif %}" id="item-edit-trail-tab">
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-4 mb-3 gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <h6 class="text-primary fw-semibold fs-5 mb-0">
+                    <i class="bi bi-pencil-square me-2"></i> Item Edit Trail
+                </h6>
+                <span class="text-primary small" id="item-edit-summary"></span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-calendar-range"></i>
+                    </span>
+                    <input type="text" id="item-edit-date-range"
+                        class="form-control form-control-sm"
+                        placeholder="Pick date range..."
+                        style="background:#141720; border-color:#333; color:#fff;"
+                        readonly>
+                </div>
+
+                <div class="input-group input-group-sm" style="width: 230px;">
+                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                        <i class="bi bi-search"></i>
+                    </span>
+                    <input type="text" id="item-edit-search"
+                        class="form-control form-control-sm"
+                        placeholder="Search item, reason, user..."
+                        style="background:#141720; border-color:#333; color:#fff;">
+                </div>
+
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearItemEditFilters()" title="Clear filters">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-hover align-middle" id="item-edit-trail-table">
+                <thead>
+                    <tr class="border-bottom border-secondary">
+                        <th style="width: 18%;">Date & Time</th>
+                        <th style="width: 23%;">Item</th>
+                        <th style="width: 31%;">Reason</th>
+                        <th style="width: 14%;">Staff</th>
+                        <th class="text-center actions-cell" style="width: 14%;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="item-edit-trail-body">
+                    <tr><td colspan="5" class="text-center text-muted py-4">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3" id="item-edit-pagination-row" style="display:none !important;">
+            <span class="text-muted small" id="item-edit-page-label"></span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" id="item-edit-prev-btn" onclick="itemEditChangePage(-1)">
+                    <i class="bi bi-chevron-left"></i> Prev
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="item-edit-next-btn" onclick="itemEditChangePage(1)">
+                    Next <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+    </div>
     <!-- PAYABLES AUDIT TAB -->
     <div class="tab-pane fade {% if active_tab == 'payables-audit-tab' %}show active{% endif %}" id="payables-audit-tab">
 
@@ -1372,7 +1833,7 @@
     <!-- ORDERS MODAL -->
     <div class="modal fade" id="poDetailsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content bg-dark text-white border-secondary">
+        <div class="modal-content bg-dark text-white border-secondary audit-modal-content">
         <div class="modal-header border-secondary">
             <h5 class="modal-title" id="poModalLabel">Purchase Order Details</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1431,7 +1892,7 @@
 </div>
     <div class="modal fade" id="payablesAuditDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-warning">
                         <i class="bi bi-journal-check me-1 text-warning"></i> Payables Audit Details
@@ -1447,7 +1908,7 @@
     <!-- ITEM CREATED MODAL -->
     <div class="modal fade" id="itemCreatedModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-success">
                         <i class="bi bi-box-seam me-1 text-success"></i> Item Created
@@ -1463,7 +1924,7 @@
 
     <div class="modal fade" id="manualInDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-success">
                         <i class="bi bi-box-arrow-in-down me-1 text-success"></i> Manual Stock IN Details
@@ -1477,9 +1938,25 @@
         </div>
     </div>
 
+    <div class="modal fade" id="itemEditDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-primary">
+                        <i class="bi bi-pencil-square me-1 text-primary"></i> Item Edit Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="itemEditDetailsBody">
+                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Select an item edit entry.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="mechanicSupplyDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-info">
                         <i class="bi bi-wrench-adjustable-circle me-2"></i>Mechanic Supply Details
@@ -1497,8 +1974,8 @@
     </div>
 
     <div class="modal fade" id="passwordResetReviewModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
+        <div class="modal-dialog modal-dialog-centered password-reset-modal-dialog">
+            <div class="modal-content bg-dark border-secondary text-white password-reset-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-danger">
                         <i class="bi bi-eye me-2"></i>Review Password Reset Request
@@ -1545,40 +2022,44 @@
                     </div>
 
                     <div id="passwordResetReviewActions">
-                        <div class="password-reset-review-card">
+                        <div class="password-reset-review-card password-reset-review-action-card">
                             <div class="password-reset-review-kicker">Primary Action</div>
                             <div class="password-reset-review-title">Set Temporary Password</div>
                             <p class="password-reset-review-subtitle">The user will be forced to change this password immediately after signing in.</p>
-                            <form id="passwordResetCompleteForm" method="POST" class="row g-3 mt-1">
-                                <div class="col-md-6">
+                            <form id="passwordResetCompleteForm" method="POST" class="mt-1">
+                                <div class="password-reset-review-form-grid">
+                                    <div class="password-reset-review-field">
                                     <label class="form-label text-white-50 small">Temporary Password</label>
                                     <input id="passwordResetTempPassword" name="temporary_password" type="password" class="form-control" placeholder="At least 8 characters" minlength="8" required>
-                                </div>
-                                <div class="col-md-6">
+                                    </div>
+                                    <div class="password-reset-review-field">
                                     <label class="form-label text-white-50 small">Admin Note</label>
                                     <input id="passwordResetCompleteNote" name="admin_note" class="form-control" placeholder="Optional note for internal tracking">
-                                </div>
-                                <div class="col-12">
+                                    </div>
+                                    <div class="password-reset-review-submit full-width">
                                     <button type="submit" class="btn btn-danger">
                                         <i class="bi bi-key me-1"></i> Set Temporary Password
                                     </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
 
-                        <div class="password-reset-review-card">
+                        <div class="password-reset-review-card password-reset-review-action-card secondary">
                             <div class="password-reset-review-kicker">Secondary Action</div>
                             <div class="password-reset-review-title">Reject Request</div>
                             <p class="password-reset-review-subtitle">Use this if the request is invalid, duplicated in error, or should not be processed.</p>
-                            <form id="passwordResetRejectForm" method="POST" class="row g-3 mt-1">
-                                <div class="col-md-9">
+                            <form id="passwordResetRejectForm" method="POST" class="mt-1">
+                                <div class="password-reset-review-form-grid">
+                                    <div class="password-reset-review-field full-width">
                                     <label class="form-label text-white-50 small">Rejection Note</label>
                                     <input id="passwordResetRejectNote" name="admin_note" class="form-control" placeholder="Optional reason for rejection">
-                                </div>
-                                <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-outline-warning w-100">
+                                    </div>
+                                    <div class="password-reset-review-submit full-width">
+                                    <button type="submit" class="btn btn-outline-warning">
                                         Reject Request
                                     </button>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -1604,7 +2085,7 @@
     <!-- DEBT PAYMENTS MODAL -->
     <div class="modal fade" id="debtPaymentsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
                 <div class="modal-header border-secondary">
                     <h5 class="modal-title text-warning">
                         <i class="bi bi-clock-history me-1 text-warning"></i>
@@ -2880,6 +3361,222 @@ function renderAuditTrail(data) {
                 <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '-'}</td>
             </tr>`;
     }).join('');
+}
+
+// --- ITEM EDIT TRAIL STATE ---
+let itemEditPage = 1;
+let itemEditStartDate = null;
+let itemEditEndDate = null;
+let itemEditSearch = '';
+let itemEditSearchTimeout = null;
+let itemEditFlatpickr = null;
+let itemEditRowsById = {};
+
+document.querySelector('[data-bs-target="#item-edit-trail-tab"]')?.addEventListener('shown.bs.tab', function () {
+    if (document.getElementById('item-edit-trail-body').textContent.includes('Loading')) {
+        loadItemEditTrail();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (!document.getElementById('item-edit-date-range')) return;
+
+    itemEditFlatpickr = flatpickr('#item-edit-date-range', {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        onClose: function(selectedDates) {
+            if (selectedDates.length === 2) {
+                const fmt = d => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                };
+                itemEditStartDate = fmt(selectedDates[0]);
+                itemEditEndDate = fmt(selectedDates[1]);
+                itemEditPage = 1;
+                loadItemEditTrail();
+            }
+        }
+    });
+
+    document.getElementById('item-edit-search')?.addEventListener('input', function () {
+        clearTimeout(itemEditSearchTimeout);
+        itemEditSearchTimeout = setTimeout(() => {
+            itemEditSearch = this.value.trim();
+            itemEditPage = 1;
+            loadItemEditTrail();
+        }, 350);
+    });
+
+    if (document.getElementById('item-edit-trail-tab')?.classList.contains('show')) {
+        loadItemEditTrail();
+    }
+});
+
+function clearItemEditFilters() {
+    if (itemEditFlatpickr) itemEditFlatpickr.clear();
+    itemEditStartDate = null;
+    itemEditEndDate = null;
+    itemEditSearch = '';
+    itemEditPage = 1;
+
+    document.getElementById('item-edit-search').value = '';
+    loadItemEditTrail();
+}
+
+function itemEditChangePage(direction) {
+    itemEditPage += direction;
+    loadItemEditTrail();
+}
+
+function loadItemEditTrail() {
+    const tbody = document.getElementById('item-edit-trail-body');
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+
+    const params = [`page=${itemEditPage}`];
+    if (itemEditStartDate) params.push(`start_date=${encodeURIComponent(itemEditStartDate)}`);
+    if (itemEditEndDate) params.push(`end_date=${encodeURIComponent(itemEditEndDate)}`);
+    if (itemEditSearch) params.push(`search=${encodeURIComponent(itemEditSearch)}`);
+
+    fetch(`/api/audit/item-edits?${params.join('&')}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger py-4">${escapeHtml(data.error)}</td></tr>`;
+                return;
+            }
+            renderItemEditTrail(data);
+        })
+        .catch(() => {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Failed to load data.</td></tr>';
+        });
+}
+
+function renderItemEditTrail(data) {
+    const tbody = document.getElementById('item-edit-trail-body');
+    const summaryEl = document.getElementById('item-edit-summary');
+    const pageLabel = document.getElementById('item-edit-page-label');
+    const paginationRow = document.getElementById('item-edit-pagination-row');
+    const prevBtn = document.getElementById('item-edit-prev-btn');
+    const nextBtn = document.getElementById('item-edit-next-btn');
+
+    summaryEl.textContent = `${Number(data.total || 0).toLocaleString()} total edits`;
+
+    if (data.total_pages > 1) {
+        paginationRow.style.display = 'flex';
+        pageLabel.className = 'page-indicator small';
+        pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
+        prevBtn.disabled = data.page <= 1;
+        nextBtn.disabled = data.page >= data.total_pages;
+    } else {
+        paginationRow.style.display = 'none';
+    }
+
+    itemEditRowsById = {};
+
+    if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No item edit records found.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.rows.map(row => {
+        itemEditRowsById[String(row.id)] = row;
+
+        return `
+            <tr>
+                <td class="text-white-50 small">${row.changed_at || '-'}</td>
+                <td>
+                    <div class="fw-bold text-white">${escapeHtml(row.item_name || '-')}</div>
+                    <div class="small text-white-50">Item ID: ${row.item_id || '-'}</div>
+                </td>
+                <td class="text-white-50 small">${escapeHtml(row.change_reason || '-')}</td>
+                <td class="text-white-50 small"><i class="bi bi-person me-1"></i>${escapeHtml(row.changed_by_username || '-')}</td>
+                <td class="text-center actions-cell">
+                    <button class="btn btn-sm btn-outline-primary" type="button" onclick="viewItemEditDetails('${row.id}')">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function viewItemEditDetails(rowId) {
+    const row = itemEditRowsById[String(rowId)];
+    const body = document.getElementById('itemEditDetailsBody');
+    if (!body) return;
+
+    if (!row) {
+        body.innerHTML = '<div class="text-danger text-center py-3">Unable to load item edit details.</div>';
+        new bootstrap.Modal(document.getElementById('itemEditDetailsModal')).show();
+        return;
+    }
+
+    const itemEditFieldIcons = {
+        name: 'bi-tag',
+        category: 'bi-diagram-3',
+        description: 'bi-card-text',
+        pack_size: 'bi-box-seam',
+        vendor_price: 'bi-shop',
+        cost_per_piece: 'bi-calculator',
+        a4s_selling_price: 'bi-cash-stack',
+        markup: 'bi-graph-up-arrow',
+        reorder_level: 'bi-bar-chart-steps',
+        vendor_name: 'bi-shop-window',
+        mechanic: 'bi-wrench-adjustable-circle',
+    };
+
+    const changedFieldsHtml = (row.changed_fields || []).length
+        ? row.changed_fields.map(field => `
+            <span class="item-edit-field-chip">
+                <i class="bi ${itemEditFieldIcons[field] || 'bi-pencil-square'}"></i>
+                ${escapeHtml(String(field || '').replaceAll('_', ' '))}
+            </span>
+        `).join('')
+        : '<span class="text-muted">-</span>';
+
+    const previewHtml = (row.change_preview || []).length
+        ? row.change_preview.map(line => `<div class="small text-white-50 mb-2">${escapeHtml(line)}</div>`).join('')
+        : '<span class="text-muted">-</span>';
+
+    body.innerHTML = `
+        <div class="mb-3">
+            <div class="fw-bold text-white fs-5">${escapeHtml(row.item_name || '-')}</div>
+            <div class="small text-white-50">Item ID: ${row.item_id || '-'} • ${escapeHtml(row.changed_at || '-')}</div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="border border-secondary rounded p-3 h-100">
+                    <div class="text-uppercase small text-white-50 mb-2">Reason</div>
+                    <div class="text-white">${escapeHtml(row.change_reason || '-')}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border border-secondary rounded p-3 h-100">
+                    <div class="text-uppercase small text-white-50 mb-2">Staff</div>
+                    <div class="text-white">${escapeHtml(row.changed_by_username || '-')}</div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="border border-secondary rounded p-3">
+                    <div class="text-uppercase small text-white-50 mb-2">Changed Fields</div>
+                    <div class="item-edit-field-list">${changedFieldsHtml}</div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="border border-secondary rounded p-3">
+                    <div class="text-uppercase small text-white-50 mb-2">Preview</div>
+                    <div>${previewHtml}</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    new bootstrap.Modal(document.getElementById('itemEditDetailsModal')).show();
 }
 
 // --- PAYABLES AUDIT TAB STATE ---

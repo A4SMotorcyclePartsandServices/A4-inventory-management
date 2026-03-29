@@ -54,6 +54,10 @@
         background: rgba(193, 18, 31, 0.06) !important;
     }
 
+    .inventory-row {
+        cursor: pointer;
+    }
+
     /* =====================
        CELL TYPES
     ===================== */
@@ -437,7 +441,7 @@
             </thead>
             <tbody>
                 {% for item in items %}
-                <tr>
+                <tr class="inventory-row" data-item-id="{{ item.id }}">
                     {% set markup_percent = ((((item.markup or 0) * 100) * 100) | int) / 100 %}
                     <td class="fw-bold item-cell">{{ item.name }}</td>
                     <td class="description-cell text-center">{{ item.description }}</td>
@@ -483,7 +487,7 @@ function createRowHtml(item) {
     const isAdmin = "{{ session.get('role') }}" === "admin";
     const isLow = Boolean(item.should_restock);
     return `
-        <tr>
+        <tr class="inventory-row" data-item-id="${item.id}">
             <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
             <td class="description-cell text-center" data-original="${item.description || ''}">${item.description || ''}</td>
             <td class="price-text">₱${item.vendor_price || 0}</td>
@@ -511,6 +515,18 @@ function highlightText(element, tokens) {
     element.innerHTML = highlighted;
 }
 
+function bindInventoryRowLinks(scope = document) {
+    scope.querySelectorAll('.inventory-row[data-item-id]').forEach(row => {
+        if (row.dataset.linkBound === '1') return;
+        row.dataset.linkBound = '1';
+        row.addEventListener('click', () => {
+            const itemId = row.dataset.itemId;
+            if (!itemId) return;
+            window.location.href = `/transaction/items/edit/${encodeURIComponent(itemId)}`;
+        });
+    });
+}
+
 /* ---- Debounce ---- */
 function debounce(func, delay) {
     let id;
@@ -529,6 +545,7 @@ const performSearch = async () => {
     if (rawInput.length === 0) {
         if (tbody) tbody.innerHTML = initialTableMarkup;
         if (badge) badge.textContent = initialBadgeText;
+        if (tbody) bindInventoryRowLinks(tbody);
         inventorySearchInput.focus();
         return;
     }
@@ -551,6 +568,7 @@ const performSearch = async () => {
         }
 
         data.items.forEach(item => tbody.insertAdjacentHTML('beforeend', createRowHtml(item)));
+        bindInventoryRowLinks(tbody);
         if (badge) badge.textContent = `${data.items.length} item${data.items.length !== 1 ? 's' : ''}`;
 
         const tokens = rawInput.toLowerCase().split(" ").filter(t => t.length >= 2);
@@ -642,5 +660,6 @@ inventorySearchInput.addEventListener('input', debounce(() => {
 }, 500));
 
 renderRecentSearches();
+bindInventoryRowLinks(inventoryTableBody || document);
 </script>
 {% endblock %}

@@ -1,5 +1,6 @@
 from db.database import get_db
 from datetime import datetime, timedelta
+import json
 import re
 from utils.formatters import format_date
 from services.loyalty_service import log_stamps_for_sale
@@ -164,6 +165,300 @@ def _update_item_cost_and_markup(conn, item_id, new_cost):
         (new_cost, recalculated_markup, item_id),
     )
     return current_master_cost, recalculated_markup
+
+
+def _serialize_item_for_edit_row(row):
+    if not row:
+        return None
+    return {
+        "id": int(row["id"]),
+        "name": (row["name"] or "").strip(),
+        "category": (row["category"] or "").strip(),
+        "description": row["description"] or "",
+        "pack_size": row["pack_size"] or "",
+        "vendor_price": round(float(row["vendor_price"] or 0), 2),
+        "cost_per_piece": round(float(row["cost_per_piece"] or 0), 2),
+        "a4s_selling_price": round(float(row["a4s_selling_price"] or 0), 2),
+        "markup": round(float(row["markup"] or 0), 4),
+        "reorder_level": int(row["reorder_level"] or 0),
+        "vendor_id": int(row["vendor_id"]) if row["vendor_id"] is not None else None,
+        "vendor_name": row["vendor_name"] or "",
+        "mechanic": row["mechanic"] or "",
+        "updated_at": row["updated_at"],
+    }
+
+
+def _get_item_for_edit(conn, item_id):
+    row = conn.execute(
+        """
+        SELECT
+            i.id,
+            i.name,
+            i.category,
+            i.description,
+            i.pack_size,
+            i.vendor_price,
+            i.cost_per_piece,
+            i.a4s_selling_price,
+            i.markup,
+            i.reorder_level,
+            i.vendor_id,
+            i.mechanic,
+            i.updated_at,
+            COALESCE(v.vendor_name, i.vendor, '') AS vendor_name
+        FROM items i
+        LEFT JOIN vendors v ON v.id = i.vendor_id
+        WHERE i.id = %s
+        """,
+        (item_id,),
+    ).fetchone()
+    return _serialize_item_for_edit_row(row)
+
+
+def get_item_edit_context(item_id, history_limit=20):
+    conn = get_db()
+    try:
+        item = _get_item_for_edit(conn, item_id)
+        if not item:
+            return None
+
+        history_rows = conn.execute(
+            """
+            SELECT
+                h.id,
+                h.changed_at,
+                h.changed_by,
+                h.changed_by_username,
+                h.change_reason,
+                h.before_payload,
+                h.after_payload
+            FROM item_edit_history h
+            WHERE h.item_id = %s
+            ORDER BY h.changed_at DESC, h.id DESC
+            LIMIT %s
+            """,
+            (item_id, history_limit),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    history = []
+    for row in history_rows:
+        before_payload = row["before_payload"] or {}
+        after_payload = row["after_payload"] or {}
+        if isinstance(before_payload, str):
+            before_payload = json.loads(before_payload or "{}")
+        if isinstance(after_payload, str):
+            after_payload = json.loads(after_payload or "{}")
+        changed_fields = []
+        for field_name in (
+            "name",
+            "category",
+            "description",
+            "pack_size",
+            "vendor_price",
+            "cost_per_piece",
+            "a4s_selling_price",
+            "markup",
+            "reorder_level",
+            "vendor_id",
+            "vendor_name",
+            "mechanic",
+        ):
+            if before_payload.get(field_name) != after_payload.get(field_name):
+                changed_fields.append(field_name)
+
+        history.append({
+            "id": int(row["id"]),
+            "changed_at": format_date(row["changed_at"], show_time=True),
+            "changed_by_username": row["changed_by_username"] or "System",
+            "change_reason": row["change_reason"] or "",
+            "before_payload": before_payload,
+            "after_payload": after_payload,
+            "changed_fields": changed_fields,
+        })
+
+    return {
+        "item": item,
+        "history": history,
+    }
+
+
+def update_item_record(item_id, data, user_id=None, username=None):
+    conn = get_db()
+    try:
+        conn.execute("BEGIN")
+        current_item = _get_item_for_edit(conn, item_id)
+        if not current_item:
+            raise ValueError("Item not found.")
+
+        existing_cat = str((data or {}).get("existing_category") or "").strip()
+        new_cat = str((data or {}).get("new_category") or "").strip()
+        category = normalize_item_category(existing_cat, new_cat)
+
+        name = str((data or {}).get("name") or "").strip()
+        if not name or not category:
+            raise ValueError("Item name and category are required.")
+
+        try:
+            vendor_price = round(float((data or {}).get("vendor_price") or 0), 2)
+            cost_per_piece = round(float((data or {}).get("cost_per_piece") or 0), 2)
+            selling_price = round(float((data or {}).get("a4s_selling_price") or 0), 2)
+        except (TypeError, ValueError):
+            raise ValueError("Vendor price, cost per piece, and selling price must be valid numbers.")
+
+        if vendor_price < 0 or cost_per_piece < 0 or selling_price < 0:
+            raise ValueError("Pricing values cannot be negative.")
+
+        reorder_level_raw = (data or {}).get("reorder_level")
+        if reorder_level_raw in (None, ""):
+            reorder_level = int(current_item.get("reorder_level") or 0)
+        else:
+            try:
+                reorder_level = int(reorder_level_raw)
+            except (TypeError, ValueError):
+                raise ValueError("Reorder level must be a whole number.")
+            if reorder_level < 0:
+                raise ValueError("Reorder level cannot be negative.")
+
+        vendor_id_raw = (data or {}).get("vendor_id")
+        if vendor_id_raw in ("", None):
+            raise ValueError("Vendor is required.")
+        try:
+            vendor_id = int(vendor_id_raw)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid vendor selected.")
+
+        vendor_row = conn.execute(
+            """
+            SELECT id, vendor_name
+            FROM vendors
+            WHERE id = %s AND is_active = 1
+            """,
+            (vendor_id,),
+        ).fetchone()
+        if not vendor_row:
+            raise ValueError("Selected vendor was not found or is inactive.")
+
+        duplicate_name = conn.execute(
+            """
+            SELECT id
+            FROM items
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(%s))
+              AND id <> %s
+            LIMIT 1
+            """,
+            (name, item_id),
+        ).fetchone()
+        if duplicate_name:
+            raise ValueError("Another item already uses that name.")
+
+        updated_item = {
+            "id": int(item_id),
+            "name": name,
+            "category": category,
+            "description": str((data or {}).get("description") or "").strip(),
+            "pack_size": str((data or {}).get("pack_size") or "").strip(),
+            "vendor_price": vendor_price,
+            "cost_per_piece": cost_per_piece,
+            "a4s_selling_price": selling_price,
+            "markup": _calculate_markup_decimal(cost_per_piece, selling_price),
+            "reorder_level": reorder_level,
+            "vendor_id": vendor_id,
+            "vendor_name": vendor_row["vendor_name"] or "",
+            "mechanic": str((data or {}).get("mechanic") or "").strip(),
+            "updated_at": current_item.get("updated_at"),
+        }
+
+        tracked_fields = (
+            "name",
+            "category",
+            "description",
+            "pack_size",
+            "vendor_price",
+            "cost_per_piece",
+            "a4s_selling_price",
+            "markup",
+            "reorder_level",
+            "vendor_id",
+            "vendor_name",
+            "mechanic",
+        )
+        changed_fields = [
+            field_name
+            for field_name in tracked_fields
+            if current_item.get(field_name) != updated_item.get(field_name)
+        ]
+        if not changed_fields:
+            raise ValueError("No changes detected.")
+
+        change_reason = str((data or {}).get("change_reason") or "").strip()
+        if not change_reason:
+            raise ValueError("Reason for edit is required.")
+
+        conn.execute(
+            """
+            UPDATE items
+            SET
+                name = %s,
+                category = %s,
+                description = %s,
+                pack_size = %s,
+                vendor_price = %s,
+                cost_per_piece = %s,
+                a4s_selling_price = %s,
+                markup = %s,
+                reorder_level = %s,
+                vendor_id = %s,
+                vendor = NULL,
+                mechanic = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                updated_item["name"],
+                updated_item["category"],
+                updated_item["description"] or None,
+                updated_item["pack_size"] or None,
+                updated_item["vendor_price"],
+                updated_item["cost_per_piece"],
+                updated_item["a4s_selling_price"],
+                updated_item["markup"],
+                updated_item["reorder_level"],
+                updated_item["vendor_id"],
+                updated_item["mechanic"] or None,
+                item_id,
+            ),
+        )
+
+        conn.execute(
+            """
+            INSERT INTO item_edit_history (
+                item_id,
+                changed_by,
+                changed_by_username,
+                change_reason,
+                before_payload,
+                after_payload
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                item_id,
+                user_id,
+                username,
+                change_reason,
+                json.dumps({field: current_item.get(field) for field in tracked_fields}),
+                json.dumps({field: updated_item.get(field) for field in tracked_fields}),
+            ),
+        )
+
+        conn.commit()
+        return _get_item_for_edit(conn, item_id)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 # ─────────────────────────────────────────────

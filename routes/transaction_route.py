@@ -9,6 +9,7 @@ from utils.formatters import format_date
 from services.transactions_service import (
     add_item_to_db,
     normalize_item_category,
+    get_item_edit_context,
     get_active_bundles_for_sale,
     get_bundle_sale_config,
     get_transaction_out_context,
@@ -31,6 +32,7 @@ from services.transactions_service import (
     get_purchase_orders_by_archive_month,
     request_po_revisions,
     search_purchase_orders,
+    update_item_record,
     update_purchase_order,
     get_purchase_order_review_context,
 )
@@ -105,6 +107,24 @@ def manage_items():
     )
 
 
+@transaction_bp.route("/transaction/items/edit/<int:item_id>")
+def edit_item_page(item_id):
+    categories = get_unique_categories()
+    vendors = _get_active_vendors()
+    context = get_item_edit_context(item_id)
+    if not context:
+        flash("Item not found.", "danger")
+        return redirect(url_for("index"))
+
+    return render_template(
+        "transactions/edit_items.html",
+        categories=categories,
+        vendors=vendors,
+        item=context["item"],
+        history=context["history"],
+    )
+
+
 @transaction_bp.route("/items/add", methods=["POST"])
 def add_item():
     existing_cat = request.form.get("existing_category", "").strip()
@@ -148,6 +168,25 @@ def add_item():
         return redirect(url_for('transaction.create_order_page', prefilled_id=new_item_id))
     else:
         return redirect(url_for('transaction.transaction_in', selected_id=new_item_id))
+
+
+@transaction_bp.route("/items/<int:item_id>/edit", methods=["POST"])
+def update_item(item_id):
+    try:
+        update_item_record(
+            item_id=item_id,
+            data=request.form,
+            user_id=session.get("user_id"),
+            username=session.get("username"),
+        )
+        flash("Item updated successfully.", "success")
+        return redirect(url_for("index"))
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("transaction.edit_item_page", item_id=item_id))
+    except Exception as e:
+        flash(f"System Error: {str(e)}", "danger")
+        return redirect(url_for("transaction.edit_item_page", item_id=item_id))
 
 
 @transaction_bp.route("/inventory/in", methods=["POST"])

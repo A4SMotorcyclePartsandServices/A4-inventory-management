@@ -14,6 +14,7 @@ from services.admin_users_service import (
     get_admin_sales_page,
     get_audit_trail_page,
     get_bundle_edit_payload,
+    get_item_edit_trail_page,
     get_item_details_payload,
     get_manage_users_context,
     get_manual_in_details,
@@ -36,9 +37,7 @@ admin_users_bp = Blueprint("admin_users", __name__)
 
 
 MANAGE_USERS_TABS = {
-    "users-tab",
     "mechanics-tab",
-    "password-resets-tab",
     "manage-services-tab",
     "bundles-tab",
     "payment-methods-tab",
@@ -46,10 +45,30 @@ MANAGE_USERS_TABS = {
 }
 
 AUDIT_TABS = {
+    "users-tab",
+    "password-resets-tab",
     "sales-tab",
     "debt-audit-tab",
     "audit-tab",
+    "item-edit-trail-tab",
     "payables-audit-tab",
+}
+
+USER_PANEL_ENDPOINTS = {
+    "admin_users.manage_users",
+    "admin_users.add_mechanic",
+    "admin_users.toggle_mechanic",
+    "admin_users.save_mechanic_quota_topup",
+    "admin_users.delete_mechanic_quota_topup",
+    "admin_users.add_service",
+    "admin_users.toggle_service",
+    "admin_users.add_bundle",
+    "admin_users.edit_bundle",
+    "admin_users.toggle_bundle",
+    "admin_users.bundle_details_api",
+    "admin_users.add_payment_method",
+    "admin_users.toggle_payment_method",
+    "admin_users.get_item_details",
 }
 
 
@@ -62,6 +81,9 @@ def protect_admin_routes():
     if not user:
         return redirect(url_for("auth.login"))
 
+    if request.endpoint in USER_PANEL_ENDPOINTS:
+        return None
+
     if user["role"] != "admin":
         abort(403)
 
@@ -69,6 +91,8 @@ def protect_admin_routes():
 @admin_users_bp.route("/users", methods=["GET", "POST"])
 def manage_users():
     if request.method == "POST":
+        if session.get("role") != "admin":
+            abort(403)
         username = request.form["username"]
         password = request.form["password"]
         phone_no = request.form["phone_no"]
@@ -76,30 +100,34 @@ def manage_users():
         try:
             create_staff_user(username, password, phone_no, current_admin_id)
             flash(f"Account for {username} created successfully!", "success")
-            return redirect(url_for("admin_users.manage_users"))
+            return redirect(url_for("admin_users.audit_dashboard", tab="users-tab"))
         except ValueError as exc:
             flash(str(exc), "danger")
         except Exception as exc:
             flash(f"Error creating user: {str(exc)}", "danger")
+        return redirect(url_for("admin_users.audit_dashboard", tab="users-tab"))
 
-    active_tab = request.args.get("tab", "users-tab")
+    active_tab = request.args.get("tab", "mechanics-tab")
     if request.method == "GET" and active_tab in AUDIT_TABS:
-        return redirect(url_for("admin_users.audit_dashboard", tab=active_tab))
+        if session.get("role") != "admin":
+            active_tab = "mechanics-tab"
+        else:
+            return redirect(url_for("admin_users.audit_dashboard", tab=active_tab))
     if active_tab not in MANAGE_USERS_TABS:
-        active_tab = "users-tab"
-    context = get_manage_users_context(active_tab=active_tab)
+        active_tab = "mechanics-tab"
+    context = get_manage_users_context(active_tab=active_tab, include_audit_data=False)
     return render_template("users/users.html", **context)
 
 
 @admin_users_bp.route("/users/audit", methods=["GET"])
 def audit_dashboard():
-    active_tab = request.args.get("tab", "sales-tab")
+    active_tab = request.args.get("tab", "users-tab")
     if active_tab in MANAGE_USERS_TABS:
         return redirect(url_for("admin_users.manage_users", tab=active_tab))
     if active_tab not in AUDIT_TABS:
-        active_tab = "sales-tab"
+        active_tab = "users-tab"
 
-    context = get_manage_users_context(active_tab=active_tab)
+    context = get_manage_users_context(active_tab=active_tab, include_audit_data=True)
     return render_template("users/audit.html", **context)
 
 
@@ -108,10 +136,10 @@ def toggle_user(user_id):
     result = toggle_user_active_status(user_id)
     if result["status"] == "missing":
         flash("User not found.", "danger")
-        return redirect(url_for("admin_users.manage_users"))
+        return redirect(url_for("admin_users.audit_dashboard", tab="users-tab"))
     if result["status"] == "forbidden_admin":
         flash("Administrator accounts cannot be disabled.", "danger")
-        return redirect(url_for("admin_users.manage_users"))
+        return redirect(url_for("admin_users.audit_dashboard", tab="users-tab"))
 
     if result["new_status"] == 0:
         flash(f"User {result['username']} has been disabled.", "danger")
@@ -120,7 +148,7 @@ def toggle_user(user_id):
     else:
         flash(f"User {result['username']} has been activated.", "success")
 
-    return redirect(url_for("admin_users.manage_users", tab="users-tab"))
+    return redirect(url_for("admin_users.audit_dashboard", tab="users-tab"))
 
 
 @admin_users_bp.route("/password-resets/<int:request_id>/complete", methods=["POST"])
@@ -143,7 +171,7 @@ def complete_password_reset(request_id):
     except Exception as exc:
         flash(f"Error completing password reset: {str(exc)}", "danger")
 
-    return redirect(url_for("admin_users.manage_users", tab="password-resets-tab"))
+    return redirect(url_for("admin_users.audit_dashboard", tab="password-resets-tab"))
 
 
 @admin_users_bp.route("/password-resets/<int:request_id>/reject", methods=["POST"])
@@ -161,7 +189,7 @@ def reject_password_reset(request_id):
     except Exception as exc:
         flash(f"Error rejecting password reset request: {str(exc)}", "danger")
 
-    return redirect(url_for("admin_users.manage_users", tab="password-resets-tab"))
+    return redirect(url_for("admin_users.audit_dashboard", tab="password-resets-tab"))
 
 
 @admin_users_bp.route("/mechanics/add", methods=["POST"])
@@ -428,6 +456,22 @@ def audit_trail_api():
             end_date=request.args.get("end_date") or None,
             movement_type=request.args.get("type") or None,
             has_discount=_to_bool(request.args.get("has_discount")),
+        )
+        return jsonify(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@admin_users_bp.route("/api/audit/item-edits")
+def item_edit_trail_api():
+    try:
+        data = get_item_edit_trail_page(
+            page=int(request.args.get("page", 1)),
+            start_date=request.args.get("start_date") or None,
+            end_date=request.args.get("end_date") or None,
+            search=(request.args.get("search") or "").strip() or None,
         )
         return jsonify(data)
     except ValueError as exc:

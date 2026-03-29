@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .item-card {
+        background-color: #1a1a1a;
+        border: 1px solid #e63946;
+        border-radius: 8px;
+        padding: 24px;
+    }
+
+    .history-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 16px 18px;
+    }
+
+    .section-title {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #e63946;
+        margin-bottom: 12px;
+        margin-top: 24px;
+    }
+
+    .hint {
+        font-size: 0.75rem;
+        color: #888;
+    }
+
+    .req {
+        color: #e63946;
+        margin-left: 2px;
+        font-weight: 700;
+    }
+
+    .vendor-selection-card {
+        border: 1px solid #2e5b43;
+        background: rgba(46, 91, 67, 0.18);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-top: 10px;
+    }
+
+    .vendor-selection-card .vendor-name {
+        color: #d1fae5;
+        font-weight: 700;
+    }
+
+    .vendor-selection-card .vendor-meta {
+        color: #c7ced8;
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    .history-meta {
+        font-size: 0.82rem;
+        color: #aeb6c2;
+    }
+
+    .history-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .history-field-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(103, 194, 228, 0.14);
+        border: 1px solid rgba(103, 194, 228, 0.28);
+        color: #8fd2eb;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+        text-transform: uppercase;
+    }
+
+    #newVendorModal .modal-dialog {
+        margin-top: 7.5rem;
+    }
+
+    #newVendorModal .modal-content {
+        background: #1a1a1a;
+        border: 1px solid #4a4a4a;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    }
+
+    #newVendorModal .modal-header,
+    #newVendorModal .modal-footer {
+        background: #1a1a1a;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    #newVendorModal .modal-body {
+        background: #1a1a1a;
+    }
+
+    #newVendorModal .form-control {
+        background: #23272e;
+        border-color: #5e6572;
+        color: #f3f4f6;
+        border-radius: 10px;
+    }
+
+    #newVendorModal .form-control:focus {
+        background: #2a2f36;
+        border-color: #e63946;
+        box-shadow: 0 0 0 0.2rem rgba(230, 57, 70, 0.18);
+        color: #fff;
+    }
+
+    #newVendorModal textarea.form-control {
+        min-height: 92px;
+    }
+
+    #newVendorModal .form-label {
+        color: #e5e7eb;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .vendor-modal-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .vendor-modal-title i {
+        color: #67c2e4;
+        font-size: 1.05rem;
+    }
+
+    @media (max-width: 768px) {
+        #newVendorModal .modal-dialog {
+            margin-top: 4rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="item-card shadow-sm">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <h5 class="mb-2 text-danger">
+                    <i class="bi bi-pencil-square"></i> Edit Item
+                </h5>
+                <div class="text-white-50 small">
+                    Update the current item master details. Future sales will use these values.
+                </div>
+            </div>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                Back to Inventory
+            </a>
+        </div>
+
+        <form method="POST" action="{{ url_for('transaction.update_item', item_id=item.id) }}">
+            <div class="section-title">Item Information</div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Item name <span class="req">*</span></label>
+                    <input type="text" id="item-name-input" name="name" value="{{ item.name }}" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Category <span class="req">*</span></label>
+                    <select name="existing_category" id="categorySelect" class="form-control bg-dark text-white border-secondary" required>
+                        <option value="">-- Select Category --</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat }}" {% if cat == item.category %}selected{% endif %}>{{ cat }}</option>
+                        {% endfor %}
+                        <option value="__OTHER__">-- New Category --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">New Category Name</label>
+                    <input
+                        name="new_category"
+                        id="newCategoryInput"
+                        class="form-control bg-dark text-white border-secondary"
+                        placeholder="Select '-- New Category --' to type"
+                        disabled
+                    >
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small text-white-50">Description</label>
+                    <input type="text" name="description" value="{{ item.description }}" class="form-control bg-dark text-white border-secondary">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label small text-white-50">Pack size</label>
+                    <input type="text" name="pack_size" value="{{ item.pack_size }}" class="form-control bg-dark text-white border-secondary" placeholder="e.g. 1L, Box of 12">
+                </div>
+            </div>
+
+            <div class="section-title">Pricing & Cost</div>
+
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Vendor price <span class="req">*</span></label>
+                    <input type="number" step="0.01" min="0" name="vendor_price" value="{{ '%.2f'|format(item.vendor_price or 0) }}" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Cost per piece <span class="req">*</span></label>
+                    <input type="number" step="0.01" min="0" name="cost_per_piece" id="cost_input" value="{{ '%.2f'|format(item.cost_per_piece or 0) }}" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Selling price <span class="req">*</span></label>
+                    <input type="number" step="0.01" min="0" name="a4s_selling_price" id="selling_input" value="{{ '%.2f'|format(item.a4s_selling_price or 0) }}" class="form-control bg-dark text-white border-secondary" required>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small text-white-50">Markup (%)</label>
+                    <input type="text" id="markup_display" class="form-control bg-dark text-white border-secondary" readonly>
+                    <input type="hidden" name="markup" id="markup_input" value="{{ item.markup }}">
+                </div>
+            </div>
+
+            <div class="section-title">Additional Info</div>
+
+            <div class="row g-3">
+                <div class="col-md-6 position-relative">
+                    <label class="form-label small text-white-50">Default Vendor <span class="req">*</span></label>
+                    <select name="vendor_id" id="vendor_select" class="form-control bg-dark text-white border-secondary" required>
+                        <option value="">-- Select Vendor --</option>
+                        {% for vendor in vendors %}
+                            <option value="{{ vendor.id }}" {% if vendor.id == item.vendor_id %}selected{% endif %}>{{ vendor.vendor_name }}</option>
+                        {% endfor %}
+                        <option value="__NEW_VENDOR__">-- New Vendor --</option>
+                    </select>
+                    <div id="vendorSelectedCard" class="vendor-selection-card" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div id="vendorSelectedName" class="vendor-name"></div>
+                                <div id="vendorSelectedMeta" class="vendor-meta"></div>
+                            </div>
+                            <button type="button" id="clearVendorBtn" class="btn btn-sm btn-outline-light">&times;</button>
+                        </div>
+                    </div>
+                    <div class="hint">Required: choose the usual supplier for this item</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small text-white-50">Mechanic</label>
+                    <input type="text" name="mechanic" value="{{ item.mechanic }}" class="form-control bg-dark text-white border-secondary">
+                    <div class="hint">Who usually installs / uses this</div>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small text-white-50">Reason for edit <span class="req">*</span></label>
+                    <textarea name="change_reason" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Explain why these details are being changed" required></textarea>
+                    <div class="hint">This reason will be saved into the item edit history.</div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4 gap-2">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Cancel</a>
+                <button type="submit" id="save-item-btn" class="btn btn-danger">
+                    <i class="bi bi-check-circle"></i> Update Item
+                </button>
+            </div>
+        </form>
+
+        <div class="section-title">Recent Edit History</div>
+        {% if history %}
+            <div class="d-grid gap-3">
+                {% for entry in history %}
+                    <div class="history-card">
+                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                            <div>
+                                <div class="fw-bold text-white">{{ entry.change_reason }}</div>
+                                <div class="history-meta">
+                                    {{ entry.changed_at }}{% if session.get('role') == 'admin' %} by {{ entry.changed_by_username }}{% endif %}
+                                </div>
+                            </div>
+                            <div class="text-white-50 small">Edit #{{ entry.id }}</div>
+                        </div>
+                        {% if entry.changed_fields %}
+                            <div class="history-fields">
+                                {% for field_name in entry.changed_fields %}
+                                    <span class="history-field-pill">{{ field_name.replace('_', ' ') }}</span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="history-card text-white-50">
+                No edit history yet for this item.
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="modal fade" id="newVendorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title vendor-modal-title">
+                    <i class="bi bi-truck"></i>
+                    <span>Add Vendor</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Vendor Name</label>
+                    <input type="text" id="new-vendor-name" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Address</label>
+                    <textarea id="new-vendor-address" class="form-control text-white border-secondary" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact Person</label>
+                    <input type="text" id="new-vendor-contact-person" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contact No</label>
+                    <input type="text" id="new-vendor-contact-no" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="new-vendor-email" class="form-control text-white border-secondary">
+                </div>
+                <div id="new-vendor-error" class="text-danger small"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="saveNewVendorBtn">Save Vendor</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const currentItem = {{ item|tojson }};
+    const costInput = document.getElementById('cost_input');
+    const sellingInput = document.getElementById('selling_input');
+    const markupDisplay = document.getElementById('markup_display');
+    const markupHidden = document.getElementById('markup_input');
+    const categorySelect = document.getElementById('categorySelect');
+    const newCategoryInput = document.getElementById('newCategoryInput');
+    const vendorOptions = {{ vendors|tojson }};
+    const NEW_VENDOR_OPTION = '__NEW_VENDOR__';
+    const vendorSelect = document.getElementById('vendor_select');
+    const vendorSelectedCard = document.getElementById('vendorSelectedCard');
+    const vendorSelectedName = document.getElementById('vendorSelectedName');
+    const vendorSelectedMeta = document.getElementById('vendorSelectedMeta');
+    const clearVendorBtn = document.getElementById('clearVendorBtn');
+    const vendorMap = new Map(vendorOptions.map(vendor => [String(vendor.id), vendor]));
+    const form = document.querySelector('form');
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    function syncCategoryFields() {
+        if (categorySelect.value === "__OTHER__") {
+            newCategoryInput.disabled = false;
+            newCategoryInput.required = true;
+            newCategoryInput.placeholder = "Type new category name...";
+            newCategoryInput.focus();
+        } else {
+            newCategoryInput.value = "";
+            newCategoryInput.disabled = true;
+            newCategoryInput.required = false;
+            newCategoryInput.placeholder = "Select '-- New Category --' to type";
+        }
+    }
+
+    function calculateMarkup() {
+        const cost = parseFloat(costInput.value);
+        const selling = parseFloat(sellingInput.value);
+
+        if (cost > 0 && selling > 0) {
+            const decimalMarkup = (selling - cost) / cost;
+            const percentMarkup = decimalMarkup * 100;
+            markupDisplay.value = percentMarkup.toFixed(2) + "%";
+            markupHidden.value = decimalMarkup.toFixed(4);
+        } else {
+            markupDisplay.value = '';
+            markupHidden.value = '';
+        }
+    }
+
+    function renderVendorMeta(vendor) {
+        const parts = [];
+        if (vendor.address) parts.push(`Address: ${escapeHtml(vendor.address)}`);
+        if (vendor.contact_person) parts.push(`Contact: ${escapeHtml(vendor.contact_person)}`);
+        if (vendor.contact_no) parts.push(`No: ${escapeHtml(vendor.contact_no)}`);
+        if (vendor.email) parts.push(`Email: ${escapeHtml(vendor.email)}`);
+        return parts.join('<br>');
+    }
+
+    function selectVendor(vendor) {
+        vendorSelect.value = String(vendor.id || '');
+        vendorSelectedName.textContent = vendor.vendor_name || '';
+        vendorSelectedMeta.innerHTML = renderVendorMeta(vendor);
+        vendorSelectedCard.style.display = 'block';
+    }
+
+    function clearVendorSelection() {
+        vendorSelect.value = '';
+        vendorSelectedName.textContent = '';
+        vendorSelectedMeta.innerHTML = '';
+        vendorSelectedCard.style.display = 'none';
+    }
+
+    function syncVendorValidity() {
+        if (vendorSelect.value && vendorSelect.value !== NEW_VENDOR_OPTION) {
+            vendorSelect.setCustomValidity('');
+        } else {
+            vendorSelect.setCustomValidity('Please select a vendor from the list.');
+        }
+    }
+
+    function openNewVendorModal(prefill = '') {
+        document.getElementById('new-vendor-name').value = prefill;
+        document.getElementById('new-vendor-address').value = '';
+        document.getElementById('new-vendor-contact-person').value = '';
+        document.getElementById('new-vendor-contact-no').value = '';
+        document.getElementById('new-vendor-email').value = '';
+        document.getElementById('new-vendor-error').textContent = '';
+        new bootstrap.Modal(document.getElementById('newVendorModal')).show();
+    }
+
+    function handleVendorSelectionChange() {
+        const selectedValue = vendorSelect.value;
+        if (!selectedValue) {
+            clearVendorSelection();
+            syncVendorValidity();
+            return;
+        }
+
+        if (selectedValue === NEW_VENDOR_OPTION) {
+            clearVendorSelection();
+            openNewVendorModal();
+            syncVendorValidity();
+            return;
+        }
+
+        const vendor = vendorMap.get(String(selectedValue));
+        if (vendor) {
+            selectVendor(vendor);
+        } else {
+            clearVendorSelection();
+        }
+        syncVendorValidity();
+    }
+
+    categorySelect.addEventListener('change', syncCategoryFields);
+    costInput.addEventListener('input', calculateMarkup);
+    sellingInput.addEventListener('input', calculateMarkup);
+    vendorSelect.addEventListener('change', handleVendorSelectionChange);
+    vendorSelect.addEventListener('invalid', syncVendorValidity);
+    clearVendorBtn.addEventListener('click', () => {
+        clearVendorSelection();
+        syncVendorValidity();
+    });
+
+    document.getElementById('newVendorModal').addEventListener('hidden.bs.modal', () => {
+        if (!vendorSelectedCard.style.display || vendorSelectedCard.style.display === 'none') {
+            if (vendorSelect.value === NEW_VENDOR_OPTION) {
+                vendorSelect.value = currentItem.vendor_id ? String(currentItem.vendor_id) : '';
+            }
+            handleVendorSelectionChange();
+        }
+    });
+
+    document.getElementById('saveNewVendorBtn').addEventListener('click', async () => {
+        const vendor = {
+            vendor_name: document.getElementById('new-vendor-name').value.trim(),
+            address: document.getElementById('new-vendor-address').value.trim(),
+            contact_person: document.getElementById('new-vendor-contact-person').value.trim(),
+            contact_no: document.getElementById('new-vendor-contact-no').value.trim(),
+            email: document.getElementById('new-vendor-email').value.trim(),
+        };
+        const errorEl = document.getElementById('new-vendor-error');
+        errorEl.textContent = '';
+
+        if (!vendor.vendor_name || !vendor.address || !vendor.contact_person || !vendor.contact_no || !vendor.email) {
+            errorEl.textContent = 'All vendor fields are required.';
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/vendors/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(vendor),
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                bootstrap.Modal.getInstance(document.getElementById('newVendorModal')).hide();
+                vendorMap.set(String(data.vendor.id), data.vendor);
+                const existingOption = Array.from(vendorSelect.options).find(option => option.value === String(data.vendor.id));
+                if (!existingOption) {
+                    const newOption = document.createElement('option');
+                    newOption.value = String(data.vendor.id);
+                    newOption.textContent = data.vendor.vendor_name || 'New Vendor';
+                    vendorSelect.insertBefore(newOption, vendorSelect.querySelector(`option[value="${NEW_VENDOR_OPTION}"]`));
+                }
+                selectVendor(data.vendor);
+                syncVendorValidity();
+                return;
+            }
+
+            errorEl.textContent = data.message || 'Could not save vendor.';
+        } catch (error) {
+            errorEl.textContent = 'Network error. Try again.';
+        }
+    });
+
+    form.addEventListener('submit', function () {
+        syncVendorValidity();
+    });
+
+    if (currentItem.vendor_id) {
+        const initialVendor = vendorMap.get(String(currentItem.vendor_id));
+        if (initialVendor) {
+            selectVendor(initialVendor);
+        }
+    }
+
+    syncCategoryFields();
+    calculateMarkup();
+    syncVendorValidity();
+</script>
+{% endblock %}
