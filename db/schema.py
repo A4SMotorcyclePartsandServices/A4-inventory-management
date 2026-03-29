@@ -1441,14 +1441,38 @@ def init_db():
     cur.execute("SELECT COUNT(*) FROM services")
     if cur.fetchone()['count'] == 0:
         initial_services = [
+            ('FI Cleaning', 'Labor'),
             ('Change Oil', 'Maintenance'),
-            ('Tire Mounting', 'Labor'),
-            ('Brake Cleaning', 'Maintenance'),
-            ('Tune-up', 'Labor'),
-            ('Chain Adjustment', 'Labor'),
-            ('Engine Overhaul', 'Major Repair')
+            ('Tune-up', 'Maintenance'),
+            ('Clean CVT', 'Maintenance'),
+            ('Clean Carb', 'Maintenance'),
+            ('Welding', 'Fabrication'),
+            ('Top Overhaul', 'Major Repair'),
+            ('Engine Overhaul', 'Major Repair'),
+            ('Change Brake Pad', 'Maintenance'),
+            ('Change Brake Shoe', 'Maintenance'),
+            ('Change Tire', 'Labor'),
+            ('Minor Electrical', 'Electrical'),
+            ('Battery Charging', 'Maintenance'),
+            ('Change Oil Seal', 'Labor'),
+            ('Change Sprocket', 'Labor'),
+            ('Change Stator', 'Major Repair'),
+            ('Change Clutch Lining', 'Major Repair'),
+            ('Change Bulb', 'Labor'),
+            ('Change Cable', 'Labor'),
+            ('Change Bearing', 'Labor'),
+            ('Change Carbon Brush', 'Labor'),
+            ('Change Filter', 'Maintenance'),
+            ('Change Handle Grip', 'Labor'),
+            ('Change Horn', 'Labor'),
+            ('Hangin', 'Maintenance'),
+            ('Maintenance', 'Maintenance'),
+            ('Labor', 'Labor')
         ]
-        cur.executemany("INSERT INTO services (name, category) VALUES (%s, %s)", initial_services)
+        cur.executemany(
+            "INSERT INTO services (name, category) VALUES (%s, %s)",
+            initial_services
+        )
         print("Services seeded successfully.")
 
     # 2. Seed Payment Methods (Only if empty)
