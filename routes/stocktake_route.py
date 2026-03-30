@@ -1,9 +1,11 @@
 import csv
 import io
+from datetime import date
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, session, url_for
 
-from auth.utils import admin_required, login_required
+from auth.utils import admin_required, login_required, stocktake_access_required
+from services.stocktake_access_service import submit_stocktake_access_request
 from services.stocktake_service import (
     PARTIAL_STOCKTAKE_LABEL,
     add_stocktake_item,
@@ -11,6 +13,7 @@ from services.stocktake_service import (
     cancel_stocktake_session,
     confirm_stocktake_session,
     create_stocktake_session,
+    get_stocktake_overall_report,
     get_stocktake_session,
     get_recent_stocktake_activity,
     list_stocktake_sessions,
@@ -23,7 +26,7 @@ stocktake_bp = Blueprint("stocktake", __name__)
 
 
 @stocktake_bp.route("/stocktake")
-@login_required
+@stocktake_access_required
 def stocktake_list():
     sessions = list_stocktake_sessions()
     return render_template(
@@ -35,7 +38,7 @@ def stocktake_list():
 
 
 @stocktake_bp.route("/stocktake/new", methods=["POST"])
-@login_required
+@stocktake_access_required
 def create_stocktake():
     try:
         stocktake = create_stocktake_session(
@@ -52,7 +55,7 @@ def create_stocktake():
 
 
 @stocktake_bp.route("/stocktake/<int:session_id>")
-@login_required
+@stocktake_access_required
 def stocktake_detail(session_id):
     stocktake = get_stocktake_session(session_id)
     if not stocktake:
@@ -66,7 +69,7 @@ def stocktake_detail(session_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/items", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_add_item_api(session_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -86,7 +89,7 @@ def stocktake_add_item_api(session_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/items/<int:item_id>", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_update_item_api(session_id, item_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -106,7 +109,7 @@ def stocktake_update_item_api(session_id, item_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/save-draft", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_save_draft_api(session_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -116,7 +119,6 @@ def stocktake_save_draft_api(session_id):
             actor_user_id=session.get("user_id"),
             actor_username=session.get("username"),
         )
-        flash("Stocktake draft saved.", "success")
         return jsonify({"status": "success", "session": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -125,7 +127,7 @@ def stocktake_save_draft_api(session_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/items/<int:item_id>/delete", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_remove_item_api(session_id, item_id):
     try:
         result = remove_stocktake_item(session_id=session_id, item_id=item_id)
@@ -137,7 +139,7 @@ def stocktake_remove_item_api(session_id, item_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/confirm", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_confirm_api(session_id):
     try:
         result = confirm_stocktake_session(
@@ -153,7 +155,7 @@ def stocktake_confirm_api(session_id):
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/cancel", methods=["POST"])
-@login_required
+@stocktake_access_required
 def stocktake_cancel_api(session_id):
     try:
         result = cancel_stocktake_session(
@@ -169,7 +171,7 @@ def stocktake_cancel_api(session_id):
 
 
 @stocktake_bp.route("/stocktake/<int:session_id>/report")
-@login_required
+@stocktake_access_required
 def stocktake_report(session_id):
     stocktake = get_stocktake_session(session_id)
     if not stocktake:
@@ -249,3 +251,112 @@ def stocktake_csv(session_id):
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@stocktake_bp.route("/stocktake/overall-report")
+@stocktake_access_required
+def stocktake_overall_report():
+    today = date.today()
+    default_start = today.replace(day=1)
+
+    start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
+    end_date = (request.args.get("end_date") or today.isoformat()).strip()
+
+    try:
+        start_obj = date.fromisoformat(start_date)
+        end_obj = date.fromisoformat(end_date)
+    except ValueError:
+        start_obj = default_start
+        end_obj = today
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    report_data = get_stocktake_overall_report(
+        start_obj.isoformat(),
+        end_obj.isoformat(),
+    )
+
+    filename = f"stocktake-overall-{report_data['start_date']}-to-{report_data['end_date']}.html"
+    return Response(
+        render_template(
+            "stocktake/overall_report.html",
+            report=report_data,
+        ),
+        headers={"Content-Disposition": f"inline; filename={filename}"},
+    )
+
+
+@stocktake_bp.route("/stocktake/overall-csv")
+@stocktake_access_required
+def stocktake_overall_csv():
+    today = date.today()
+    default_start = today.replace(day=1)
+
+    start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
+    end_date = (request.args.get("end_date") or today.isoformat()).strip()
+
+    try:
+        start_obj = date.fromisoformat(start_date)
+        end_obj = date.fromisoformat(end_date)
+    except ValueError:
+        start_obj = default_start
+        end_obj = today
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    report_data = get_stocktake_overall_report(
+        start_obj.isoformat(),
+        end_obj.isoformat(),
+    )
+    summary = report_data.get("summary", {})
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["Metric", "Value"])
+    writer.writerow(["Start Date", report_data["start_date"]])
+    writer.writerow(["End Date", report_data["end_date"]])
+    writer.writerow(["Sessions Included", summary.get("session_count", 0)])
+    writer.writerow(["Completed Sessions", report_data["session_status_counts"].get("completed", 0)])
+    writer.writerow(["Ongoing Sessions", report_data["session_status_counts"].get("ongoing", 0)])
+    writer.writerow(["Cancelled Sessions", report_data["session_status_counts"].get("cancelled", 0)])
+    writer.writerow(["Total Items Counted", summary.get("item_count", 0)])
+    writer.writerow(["Total Value of Counted Items", summary.get("counted_items_value", 0)])
+    writer.writerow(["No of Items w/ Variance", summary.get("variance_item_count", 0)])
+    writer.writerow(["Total Value of Items w/ Variance", summary.get("variance_items_value", 0)])
+    writer.writerow(["No of Items w/ Shortage", summary.get("shortage_item_count", 0)])
+    writer.writerow(["Total Value of Items w/ Shortage", summary.get("shortage_items_value", 0)])
+    writer.writerow(["No of Items w/ Overage", summary.get("overage_item_count", 0)])
+    writer.writerow(["Total Value of Items w/ Overage", summary.get("overage_items_value", 0)])
+
+    filename = f"stocktake-overall-{report_data['start_date']}-to-{report_data['end_date']}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@stocktake_bp.route("/stocktake/access/request", methods=["POST"])
+@login_required
+def stocktake_access_request():
+    next_url = (request.form.get("next") or "").strip()
+    if not next_url.startswith("/"):
+        next_url = url_for("index")
+
+    try:
+        submit_stocktake_access_request(
+            user_id=session.get("user_id"),
+            username=session.get("username"),
+            user_role=session.get("role"),
+            request_reason=request.form.get("request_reason"),
+        )
+        flash("Your stocktake access request was sent to the admins.", "success")
+    except ValueError as exc:
+        flash(str(exc), "warning")
+    except Exception as exc:
+        flash(f"Unable to submit stocktake access request: {str(exc)}", "danger")
+
+    return redirect(next_url)

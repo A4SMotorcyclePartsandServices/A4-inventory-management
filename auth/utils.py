@@ -3,7 +3,7 @@ import time
 from collections import defaultdict, deque
 from functools import wraps
 
-from flask import abort, flash, g, request, session, redirect, url_for
+from flask import abort, flash, g, request, session, redirect, url_for, jsonify
 
 from db.database import get_db
 
@@ -118,4 +118,40 @@ def admin_required(f):
             abort(403)
 
         return f(*args, **kwargs)
+    return wrapper
+
+
+def _is_api_request():
+    path = request.path or ""
+    if path.startswith("/api/"):
+        return True
+    accept = request.accept_mimetypes.best or ""
+    return accept == "application/json" or request.is_json
+
+
+def stocktake_access_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("auth.login"))
+
+        user = getattr(g, "current_user", None) or ensure_authenticated_user()
+        if not user:
+            return redirect(url_for("auth.login"))
+
+        if user["role"] == "admin":
+            return f(*args, **kwargs)
+
+        from services.stocktake_access_service import user_has_active_stocktake_access
+
+        if user_has_active_stocktake_access(user["id"], user_role=user["role"]):
+            return f(*args, **kwargs)
+
+        message = "Stocktake access requires admin approval. Use the Inventory menu to submit a request."
+        if _is_api_request():
+            return jsonify({"status": "error", "message": message}), 403
+
+        flash(message, "warning")
+        return redirect(url_for("index"))
+
     return wrapper

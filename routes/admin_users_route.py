@@ -32,6 +32,11 @@ from services.password_reset_service import (
     complete_password_reset_request,
     reject_password_reset_request,
 )
+from services.stocktake_access_service import (
+    approve_stocktake_access_request,
+    reject_stocktake_access_request,
+    revoke_stocktake_access,
+)
 
 admin_users_bp = Blueprint("admin_users", __name__)
 
@@ -47,6 +52,7 @@ MANAGE_USERS_TABS = {
 AUDIT_TABS = {
     "users-tab",
     "password-resets-tab",
+    "stocktake-access-tab",
     "sales-tab",
     "debt-audit-tab",
     "audit-tab",
@@ -190,6 +196,62 @@ def reject_password_reset(request_id):
         flash(f"Error rejecting password reset request: {str(exc)}", "danger")
 
     return redirect(url_for("admin_users.audit_dashboard", tab="password-resets-tab"))
+
+
+@admin_users_bp.route("/stocktake-access/<int:approval_request_id>/approve", methods=["POST"])
+def approve_stocktake_access(approval_request_id):
+    expires_on = request.form.get("expires_on")
+    admin_note = request.form.get("admin_note", "")
+    try:
+        approve_stocktake_access_request(
+            approval_request_id=approval_request_id,
+            admin_user_id=session.get("user_id"),
+            expires_on=expires_on,
+            notes=admin_note,
+        )
+        flash("Stocktake access granted.", "success")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error approving stocktake access: {str(exc)}", "danger")
+
+    return redirect(url_for("admin_users.audit_dashboard", tab="stocktake-access-tab"))
+
+
+@admin_users_bp.route("/stocktake-access/<int:approval_request_id>/reject", methods=["POST"])
+def reject_stocktake_access(approval_request_id):
+    admin_note = request.form.get("admin_note", "")
+    try:
+        reject_stocktake_access_request(
+            approval_request_id=approval_request_id,
+            admin_user_id=session.get("user_id"),
+            notes=admin_note,
+        )
+        flash("Stocktake access request rejected.", "warning")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error rejecting stocktake access request: {str(exc)}", "danger")
+
+    return redirect(url_for("admin_users.audit_dashboard", tab="stocktake-access-tab"))
+
+
+@admin_users_bp.route("/stocktake-access/<int:approval_request_id>/revoke", methods=["POST"])
+def revoke_stocktake_access_route(approval_request_id):
+    admin_note = request.form.get("admin_note", "")
+    try:
+        revoke_stocktake_access(
+            approval_request_id=approval_request_id,
+            admin_user_id=session.get("user_id"),
+            notes=admin_note,
+        )
+        flash("Stocktake access revoked.", "warning")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error revoking stocktake access: {str(exc)}", "danger")
+
+    return redirect(url_for("admin_users.audit_dashboard", tab="stocktake-access-tab"))
 
 
 @admin_users_bp.route("/mechanics/add", methods=["POST"])

@@ -9,6 +9,7 @@ from services.audit_service import get_audit_trail
 from services.payables_service import get_payables_audit_log
 from services.password_reset_service import list_password_reset_requests
 from services.sales_admin_service import get_sales_paginated
+from services.stocktake_access_service import list_stocktake_access_requests
 from services.transactions_service import get_sale_refund_context
 from utils.formatters import format_date, norm_text
 
@@ -138,6 +139,7 @@ def get_manage_users_context(active_tab="users-tab", include_audit_data=False):
     if include_audit_data:
         context["users"] = formatted_users
         context["password_reset_requests"] = list_password_reset_requests()
+        context["stocktake_access_requests"] = list_stocktake_access_requests()
 
     return context
 

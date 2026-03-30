@@ -64,6 +64,7 @@
         padding-bottom: 0.9rem;
     }
 
+    {% if session.get('role') == 'admin' %}
     .stocktake-table-card .table thead th:nth-child(1) { width: 20%; }
     .stocktake-table-card .table thead th:nth-child(2) { width: 12%; }
     .stocktake-table-card .table thead th:nth-child(3) { width: 12%; }
@@ -71,6 +72,14 @@
     .stocktake-table-card .table thead th:nth-child(5) { width: 14%; }
     .stocktake-table-card .table thead th:nth-child(6) { width: 21%; }
     .stocktake-table-card .table thead th:nth-child(7) { width: 12%; }
+    {% else %}
+    .stocktake-table-card .table thead th:nth-child(1) { width: 22%; }
+    .stocktake-table-card .table thead th:nth-child(2) { width: 13%; }
+    .stocktake-table-card .table thead th:nth-child(3) { width: 13%; }
+    .stocktake-table-card .table thead th:nth-child(4) { width: 10%; }
+    .stocktake-table-card .table thead th:nth-child(5) { width: 28%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 14%; }
+    {% endif %}
 
     .stocktake-created {
         min-width: 170px;
@@ -90,8 +99,12 @@
     .stocktake-table-card .table td:nth-child(2),
     .stocktake-table-card .table td:nth-child(3),
     .stocktake-table-card .table td:nth-child(4),
+    {% if session.get('role') == 'admin' %}
     .stocktake-table-card .table td:nth-child(5),
     .stocktake-table-card .table td:nth-child(7) {
+    {% else %}
+    .stocktake-table-card .table td:nth-child(6) {
+    {% endif %}
         vertical-align: middle !important;
     }
 
@@ -142,6 +155,21 @@
         color: #facc15 !important;
     }
 
+    .stocktake-actions {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .stocktake-export-btn {
+        padding: 0.35rem 0.55rem;
+        line-height: 1;
+    }
+
+    .stocktake-export-btn i {
+        font-size: 1.05rem;
+    }
+
     @media (max-width: 992px) {
         .stocktake-grid {
             grid-template-columns: 1fr;
@@ -156,6 +184,26 @@
         <div>
             <h2 class="mb-1">Stocktaking</h2>
             <p class="text-muted mb-0">Create stocktake sessions, count selected items, and confirm ledger-backed variance adjustments.</p>
+        </div>
+        <div class="stocktake-actions">
+            <button
+                type="button"
+                class="btn btn-sm btn-outline-danger stocktake-export-btn"
+                data-bs-toggle="modal"
+                data-bs-target="#stocktakeOverallReportModal"
+                title="Open overall stocktake PDF report"
+                aria-label="Open overall stocktake PDF report">
+                <i class="bi bi-filetype-pdf"></i>
+            </button>
+            <button
+                type="button"
+                class="btn btn-sm btn-outline-success stocktake-export-btn"
+                data-bs-toggle="modal"
+                data-bs-target="#stocktakeOverallCsvModal"
+                title="Export overall stocktake CSV"
+                aria-label="Export overall stocktake CSV">
+                <i class="bi bi-filetype-csv"></i>
+            </button>
         </div>
     </div>
 
@@ -209,7 +257,9 @@
                             <th>Status</th>
                             <th>Scope</th>
                             <th>Items</th>
+                            {% if session.get('role') == 'admin' %}
                             <th>Variance Items</th>
+                            {% endif %}
                             <th>Created</th>
                             <th>Action</th>
                         </tr>
@@ -229,11 +279,13 @@
                             </td>
                             <td><div class="stocktake-cell-center">{{ stocktake.count_scope }}</div></td>
                             <td><div class="stocktake-cell-center fw-bold">{{ stocktake.item_count }}</div></td>
+                            {% if session.get('role') == 'admin' %}
                             <td>
                                 <div class="stocktake-cell-center fw-bold {% if stocktake.variance_item_count > 0 %}text-warning{% endif %}">
                                     {{ stocktake.variance_item_count }}
                                 </div>
                             </td>
+                            {% endif %}
                             <td class="stocktake-created">
                                 <div class="stocktake-cell-stack">
                                     <div>{{ stocktake.created_at_display }}</div>
@@ -250,7 +302,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">No stocktake sessions yet.</td>
+                            <td colspan="{% if session.get('role') == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No stocktake sessions yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -259,4 +311,146 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="stocktakeOverallCsvModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Export Overall Stocktake CSV</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('stocktake.stocktake_overall_csv') }}" method="GET">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Date Range</label>
+                        <div class="input-group">
+                            <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                                <i class="bi bi-calendar-range"></i>
+                            </span>
+                            <input
+                                type="text"
+                                id="stocktake-overall-csv-date-range"
+                                class="form-control"
+                                placeholder="Select date range..."
+                                style="background:#141720; border-color:#333; color:#fff;"
+                                readonly
+                            >
+                        </div>
+                        <input type="hidden" name="start_date" id="stocktake-overall-csv-start-hidden">
+                        <input type="hidden" name="end_date" id="stocktake-overall-csv-end-hidden">
+                    </div>
+                    <p class="text small mb-0">This CSV aggregates stocktake sessions created within the selected date range.</p>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export CSV
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="stocktakeOverallReportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Generate Overall Stocktake Report</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('stocktake.stocktake_overall_report') }}" method="GET" target="_blank">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Date Range</label>
+                        <div class="input-group">
+                            <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                                <i class="bi bi-calendar-range"></i>
+                            </span>
+                            <input
+                                type="text"
+                                id="stocktake-overall-date-range"
+                                class="form-control"
+                                placeholder="Select date range..."
+                                style="background:#141720; border-color:#333; color:#fff;"
+                                readonly
+                            >
+                        </div>
+                        <input type="hidden" name="start_date" id="stocktake-overall-start-hidden">
+                        <input type="hidden" name="end_date" id="stocktake-overall-end-hidden">
+                    </div>
+                    <p class="text small mb-0">This report aggregates stocktake sessions created within the selected date range.</p>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Open Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof flatpickr !== 'function') {
+        return;
+    }
+
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const fmt = (value) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const initOverallRangePicker = (rangeInputId, startHiddenId, endHiddenId) => {
+        const rangeInput = document.getElementById(rangeInputId);
+        const startHidden = document.getElementById(startHiddenId);
+        const endHidden = document.getElementById(endHiddenId);
+
+        if (!rangeInput || !startHidden || !endHidden) {
+            return;
+        }
+
+        startHidden.value = fmt(firstDay);
+        endHidden.value = fmt(today);
+
+        flatpickr(rangeInput, {
+            mode: 'range',
+            dateFormat: 'Y-m-d',
+            altInput: true,
+            altFormat: 'M j, Y',
+            allowInput: false,
+            defaultDate: [startHidden.value, endHidden.value],
+            onChange: function(selectedDates) {
+                if (selectedDates.length === 1) {
+                    startHidden.value = fmt(selectedDates[0]);
+                    endHidden.value = fmt(selectedDates[0]);
+                } else if (selectedDates.length === 2) {
+                    startHidden.value = fmt(selectedDates[0]);
+                    endHidden.value = fmt(selectedDates[1]);
+                }
+            },
+        });
+    };
+
+    initOverallRangePicker(
+        'stocktake-overall-csv-date-range',
+        'stocktake-overall-csv-start-hidden',
+        'stocktake-overall-csv-end-hidden'
+    );
+    initOverallRangePicker(
+        'stocktake-overall-date-range',
+        'stocktake-overall-start-hidden',
+        'stocktake-overall-end-hidden'
+    );
+});
+</script>
 {% endblock %}

@@ -105,8 +105,18 @@ def _daterange(start_date, end_date):
         current += timedelta(days=1)
 
 
-def get_sales_analytics_snapshot(start_date, end_date):
+def _normalize_top_items_limit(value, default=10, max_value=50):
+    try:
+        limit = int(value or default)
+    except (TypeError, ValueError):
+        limit = default
+    return max(1, min(limit, max_value))
+
+
+def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_items_category=None):
     conn = get_db()
+    top_items_limit = _normalize_top_items_limit(top_items_limit)
+    requested_top_items_category = str(top_items_category or "").strip()
 
     summary_row = conn.execute(
         """
@@ -300,10 +310,36 @@ def get_sales_analytics_snapshot(start_date, end_date):
         (start_date, end_date),
     ).fetchall()
 
+    top_item_categories_rows = conn.execute(
+        """
+        SELECT DISTINCT TRIM(category) AS category
+        FROM items
+        WHERE NULLIF(TRIM(category), '') IS NOT NULL
+          AND UPPER(TRIM(category)) <> 'SVC'
+        ORDER BY TRIM(category) ASC
+        """
+    ).fetchall()
+    top_item_categories = [row["category"] for row in top_item_categories_rows]
+    normalized_category_lookup = {
+        str(category).strip().lower(): category
+        for category in top_item_categories
+    }
+    selected_top_items_category = normalized_category_lookup.get(
+        requested_top_items_category.lower(),
+        "",
+    )
+
+    top_items_category_filter_sql = ""
+    top_items_category_params = []
+    if selected_top_items_category:
+        top_items_category_filter_sql = " AND LOWER(TRIM(item_category)) = %s"
+        top_items_category_params.append(selected_top_items_category.lower())
+
     top_items = conn.execute(
         """
         SELECT
             item_name,
+            item_category,
             SUM(quantity_sold) AS quantity_sold,
             COALESCE(SUM(total_revenue), 0) AS total_revenue,
             COALESCE(SUM(total_cost), 0) AS total_cost,
@@ -311,6 +347,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
         FROM (
             SELECT
                 i.name AS item_name,
+                i.category AS item_category,
                 SUM(si.quantity) AS quantity_sold,
                 COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue,
                 COALESCE(SUM(si.quantity * si.cost_per_piece_snapshot), 0) AS total_cost,
@@ -321,12 +358,13 @@ def get_sales_analytics_snapshot(start_date, end_date):
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-            GROUP BY i.id, i.name
+            GROUP BY i.id, i.name, i.category
 
             UNION ALL
 
             SELECT
                 sbi.item_name_snapshot AS item_name,
+                i.category AS item_category,
                 SUM(COALESCE(sbi.quantity, 0)) AS quantity_sold,
                 COALESCE(SUM(
                     CASE
@@ -368,6 +406,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             FROM sales_bundles sb
             JOIN sales s ON s.id = sb.sale_id
             JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
+            LEFT JOIN items i ON i.id = sbi.item_id
             LEFT JOIN (
                 SELECT
                     sales_bundle_id,
@@ -378,13 +417,24 @@ def get_sales_analytics_snapshot(start_date, end_date):
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-            GROUP BY sbi.item_name_snapshot
+            GROUP BY sbi.item_name_snapshot, i.category
         ) ranked_items
-        GROUP BY item_name
+        WHERE 1 = 1
+        """
+        + top_items_category_filter_sql +
+        """
+        GROUP BY item_name, item_category
         ORDER BY quantity_sold DESC, total_revenue DESC, item_name ASC
-        LIMIT 10
+        LIMIT %s
         """,
-        (start_date, end_date, start_date, end_date),
+        (
+            start_date,
+            end_date,
+            start_date,
+            end_date,
+            *top_items_category_params,
+            top_items_limit,
+        ),
     ).fetchall()
 
     top_services = conn.execute(
@@ -587,6 +637,7 @@ def get_sales_analytics_snapshot(start_date, end_date):
             "top_items": [
                 {
                     "name": row["item_name"],
+                    "category": row["item_category"] or "",
                     "quantity_sold": int(row["quantity_sold"] or 0),
                     "total_revenue": round(_num(row["total_revenue"]), 2),
                     "total_cost": round(_num(row["total_cost"]), 2),
@@ -623,5 +674,10 @@ def get_sales_analytics_snapshot(start_date, end_date):
                 }
                 for row in mechanic_supply_analytics
             ],
+        },
+        "filters": {
+            "top_items_limit": top_items_limit,
+            "top_items_category": selected_top_items_category,
+            "top_item_categories": top_item_categories,
         },
     }

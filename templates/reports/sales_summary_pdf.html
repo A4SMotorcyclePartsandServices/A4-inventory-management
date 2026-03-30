@@ -488,7 +488,7 @@
                 {% for sale in data.mechanic_supply_sales %}
                 <tr>
                     <td>
-                        {{ sale.sales_number }}
+                        {{ sale.report_label or 'Mechanic Supply' }}
                         <div class="muted">Excluded from sales calculations</div>
                     </td>
                     <td>{{ sale.mechanic_name }}</td>

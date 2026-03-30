@@ -376,14 +376,6 @@
             border-left-width: 3px !important;
             border-left-style: solid !important;
             color: #fff;
-            opacity: 0;
-            transform: translateX(20px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        .alert.show {
-            opacity: 1;
-            transform: translateX(0);
         }
 
         .alert-success {
@@ -414,6 +406,32 @@
         .alert-danger i { color: #ff6b6b; }
         .alert-warning i { color: #f4c430; }
         .alert-info i { color: #67c2e4; }
+
+        .stocktake-access-modal .modal-content {
+            overflow: hidden;
+        }
+
+        .stocktake-access-modal .modal-body {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+        }
+
+        .stocktake-access-modal .modal-footer {
+            padding-top: 0.75rem;
+        }
+
+        .stocktake-access-panel {
+            padding: 0.9rem 1rem;
+            border-radius: 0.75rem;
+            background: #141720;
+            border: 1px solid #333;
+            color: #fff;
+        }
+
+        .stocktake-access-modal textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+        }
 
         /* NOTIFICATIONS */
 
@@ -1089,10 +1107,26 @@
                         <i class="bi bi-chevron-down nav-group-caret"></i>
                     </button>
                     <div class="nav-group-links">
+                        {% set stocktake_access = stocktake_access_state or {} %}
+                        {% set stocktake_link_active = 'stocktake' in request.path %}
+                        {% if session.get('role') == 'admin' or stocktake_access.get('has_access') %}
                         <a href="{{ url_for('stocktake.stocktake_list') }}"
-                        class="{% if 'stocktake' in request.path %}active-link{% endif %}">
+                        class="{% if stocktake_link_active %}active-link{% endif %}">
                             <i class="bi bi-clipboard2-check"></i> Inventory
                         </a>
+                        {% else %}
+                        <a href="#"
+                        class="{% if stocktake_link_active %}active-link{% endif %}"
+                        onclick="return false;"
+                        data-bs-toggle="modal"
+                        {% if stocktake_access.get('pending_request') %}
+                        data-bs-target="#stocktakeAccessPendingModal">
+                        {% else %}
+                        data-bs-target="#stocktakeAccessRequestModal">
+                        {% endif %}
+                            <i class="bi bi-clipboard2-check"></i> Inventory
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -1446,6 +1480,85 @@
     </div>
 </div>
 
+{% if session.get('user_id') and session.get('role') != 'admin' and not (stocktake_access_state or {}).get('has_access') %}
+{% if (stocktake_access_state or {}).get('pending_request') %}
+<div class="modal fade" id="stocktakeAccessPendingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content stocktake-access-modal" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Stocktake Access Pending</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-warning small mb-3">
+                    Your stocktake access request is still waiting for admin approval.
+                </p>
+
+                <div class="d-grid gap-3">
+                    <div>
+                        <label class="form-label text-white-50 small mb-1">Request Sent</label>
+                        <div class="stocktake-access-panel">
+                            {{ stocktake_access_state.pending_request.last_submitted_at or stocktake_access_state.pending_request.requested_at or 'Unknown date' }}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label text-white-50 small mb-1">Your Reason</label>
+                        <div class="stocktake-access-panel">
+                            {{ stocktake_access_state.pending_request.metadata.request_reason or 'No reason recorded.' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="modal fade" id="stocktakeAccessRequestModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content stocktake-access-modal" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">Request Stocktake Access</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="stocktakeAccessRequestForm" action="{{ url_for('stocktake.stocktake_access_request') }}" method="POST">
+                    {% if (stocktake_access_state or {}).get('latest_request') and (stocktake_access_state.latest_request.status == 'CANCELLED') %}
+                    <div class="alert alert-danger mb-3" role="alert">
+                        Last admin note: {{ stocktake_access_state.latest_request.decision_notes or 'No admin note was left.' }}
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Reason for Access</label>
+                        <textarea
+                            name="request_reason"
+                            class="form-control"
+                            rows="4"
+                            maxlength="500"
+                            placeholder="Explain why you need temporary access to the stocktake pages."
+                            required></textarea>
+                        <div class="form-text text-warning">This reason is required and will be shown to the admins in the approval workflow.</div>
+                    </div>
+                    <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}">
+                </form>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="submit" class="btn btn-danger" form="stocktakeAccessRequestForm">
+                    <i class="bi bi-send me-1"></i>
+                    Send Request
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -1748,6 +1861,47 @@ function defaultFlashAutoCloseMs(type) {
     }
 }
 
+const PENDING_FLASH_STORAGE_KEY = 'pending-flash-message';
+
+function setPendingFlashMessage(message, type = 'info', options = {}) {
+    const text = String(message ?? '').trim();
+    if (!text) {
+        return;
+    }
+
+    const payload = {
+        message: text,
+        type: String(type || 'info'),
+        options: {
+            autoCloseMs: options.autoCloseMs ?? null,
+            replace: Boolean(options.replace),
+            clearExisting: Boolean(options.clearExisting),
+        },
+        createdAt: Date.now(),
+    };
+
+    sessionStorage.setItem(PENDING_FLASH_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function consumePendingFlashMessage() {
+    const rawValue = sessionStorage.getItem(PENDING_FLASH_STORAGE_KEY);
+    if (!rawValue) {
+        return null;
+    }
+
+    sessionStorage.removeItem(PENDING_FLASH_STORAGE_KEY);
+
+    try {
+        const payload = JSON.parse(rawValue);
+        if (!payload || !payload.message) {
+            return null;
+        }
+        return payload;
+    } catch (error) {
+        return null;
+    }
+}
+
 function showFlashMessage(message, type = 'info', options = {}) {
     const container = flashContainer();
     if (!container) {
@@ -1876,6 +2030,7 @@ window.A4Flash = {
     close: closeFlashAlert,
     defaultAutoCloseMs: defaultFlashAutoCloseMs,
     focusTarget: focusFlashTarget,
+    queueNextPage: setPendingFlashMessage,
     show: showFlashMessage,
 };
 
@@ -1897,6 +2052,15 @@ document.addEventListener("DOMContentLoaded", function () {
             alert.classList.add('show');
         });
     });
+
+    const pendingFlash = consumePendingFlashMessage();
+    if (pendingFlash) {
+        showFlashMessage(
+            pendingFlash.message,
+            pendingFlash.type,
+            pendingFlash.options || {},
+        );
+    }
 });
 
 document.addEventListener('click', function(event) {

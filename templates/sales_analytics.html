@@ -166,6 +166,12 @@
         border-color: var(--border-soft);
     }
 
+    .table-dark thead th {
+        background: #151922;
+        color: #e63946;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
     .section-title {
         margin: 1.7rem 0 0.85rem;
         display: flex;
@@ -216,6 +222,41 @@
 
     .table tbody tr:hover {
         background: rgba(193,18,31,0.04) !important;
+    }
+
+    .table-filter-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px auto;
+        gap: 0.65rem;
+        align-items: end;
+        margin-bottom: 1rem;
+    }
+
+    .performance-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .top-items-card .table-responsive {
+        max-height: 720px;
+        overflow-y: auto;
+    }
+
+    .top-items-card .table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #151922;
+        box-shadow: inset 0 -1px 0 rgba(255,255,255,0.08);
+    }
+
+    .table-filter-form .form-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 700;
+        margin-bottom: 0.35rem;
     }
     .profit-spotlight {
         position: relative;
@@ -429,6 +470,10 @@
 
         .range-form {
             width: 100%;
+            grid-template-columns: 1fr;
+        }
+
+        .table-filter-form {
             grid-template-columns: 1fr;
         }
 
@@ -651,16 +696,40 @@
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-xl-4">
-        <div class="panel-card">
+<div class="performance-grid" id="top-items-section">
+    <div class="panel-card top-items-card">
             <h3>Top items</h3>
-            <div class="panel-meta">Paid item sales sorted by quantity sold.</div>
+            <div class="panel-meta">Paid item sales sorted by quantity sold. You can show up to the top 50 and narrow the list by item category.</div>
+            <form method="GET" action="/sales-analytics#top-items-section" class="table-filter-form">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <div>
+                    <label for="top-items-category" class="form-label">Category</label>
+                    <select id="top-items-category" name="top_items_category" class="form-select">
+                        <option value="">All Categories</option>
+                        {% for category in analytics.filters.top_item_categories %}
+                        <option value="{{ category }}" {% if category == top_items_category %}selected{% endif %}>{{ category }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="top-items-limit" class="form-label">Show</label>
+                    <select id="top-items-limit" name="top_items_limit" class="form-select">
+                        {% for limit in [10, 20, 30, 40, 50] %}
+                        <option value="{{ limit }}" {% if limit == top_items_limit %}selected{% endif %}>Top {{ limit }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+            </form>
             <div class="table-responsive">
                 <table class="table table-dark table-striped align-middle text-center mb-0">
                     <thead>
                         <tr>
                             <th>Item</th>
+                            <th>Category</th>
                             <th>Qty</th>
                             <th>Revenue</th>
                             <th>Profit</th>
@@ -671,6 +740,7 @@
                             {% for row in analytics.tables.top_items %}
                             <tr>
                                 <td>{{ row.name }}</td>
+                                <td>{{ row.category or '-' }}</td>
                                 <td>{{ row.quantity_sold }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_profit) }}</td>
@@ -678,16 +748,16 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="4" class="empty-table">No paid item sales in this range.</td>
+                                <td colspan="5" class="empty-table">No paid item sales matched this range and category filter.</td>
                             </tr>
                         {% endif %}
                     </tbody>
                 </table>
             </div>
-        </div>
     </div>
 
-    <div class="col-xl-4">
+    <div class="row g-3">
+    <div class="col-xl-6">
         <div class="panel-card">
             <h3>Top services</h3>
             <div class="panel-meta">Paid service revenue sorted by total earned.</div>
@@ -720,7 +790,7 @@
         </div>
     </div>
 
-    <div class="col-xl-4">
+    <div class="col-xl-6">
         <div class="panel-card">
             <h3>Top customers</h3>
             <div class="panel-meta">Paid sales grouped by customer display name.</div>
@@ -751,6 +821,7 @@
                 </table>
             </div>
         </div>
+    </div>
     </div>
 </div>
 

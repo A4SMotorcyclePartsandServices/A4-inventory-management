@@ -207,26 +207,29 @@
             <div class="section-title">Pricing & Cost</div>
 
             <div class="row g-3">
-                <div class="col-md-3">
+                <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Vendor price <span class="req">*</span></label>
                     <input type="number" step="0.01" min="0" name="vendor_price" value="{{ '%.2f'|format(item.vendor_price or 0) }}" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
-                <div class="col-md-3">
+                <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Cost per piece <span class="req">*</span></label>
                     <input type="number" step="0.01" min="0" name="cost_per_piece" id="cost_input" value="{{ '%.2f'|format(item.cost_per_piece or 0) }}" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
-                <div class="col-md-3">
+                <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Selling price <span class="req">*</span></label>
                     <input type="number" step="0.01" min="0" name="a4s_selling_price" id="selling_input" value="{{ '%.2f'|format(item.a4s_selling_price or 0) }}" class="form-control bg-dark text-white border-secondary" required>
                 </div>
 
+                {% if session.get('role') == 'admin' %}
                 <div class="col-md-3">
                     <label class="form-label small text-white-50">Markup (%)</label>
                     <input type="text" id="markup_display" class="form-control bg-dark text-white border-secondary" readonly>
-                    <input type="hidden" name="markup" id="markup_input" value="{{ item.markup }}">
                 </div>
+                {% endif %}
+
+                <input type="hidden" name="markup" id="markup_input" value="{{ item.markup }}">
             </div>
 
             <div class="section-title">Additional Info</div>
@@ -397,10 +400,14 @@
         if (cost > 0 && selling > 0) {
             const decimalMarkup = (selling - cost) / cost;
             const percentMarkup = decimalMarkup * 100;
-            markupDisplay.value = percentMarkup.toFixed(2) + "%";
+            if (markupDisplay) {
+                markupDisplay.value = percentMarkup.toFixed(2) + "%";
+            }
             markupHidden.value = decimalMarkup.toFixed(4);
         } else {
-            markupDisplay.value = '';
+            if (markupDisplay) {
+                markupDisplay.value = '';
+            }
             markupHidden.value = '';
         }
     }

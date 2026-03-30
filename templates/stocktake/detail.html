@@ -93,7 +93,7 @@
 
     .stocktake-summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat({% if current_user and current_user.role == 'admin' %}4{% else %}1{% endif %}, minmax(0, 1fr));
         gap: 0.9rem;
     }
 
@@ -203,6 +203,16 @@
 
     .search-result:hover {
         background: rgba(193,18,31,0.12);
+    }
+
+    .search-result:disabled {
+        cursor: not-allowed;
+        opacity: 0.68;
+        background: rgba(255,255,255,0.03);
+    }
+
+    .search-result:disabled:hover {
+        background: rgba(255,255,255,0.03);
     }
 
     .result-meta {
@@ -543,10 +553,13 @@
             <span class="kicker">Items Counted</span>
             <div class="value" id="summaryItemCount">{{ stocktake.summary.item_count }}</div>
         </div>
+        {% if current_user and current_user.role == 'admin' %}
         <div class="summary-card">
             <span class="kicker">Variance Items</span>
             <div class="value text-warning" id="summaryVarianceItemCount">{{ stocktake.summary.variance_item_count }}</div>
         </div>
+        {% endif %}
+        {% if current_user and current_user.role == 'admin' %}
         <div class="summary-card">
             <span class="kicker">Shortage Items</span>
             <div class="value text-danger" id="summaryShortageItemCount">{{ stocktake.summary.shortage_item_count }}</div>
@@ -555,6 +568,7 @@
             <span class="kicker">Overage Items</span>
             <div class="value text-success" id="summaryOverageItemCount">{{ stocktake.summary.overage_item_count }}</div>
         </div>
+        {% endif %}
     </div>
     <div class="stocktake-shell">
         <div class="stocktake-panel pad">
@@ -716,6 +730,7 @@ let batchModal = null;
 let batchEntries = [];
 let lastMainSearchItems = [];
 let lastBatchSearchItems = [];
+const canViewCurrentStock = {{ (current_user and current_user.role == 'admin') | tojson }};
 const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
 
 function escapeHtml(value) {
@@ -725,6 +740,70 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function renderSearchMeta(item) {
+    const parts = [];
+    if (canViewCurrentStock) {
+        parts.push(`Stock: ${Number(item.current_stock || 0)}`);
+    }
+    if (item.category) {
+        parts.push(escapeHtml(item.category));
+    }
+    if (item.description) {
+        parts.push(escapeHtml(item.description));
+    }
+    return parts.join(' · ');
+}
+
+function hideSearchStockMeta(container) {
+    if (canViewCurrentStock || !container) return;
+    container.querySelectorAll('.result-meta').forEach((meta) => {
+        const cleanedText = String(meta.textContent || '')
+            .replace(/^\s*Stock:\s*\d+\s*(?:Â·|·)?\s*/i, '')
+            .replace(/\s*(?:Â·|·)\s*/g, ' · ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        meta.textContent = cleanedText;
+    });
+}
+
+function isItemInSession(itemId) {
+    return Boolean((stocktakeSession.items || []).some((entry) => Number(entry.item_id) === Number(itemId)));
+}
+
+function isItemInBatch(itemId) {
+    return Boolean(batchEntries.some((entry) => Number(entry.item_id) === Number(itemId)));
+}
+
+function getSearchSelectionState(itemId) {
+    const inSession = isItemInSession(itemId);
+    const inBatch = isItemInBatch(itemId);
+    return {
+        inSession,
+        inBatch,
+        isSelected: inSession || inBatch,
+    };
+}
+
+function renderAlreadySelectedNote(itemId) {
+    const selectionState = getSearchSelectionState(itemId);
+    if (!selectionState.isSelected) return '';
+
+    let reminder = 'Item already selected.';
+    if (selectionState.inSession && selectionState.inBatch) {
+        reminder = 'Item already selected in Counted Items and Batch Count Entry.';
+    } else if (selectionState.inSession) {
+        reminder = 'Item already selected in Counted Items.';
+    } else if (selectionState.inBatch) {
+        reminder = 'Item already selected in Batch Count Entry.';
+    }
+
+    return `
+        <div class="result-stocktake-meta warning">
+            ${reminder}
+        </div>
+    `;
 }
 
 function sessionIsEditable() {
@@ -764,9 +843,18 @@ function renderSessionMeta() {
 
     const summary = stocktakeSession.summary || {};
     document.getElementById('summaryItemCount').textContent = summary.item_count || 0;
-    document.getElementById('summaryVarianceItemCount').textContent = summary.variance_item_count || 0;
-    document.getElementById('summaryShortageItemCount').textContent = summary.shortage_item_count || 0;
-    document.getElementById('summaryOverageItemCount').textContent = summary.overage_item_count || 0;
+    const varianceItemCountEl = document.getElementById('summaryVarianceItemCount');
+    if (varianceItemCountEl) {
+        varianceItemCountEl.textContent = summary.variance_item_count || 0;
+    }
+    const shortageItemCountEl = document.getElementById('summaryShortageItemCount');
+    if (shortageItemCountEl) {
+        shortageItemCountEl.textContent = summary.shortage_item_count || 0;
+    }
+    const overageItemCountEl = document.getElementById('summaryOverageItemCount');
+    if (overageItemCountEl) {
+        overageItemCountEl.textContent = summary.overage_item_count || 0;
+    }
     document.getElementById('tableCountLabel').textContent = `${summary.item_count || 0} line(s)`;
     const confirmBtn = document.getElementById('confirmSessionBtn');
     const cancelBtn = document.getElementById('cancelSessionBtn');
@@ -877,16 +965,18 @@ function renderSearchResultsLegacy(items, options = {}) {
     }
 
     container.innerHTML = items.map((item) => `
-        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}">
+        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}" ${getSearchSelectionState(item.id).isSelected ? 'disabled' : ''}>
             <div class="fw-bold">${escapeHtml(item.name || '')}</div>
             <div class="result-meta">
                 Stock: ${Number(item.current_stock || 0)}
                 ${item.category ? ` · ${escapeHtml(item.category)}` : ''}
                 ${item.description ? ` · ${escapeHtml(item.description)}` : ''}
             </div>
+            ${renderAlreadySelectedNote(item.id)}
         </button>
     `).join('');
     container.style.display = 'block';
+    hideSearchStockMeta(container);
 }
 
 function renderSearchResults(items, options = {}) {
@@ -909,13 +999,14 @@ function renderSearchResults(items, options = {}) {
     }
 
     container.innerHTML = items.map((item) => `
-        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}">
+        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}" ${getSearchSelectionState(item.id).isSelected ? 'disabled' : ''}>
             <div class="fw-bold">${escapeHtml(item.name || '')}</div>
             <div class="result-meta">
                 Stock: ${Number(item.current_stock || 0)}
                 ${item.category ? ` · ${escapeHtml(item.category)}` : ''}
                 ${item.description ? ` · ${escapeHtml(item.description)}` : ''}
             </div>
+            ${renderAlreadySelectedNote(item.id)}
             ${item.recently_counted ? `
                 <div class="result-stocktake-meta warning">
                     Counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}.
@@ -928,6 +1019,7 @@ function renderSearchResults(items, options = {}) {
         </button>
     `).join('');
     container.style.display = 'block';
+    hideSearchStockMeta(container);
 }
 
 async function confirmRecentCountWarning(item) {
@@ -962,6 +1054,7 @@ async function addItemToSessionInternal(itemId, options = {}) {
         silent = false,
         rerender = true,
     } = options;
+    const draftSnapshot = collectDraftItems();
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -971,7 +1064,7 @@ async function addItemToSessionInternal(itemId, options = {}) {
     if (!response.ok) {
         throw new Error(data.message || 'Failed to add item.');
     }
-    stocktakeSession = data.session;
+    stocktakeSession = mergeUnsavedDraftIntoSession(data.session, draftSnapshot);
     if (rerender) {
         renderSessionMeta();
         renderItemsTable();
@@ -999,6 +1092,7 @@ async function saveItemRow(itemId, countedStock, notes) {
 }
 
 async function removeItemRow(itemId) {
+    const draftSnapshot = collectDraftItems();
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/items/${itemId}/delete`, {
         method: 'POST',
     });
@@ -1006,7 +1100,7 @@ async function removeItemRow(itemId) {
     if (!response.ok) {
         throw new Error(data.message || 'Failed to remove stocktake item.');
     }
-    stocktakeSession = data.session;
+    stocktakeSession = mergeUnsavedDraftIntoSession(data.session, draftSnapshot, { excludeItemId: itemId });
     renderSessionMeta();
     renderItemsTable();
     A4Flash.show('Stocktake item removed.', 'success', { replace: true, autoCloseMs: 2200 });
@@ -1022,6 +1116,33 @@ function collectDraftItems() {
             notes,
         };
     });
+}
+
+function mergeUnsavedDraftIntoSession(sessionData, draftItems, options = {}) {
+    const { excludeItemId = null } = options;
+    if (!sessionData || !Array.isArray(sessionData.items) || !Array.isArray(draftItems) || !draftItems.length) {
+        return sessionData;
+    }
+
+    const draftMap = new Map(
+        draftItems
+            .filter((entry) => Number(entry.item_id) !== Number(excludeItemId))
+            .map((entry) => [Number(entry.item_id), entry])
+    );
+
+    sessionData.items = sessionData.items.map((item) => {
+        const draftEntry = draftMap.get(Number(item.item_id));
+        if (!draftEntry) {
+            return item;
+        }
+        return {
+            ...item,
+            counted_stock: draftEntry.counted_stock,
+            notes: draftEntry.notes,
+        };
+    });
+
+    return sessionData;
 }
 
 async function saveDraft() {
@@ -1045,6 +1166,10 @@ async function persistDraft(items, options = {}) {
     renderSessionMeta();
     renderItemsTable();
     if (redirectOnSuccess) {
+        window.A4Flash?.queueNextPage?.('Stocktake draft saved.', 'success', {
+            replace: true,
+            autoCloseMs: 2200,
+        });
         window.location.href = stocktakeListUrl;
     }
     return data.session;

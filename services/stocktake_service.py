@@ -314,6 +314,104 @@ def get_recent_stocktake_activity(window_days=STOCKTAKE_WARNING_DAYS):
         conn.close()
 
 
+def get_stocktake_overall_report(start_date, end_date):
+    conn = get_db()
+    try:
+        summary_row = conn.execute(
+            """
+            SELECT
+                COUNT(DISTINCT ss.id) AS session_count,
+                COUNT(si.id) AS item_count,
+                COUNT(si.id) FILTER (WHERE COALESCE(si.variance, 0) <> 0) AS variance_item_count,
+                COUNT(si.id) FILTER (WHERE COALESCE(si.variance, 0) < 0) AS shortage_item_count,
+                COUNT(si.id) FILTER (WHERE COALESCE(si.variance, 0) > 0) AS overage_item_count,
+                COALESCE(SUM(
+                    CASE
+                        WHEN si.counted_stock IS NOT NULL
+                        THEN COALESCE(si.counted_stock, 0) * COALESCE(i.cost_per_piece, 0)
+                        ELSE 0
+                    END
+                ), 0) AS counted_items_value,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(si.variance, 0) <> 0
+                        THEN ABS(COALESCE(si.variance, 0) * COALESCE(i.cost_per_piece, 0))
+                        ELSE 0
+                    END
+                ), 0) AS variance_items_value,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(si.variance, 0) < 0
+                        THEN ABS(COALESCE(si.variance, 0) * COALESCE(i.cost_per_piece, 0))
+                        ELSE 0
+                    END
+                ), 0) AS shortage_items_value,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(si.variance, 0) > 0
+                        THEN ABS(COALESCE(si.variance, 0) * COALESCE(i.cost_per_piece, 0))
+                        ELSE 0
+                    END
+                ), 0) AS overage_items_value
+            FROM stocktake_sessions ss
+            LEFT JOIN stocktake_items si ON si.session_id = ss.id
+            LEFT JOIN items i ON i.id = si.item_id
+            WHERE DATE(ss.created_at) BETWEEN %s AND %s
+            """,
+            (start_date, end_date),
+        ).fetchone()
+
+        session_rows = conn.execute(
+            """
+            SELECT
+                id,
+                session_number,
+                status,
+                created_at,
+                confirmed_at
+            FROM stocktake_sessions
+            WHERE DATE(created_at) BETWEEN %s AND %s
+            ORDER BY created_at DESC, id DESC
+            """,
+            (start_date, end_date),
+        ).fetchall()
+
+        session_status_counts = {
+            "completed": 0,
+            "ongoing": 0,
+            "cancelled": 0,
+        }
+
+        for row in session_rows:
+            status = str(row["status"] or "").upper()
+            if status == STOCKTAKE_STATUS_CONFIRMED:
+                session_status_counts["completed"] += 1
+            elif status == STOCKTAKE_STATUS_DRAFT:
+                session_status_counts["ongoing"] += 1
+            elif status == STOCKTAKE_STATUS_CANCELLED:
+                session_status_counts["cancelled"] += 1
+
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "date_range_display": f"{format_date(start_date)} to {format_date(end_date)}",
+            "summary": {
+                "session_count": int(summary_row["session_count"] or 0),
+                "item_count": int(summary_row["item_count"] or 0),
+                "variance_item_count": int(summary_row["variance_item_count"] or 0),
+                "shortage_item_count": int(summary_row["shortage_item_count"] or 0),
+                "overage_item_count": int(summary_row["overage_item_count"] or 0),
+                "counted_items_value": float(summary_row["counted_items_value"] or 0),
+                "variance_items_value": float(summary_row["variance_items_value"] or 0),
+                "shortage_items_value": float(summary_row["shortage_items_value"] or 0),
+                "overage_items_value": float(summary_row["overage_items_value"] or 0),
+            },
+            "session_status_counts": session_status_counts,
+        }
+    finally:
+        conn.close()
+
+
 def _serialize_session_row(row):
     if not row:
         return None
@@ -435,7 +533,7 @@ def get_stocktake_session(session_id):
             FROM stocktake_items si
             JOIN items i ON i.id = si.item_id
             WHERE si.session_id = %s
-            ORDER BY i.name ASC
+            ORDER BY si.id DESC
             """,
             (session_id,),
         ).fetchall()

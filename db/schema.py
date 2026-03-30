@@ -1450,6 +1450,33 @@ def init_db():
           )
     """)
 
+    # 29. STOCKTAKE ACCESS GRANTS
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS stocktake_access_grants (
+        id                  SERIAL PRIMARY KEY,
+        approval_request_id INTEGER NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+        user_id             INTEGER NOT NULL REFERENCES users(id),
+        granted_by          INTEGER NOT NULL REFERENCES users(id),
+        granted_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        expires_at          TIMESTAMP NOT NULL,
+        grant_notes         TEXT,
+        revoked_at          TIMESTAMP,
+        revoked_by          INTEGER REFERENCES users(id),
+        revoke_notes        TEXT
+    )
+    """)
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS approval_request_id INTEGER")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS user_id INTEGER")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS granted_by INTEGER")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS granted_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS grant_notes TEXT")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS revoked_by INTEGER")
+    cur.execute("ALTER TABLE stocktake_access_grants ADD COLUMN IF NOT EXISTS revoke_notes TEXT")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_access_grants_user_active ON stocktake_access_grants(user_id, revoked_at, expires_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_stocktake_access_grants_request ON stocktake_access_grants(approval_request_id)")
+
     # --- SEEDING ---
 
     # 1. Seed Services (Only if empty)

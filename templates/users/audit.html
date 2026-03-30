@@ -1132,6 +1132,11 @@
         </button>
     </li>
     <li class="nav-item">
+        <button class="nav-link {% if active_tab == 'stocktake-access-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#stocktake-access-tab" type="button">
+            <i class="bi bi-clipboard2-check"></i> Stocktake Access
+        </button>
+    </li>
+    <li class="nav-item">
         <button class="nav-link {% if active_tab == 'sales-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#sales-tab" type="button">
             <i class="bi bi-cash-stack"></i> Sales
         </button>
@@ -1337,6 +1342,115 @@
                     {% else %}
                     <tr>
                         <td colspan="6" class="text-center text-muted">No password reset requests yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- STOCKTAKE ACCESS TAB -->
+    <div class="tab-pane fade {% if active_tab == 'stocktake-access-tab' %}show active{% endif %}" id="stocktake-access-tab">
+        <div class="admin-card shadow-sm">
+            <h5 class="mb-2 text-white-50">Temporary Stocktake Access Requests</h5>
+            <p class="text-info mb-0 small">
+                Staff users must request temporary stocktake access. Admins approve for a set number of days, reject invalid requests, or revoke access before expiry.
+            </p>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Requested</th>
+                        <th>Username</th>
+                        <th>Reason</th>
+                        <th>Approval</th>
+                        <th>Access Window</th>
+                        <th>Handled By</th>
+                        <th>Admin Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in stocktake_access_requests %}
+                    <tr>
+                        <td class="text-white-50">
+                            <div>{{ req.last_submitted_at_display or req.requested_at_display }}</div>
+                            {% if req.current_revision_no %}
+                            <div class="small text-info">
+                                Submission #{{ req.current_revision_no + 1 }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ req.requested_by_username }}</div>
+                        </td>
+                        <td class="text-white-50">
+                            {{ req.request_reason or 'No reason provided.' }}
+                        </td>
+                        <td>
+                            {% if req.status == 'PENDING' %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif req.status == 'APPROVED' %}
+                                <span class="badge bg-success">Approved</span>
+                            {% elif req.status == 'CANCELLED' %}
+                                <span class="badge bg-danger">Cancelled</span>
+                            {% elif req.status == 'REVISIONS_NEEDED' %}
+                                <span class="badge bg-info text-dark">Revisions Needed</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ req.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">
+                            {% if req.has_active_access %}
+                                <div><span class="badge bg-success-subtle text-success-emphasis">Active</span></div>
+                                <div class="small">Until {{ req.active_expires_at_display }}</div>
+                            {% elif req.access_state == 'EXPIRED' %}
+                                <div><span class="badge bg-secondary">Expired</span></div>
+                                <div class="small">Ended {{ req.latest_expires_at_display }}</div>
+                            {% elif req.access_state == 'REVOKED' %}
+                                <div><span class="badge bg-danger">Revoked</span></div>
+                                <div class="small">Revoked {{ req.latest_revoked_at_display }}</div>
+                            {% else %}
+                                <span class="text-muted">No active access</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-white-50">
+                            {% if req.decision_by_username %}
+                                <div>{{ req.decision_by_username }}</div>
+                                <div class="small text">{{ req.decision_at_display or '' }}</div>
+                            {% else %}
+                                <span class="text-muted">Waiting for admin</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center actions-cell">
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-outline-info"
+                                title="Review stocktake access request"
+                                data-request-id="{{ req.id }}"
+                                data-username="{{ req.requested_by_username }}"
+                                data-requested-at="{{ req.last_submitted_at_display or req.requested_at_display }}"
+                                data-request-reason="{{ req.request_reason or '' }}"
+                                data-status="{{ req.status }}"
+                                data-handled-by="{{ req.decision_by_username or '' }}"
+                                data-handled-at="{{ req.decision_at_display or '' }}"
+                                data-admin-note="{{ req.decision_notes or '' }}"
+                                data-access-state="{{ req.access_state }}"
+                                data-active-expires-at="{{ req.active_expires_at_display or '' }}"
+                                data-latest-expires-at="{{ req.latest_expires_at_display or '' }}"
+                                data-latest-revoked-at="{{ req.latest_revoked_at_display or '' }}"
+                                data-can-approve="{{ 1 if req.status == 'PENDING' and not req.has_active_access else 0 }}"
+                                data-can-reject="{{ 1 if req.status == 'PENDING' else 0 }}"
+                                data-can-revoke="{{ 1 if req.has_active_access else 0 }}"
+                                onclick="openStocktakeAccessReviewModal(this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No stocktake access requests yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1938,6 +2052,22 @@
         </div>
     </div>
 
+    <div class="modal fade" id="stocktakeVarianceDetailsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-warning" id="stocktakeVarianceModalTitle">
+                        <i class="bi bi-clipboard2-check me-1 text-warning"></i> Stocktake Variance Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="stocktakeVarianceDetailsBody">
+                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="itemEditDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
@@ -2073,6 +2203,131 @@
 
                     <div id="passwordResetReviewNoMatch" class="password-reset-empty-state d-none">
                         No eligible active staff account matched this request, so there is no reset action available from this screen.
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="stocktakeAccessReviewModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered password-reset-modal-dialog">
+            <div class="modal-content bg-dark border-secondary text-white password-reset-modal-content">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-danger">
+                        <i class="bi bi-shield-lock me-2"></i>Review Stocktake Access
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="password-reset-review-card">
+                        <div class="password-reset-review-kicker">Request Summary</div>
+                        <div class="password-reset-review-title" id="stocktakeAccessReviewUsername">Staff user</div>
+                        <p class="password-reset-review-subtitle" id="stocktakeAccessReviewSubtitle">Review the request details and choose the next action.</p>
+                        <div class="password-reset-meta-grid mt-3">
+                            <div class="password-reset-meta-item">
+                                <div class="password-reset-meta-label">Requested</div>
+                                <div class="password-reset-meta-value" id="stocktakeAccessReviewRequestedAt">-</div>
+                            </div>
+                            <div class="password-reset-meta-item">
+                                <div class="password-reset-meta-label">Approval Status</div>
+                                <div class="password-reset-meta-value">
+                                    <span id="stocktakeAccessReviewStatus" class="password-reset-status-pill pending">Pending</span>
+                                </div>
+                            </div>
+                            <div class="password-reset-meta-item" style="grid-column: 1 / -1;">
+                                <div class="password-reset-meta-label">Reason</div>
+                                <div class="password-reset-meta-value" id="stocktakeAccessReviewReason">No reason provided.</div>
+                            </div>
+                            <div class="password-reset-meta-item">
+                                <div class="password-reset-meta-label">Access State</div>
+                                <div class="password-reset-meta-value" id="stocktakeAccessReviewAccessState">No active access</div>
+                            </div>
+                            <div class="password-reset-meta-item">
+                                <div class="password-reset-meta-label">Handled By</div>
+                                <div class="password-reset-meta-value" id="stocktakeAccessReviewHandledBy">Pending</div>
+                            </div>
+                            <div class="password-reset-meta-item" style="grid-column: 1 / -1;">
+                                <div class="password-reset-meta-label">Admin Note</div>
+                                <div class="password-reset-meta-value" id="stocktakeAccessReviewAdminNote">No admin note yet.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="stocktakeAccessApproveBlock" class="password-reset-review-card password-reset-review-action-card d-none">
+                        <div class="password-reset-review-kicker">Primary Action</div>
+                        <div class="password-reset-review-title">Grant Temporary Access</div>
+                        <p class="password-reset-review-subtitle">Approve access until a specific date. The grant stays active through the end of that selected day.</p>
+                        <form id="stocktakeAccessApproveForm" method="POST" class="mt-1">
+                            <div class="password-reset-review-form-grid">
+                                <div class="password-reset-review-field">
+                                    <label class="form-label text-white-50 small">Access Expires On</label>
+                                    <input
+                                        id="stocktakeAccessExpiresOn"
+                                        name="expires_on"
+                                        type="text"
+                                        class="form-control"
+                                        placeholder="Pick expiry date..."
+                                        readonly
+                                        required>
+                                </div>
+                                <div class="password-reset-review-field">
+                                    <label class="form-label text-white-50 small">Admin Note</label>
+                                    <input id="stocktakeAccessApproveNote" name="admin_note" class="form-control" placeholder="Optional note for this approval">
+                                </div>
+                                <div class="password-reset-review-submit full-width">
+                                    <button type="submit" class="btn btn-danger">
+                                        <i class="bi bi-shield-check me-1"></i> Grant Access
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="stocktakeAccessRejectBlock" class="password-reset-review-card password-reset-review-action-card secondary d-none">
+                        <div class="password-reset-review-kicker">Secondary Action</div>
+                        <div class="password-reset-review-title">Reject Request</div>
+                        <p class="password-reset-review-subtitle">Use this when the request should not be approved right now. Staff can submit a new request later.</p>
+                        <form id="stocktakeAccessRejectForm" method="POST" class="mt-1">
+                            <div class="password-reset-review-form-grid">
+                                <div class="password-reset-review-field full-width">
+                                    <label class="form-label text-white-50 small">Rejection Note</label>
+                                    <input id="stocktakeAccessRejectNote" name="admin_note" class="form-control" placeholder="Required reason for rejection" required>
+                                </div>
+                                <div class="password-reset-review-submit full-width">
+                                    <button type="submit" class="btn btn-outline-warning">
+                                        Reject Request
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="stocktakeAccessRevokeBlock" class="password-reset-review-card password-reset-review-action-card secondary d-none">
+                        <div class="password-reset-review-kicker">Access Control</div>
+                        <div class="password-reset-review-title">Revoke Active Access</div>
+                        <p class="password-reset-review-subtitle">End the current access window immediately. The staff user will need to request access again.</p>
+                        <form id="stocktakeAccessRevokeForm" method="POST" class="mt-1">
+                            <div class="password-reset-review-form-grid">
+                                <div class="password-reset-review-field full-width">
+                                    <label class="form-label text-white-50 small">Revocation Note</label>
+                                    <input id="stocktakeAccessRevokeNote" name="admin_note" class="form-control" placeholder="Required reason for revocation" required>
+                                </div>
+                                <div class="password-reset-review-submit full-width">
+                                    <button type="submit" class="btn btn-outline-danger">
+                                        Revoke Access
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div id="stocktakeAccessReadOnly" class="password-reset-review-card d-none">
+                        <div class="password-reset-review-kicker">Final State</div>
+                        <div class="password-reset-review-title">No further admin action is available from this request.</div>
+                        <p class="password-reset-review-subtitle">Review the details above to see the latest access state and admin notes.</p>
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
@@ -2887,6 +3142,72 @@ function viewManualInDetails(auditGroupId) {
         });
 }
 
+function openStocktakeVarianceDetails(encodedPayload) {
+    const body = document.getElementById('stocktakeVarianceDetailsBody');
+    const title = document.getElementById('stocktakeVarianceModalTitle');
+    if (!body || !title) {
+        return;
+    }
+
+    let payload = {};
+    try {
+        payload = JSON.parse(decodeURIComponent(encodedPayload || ''));
+    } catch (error) {
+        payload = {};
+    }
+
+    const movementType = String(payload.transaction_type || '').toUpperCase();
+    const isGain = movementType === 'IN';
+    const accentClass = isGain ? 'text-success' : 'text-danger';
+    const iconClass = isGain ? 'bi bi-box-arrow-in-down' : 'bi bi-box-arrow-up';
+    const headingText = isGain ? 'Stocktake Variance Gain' : 'Stocktake Variance Loss';
+    const badgeHtml = isGain
+        ? '<span class="badge bg-success-subtle text-success-emphasis">IN</span>'
+        : '<span class="badge bg-danger-subtle text-danger-emphasis">OUT</span>';
+
+    title.className = `modal-title ${accentClass}`;
+    title.innerHTML = `<i class="${iconClass} me-1 ${accentClass}"></i> ${headingText}`;
+
+    body.innerHTML = `
+        <div class="row g-3">
+            <div class="col-sm-6">
+                <small class="text-white-50 d-block">STOCKTAKE SESSION</small>
+                <div class="fw-bold text-warning fs-6">${escapeHtml(payload.session_label || 'Stocktake Session')}</div>
+            </div>
+            <div class="col-sm-6 text-sm-end">
+                <small class="text-white-50 d-block">MOVEMENT</small>
+                <div>${badgeHtml}</div>
+            </div>
+            <div class="col-sm-6">
+                <small class="text-white-50 d-block">DATE & TIME</small>
+                <div>${escapeHtml(payload.transaction_date || '-')}</div>
+            </div>
+            <div class="col-sm-6 text-sm-end">
+                <small class="text-white-50 d-block">QTY</small>
+                <div class="fw-bold fs-5 ${accentClass}">${escapeHtml(String(payload.total_qty || 0))}</div>
+            </div>
+            <div class="col-12">
+                <small class="text-white-50 d-block">ITEM SUMMARY</small>
+                <div class="fw-bold text-white">${escapeHtml(payload.items_summary || '-')}</div>
+            </div>
+            <div class="col-sm-6">
+                <small class="text-white-50 d-block">REASON</small>
+                <div class="fw-bold ${accentClass}">${escapeHtml(payload.reason_label || headingText)}</div>
+            </div>
+            <div class="col-sm-6 text-sm-end">
+                <small class="text-white-50 d-block">STAFF</small>
+                <div>${escapeHtml(payload.user_name || '-')}</div>
+            </div>
+            <div class="col-12">
+                <small class="text-white-50 d-block">NOTES</small>
+                <div class="border border-secondary rounded p-3 bg-black bg-opacity-25">${escapeHtml(payload.notes || 'No notes recorded.')}</div>
+            </div>
+        </div>
+    `;
+
+    new bootstrap.Modal(document.getElementById('stocktakeVarianceDetailsModal')).show();
+}
+
 function openPasswordResetReviewModal(button) {
     const requestId = button.getAttribute('data-request-id');
     const username = button.getAttribute('data-username') || 'Staff user';
@@ -2956,6 +3277,112 @@ function openPasswordResetReviewModal(button) {
     const modal = new bootstrap.Modal(document.getElementById('passwordResetReviewModal'));
     modal.show();
 }
+
+function openStocktakeAccessReviewModal(button) {
+    const requestId = button.getAttribute('data-request-id');
+    const username = button.getAttribute('data-username') || 'Staff user';
+    const requestedAt = button.getAttribute('data-requested-at') || '-';
+    const requestReason = button.getAttribute('data-request-reason') || 'No reason provided.';
+    const status = button.getAttribute('data-status') || 'PENDING';
+    const handledBy = button.getAttribute('data-handled-by') || 'Pending';
+    const handledAt = button.getAttribute('data-handled-at') || '';
+    const adminNote = button.getAttribute('data-admin-note') || 'No admin note yet.';
+    const accessState = button.getAttribute('data-access-state') || 'NONE';
+    const activeExpiresAt = button.getAttribute('data-active-expires-at') || '';
+    const latestExpiresAt = button.getAttribute('data-latest-expires-at') || '';
+    const latestRevokedAt = button.getAttribute('data-latest-revoked-at') || '';
+    const canApprove = button.getAttribute('data-can-approve') === '1';
+    const canReject = button.getAttribute('data-can-reject') === '1';
+    const canRevoke = button.getAttribute('data-can-revoke') === '1';
+
+    document.getElementById('stocktakeAccessReviewUsername').textContent = username;
+    document.getElementById('stocktakeAccessReviewRequestedAt').textContent = requestedAt;
+    document.getElementById('stocktakeAccessReviewReason').textContent = requestReason;
+    document.getElementById('stocktakeAccessReviewAdminNote').textContent = adminNote;
+    document.getElementById('stocktakeAccessReviewHandledBy').textContent = handledAt ? `${handledBy} • ${handledAt}` : handledBy;
+
+    const statusEl = document.getElementById('stocktakeAccessReviewStatus');
+    statusEl.textContent = status;
+    statusEl.className = 'password-reset-status-pill';
+    if (status === 'PENDING') {
+        statusEl.classList.add('pending');
+    } else if (status === 'APPROVED') {
+        statusEl.classList.add('completed');
+    } else if (status === 'CANCELLED') {
+        statusEl.classList.add('rejected');
+    } else {
+        statusEl.classList.add('pending');
+    }
+
+    const accessStateEl = document.getElementById('stocktakeAccessReviewAccessState');
+    if (accessState === 'ACTIVE') {
+        accessStateEl.textContent = activeExpiresAt ? `Active until ${activeExpiresAt}` : 'Active';
+    } else if (accessState === 'EXPIRED') {
+        accessStateEl.textContent = latestExpiresAt ? `Expired on ${latestExpiresAt}` : 'Expired';
+    } else if (accessState === 'REVOKED') {
+        accessStateEl.textContent = latestRevokedAt ? `Revoked on ${latestRevokedAt}` : 'Revoked';
+    } else {
+        accessStateEl.textContent = 'No active access';
+    }
+
+    const subtitleEl = document.getElementById('stocktakeAccessReviewSubtitle');
+    if (canApprove || canReject) {
+        subtitleEl.textContent = 'Review the request details and decide whether temporary stocktake access should be granted.';
+    } else if (canRevoke) {
+        subtitleEl.textContent = 'This user currently has active access. You can revoke it here if needed.';
+    } else {
+        subtitleEl.textContent = 'This request is in a read-only state. Review the latest decision and access details below.';
+    }
+
+    const approveBlock = document.getElementById('stocktakeAccessApproveBlock');
+    const rejectBlock = document.getElementById('stocktakeAccessRejectBlock');
+    const revokeBlock = document.getElementById('stocktakeAccessRevokeBlock');
+    const readOnlyBlock = document.getElementById('stocktakeAccessReadOnly');
+    approveBlock.classList.toggle('d-none', !canApprove);
+    rejectBlock.classList.toggle('d-none', !canReject);
+    revokeBlock.classList.toggle('d-none', !canRevoke);
+    readOnlyBlock.classList.toggle('d-none', canApprove || canReject || canRevoke);
+
+    const approveForm = document.getElementById('stocktakeAccessApproveForm');
+    const rejectForm = document.getElementById('stocktakeAccessRejectForm');
+    const revokeForm = document.getElementById('stocktakeAccessRevokeForm');
+    approveForm.action = `/stocktake-access/${encodeURIComponent(requestId)}/approve`;
+    rejectForm.action = `/stocktake-access/${encodeURIComponent(requestId)}/reject`;
+    revokeForm.action = `/stocktake-access/${encodeURIComponent(requestId)}/revoke`;
+
+    if (window.stocktakeAccessExpiryFlatpickr) {
+        const defaultExpiry = new Date();
+        defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+        window.stocktakeAccessExpiryFlatpickr.setDate(defaultExpiry, true);
+    } else {
+        document.getElementById('stocktakeAccessExpiresOn').value = '';
+    }
+    document.getElementById('stocktakeAccessApproveNote').value = '';
+    document.getElementById('stocktakeAccessRejectNote').value = '';
+    document.getElementById('stocktakeAccessRevokeNote').value = '';
+
+    const modal = new bootstrap.Modal(document.getElementById('stocktakeAccessReviewModal'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const expiryInput = document.getElementById('stocktakeAccessExpiresOn');
+    if (!expiryInput || typeof flatpickr !== 'function') {
+        return;
+    }
+
+    const defaultExpiry = new Date();
+    defaultExpiry.setDate(defaultExpiry.getDate() + 7);
+
+    window.stocktakeAccessExpiryFlatpickr = flatpickr(expiryInput, {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        minDate: 'today',
+        defaultDate: defaultExpiry,
+    });
+});
 
 function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '') {
     const params = new URLSearchParams();
@@ -3305,6 +3732,15 @@ function renderAuditTrail(data) {
         'ORDER':  `<span class="badge rounded-pill bg-info text-dark audit-badge"><i class="bi bi-clipboard-check-fill me-1"></i> ORDER</span>`,
     };
 
+    const extractStocktakeSessionLabel = (notes, fallbackReference) => {
+        const noteText = String(notes || '');
+        const match = noteText.match(/Stocktake\s+([A-Z0-9-]+)/i);
+        if (match && match[1]) {
+            return match[1];
+        }
+        return fallbackReference ? `Session #${fallbackReference}` : 'Stocktake Session';
+    };
+
     tbody.innerHTML = data.rows.map(log => {
         const type    = (log.transaction_type || '').toUpperCase();
         const badge   = typeBadge[type] || `<span class="badge rounded-pill bg-secondary audit-badge">${log.transaction_type}</span>`;
@@ -3326,6 +3762,26 @@ function renderAuditTrail(data) {
                 style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
                 onclick="viewManualInDetails('${log.audit_group_id}')">
                 <i class="bi bi-box-arrow-in-down me-1"></i>Manual IN
+            </button>`;
+        } else if (log.reference_type === 'STOCKTAKE' || String(log.change_reason || '').startsWith('STOCKTAKE_VARIANCE_')) {
+            const stocktakeLabel = extractStocktakeSessionLabel(log.notes, log.reference_id);
+            const stocktakePayload = encodeURIComponent(JSON.stringify({
+                reference_id: log.reference_id,
+                transaction_date: log.transaction_date,
+                transaction_type: log.transaction_type,
+                total_qty: log.total_qty,
+                items_summary: log.items_summary || '',
+                reason_label: log.change_reason
+                    ? (log.change_reason === 'WALKIN_PURCHASE' ? 'WALK IN PURCHASE' : log.change_reason.replace(/_/g, ' '))
+                    : '',
+                notes: log.notes || '',
+                user_name: log.user_name || '',
+                session_label: stocktakeLabel,
+            }));
+            refBtn = `<button class="btn btn-sm btn-outline-info border-0"
+                style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                onclick="event.stopPropagation(); openStocktakeVarianceDetails('${stocktakePayload}')">
+                <i class="bi bi-clipboard2-check me-1"></i>${escapeHtml(stocktakeLabel)}
             </button>`;
         } else if (log.reference_id) {
             if (log.reference_type === 'PURCHASE_ORDER') {

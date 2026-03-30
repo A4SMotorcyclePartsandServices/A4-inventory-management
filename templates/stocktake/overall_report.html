@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overall Stocktake Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #c1121f;
+            --ink: #1a1a1a;
+            --muted: #666;
+            --line: #d7d7d7;
+            --soft: #f5f5f5;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: var(--ink);
+            background: #fff;
+            padding: 24px 26px;
+            max-width: 980px;
+            margin-inline: auto;
+            font-size: 13px;
+        }
+
+        .print-bar {
+            text-align: center;
+            padding-bottom: 16px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid #ececec;
+        }
+
+        .print-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 24px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 18px;
+        }
+
+        .brand {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .brand img {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+        }
+
+        .brand-title {
+            font-size: 1.08rem;
+            font-weight: 900;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .brand-subtitle {
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px 22px;
+            margin-bottom: 16px;
+        }
+
+        .meta-card,
+        .summary-card {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--soft);
+            padding: 12px 14px;
+        }
+
+        .meta-label {
+            display: block;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+
+        .meta-value {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .session-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .session-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .session-badge.completed {
+            background: #dcfce7;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .session-badge.ongoing {
+            background: #fef3c7;
+            border-color: #fde68a;
+            color: #92400e;
+        }
+
+        .session-badge.cancelled {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .summary-stack {
+            display: grid;
+            gap: 12px;
+        }
+
+        .summary-card .value {
+            font-size: 1.15rem;
+            font-weight: 800;
+        }
+
+        .summary-card.tone-warning {
+            background: #fff7db;
+            border-color: #f6d98b;
+        }
+
+        .summary-card.tone-warning .value {
+            color: #9a6700;
+        }
+
+        .summary-card.tone-danger {
+            background: #feeceb;
+            border-color: #f5b7b1;
+        }
+
+        .summary-card.tone-danger .value {
+            color: #b42318;
+        }
+
+        .summary-card.tone-info {
+            background: #eaf4ff;
+            border-color: #b6d4fe;
+        }
+
+        .summary-card.tone-info .value {
+            color: #0a58ca;
+        }
+
+        .footer {
+            margin-top: 18px;
+            padding-top: 10px;
+            border-top: 1px solid #ececec;
+            display: flex;
+            justify-content: flex-end;
+            color: #777;
+            font-size: 0.72rem;
+        }
+
+        @media print {
+            .print-bar { display: none; }
+            body { padding: 8px 10px; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-bar">
+        <button class="print-btn" onclick="window.print()">Print Overall Stocktake Report</button>
+    </div>
+
+    <div class="header">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Logo">
+            <div>
+                <div class="brand-title">A4S Motorcycle Shop & Services</div>
+                <div class="brand-subtitle">Stock Variance / Overall Stocktake Report</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="meta-grid">
+        <div class="meta-card">
+            <span class="meta-label">Date Range</span>
+            <div class="meta-value">{{ report.date_range_display }}</div>
+        </div>
+        <div class="meta-card">
+            <span class="meta-label">Sessions Included</span>
+            <div class="meta-value">{{ report.summary.session_count }}</div>
+            {% if report.session_status_counts %}
+            <div class="session-badges">
+                {% if report.session_status_counts.completed %}
+                <span class="session-badge completed">
+                    {{ report.session_status_counts.completed }} Completed
+                </span>
+                {% endif %}
+                {% if report.session_status_counts.ongoing %}
+                <span class="session-badge ongoing">
+                    {{ report.session_status_counts.ongoing }} Ongoing
+                </span>
+                {% endif %}
+                {% if report.session_status_counts.cancelled %}
+                <span class="session-badge cancelled">
+                    {{ report.session_status_counts.cancelled }} Cancelled
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-stack">
+            <div class="summary-card">
+                <span class="meta-label">Total Items Counted</span>
+                <div class="value">{{ report.summary.item_count }}</div>
+            </div>
+            <div class="summary-card">
+                <span class="meta-label">Total Value of Counted Items</span>
+                <div class="value">&#8369;{{ "{:,.2f}".format(report.summary.counted_items_value or 0) }}</div>
+            </div>
+        </div>
+        <div class="summary-stack">
+            <div class="summary-card">
+                <span class="meta-label">No of Items w/ Variance</span>
+                <div class="value">{{ report.summary.variance_item_count }}</div>
+            </div>
+            <div class="summary-card tone-warning">
+                <span class="meta-label">Total Value of Items w/ Variance</span>
+                <div class="value">&#8369;{{ "{:,.2f}".format(report.summary.variance_items_value or 0) }}</div>
+            </div>
+        </div>
+        <div class="summary-stack">
+            <div class="summary-card">
+                <span class="meta-label">No of Items w/ Shortage</span>
+                <div class="value">{{ report.summary.shortage_item_count }}</div>
+            </div>
+            <div class="summary-card tone-danger">
+                <span class="meta-label">Total Value of Items w/ Shortage</span>
+                <div class="value">&#8369;{{ "{:,.2f}".format(report.summary.shortage_items_value or 0) }}</div>
+            </div>
+        </div>
+        <div class="summary-stack">
+            <div class="summary-card">
+                <span class="meta-label">No of Items w/ Overage</span>
+                <div class="value">{{ report.summary.overage_item_count }}</div>
+            </div>
+            <div class="summary-card tone-info">
+                <span class="meta-label">Total Value of Items w/ Overage</span>
+                <div class="value">&#8369;{{ "{:,.2f}".format(report.summary.overage_items_value or 0) }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">This is a system-generated aggregate stocktake report.</div>
+</body>
+</html>

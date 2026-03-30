@@ -1182,6 +1182,10 @@ def get_sales_report_by_date(report_date):
         2,
     )
 
+    paid_sales = sorted(
+        paid_sales,
+        key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
+    )
     items_summary = _summarize_items_for_profit(financial_paid_sales)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
@@ -1494,6 +1498,10 @@ def get_sales_report_by_range(start_date, end_date):
         2,
     )
 
+    paid_sales = sorted(
+        paid_sales,
+        key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
+    )
     items_summary = _summarize_items_for_profit(financial_paid_sales)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"

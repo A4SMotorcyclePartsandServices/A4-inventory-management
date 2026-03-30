@@ -38,6 +38,7 @@ from services.analytics_service import (
     get_restock_debug_items,
 )
 from services.sales_analytics_service import get_sales_analytics_snapshot
+from services.stocktake_access_service import get_stocktake_access_state
 
 # ------------------------
 # Importers (CSV handling)
@@ -131,9 +132,14 @@ def add_security_headers(response):
 
 @app.context_processor
 def inject_globals():
+    current_user = getattr(g, "current_user", None)
     return {
         "current_date": date.today().isoformat(),
-        "current_user": getattr(g, "current_user", None),
+        "current_user": current_user,
+        "stocktake_access_state": get_stocktake_access_state(
+            current_user.get("id") if current_user else None,
+            user_role=current_user.get("role") if current_user else None,
+        ),
     }
 init_db()  # Safe to call on startup (creates tables if missing)
 
@@ -283,13 +289,27 @@ def sales_analytics():
 
     start_date = start_obj.isoformat()
     end_date = end_obj.isoformat()
-    analytics_data = get_sales_analytics_snapshot(start_date, end_date)
+    top_items_category = (request.args.get("top_items_category") or "").strip()
+
+    try:
+        top_items_limit = int((request.args.get("top_items_limit") or "10").strip())
+    except ValueError:
+        top_items_limit = 10
+
+    analytics_data = get_sales_analytics_snapshot(
+        start_date,
+        end_date,
+        top_items_limit=top_items_limit,
+        top_items_category=top_items_category,
+    )
 
     return render_template(
         "sales_analytics.html",
         analytics=analytics_data,
         start_date=start_date,
         end_date=end_date,
+        top_items_limit=analytics_data["filters"]["top_items_limit"],
+        top_items_category=analytics_data["filters"]["top_items_category"],
     )
 
 
