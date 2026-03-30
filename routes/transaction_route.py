@@ -57,12 +57,14 @@ def _get_active_vendors():
 
 
 @transaction_bp.route("/transaction/out")
+@login_required
 def transaction_out():
     context = get_transaction_out_context()
     return render_template("transactions/out.html", **context)
 
 
 @transaction_bp.route("/api/bundles/sale-options")
+@login_required
 def bundle_sale_options_api():
     try:
         return jsonify({"bundles": get_active_bundles_for_sale()})
@@ -71,6 +73,7 @@ def bundle_sale_options_api():
 
 
 @transaction_bp.route("/api/bundles/<int:bundle_id>/sale-config")
+@login_required
 def bundle_sale_config_api(bundle_id):
     try:
         return jsonify(get_bundle_sale_config(bundle_id))
@@ -87,12 +90,14 @@ def transaction_refund():
 
 
 @transaction_bp.route("/transaction/in")
+@login_required
 def transaction_in():
     prefilled_id = request.args.get('selected_id')
     return render_template("transactions/in.html", prefilled_id=prefilled_id)
 
 
 @transaction_bp.route("/transaction/items")
+@login_required
 def manage_items():
     categories = get_unique_categories()
     vendors = _get_active_vendors()
@@ -108,6 +113,7 @@ def manage_items():
 
 
 @transaction_bp.route("/transaction/items/edit/<int:item_id>")
+@login_required
 def edit_item_page(item_id):
     categories = get_unique_categories()
     vendors = _get_active_vendors()
@@ -126,6 +132,7 @@ def edit_item_page(item_id):
 
 
 @transaction_bp.route("/items/add", methods=["POST"])
+@login_required
 def add_item():
     existing_cat = request.form.get("existing_category", "").strip()
     new_cat = request.form.get("new_category", "").strip()
@@ -157,6 +164,7 @@ def add_item():
     try:
         new_item_id = add_item_to_db(form_data, user_id=session.get('user_id'), username=session.get('username'))
     except ValueError as e:
+        flash(str(e), "danger")
         return redirect(url_for(
             'transaction.manage_items',
             return_to=return_to,
@@ -171,6 +179,7 @@ def add_item():
 
 
 @transaction_bp.route("/items/<int:item_id>/edit", methods=["POST"])
+@login_required
 def update_item(item_id):
     try:
         update_item_record(
@@ -190,6 +199,7 @@ def update_item(item_id):
 
 
 @transaction_bp.route("/inventory/in", methods=["POST"])
+@login_required
 def process_transaction_in():
     item_id = request.form.get("item_id")
     quantity = request.form.get("quantity")
@@ -223,6 +233,7 @@ def process_transaction_in():
 
 
 @transaction_bp.route("/transaction/out/save", methods=["POST"])
+@login_required
 def save_transaction_out():
     data = request.get_json()
     try:

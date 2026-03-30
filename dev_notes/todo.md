@@ -5,7 +5,7 @@
 - [X] ~~*Admin page Sales tab: filter for payment status*~~ [2026-03-17]
 - [X] ~~*Admin page Sales tab: print formatting (view + print)*~~ [2026-03-27]
 - [ ] System tracking for all actions (audit improvements)
-- [ ] Database enforcement to prevent duplicate records
+- [X] ~~*Database enforcement to prevent duplicate records*~~ [2026-03-30]
 - [X] ~~*Payabales Page*~~ [2026-03-21]
 - [X] ~~*Centralize vendor data (currently in item table and purchase_orders)*~~ [2026-03-15]
 
@@ -33,11 +33,11 @@
   - 100+
 
 ## Dashboard
-- [ ] Dashboard page
+- [X] ~~*Dashboard page*~~ [2026-03-30]
 
 ## Security / Deployment
 
-- [ ] Protect against SQL injection
+- [X] ~~*Protect against SQL injection*~~ [2026-03-30]
 - [ ] Prepare env vars before deployment
 
 ## Variance Page

@@ -192,7 +192,7 @@ Applied:
 
 - [x] Decide whether debug mode should stay, be hidden, or be removed after validation
   - hidden after validation
-- [ ] Clean up old `reorder_level` usage in the wider product
+- [X] ~~*Clean up old `reorder_level` usage in the wider product*~~ [2026-03-30]
   - the current algorithm no longer relies on it for restock alerts
   - field still exists in DB/forms/imports for legacy reasons
 

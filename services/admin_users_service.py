@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime
 
+from psycopg2 import errors as pg_errors
 from werkzeug.security import generate_password_hash
 
 from db.database import get_db
@@ -406,6 +407,9 @@ def add_service_record(name, existing_category, new_category):
     normalized_name = (name or "").strip()
     normalized_new_category = (new_category or "").strip()
 
+    if not normalized_name:
+        return {"status": "missing_fields"}
+
     conn = get_db()
     try:
         if existing_category == "__OTHER__" and normalized_new_category:
@@ -434,6 +438,9 @@ def add_service_record(name, existing_category, new_category):
         )
         conn.commit()
         return {"status": "ok", "name": normalized_name, "category": category}
+    except pg_errors.UniqueViolation:
+        conn.rollback()
+        return {"status": "duplicate", "name": normalized_name}
     finally:
         conn.close()
 
@@ -965,6 +972,9 @@ def add_payment_method_record(name, category):
         )
         conn.commit()
         return {"status": "ok", "name": normalized_name}
+    except pg_errors.UniqueViolation:
+        conn.rollback()
+        return {"status": "duplicate", "name": normalized_name}
     finally:
         conn.close()
 

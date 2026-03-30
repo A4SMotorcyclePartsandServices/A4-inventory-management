@@ -83,6 +83,7 @@ def init_db():
     cur.execute("ALTER TABLE items ALTER COLUMN markup TYPE NUMERIC(12,4)")
     cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES vendors(id)")
     cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()")
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_items_name_unique_normalized ON items ((LOWER(TRIM(name))))")
     cur.execute("""
         UPDATE items
         SET markup = CASE
@@ -115,6 +116,7 @@ def init_db():
         is_active   INTEGER DEFAULT 1
     )
     """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_methods_name_unique_normalized ON payment_methods ((LOWER(TRIM(name))))")
 
     # 6. CUSTOMERS TABLE
     cur.execute("""
@@ -126,6 +128,7 @@ def init_db():
         created_at      TIMESTAMP DEFAULT NOW()
     )
     """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_customer_no_unique_normalized ON customers ((LOWER(TRIM(customer_no))))")
 
     # 7. VEHICLES TABLE
     cur.execute("""
@@ -137,6 +140,11 @@ def init_db():
         created_at  TIMESTAMP DEFAULT NOW(),
         updated_at  TIMESTAMP DEFAULT NOW()
     )
+    """)
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_vehicles_customer_vehicle_unique_active
+    ON vehicles (customer_id, (LOWER(TRIM(vehicle_name))))
+    WHERE is_active = 1
     """)
 
     # 8. SALES TABLE
@@ -204,6 +212,7 @@ def init_db():
         is_active   INTEGER DEFAULT 1
     )
     """)
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_services_name_unique_normalized ON services ((LOWER(TRIM(name))))")
 
     # 10b. BUNDLES TABLES (Admin-maintained bundle master)
     cur.execute("""

@@ -45,10 +45,9 @@ def _suggest_cash_in_category(payment_category):
 
 
 def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
-    params = list(FLOATING_PAYMENT_CATEGORIES)
-    placeholders = ','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))
+    params = [list(FLOATING_PAYMENT_CATEGORIES)]
 
-    query = f"""
+    query = """
         SELECT
             s.id AS sale_id,
             s.sales_number,
@@ -63,7 +62,7 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
         LEFT JOIN users u ON u.id = s.user_id
         WHERE s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND pm.category IN ({placeholders})
+          AND pm.category = ANY(%s)
     """
 
     if date_from:
@@ -78,10 +77,9 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
 
 
 def _get_non_cash_debt_payments(conn, date_from=None, date_to=None):
-    params = list(FLOATING_PAYMENT_CATEGORIES)
-    placeholders = ','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))
+    params = [list(FLOATING_PAYMENT_CATEGORIES)]
 
-    query = f"""
+    query = """
         SELECT
             dp.id AS debt_payment_id,
             dp.sale_id,
@@ -97,7 +95,7 @@ def _get_non_cash_debt_payments(conn, date_from=None, date_to=None):
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u ON u.id = dp.paid_by
         WHERE COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND pm.category IN ({placeholders})
+          AND pm.category = ANY(%s)
     """
 
     if date_from:
@@ -116,13 +114,12 @@ def _get_active_float_claimed_sale_ids(conn, sale_ids, claimed_on_or_before=None
     if not normalized_ids:
         return set()
 
-    placeholders = ','.join(['%s'] * len(normalized_ids))
-    params = list(normalized_ids)
-    query = f"""
+    params = [normalized_ids]
+    query = """
         SELECT DISTINCT cfc.sale_id
         FROM cash_float_claims cfc
         JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
-        WHERE cfc.sale_id IN ({placeholders})
+        WHERE cfc.sale_id = ANY(%s)
           AND COALESCE(ce.is_deleted, FALSE) = FALSE
     """
 
@@ -139,13 +136,12 @@ def _get_active_float_claimed_debt_payment_ids(conn, debt_payment_ids, claimed_o
     if not normalized_ids:
         return set()
 
-    placeholders = ','.join(['%s'] * len(normalized_ids))
-    params = list(normalized_ids)
-    query = f"""
+    params = [normalized_ids]
+    query = """
         SELECT DISTINCT cdpc.debt_payment_id
         FROM cash_debt_payment_claims cdpc
         JOIN cash_entries ce ON ce.id = cdpc.cash_entry_id
-        WHERE cdpc.debt_payment_id IN ({placeholders})
+        WHERE cdpc.debt_payment_id = ANY(%s)
           AND COALESCE(ce.is_deleted, FALSE) = FALSE
     """
 
@@ -166,10 +162,9 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     [Source 1] Direct cash sales that are fully Paid.
     Always CASH_IN — never appears when filtering for CASH_OUT.
     """
-    placeholders = ','.join(['%s'] * len(PHYSICAL_CASH_CATEGORIES))
-    params = list(PHYSICAL_CASH_CATEGORIES)
+    params = [list(PHYSICAL_CASH_CATEGORIES)]
 
-    query = f"""
+    query = """
         SELECT
             s.id            AS reference_id,
             s.sales_number,
@@ -182,7 +177,7 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
         JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN users u       ON u.id  = s.user_id
         LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
-        WHERE pm.category IN ({placeholders})
+        WHERE pm.category = ANY(%s)
         AND s.status = 'Paid'
         AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
     """
@@ -202,10 +197,9 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
     [Source 2] Cash payments that settled Utang balances.
     Always CASH_IN — never appears when filtering for CASH_OUT.
     """
-    placeholders = ','.join(['%s'] * len(PHYSICAL_CASH_CATEGORIES))
-    params = list(PHYSICAL_CASH_CATEGORIES)
+    params = [list(PHYSICAL_CASH_CATEGORIES)]
 
-    query = f"""
+    query = """
         SELECT
             dp.id           AS reference_id,
             s.sales_number,
@@ -217,7 +211,7 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
         JOIN sales s            ON s.id  = dp.sale_id
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u       ON u.id  = dp.paid_by
-        WHERE pm.category IN ({placeholders})
+        WHERE pm.category = ANY(%s)
     """
 
     if date_from:
@@ -579,9 +573,7 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
     }
 
     conn = get_db()
-    placeholders = ",".join(["%s"] * len(normalized_dates))
-
-    mechanic_rows = conn.execute(f"""
+    mechanic_rows = conn.execute("""
         SELECT
             COALESCE(payout_for_date, DATE(created_at)) AS payout_date,
             reference_id
@@ -591,11 +583,11 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND category = 'Mechanic Payout'
           AND reference_type = 'MECHANIC_PAYOUT'
           AND COALESCE(is_deleted, FALSE) = FALSE
-          AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
+          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s)
           AND reference_id IS NOT NULL
-    """, [branch_id] + normalized_dates).fetchall()
+    """, [branch_id, normalized_dates]).fetchall()
 
-    legacy_rows = conn.execute(f"""
+    legacy_rows = conn.execute("""
         SELECT
             COALESCE(payout_for_date, DATE(created_at)) AS payout_date,
             description
@@ -605,8 +597,8 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND category = 'Mechanic Payout'
           AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
           AND COALESCE(is_deleted, FALSE) = FALSE
-          AND COALESCE(payout_for_date, DATE(created_at)) IN ({placeholders})
-    """, [branch_id] + normalized_dates).fetchall()
+          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s)
+    """, [branch_id, normalized_dates]).fetchall()
     conn.close()
 
     for row in mechanic_rows:

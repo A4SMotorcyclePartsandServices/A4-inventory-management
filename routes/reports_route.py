@@ -5,6 +5,7 @@ from datetime import datetime, date
 from flask import Response
 from db.database import get_db
 from flask import Blueprint, request, render_template, redirect, url_for, flash
+from auth.utils import login_required
 from services.reports_service import (
     get_sales_by_date,
     get_sales_by_range,
@@ -79,6 +80,7 @@ def _build_sales_report_context():
 
 
 @reports_bp.route("/reports/sales-receipt/<int:sale_id>")
+@login_required
 def sales_receipt_report(sale_id):
     try:
         data = get_sale_refund_context(sale_id)
@@ -98,6 +100,7 @@ def sales_receipt_report(sale_id):
 
 
 @reports_bp.route("/reports/purchase-order/<int:po_id>")
+@login_required
 def purchase_order_report(po_id):
     po, items = get_purchase_order_export_data(po_id)
     if not po:
@@ -153,6 +156,7 @@ def purchase_order_report(po_id):
 
 
 @reports_bp.route("/reports/daily")
+@login_required
 def daily_report():
     report_date = request.args.get("date")
 
@@ -163,6 +167,7 @@ def daily_report():
 
 
 @reports_bp.route("/reports/range")
+@login_required
 def range_report():
     start = request.args.get("start")
     end = request.args.get("end")
@@ -174,6 +179,7 @@ def range_report():
 
 
 @reports_bp.route("/reports/sales-summary")
+@login_required
 def sales_summary_report():
     context = _build_sales_report_context()
     if context is None:
@@ -182,6 +188,7 @@ def sales_summary_report():
 
 
 @reports_bp.route("/reports/sales-report-summary")
+@login_required
 def sales_report_summary_pdf():
     context = _build_sales_report_context()
     if context is None:
@@ -190,6 +197,7 @@ def sales_report_summary_pdf():
 
 
 @reports_bp.route("/reports/mechanic-supply")
+@login_required
 def mechanic_supply_report():
     report_date = request.args.get("report_date")
     start_date = request.args.get("start_date")
@@ -216,6 +224,7 @@ def mechanic_supply_report():
 
 
 @reports_bp.route("/export/inventory-snapshot")
+@login_required
 def export_inventory_snapshot():
     """
     Exports all items with current stock, total units sold all-time, selling price, and total revenue.
@@ -289,6 +298,7 @@ def export_inventory_snapshot():
 
 
 @reports_bp.route("/export/items")
+@login_required
 def export_items_csv():
     """
     Exports the current item catalog shown in the inventory page.
@@ -375,6 +385,7 @@ def export_items_csv():
 
 
 @reports_bp.route("/export/items-sold-today")
+@login_required
 def export_items_sold_today():
     today = date.today()
     today_iso = today.isoformat()
@@ -420,8 +431,7 @@ def export_items_sold_today():
     rows = []
     if sales_rows:
         sale_ids = [row["sale_id"] for row in sales_rows]
-        placeholders = ",".join(["%s"] * len(sale_ids))
-        rows = conn.execute(f"""
+        rows = conn.execute("""
             SELECT
                 si.sale_id,
                 COALESCE(i.name, '') AS item_name,
@@ -429,9 +439,9 @@ def export_items_sold_today():
                 COALESCE(si.final_unit_price, 0) AS final_unit_price
             FROM sales_items si
             LEFT JOIN items i ON i.id = si.item_id
-            WHERE si.sale_id IN ({placeholders})
+            WHERE si.sale_id = ANY(%s)
             ORDER BY si.sale_id ASC
-        """, sale_ids).fetchall()
+        """, (sale_ids,)).fetchall()
     conn.close()
 
     output = []
@@ -475,6 +485,7 @@ def export_items_sold_today():
 
 
 @reports_bp.route("/export/services-sold-today")
+@login_required
 def export_services_sold_today():
     today = date.today()
     today_iso = today.isoformat()
@@ -532,17 +543,16 @@ def export_services_sold_today():
     rows = []
     if sale_rows:
         sale_ids = [row["sale_id"] for row in sale_rows]
-        placeholders = ",".join(["%s"] * len(sale_ids))
-        rows = conn.execute(f"""
+        rows = conn.execute("""
             SELECT
                 ss.sale_id,
                 sv.name AS service_name,
                 ss.price
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id IN ({placeholders})
+            WHERE ss.sale_id = ANY(%s)
             ORDER BY ss.sale_id ASC, sv.name ASC
-        """, sale_ids).fetchall()
+        """, (sale_ids,)).fetchall()
 
     conn.close()
 

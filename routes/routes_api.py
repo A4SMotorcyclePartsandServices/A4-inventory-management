@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from db.database import get_db
-from auth.utils import admin_required
+from auth.utils import admin_required, login_required
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -90,6 +90,7 @@ def top_items_chart():
     }
 
 @dashboard_api.route("/api/search/services")
+@login_required
 def search_services():
     query = request.args.get('q', '').strip()
     include_inactive = str(request.args.get('include_inactive', '')).strip().lower() in {'1', 'true', 'yes', 'on'}
@@ -97,23 +98,27 @@ def search_services():
     if not query and not show_all:
         return jsonify({"services": []})
 
-    active_clause = "" if include_inactive else "AND is_active = 1"
-    query_sql = f"""
+    query_parts = [
+        """
         SELECT id, name, category, is_active
         FROM services
         WHERE 1=1
-        {active_clause}
-    """
+        """
+    ]
     params = []
+
+    if not include_inactive:
+        query_parts.append("AND is_active = 1")
 
     if not show_all:
         words = query.split()
         where_clause = " AND ".join(["(name ILIKE %s OR category ILIKE %s)" for _ in words])
-        query_sql += f" AND {where_clause}"
+        query_parts.append("AND " + where_clause)
         for word in words:
             params.extend([f'%{word}%', f'%{word}%'])
 
-    query_sql += " ORDER BY category ASC, name ASC LIMIT 50"
+    query_parts.append("ORDER BY category ASC, name ASC LIMIT 50")
+    query_sql = "\n".join(query_parts)
 
     conn = get_db()
     cursor = conn.execute(query_sql, params)
@@ -125,6 +130,7 @@ def search_services():
 
 
 @dashboard_api.route("/api/search/items")
+@login_required
 def search_items():
     query = request.args.get('q', '').strip()
     if not query:
@@ -141,7 +147,7 @@ def search_items():
         params.extend([pattern, pattern, pattern])
 
     conn = get_db()
-    cursor = conn.execute(f"""
+    query_sql = """
         SELECT
             id,
             name,
@@ -149,10 +155,11 @@ def search_items():
             COALESCE(a4s_selling_price, 0) AS a4s_selling_price,
             COALESCE(cost_per_piece, 0) AS cost_per_piece
         FROM items
-        WHERE {where_clause}
+        WHERE """ + where_clause + """
         ORDER BY name ASC
         LIMIT 20
-    """, params)
+    """
+    cursor = conn.execute(query_sql, params)
 
     items = [dict(row) for row in cursor.fetchall()]
     conn.close()

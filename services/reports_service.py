@@ -68,15 +68,15 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         sale_ids = list(sale_totals.keys())
         placeholders = ",".join(["%s"] * len(sale_ids))
         claimed_rows = conn.execute(
-            f"""
+            """
             SELECT DISTINCT cfc.sale_id
             FROM cash_float_claims cfc
             JOIN cash_entries ce ON ce.id = cfc.cash_entry_id
-            WHERE cfc.sale_id IN ({placeholders})
+            WHERE cfc.sale_id = ANY(%s)
               AND COALESCE(ce.is_deleted, FALSE) = FALSE
               AND DATE(ce.created_at) <= %s
             """,
-            sale_ids + [end_date],
+            [sale_ids, end_date],
         ).fetchall()
         claimed_sale_ids = {int(row["sale_id"]) for row in claimed_rows}
 
@@ -89,15 +89,15 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         debt_payment_ids = list(debt_payment_totals.keys())
         placeholders = ",".join(["%s"] * len(debt_payment_ids))
         claimed_rows = conn.execute(
-            f"""
+            """
             SELECT DISTINCT cdpc.debt_payment_id
             FROM cash_debt_payment_claims cdpc
             JOIN cash_entries ce ON ce.id = cdpc.cash_entry_id
-            WHERE cdpc.debt_payment_id IN ({placeholders})
+            WHERE cdpc.debt_payment_id = ANY(%s)
               AND COALESCE(ce.is_deleted, FALSE) = FALSE
               AND DATE(ce.created_at) <= %s
             """,
-            debt_payment_ids + [end_date],
+            [debt_payment_ids, end_date],
         ).fetchall()
         claimed_debt_payment_ids = {int(row["debt_payment_id"]) for row in claimed_rows}
 
@@ -220,9 +220,8 @@ def _build_mechanic_supply_report_context(start_date, end_date):
         }
 
     sale_ids = [row["id"] for row in sales_rows]
-    placeholders = ",".join(["%s"] * len(sale_ids))
     item_rows = conn.execute(
-        f"""
+        """
         SELECT
             si.sale_id,
             i.name AS item_name,
@@ -233,10 +232,10 @@ def _build_mechanic_supply_report_context(start_date, end_date):
             (si.quantity * si.cost_per_piece_snapshot) AS cost_total
         FROM sales_items si
         JOIN items i ON i.id = si.item_id
-        WHERE si.sale_id IN ({placeholders})
+        WHERE si.sale_id = ANY(%s)
         ORDER BY si.sale_id ASC, i.name ASC
         """,
-        sale_ids,
+        (sale_ids,),
     ).fetchall()
     conn.close()
 
@@ -277,10 +276,8 @@ def _load_bundles_by_sale(conn, sale_ids):
     if not sale_ids:
         return {}
 
-    placeholders = ",".join(["%s"] * len(sale_ids))
-
     bundle_rows = conn.execute(
-        f"""
+        """
         SELECT
             sb.id,
             sb.sale_id,
@@ -296,34 +293,33 @@ def _load_bundles_by_sale(conn, sale_ids):
             sb.mechanic_share_snapshot,
             sb.bundle_price_snapshot
         FROM sales_bundles sb
-        WHERE sb.sale_id IN ({placeholders})
+        WHERE sb.sale_id = ANY(%s)
         ORDER BY sb.sale_id ASC, sb.id ASC
         """,
-        sale_ids,
+        (sale_ids,),
     ).fetchall()
 
     if not bundle_rows:
         return {}
 
-    bundle_id_placeholders = ",".join(["%s"] * len(bundle_rows))
     bundle_ids = [row["id"] for row in bundle_rows]
 
     bundle_service_rows = conn.execute(
-        f"""
+        """
         SELECT
             sbs.sales_bundle_id,
             sbs.service_id,
             sbs.service_name_snapshot,
             sbs.sort_order
         FROM sales_bundle_services sbs
-        WHERE sbs.sales_bundle_id IN ({bundle_id_placeholders})
+        WHERE sbs.sales_bundle_id = ANY(%s)
         ORDER BY sbs.sales_bundle_id ASC, sbs.sort_order ASC, sbs.id ASC
         """,
-        bundle_ids,
+        (bundle_ids,),
     ).fetchall()
 
     bundle_item_rows = conn.execute(
-        f"""
+        """
         SELECT
             sbi.sales_bundle_id,
             sbi.item_id,
@@ -335,10 +331,10 @@ def _load_bundles_by_sale(conn, sale_ids):
             sbi.is_included,
             sbi.sort_order
         FROM sales_bundle_items sbi
-        WHERE sbi.sales_bundle_id IN ({bundle_id_placeholders})
+        WHERE sbi.sales_bundle_id = ANY(%s)
         ORDER BY sbi.sales_bundle_id ASC, sbi.sort_order ASC, sbi.id ASC
         """,
-        bundle_ids,
+        (bundle_ids,),
     ).fetchall()
 
     services_by_bundle = {}
@@ -676,9 +672,7 @@ def get_mechanic_payouts_for_dates(report_dates):
         return {}
 
     conn = get_db()
-    placeholders = ",".join(["%s"] * len(normalized_dates))
-
-    sales_rows = conn.execute(f"""
+    sales_rows = conn.execute("""
         SELECT
             DATE(s.transaction_date) AS payout_date,
             s.id,
@@ -692,11 +686,11 @@ def get_mechanic_payouts_for_dates(report_dates):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        WHERE DATE(s.transaction_date) IN ({placeholders})
+        WHERE DATE(s.transaction_date) = ANY(%s)
           AND s.mechanic_id IS NOT NULL
-    """, normalized_dates).fetchall()
+    """, (normalized_dates,)).fetchall()
 
-    debt_collected_rows = conn.execute(f"""
+    debt_collected_rows = conn.execute("""
         SELECT
             DATE(dp.paid_at) AS payout_date,
             dp.service_portion,
@@ -710,9 +704,9 @@ def get_mechanic_payouts_for_dates(report_dates):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(dp.paid_at)
-        WHERE DATE(dp.paid_at) IN ({placeholders})
+        WHERE DATE(dp.paid_at) = ANY(%s)
           AND s.mechanic_id IS NOT NULL
-    """, normalized_dates).fetchall()
+    """, (normalized_dates,)).fetchall()
 
     if not sales_rows and not debt_collected_rows:
         conn.close()
@@ -722,12 +716,11 @@ def get_mechanic_payouts_for_dates(report_dates):
     services_by_sale = {}
     bundles_by_sale = {}
     if sale_ids:
-        sale_id_placeholders = ",".join(["%s"] * len(sale_ids))
-        services_rows = conn.execute(f"""
+        services_rows = conn.execute("""
             SELECT ss.sale_id, ss.price
             FROM sales_services ss
-            WHERE ss.sale_id IN ({sale_id_placeholders})
-        """, sale_ids).fetchall()
+            WHERE ss.sale_id = ANY(%s)
+        """, (sale_ids,)).fetchall()
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append({"price": row["price"]})
         bundles_by_sale = _load_bundles_by_sale(conn, sale_ids)
@@ -846,9 +839,7 @@ def get_all_unresolved_sales(conn):
         return []
 
     sale_ids     = [row["id"] for row in unresolved_rows]
-    placeholders = ",".join(["%s"] * len(sale_ids))
-
-    items_rows = conn.execute(f"""
+    items_rows = conn.execute("""
         SELECT
             si.sale_id,
             i.name                  AS item_name,
@@ -860,20 +851,20 @@ def get_all_unresolved_sales(conn):
             (si.quantity * si.final_unit_price) AS line_total
         FROM sales_items si
         JOIN items i ON i.id = si.item_id
-        WHERE si.sale_id IN ({placeholders})
+        WHERE si.sale_id = ANY(%s)
         ORDER BY si.sale_id, i.name
-    """, sale_ids).fetchall()
+    """, (sale_ids,)).fetchall()
 
-    services_rows = conn.execute(f"""
+    services_rows = conn.execute("""
         SELECT
             ss.sale_id,
             sv.name AS service_name,
             ss.price
         FROM sales_services ss
         JOIN services sv ON sv.id = ss.service_id
-        WHERE ss.sale_id IN ({placeholders})
+        WHERE ss.sale_id = ANY(%s)
         ORDER BY ss.sale_id, sv.name
-    """, sale_ids).fetchall()
+    """, (sale_ids,)).fetchall()
 
     items_by_sale    = {}
     services_by_sale = {}
@@ -1005,8 +996,7 @@ def get_sales_report_by_date(report_date):
     refund_items_by_id = {}
 
     if paid_sale_ids:
-        placeholders = ",".join(["%s"] * len(paid_sale_ids))
-        items_rows = conn.execute(f"""
+        items_rows = conn.execute("""
             SELECT
                 si.sale_id,
                 i.name AS item_name,
@@ -1021,29 +1011,27 @@ def get_sales_report_by_date(report_date):
                 (si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)) AS profit_total
             FROM sales_items si
             JOIN items i ON i.id = si.item_id
-            WHERE si.sale_id IN ({placeholders})
+            WHERE si.sale_id = ANY(%s)
             ORDER BY si.sale_id, i.name
-        """, paid_sale_ids).fetchall()
+        """, (paid_sale_ids,)).fetchall()
         for row in items_rows:
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        placeholders = ",".join(["%s"] * len(all_sale_ids))
-        services_rows = conn.execute(f"""
+        services_rows = conn.execute("""
             SELECT ss.sale_id, sv.name AS service_name, ss.price
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id IN ({placeholders})
+            WHERE ss.sale_id = ANY(%s)
             ORDER BY ss.sale_id, sv.name
-        """, all_sale_ids).fetchall()
+        """, (all_sale_ids,)).fetchall()
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
         bundles_by_sale = _load_bundles_by_sale(conn, all_sale_ids)
 
     refund_ids = [row["id"] for row in refund_rows]
     if refund_ids:
-        placeholders = ",".join(["%s"] * len(refund_ids))
-        refund_item_rows = conn.execute(f"""
+        refund_item_rows = conn.execute("""
             SELECT
                 sri.refund_id,
                 i.name AS item_name,
@@ -1052,9 +1040,9 @@ def get_sales_report_by_date(report_date):
                 sri.line_total
             FROM sale_refund_items sri
             JOIN items i ON i.id = sri.item_id
-            WHERE sri.refund_id IN ({placeholders})
+            WHERE sri.refund_id = ANY(%s)
             ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
-        """, refund_ids).fetchall()
+        """, (refund_ids,)).fetchall()
         for row in refund_item_rows:
             refund_items_by_id.setdefault(row["refund_id"], []).append({
                 "item_name": row["item_name"],
@@ -1322,8 +1310,7 @@ def get_sales_report_by_range(start_date, end_date):
     refund_items_by_id = {}
 
     if paid_sale_ids:
-        placeholders = ",".join(["%s"] * len(paid_sale_ids))
-        items_rows = conn.execute(f"""
+        items_rows = conn.execute("""
             SELECT
                 si.sale_id,
                 i.name AS item_name,
@@ -1338,29 +1325,27 @@ def get_sales_report_by_range(start_date, end_date):
                 (si.quantity * (si.final_unit_price - si.cost_per_piece_snapshot)) AS profit_total
             FROM sales_items si
             JOIN items i ON i.id = si.item_id
-            WHERE si.sale_id IN ({placeholders})
+            WHERE si.sale_id = ANY(%s)
             ORDER BY si.sale_id, i.name
-        """, paid_sale_ids).fetchall()
+        """, (paid_sale_ids,)).fetchall()
         for row in items_rows:
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        placeholders = ",".join(["%s"] * len(all_sale_ids))
-        services_rows = conn.execute(f"""
+        services_rows = conn.execute("""
             SELECT ss.sale_id, sv.name AS service_name, ss.price
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id IN ({placeholders})
+            WHERE ss.sale_id = ANY(%s)
             ORDER BY ss.sale_id, sv.name
-        """, all_sale_ids).fetchall()
+        """, (all_sale_ids,)).fetchall()
         for row in services_rows:
             services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
         bundles_by_sale = _load_bundles_by_sale(conn, all_sale_ids)
 
     refund_ids = [row["id"] for row in refund_rows]
     if refund_ids:
-        placeholders = ",".join(["%s"] * len(refund_ids))
-        refund_item_rows = conn.execute(f"""
+        refund_item_rows = conn.execute("""
             SELECT
                 sri.refund_id,
                 i.name AS item_name,
@@ -1369,9 +1354,9 @@ def get_sales_report_by_range(start_date, end_date):
                 sri.line_total
             FROM sale_refund_items sri
             JOIN items i ON i.id = sri.item_id
-            WHERE sri.refund_id IN ({placeholders})
+            WHERE sri.refund_id = ANY(%s)
             ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
-        """, refund_ids).fetchall()
+        """, (refund_ids,)).fetchall()
         for row in refund_item_rows:
             refund_items_by_id.setdefault(row["refund_id"], []).append({
                 "item_name": row["item_name"],

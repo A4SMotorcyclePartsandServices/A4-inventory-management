@@ -4,6 +4,18 @@ from utils.formatters import format_date
 PER_PAGE = 50
 
 
+def _build_where_clause(conditions, *, prefix="WHERE"):
+    if not conditions:
+        return ""
+    return f" {prefix} " + " AND ".join(conditions)
+
+
+def _build_and_clause(conditions):
+    if not conditions:
+        return ""
+    return " AND " + " AND ".join(conditions)
+
+
 def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, has_discount=False):
     """
     Paginated audit trail with optional filters.
@@ -62,10 +74,10 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             )
         """)
 
-    inv_where_clause = ("WHERE " + " AND ".join(inv_conditions)) if inv_conditions else ""
-    sale_extra_clause = (" AND " + " AND ".join(sale_conditions)) if sale_conditions else ""
+    inv_where_clause = _build_where_clause(inv_conditions)
+    sale_extra_clause = _build_and_clause(sale_conditions)
 
-    count_query = f"""
+    count_query = """
         SELECT COUNT(*) FROM (
             SELECT
                 t.reference_id,
@@ -74,7 +86,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
                 t.change_reason
             FROM inventory_transactions t
             JOIN items i ON t.item_id = i.id
-            {inv_where_clause}
+    """ + inv_where_clause + """
             GROUP BY t.reference_id, t.transaction_date, t.transaction_type, t.change_reason
 
             UNION ALL
@@ -91,13 +103,13 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
                 WHERE t2.reference_type = 'SALE'
                   AND CAST(t2.reference_id AS TEXT) = CAST(s.id AS TEXT)
             )
-            {sale_extra_clause}
+    """ + sale_extra_clause + """
         )
     """
     total = conn.execute(count_query, inv_params + sale_params).fetchone()[0]
     total_pages = max(1, -(-total // PER_PAGE))
 
-    data_query = f"""
+    data_query = """
         SELECT
             MIN(t.id) AS audit_group_id,
             t.transaction_date,
@@ -117,7 +129,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             ON t.reference_id = s.id AND t.reference_type = 'SALE'
         LEFT JOIN purchase_orders po
             ON t.reference_id = po.id AND t.reference_type = 'PURCHASE_ORDER'
-        {inv_where_clause}
+    """ + inv_where_clause + """
         GROUP BY
             t.reference_id,
             t.transaction_date,
@@ -156,7 +168,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             WHERE t2.reference_type = 'SALE'
               AND CAST(t2.reference_id AS TEXT) = CAST(s.id AS TEXT)
         )
-        {sale_extra_clause}
+    """ + sale_extra_clause + """
 
         ORDER BY transaction_date DESC
         LIMIT %s OFFSET %s

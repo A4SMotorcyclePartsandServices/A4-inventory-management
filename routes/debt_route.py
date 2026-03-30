@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, session, flash, redirect, url_for
+from auth.utils import login_required
 from services.debt_service import (
     get_all_debts,
     get_customer_active_debt_payments,
@@ -16,6 +17,7 @@ def _money(value):
     return round(float(value or 0), 2)
 
 @debt_bp.route("/utang")
+@login_required
 def utang_list():
     debts = get_all_debts()
 
@@ -53,6 +55,7 @@ def utang_list():
     )
 
 @debt_bp.route("/api/debt/<int:sale_id>")
+@login_required
 def debt_detail_api(sale_id):
     data = get_debt_detail(sale_id)
     if not data:
@@ -60,6 +63,7 @@ def debt_detail_api(sale_id):
     return jsonify(data)
 
 @debt_bp.route("/api/debt/<int:sale_id>/pay", methods=["POST"])
+@login_required
 def pay_debt(sale_id):
     data = request.get_json()
 
@@ -89,6 +93,7 @@ def pay_debt(sale_id):
         return jsonify({"status": "error", "message": "Server error: " + str(e)}), 500
 
 @debt_bp.route("/api/debt/audit")
+@login_required
 def debt_audit_api():
     from utils.formatters import format_date
     conn = get_db()
@@ -131,6 +136,7 @@ def debt_audit_api():
     return jsonify({"payments": formatted})
 
 @debt_bp.route("/api/debt/summary")
+@login_required
 def debt_summary_api():
     """
     Returns all debt-originated sales with accurate server-side totals.
@@ -243,6 +249,7 @@ def debt_summary_api():
 
 
 @debt_bp.route("/api/debt/payments/<int:sale_id>")
+@login_required
 def debt_payments_for_sale(sale_id):
     """
     All payment entries for one specific sale — no limit.
@@ -277,6 +284,7 @@ def debt_payments_for_sale(sale_id):
 
 
 @debt_bp.route("/api/debt/customer/<int:customer_id>/payments")
+@login_required
 def debt_payments_for_customer(customer_id):
     data = get_customer_active_debt_payments(customer_id)
     if not data:
@@ -285,6 +293,7 @@ def debt_payments_for_customer(customer_id):
     return jsonify(data)
 
 @debt_bp.route("/debt/statement/customer/<int:customer_id>")
+@login_required
 def customer_debt_statement(customer_id):
     data = get_customer_debt_statement(customer_id)
     if not data:
@@ -293,6 +302,7 @@ def customer_debt_statement(customer_id):
 
 
 @debt_bp.route("/debt/statement/<int:sale_id>")
+@login_required
 def customer_debt_statement_from_sale(sale_id):
     customer_id = get_customer_id_for_debt_sale(sale_id)
     if not customer_id:

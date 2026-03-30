@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 70vh;">
+    <h1 style="font-size: 6rem; font-weight: bold; margin-bottom: 0;">409</h1>
+    <div style="width: 100px; height: 4px; background-color: #e63946; margin-bottom: 2rem;"></div>
+
+    <h2 class="text-uppercase mb-3" style="letter-spacing: 2px;">Duplicate Record</h2>
+    <p class="text-secondary text-center mb-4" style="max-width: 560px;">
+        {{ error_message or "A record with the same identity already exists. Please review the existing entry instead of creating another one." }}
+    </p>
+
+    <div class="d-flex gap-3">
+        <button onclick="history.back()" class="btn btn-outline-light px-4">
+            <i class="bi bi-arrow-left me-2"></i>Go Back
+        </button>
+        <a href="{{ url_for('index') }}" class="btn btn-danger px-4">
+            <i class="bi bi-house-door me-2"></i>Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

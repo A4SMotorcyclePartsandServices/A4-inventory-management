@@ -347,6 +347,10 @@ def add_service():
         existing_category=request.form.get("existing_category"),
         new_category=request.form.get("new_category", ""),
     )
+    if result["status"] == "missing_fields":
+        flash("Service name is required.", "danger")
+        return redirect(url_for("admin_users.manage_users", tab="manage-services-tab"))
+
     if result["status"] == "duplicate":
         flash(f"Service '{result['name']}' already exists!", "warning")
         return redirect(url_for("admin_users.manage_users", tab="manage-services-tab"))

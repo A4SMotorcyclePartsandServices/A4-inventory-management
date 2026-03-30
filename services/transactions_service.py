@@ -2,6 +2,7 @@ from db.database import get_db
 from datetime import datetime, timedelta
 import json
 import re
+from psycopg2 import errors as pg_errors
 from utils.formatters import format_date
 from services.loyalty_service import log_stamps_for_sale
 from services.approval_service import (
@@ -20,6 +21,12 @@ from services.notification_service import (
     list_active_user_ids,
 )
 from services.payables_service import ensure_payable_for_po_receipt
+
+
+def _build_where_clause(conditions):
+    if not conditions:
+        return ""
+    return " WHERE " + " AND ".join(conditions)
 
 
 # ─────────────────────────────────────────────
@@ -114,6 +121,9 @@ def add_item_to_db(data, user_id=None, username=None):
         )
 
         conn.commit()
+    except pg_errors.UniqueViolation as exc:
+        conn.rollback()
+        raise ValueError("Another item already uses that name.") from exc
     except Exception:
         conn.rollback()
         raise
@@ -454,6 +464,9 @@ def update_item_record(item_id, data, user_id=None, username=None):
 
         conn.commit()
         return _get_item_for_edit(conn, item_id)
+    except pg_errors.UniqueViolation as exc:
+        conn.rollback()
+        raise ValueError("Another item already uses that name.") from exc
     except Exception:
         conn.rollback()
         raise
@@ -2004,8 +2017,8 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
                 conditions.append("DATE(s.transaction_date) >= CURRENT_DATE - (%s * INTERVAL '1 day')")
                 params.append(days_int)
 
-        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-        query_sql = f"""
+        where_clause = _build_where_clause(conditions)
+        query_sql = """
             SELECT
                 s.id,
                 s.sales_number,
@@ -2050,7 +2063,7 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
                 ) refunded ON refunded.sale_item_id = si.id
                 GROUP BY si.sale_id
             ) items ON items.sale_id = s.id
-            {where_clause}
+        """ + where_clause + """
             ORDER BY s.transaction_date DESC, s.id DESC
             LIMIT %s
         """

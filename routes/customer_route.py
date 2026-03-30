@@ -2,7 +2,10 @@ import csv
 import io
 from datetime import datetime
 
-from flask import Blueprint, request, jsonify, render_template, Response
+from flask import Blueprint, abort, request, jsonify, render_template, Response
+from psycopg2 import errors as pg_errors
+from werkzeug.exceptions import HTTPException
+from auth.utils import login_required
 from db.database import get_db
 from utils.formatters import format_date
 from services.loyalty_service import (
@@ -82,6 +85,7 @@ def _get_customer_export_rows():
 # API: Search customers (used in out.html autocomplete)
 # ─────────────────────────────────────────────
 @customer_bp.route("/api/search/customers")
+@login_required
 def search_customers():
     query = request.args.get('q', '').strip()
     if not query:
@@ -105,6 +109,7 @@ def search_customers():
 # API: Add new customer
 # ─────────────────────────────────────────────
 @customer_bp.route("/api/customers/add", methods=["POST"])
+@login_required
 def add_customer():
     data = request.get_json()
     customer_no = (data.get('customer_no') or '').strip()
@@ -116,6 +121,18 @@ def add_customer():
 
     conn = get_db()
     try:
+        existing_customer = conn.execute(
+            """
+            SELECT id
+            FROM customers
+            WHERE LOWER(TRIM(customer_no)) = LOWER(TRIM(%s))
+            LIMIT 1
+            """,
+            (customer_no,),
+        ).fetchone()
+        if existing_customer:
+            abort(409, description="A customer with that number already exists.")
+
         customer_row = conn.execute(
             "INSERT INTO customers (customer_no, customer_name) VALUES (%s, %s) RETURNING id",
             (customer_no, customer_name)
@@ -141,17 +158,26 @@ def add_customer():
                 "vehicle_name": vehicle_name
             }
         })
-    except Exception as e:
-        # Most likely a UNIQUE constraint on customer_no
+    except pg_errors.UniqueViolation as e:
         conn.rollback()
-        if "UNIQUE" in str(e):
-            return jsonify({"status": "error", "message": "A customer with that number already exists."}), 409
+        constraint_name = getattr(getattr(e, "diag", None), "constraint_name", "") or ""
+        if constraint_name == "idx_customers_customer_no_unique_normalized":
+            abort(409, description="A customer with that number already exists.")
+        if constraint_name == "idx_vehicles_customer_vehicle_unique_active":
+            abort(409, description="That customer already has an active vehicle with the same name.")
+        raise
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()
 
 
 @customer_bp.route("/api/customers/<int:customer_id>/vehicles")
+@login_required
 def get_customer_vehicles(customer_id):
     conn = get_db()
     customer = conn.execute(
@@ -178,6 +204,7 @@ def get_customer_vehicles(customer_id):
 
 
 @customer_bp.route("/api/customers/<int:customer_id>/vehicles/add", methods=["POST"])
+@login_required
 def add_customer_vehicle(customer_id):
     data = request.get_json(silent=True) or {}
     vehicle_name = (data.get("vehicle_name") or "").strip()
@@ -195,6 +222,20 @@ def add_customer_vehicle(customer_id):
         if not customer:
             return jsonify({"status": "error", "message": "Customer not found."}), 404
 
+        existing_vehicle = conn.execute(
+            """
+            SELECT id
+            FROM vehicles
+            WHERE customer_id = %s
+              AND is_active = 1
+              AND LOWER(TRIM(vehicle_name)) = LOWER(TRIM(%s))
+            LIMIT 1
+            """,
+            (customer_id, vehicle_name),
+        ).fetchone()
+        if existing_vehicle:
+            abort(409, description="That customer already has an active vehicle with the same name.")
+
         row = conn.execute(
             "INSERT INTO vehicles (customer_id, vehicle_name, is_active) VALUES (%s, %s, 1) RETURNING id",
             (customer_id, vehicle_name)
@@ -207,6 +248,15 @@ def add_customer_vehicle(customer_id):
                 "vehicle_name": vehicle_name
             }
         })
+    except pg_errors.UniqueViolation as e:
+        conn.rollback()
+        constraint_name = getattr(getattr(e, "diag", None), "constraint_name", "") or ""
+        if constraint_name == "idx_vehicles_customer_vehicle_unique_active":
+            abort(409, description="That customer already has an active vehicle with the same name.")
+        raise
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as e:
         conn.rollback()
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -218,6 +268,7 @@ def add_customer_vehicle(customer_id):
 # PAGE: Customer list
 # ─────────────────────────────────────────────
 @customer_bp.route("/customers")
+@login_required
 def customer_list():
     conn = get_db()
 
@@ -321,6 +372,7 @@ def customer_list():
 
 
 @customer_bp.route("/export/customers")
+@login_required
 def export_customers_csv():
     customers = _get_customer_export_rows()
 
@@ -358,6 +410,7 @@ def export_customers_csv():
 
 
 @customer_bp.route("/reports/customers/points")
+@login_required
 def customer_points_report():
     tier_key = (request.args.get("tier") or "").strip()
     tier = POINT_TIERS.get(tier_key)
@@ -390,6 +443,7 @@ def customer_points_report():
 # API: Get one customer's transaction history
 # ─────────────────────────────────────────────
 @customer_bp.route("/api/customers/<int:customer_id>/transactions")
+@login_required
 def customer_transactions(customer_id):
     conn = get_db()
 

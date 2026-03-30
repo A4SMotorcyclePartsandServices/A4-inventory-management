@@ -1,5 +1,8 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, abort, jsonify, request
+from psycopg2 import errors as pg_errors
+from werkzeug.exceptions import HTTPException
 
+from auth.utils import login_required
 from db.database import get_db
 
 
@@ -7,6 +10,7 @@ vendor_bp = Blueprint("vendor", __name__)
 
 
 @vendor_bp.route("/api/search/vendors")
+@login_required
 def search_vendors():
     query = (request.args.get("q") or "").strip()
     if not query:
@@ -36,6 +40,7 @@ def search_vendors():
 
 
 @vendor_bp.route("/api/vendors/<int:vendor_id>")
+@login_required
 def get_vendor(vendor_id):
     conn = get_db()
     try:
@@ -57,6 +62,7 @@ def get_vendor(vendor_id):
 
 
 @vendor_bp.route("/api/vendors/add", methods=["POST"])
+@login_required
 def add_vendor():
     data = request.get_json(silent=True) or {}
     vendor_name = (data.get("vendor_name") or "").strip()
@@ -83,11 +89,7 @@ def add_vendor():
             (vendor_name,),
         ).fetchone()
         if existing:
-            return jsonify({
-                "status": "error",
-                "message": "A vendor with that name already exists.",
-                "vendor": dict(existing),
-            }), 409
+            abort(409, description="A vendor with that name already exists.")
 
         row = conn.execute(
             """
@@ -99,6 +101,15 @@ def add_vendor():
         ).fetchone()
         conn.commit()
         return jsonify({"status": "success", "vendor": dict(row)})
+    except pg_errors.UniqueViolation as exc:
+        conn.rollback()
+        constraint_name = getattr(getattr(exc, "diag", None), "constraint_name", "") or ""
+        if constraint_name == "idx_vendors_name_unique":
+            abort(409, description="A vendor with that name already exists.")
+        raise
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as exc:
         conn.rollback()
         return jsonify({"status": "error", "message": str(exc)}), 500

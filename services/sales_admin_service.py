@@ -4,6 +4,12 @@ from utils.formatters import format_date
 PER_PAGE = 50
 VALID_SALE_STATUSES = {"Paid", "Partial", "Unresolved"}
 
+
+def _build_where_clause(conditions):
+    if not conditions:
+        return ""
+    return " WHERE " + " AND ".join(conditions)
+
 def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has_discount=False, payment_status=None):
     """
     Paginated sales history for the admin panel.
@@ -43,15 +49,14 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
             )
         """)
 
-    where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    where_clause = _build_where_clause(conditions)
 
-    total = conn.execute(f"""
-        SELECT COUNT(*) FROM sales s {where_clause}
-    """, params).fetchone()[0]
+    total_query = "SELECT COUNT(*) FROM sales s" + where_clause
+    total = conn.execute(total_query, params).fetchone()[0]
 
     total_pages = max(1, -(-total // PER_PAGE))
 
-    rows = conn.execute(f"""
+    rows_query = """
         SELECT
             s.id,
             s.transaction_date,
@@ -92,10 +97,11 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
             ) refunded ON refunded.sale_item_id = si.id
             GROUP BY si.sale_id
         ) items ON items.sale_id = s.id
-        {where_clause}
+    """ + where_clause + """
         ORDER BY s.transaction_date DESC
         LIMIT %s OFFSET %s
-    """, params + [PER_PAGE, offset]).fetchall()
+    """
+    rows = conn.execute(rows_query, params + [PER_PAGE, offset]).fetchall()
 
     conn.close()
 

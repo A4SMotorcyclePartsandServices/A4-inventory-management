@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
+from werkzeug.exceptions import HTTPException
 import webbrowser
 import threading
 
@@ -27,7 +28,7 @@ from db.schema import init_db
 from routes.auth_route import auth_bp
 from routes.admin_users_route import admin_users_bp
 from routes.password_reset_route import password_reset_bp
-from auth.utils import ensure_authenticated_user, admin_required
+from auth.utils import ensure_authenticated_user, admin_required, login_required
 from services.inventory_service import attach_restock_recommendation, get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
@@ -165,6 +166,7 @@ app.register_blueprint(stocktake_bp)
 # Core inventory UI
 # ============================================================
 @app.route("/", methods=["GET", "POST"])
+@login_required
 def index():
     if request.method == "POST":
         action = request.form["action"]
@@ -214,6 +216,7 @@ def index():
     return render_template("index.html", items=items_merged)
 
 @app.route("/api/search")
+@login_required
 def search_items_api():
     query = request.args.get("q", "").strip()
     item_id = request.args.get("id") # Get the ID if it exists
@@ -257,6 +260,7 @@ def items_analytics():
 
 
 @app.route("/analytics")
+@login_required
 def analytics():
     """
     Fast-moving items (last 30 days).
@@ -314,6 +318,7 @@ def sales_analytics():
 
 
 @app.route("/dead-stock")
+@login_required
 def dead_stock():
     """
     Items with no sales for a long time (or never sold).
@@ -323,6 +328,7 @@ def dead_stock():
 
 
 @app.route("/low-stock")
+@login_required
 def low_stock():
     """
     Items at or below reorder level.
@@ -345,6 +351,7 @@ def low_stock():
 
 
 @app.route("/api/restock-debug")
+@login_required
 def restock_debug_api():
     abort(404)
     offset_raw = (request.args.get("offset") or "0").strip()
@@ -373,6 +380,7 @@ def restock_debug_api():
 # Item & transaction utilities
 # ============================================================
 @app.route("/export/transactions")
+@login_required
 def export_transactions():
     conn = get_db()
     rows = conn.execute("""
@@ -592,6 +600,17 @@ def handle_csrf_error(e):
 @app.errorhandler(400)
 def bad_request(e):
     return render_template('errors/403.html'), 400
+
+@app.errorhandler(409)
+def conflict_error(e):
+    description = "The record already exists."
+    if isinstance(e, HTTPException) and e.description:
+        description = e.description
+
+    if request.path.startswith("/api/"):
+        return jsonify({"status": "error", "message": description}), 409
+
+    return render_template("errors/409.html", error_message=description), 409
 
 @app.errorhandler(500)
 def server_error(e):
