@@ -187,12 +187,34 @@
         background: #1c1f26;
         border: 1px solid var(--border-soft);
         border-radius: 20px;
-        padding: 4px 12px;
+        padding: 6px 13px;
         margin: 4px 5px 0 0;
-        font-size: 0.78rem;
+        font-size: 0.82rem;
         cursor: pointer;
         color: var(--text-muted);
         transition: all 0.15s ease;
+    }
+
+    .chip-link-btn,
+    .chip-remove-btn {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        font: inherit;
+        color: inherit;
+    }
+
+    .chip-link-btn {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1.25;
+        color: inherit;
+    }
+
+    .chip-link-btn:hover {
+        color: var(--text-primary);
     }
 
     .search-chip:hover {
@@ -202,12 +224,15 @@
     }
 
     .search-chip .close-btn {
-        margin-left: 8px;
+        margin-left: 10px;
         color: #555;
         cursor: pointer;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         line-height: 1;
         transition: color 0.15s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .search-chip .close-btn:hover {
@@ -475,6 +500,14 @@ const inventoryTableBody = document.querySelector('table tbody');
 const itemCountBadge = document.getElementById('itemCountBadge');
 const initialTableMarkup = inventoryTableBody ? inventoryTableBody.innerHTML : "";
 const initialBadgeText = itemCountBadge ? itemCountBadge.textContent : "";
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
 
 function formatMarkupPercent(markup) {
     const numericMarkup = Number(markup || 0) * 100;
@@ -488,8 +521,8 @@ function createRowHtml(item) {
     const isLow = Boolean(item.should_restock);
     return `
         <tr class="inventory-row" data-item-id="${item.id}">
-            <td class="fw-bold item-cell" data-original="${item.name}">${item.name}</td>
-            <td class="description-cell text-center" data-original="${item.description || ''}">${item.description || ''}</td>
+            <td class="fw-bold item-cell" data-original="${escapeHtml(item.name || '')}">${escapeHtml(item.name || '')}</td>
+            <td class="description-cell text-center" data-original="${escapeHtml(item.description || '')}">${escapeHtml(item.description || '')}</td>
             <td class="price-text">₱${item.vendor_price || 0}</td>
             <td class="price-text">₱${item.cost_per_piece || 0}</td>
             <td class="price-text selling-price">₱${item.a4s_selling_price || 0}</td>
@@ -506,7 +539,8 @@ function escapeRegExp(text) {
 
 function highlightText(element, tokens) {
     if (!element || !element.dataset.original) return;
-    let highlighted = element.dataset.original;
+    const original = element.dataset.original;
+    let highlighted = escapeHtml(original);
     tokens.forEach(token => {
         if (!token) return;
         const regex = new RegExp(`(${escapeRegExp(token)})`, "gi");
@@ -559,10 +593,25 @@ const performSearch = async () => {
 
         if (data.items.length === 0) {
             const cols = "{{ session.get('role') }}" === "admin" ? 7 : 6;
-            tbody.innerHTML = `<tr><td colspan="${cols}" class="text-center py-5" style="color: var(--text-muted);">
-                <i class="bi bi-inbox" style="font-size:1.6rem; display:block; margin-bottom:8px;"></i>
-                No items found for "<strong style="color:var(--text-primary)">${rawInput}</strong>"
-            </td></tr>`;
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = cols;
+            cell.className = 'text-center py-5';
+            cell.style.color = 'var(--text-muted)';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-inbox';
+            icon.style.fontSize = '1.6rem';
+            icon.style.display = 'block';
+            icon.style.marginBottom = '8px';
+            const strong = document.createElement('strong');
+            strong.style.color = 'var(--text-primary)';
+            strong.textContent = rawInput;
+            cell.appendChild(icon);
+            cell.appendChild(document.createTextNode('No items found for "'));
+            cell.appendChild(strong);
+            cell.appendChild(document.createTextNode('"'));
+            row.appendChild(cell);
+            tbody.appendChild(row);
             if (badge) badge.textContent = '0 items';
             return;
         }
@@ -626,19 +675,36 @@ function saveRecentSearch(term) {
 function renderRecentSearches() {
     const container = document.getElementById("recentSearches");
     const searches = getRecentSearches();
-    if (!searches.length) { container.innerHTML = ""; return; }
+    if (!container) return;
+    container.replaceChildren();
+    if (!searches.length) return;
 
-    container.innerHTML = `
-        <span class="chips-label">Quick picks:</span>
-        ${searches.map(s => `
-            <span class="search-chip ${s.count >= 3 ? "frequent" : ""}">
-                <span onclick="applyRecentSearch('${s.term.replace(/'/g, "\\'")}')">
-                    ${s.term}
-                </span>
-                <span class="close-btn" onclick="removeRecentSearch('${s.term.replace(/'/g, "\\'")}')">×</span>
-            </span>
-        `).join("")}
-    `;
+    const label = document.createElement('span');
+    label.className = 'chips-label';
+    label.textContent = 'Quick picks:';
+    container.appendChild(label);
+
+    searches.forEach((search) => {
+        const chip = document.createElement('span');
+        chip.className = `search-chip ${search.count >= 3 ? 'frequent' : ''}`.trim();
+
+        const searchButton = document.createElement('button');
+        searchButton.type = 'button';
+        searchButton.className = 'chip-link-btn';
+        searchButton.textContent = search.term;
+        searchButton.addEventListener('click', () => applyRecentSearch(search.term));
+
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'close-btn chip-remove-btn';
+        removeButton.setAttribute('aria-label', 'Remove recent search');
+        removeButton.textContent = 'x';
+        removeButton.addEventListener('click', () => removeRecentSearch(search.term));
+
+        chip.appendChild(searchButton);
+        chip.appendChild(removeButton);
+        container.appendChild(chip);
+    });
 }
 
 function removeRecentSearch(term) {

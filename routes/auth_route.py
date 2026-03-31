@@ -4,6 +4,7 @@ from auth.utils import (
     clear_failed_login_attempts,
     is_login_rate_limited,
     login_required,
+    purge_old_login_attempts,
     register_failed_login_attempt,
 )
 from services.auth_service import authenticate_user
@@ -14,6 +15,7 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
+        purge_old_login_attempts()
         username = request.form["username"]
         password = request.form["password"]
 

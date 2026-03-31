@@ -686,7 +686,7 @@ def get_mechanic_payouts_for_dates(report_dates):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        WHERE DATE(s.transaction_date) = ANY(%s)
+        WHERE DATE(s.transaction_date) = ANY(%s::date[])
           AND s.mechanic_id IS NOT NULL
     """, (normalized_dates,)).fetchall()
 
@@ -704,7 +704,7 @@ def get_mechanic_payouts_for_dates(report_dates):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(dp.paid_at)
-        WHERE DATE(dp.paid_at) = ANY(%s)
+        WHERE DATE(dp.paid_at) = ANY(%s::date[])
           AND s.mechanic_id IS NOT NULL
     """, (normalized_dates,)).fetchall()
 

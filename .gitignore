@@ -1,18 +1,26 @@
-# Python stuff
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+.venv/
 venv/
 .env
+
+# Node (IMPORTANT for your case)
+node_modules/
+npm-debug.log*
 
 # Database & Local Data
 *.db
 *.csv
 *.sql
 
-# Mac/Windows clutter
+# OS clutter
 .DS_Store
 Thumbs.db
 
-# VS Code settings
+# VS Code
 .vscode/
+
+# Just in case (your current issue)
+AppData/

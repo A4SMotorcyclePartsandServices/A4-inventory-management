@@ -1674,25 +1674,45 @@ const handleTableSearch = async (input) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
-            const itemName = escapeHtml(item.name);
-            const itemDescription = item.description ? escapeHtml(item.description) : '';
 
             const itemIdStr = String(item.id);
             const currentRowSelectedId = String(idInput.value || '');
             const alreadySelectedElsewhere =
                 selectedItemIds.has(itemIdStr) && itemIdStr !== currentRowSelectedId;
 
-            btn.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong>${itemName}</strong>
-                    <span class="suggestion-price-badge">₱${isMechanicSupplyMode() ? item.cost_per_piece : item.a4s_selling_price}</span>
-                </div>
-                ${itemDescription ? `<div class="suggestion-description">${itemDescription}</div>` : ``}
-                <div class="suggestion-stock">
-                    <i class="bi bi-box me-1"></i>Stock: ${item.current_stock}
-                    ${alreadySelectedElsewhere ? `<span style="margin-left:8px; color:#f4c430;">(already in cart)</span>` : ``}
-                </div>
-            `;
+            const topRow = document.createElement('div');
+            topRow.className = 'd-flex justify-content-between align-items-center';
+
+            const nameStrong = document.createElement('strong');
+            nameStrong.textContent = item.name || '';
+
+            const priceBadge = document.createElement('span');
+            priceBadge.className = 'suggestion-price-badge';
+            priceBadge.textContent = `₱${isMechanicSupplyMode() ? item.cost_per_piece : item.a4s_selling_price}`;
+
+            topRow.appendChild(nameStrong);
+            topRow.appendChild(priceBadge);
+            btn.appendChild(topRow);
+
+            if (item.description) {
+                const description = document.createElement('div');
+                description.className = 'suggestion-description';
+                description.textContent = item.description;
+                btn.appendChild(description);
+            }
+
+            const stockRow = document.createElement('div');
+            stockRow.className = 'suggestion-stock';
+            stockRow.innerHTML = '<i class="bi bi-box me-1"></i>';
+            stockRow.appendChild(document.createTextNode(`Stock: ${item.current_stock}`));
+            if (alreadySelectedElsewhere) {
+                const cartNote = document.createElement('span');
+                cartNote.style.marginLeft = '8px';
+                cartNote.style.color = '#f4c430';
+                cartNote.textContent = '(already in cart)';
+                stockRow.appendChild(cartNote);
+            }
+            btn.appendChild(stockRow);
 
             if (alreadySelectedElsewhere) {
                 btn.disabled = true;
@@ -1754,14 +1774,17 @@ const handleServiceSearch = async (input) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';
-            const serviceName = escapeHtml(service.name);
-            const serviceCategory = escapeHtml(service.category);
-            btn.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong>${serviceName}</strong>
-                    <span style="font-size:0.72rem; color:#67c2e4;">${serviceCategory}</span>
-                </div>
-            `;
+            const rowWrap = document.createElement('div');
+            rowWrap.className = 'd-flex justify-content-between align-items-center';
+            const serviceName = document.createElement('strong');
+            serviceName.textContent = service.name || '';
+            const serviceCategory = document.createElement('span');
+            serviceCategory.style.fontSize = '0.72rem';
+            serviceCategory.style.color = '#67c2e4';
+            serviceCategory.textContent = service.category || '';
+            rowWrap.appendChild(serviceName);
+            rowWrap.appendChild(serviceCategory);
+            btn.appendChild(rowWrap);
             btn.onclick = () => {
                 input.value = service.name;
                 idInput.value = service.id;
@@ -2183,7 +2206,11 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                 addBtn.type = 'button';
                 addBtn.className = 'list-group-item list-group-item-action';
                 addBtn.style.cssText = 'color:#67c2e4; font-weight:600;';
-                addBtn.innerHTML = `<i class="bi bi-person-plus me-2"></i>Add new customer: <em>"${escapeHtml(q)}"</em>`;
+                addBtn.innerHTML = '<i class="bi bi-person-plus me-2"></i>';
+                addBtn.appendChild(document.createTextNode('Add new customer: '));
+                const emphasis = document.createElement('em');
+                emphasis.textContent = `"${q}"`;
+                addBtn.appendChild(emphasis);
                 addBtn.onclick = () => openNewCustomerModal(q);
                 suggestions.appendChild(addBtn);
 
@@ -2191,13 +2218,17 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'list-group-item list-group-item-action';
-                    const customerName = escapeHtml(c.customer_name);
-                    const customerNo = escapeHtml(c.customer_no);
-                    btn.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong>${customerName}</strong>
-                            <span style="font-size:0.72rem; color:#aaa;">${customerNo}</span>
-                        </div>`;
+                    const rowWrap = document.createElement('div');
+                    rowWrap.className = 'd-flex justify-content-between align-items-center';
+                    const customerName = document.createElement('strong');
+                    customerName.textContent = c.customer_name || '';
+                    const customerNo = document.createElement('span');
+                    customerNo.style.fontSize = '0.72rem';
+                    customerNo.style.color = '#aaa';
+                    customerNo.textContent = c.customer_no || '';
+                    rowWrap.appendChild(customerName);
+                    rowWrap.appendChild(customerNo);
+                    btn.appendChild(rowWrap);
                     btn.onclick = () => setCustomer(c.id, c.customer_no, c.customer_name);
                     suggestions.appendChild(btn);
                 });

@@ -19,6 +19,22 @@ def init_db():
     """)
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_no TEXT")
     cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password INTEGER NOT NULL DEFAULT 0")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS login_attempts (
+        id                  SERIAL PRIMARY KEY,
+        username_normalized TEXT NOT NULL,
+        ip_address          TEXT NOT NULL,
+        attempted_at        TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup
+    ON login_attempts (username_normalized, ip_address, attempted_at DESC)
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at
+    ON login_attempts (attempted_at DESC)
+    """)
 
     # 2. MECHANICS TABLE
     cur.execute("""

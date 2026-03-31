@@ -583,7 +583,7 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND category = 'Mechanic Payout'
           AND reference_type = 'MECHANIC_PAYOUT'
           AND COALESCE(is_deleted, FALSE) = FALSE
-          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s)
+          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s::date[])
           AND reference_id IS NOT NULL
     """, [branch_id, normalized_dates]).fetchall()
 
@@ -597,7 +597,7 @@ def get_already_paid_mechanic_identifiers_for_dates(dates, branch_id=1):
           AND category = 'Mechanic Payout'
           AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT')
           AND COALESCE(is_deleted, FALSE) = FALSE
-          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s)
+          AND COALESCE(payout_for_date, DATE(created_at)) = ANY(%s::date[])
     """, [branch_id, normalized_dates]).fetchall()
     conn.close()
 

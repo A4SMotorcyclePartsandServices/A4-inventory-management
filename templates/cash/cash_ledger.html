@@ -1743,56 +1743,91 @@ function renderLedgerRows(entries) {
         return;
     }
 
-    tbody.innerHTML = entries.map((entry) => {
+    tbody.replaceChildren();
+
+    entries.forEach((entry) => {
+        const row = document.createElement('tr');
         const isCashIn = entry.entry_type === 'CASH_IN';
         const amountValue = Number(entry.amount || 0).toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         });
-        const description = escapeHtml(entry.description || '—');
-        const category = escapeHtml(entry.category || '—');
-        const recordedBy = escapeHtml(entry.recorded_by || '—');
-        const createdAt = escapeHtml(entry.created_at || '—');
-        const deletedBy = escapeHtml(entry.deleted_by || '—');
-        const deletedAt = escapeHtml(entry.deleted_at || '—');
-        const entryTypeBadge = isCashIn
-            ? '<span class="type-badge badge-in"><i class="bi bi-arrow-down-circle me-1"></i>Cash In</span>'
-            : '<span class="type-badge badge-out"><i class="bi bi-arrow-up-circle me-1"></i>Cash Out</span>';
         const amountClass = isCashIn ? 'entry-amount-in' : 'entry-amount-out';
         const canDeleteThisRow = LEDGER_CAN_DELETE && entry.source === 'manual' && Number.isFinite(Number(entry.id));
-        const actionCell = LEDGER_CAN_DELETE
-            ? (canDeleteThisRow
-                ? (isDeletedView
-                    ? `<td>
-                        <button class="btn btn-sm btn-outline-warning"
-                                onclick="restoreEntry(${Number(entry.id)})"
-                                title="Restore entry">
-                            <i class="bi bi-arrow-counterclockwise"></i>
-                        </button>
-                    </td>`
-                    : `<td>
-                        <button class="btn btn-sm btn-outline-danger delete-btn"
-                                onclick="deleteEntry(${Number(entry.id)}, this)">
-                            <i class="bi bi-trash3"></i>
-                        </button>
-                    </td>`)
-                : '<td></td>')
-            : '';
-        const dateCells = isDeletedView
-            ? `<td class="small">${deletedBy}</td><td class="small date-cell">${deletedAt}</td>`
-            : `<td class="small date-cell">${createdAt}</td>`;
 
-        return `
-            <tr>
-                <td>${entryTypeBadge}</td>
-                <td>${category}</td>
-                <td class="small">${description}</td>
-                <td class="text-end fw-semibold ${amountClass}">&#8369;${amountValue}</td>
-                <td class="small">${recordedBy}</td>
-                ${dateCells}
-                ${actionCell}
-            </tr>`;
-    }).join('');
+        const typeCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = `type-badge ${isCashIn ? 'badge-in' : 'badge-out'}`;
+        badge.innerHTML = isCashIn
+            ? '<i class="bi bi-arrow-down-circle me-1"></i>Cash In'
+            : '<i class="bi bi-arrow-up-circle me-1"></i>Cash Out';
+        typeCell.appendChild(badge);
+
+        const categoryCell = document.createElement('td');
+        categoryCell.textContent = entry.category || '—';
+
+        const descriptionCell = document.createElement('td');
+        descriptionCell.className = 'small';
+        descriptionCell.textContent = entry.description || '—';
+
+        const amountCell = document.createElement('td');
+        amountCell.className = `text-end fw-semibold ${amountClass}`;
+        amountCell.textContent = `₱${amountValue}`;
+
+        const recordedByCell = document.createElement('td');
+        recordedByCell.className = 'small';
+        recordedByCell.textContent = entry.recorded_by || '—';
+
+        row.appendChild(typeCell);
+        row.appendChild(categoryCell);
+        row.appendChild(descriptionCell);
+        row.appendChild(amountCell);
+        row.appendChild(recordedByCell);
+
+        if (isDeletedView) {
+            const deletedByCell = document.createElement('td');
+            deletedByCell.className = 'small';
+            deletedByCell.textContent = entry.deleted_by || '—';
+
+            const deletedAtCell = document.createElement('td');
+            deletedAtCell.className = 'small date-cell';
+            deletedAtCell.textContent = entry.deleted_at || '—';
+
+            row.appendChild(deletedByCell);
+            row.appendChild(deletedAtCell);
+        } else {
+            const createdAtCell = document.createElement('td');
+            createdAtCell.className = 'small date-cell';
+            createdAtCell.textContent = entry.created_at || '—';
+            row.appendChild(createdAtCell);
+        }
+
+        if (LEDGER_CAN_DELETE) {
+            const actionCell = document.createElement('td');
+            if (canDeleteThisRow) {
+                const actionButton = document.createElement('button');
+                actionButton.type = 'button';
+                actionButton.className = isDeletedView
+                    ? 'btn btn-sm btn-outline-warning'
+                    : 'btn btn-sm btn-outline-danger delete-btn';
+                actionButton.title = isDeletedView ? 'Restore entry' : 'Delete entry';
+                actionButton.innerHTML = isDeletedView
+                    ? '<i class="bi bi-arrow-counterclockwise"></i>'
+                    : '<i class="bi bi-trash3"></i>';
+                actionButton.addEventListener('click', () => {
+                    if (isDeletedView) {
+                        restoreEntry(Number(entry.id));
+                    } else {
+                        deleteEntry(Number(entry.id), actionButton);
+                    }
+                });
+                actionCell.appendChild(actionButton);
+            }
+            row.appendChild(actionCell);
+        }
+
+        tbody.appendChild(row);
+    });
 }
 
 function renderLedgerPagination(page, totalPages) {

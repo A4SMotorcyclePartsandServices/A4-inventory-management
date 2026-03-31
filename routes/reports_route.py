@@ -20,24 +20,56 @@ from utils.formatters import format_date
 reports_bp = Blueprint("reports", __name__)
 
 
+def _parse_strict_iso_date(value):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _get_validated_date_arg(param_name, *, flash_label):
+    raw_value = (request.args.get(param_name) or "").strip()
+    if not raw_value:
+        return None
+
+    parsed = _parse_strict_iso_date(raw_value)
+    if parsed is None:
+        flash(f"{flash_label} must be a valid date in YYYY-MM-DD format.", "warning")
+        return None
+    return parsed
+
+
 def _build_sales_report_context():
-    report_date = request.args.get("report_date")
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
+    report_date = _get_validated_date_arg("report_date", flash_label="Report date")
+    if request.args.get("report_date") and report_date is None:
+        return None
+
+    start_date = _get_validated_date_arg("start_date", flash_label="Start date")
+    if request.args.get("start_date") and start_date is None:
+        return None
+
+    end_date = _get_validated_date_arg("end_date", flash_label="End date")
+    if request.args.get("end_date") and end_date is None:
+        return None
 
     if report_date:
-        data = get_sales_report_by_date(report_date)
-        date_label = format_date(report_date)
+        report_date_iso = report_date.isoformat()
+        data = get_sales_report_by_date(report_date_iso)
+        date_label = format_date(report_date_iso)
         is_range = False
-        cash_data = get_cash_entries_for_report(report_date, report_date)
+        cash_data = get_cash_entries_for_report(report_date_iso, report_date_iso)
     elif start_date and end_date:
         if end_date < start_date:
             flash("End date cannot be before start date.", "warning")
             return None
-        data = get_sales_report_by_range(start_date, end_date)
-        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
+        start_date_iso = start_date.isoformat()
+        end_date_iso = end_date.isoformat()
+        data = get_sales_report_by_range(start_date_iso, end_date_iso)
+        date_label = f"{format_date(start_date_iso)} to {format_date(end_date_iso)}"
         is_range = True
-        cash_data = get_cash_entries_for_report(start_date, end_date)
+        cash_data = get_cash_entries_for_report(start_date_iso, end_date_iso)
     else:
         flash("Please select a date.", "warning")
         return None
@@ -158,24 +190,31 @@ def purchase_order_report(po_id):
 @reports_bp.route("/reports/daily")
 @login_required
 def daily_report():
-    report_date = request.args.get("date")
+    report_date = _get_validated_date_arg("date", flash_label="Report date")
+    if request.args.get("date") and report_date is None:
+        return redirect(url_for("index"))
 
     if not report_date:
         flash("Please select a date.", "warning")
         return redirect(url_for("index"))
-    return redirect(url_for("reports.sales_summary_report", report_date=report_date))
+    return redirect(url_for("reports.sales_summary_report", report_date=report_date.isoformat()))
 
 
 @reports_bp.route("/reports/range")
 @login_required
 def range_report():
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start = _get_validated_date_arg("start", flash_label="Start date")
+    if request.args.get("start") and start is None:
+        return redirect(url_for("index"))
+
+    end = _get_validated_date_arg("end", flash_label="End date")
+    if request.args.get("end") and end is None:
+        return redirect(url_for("index"))
 
     if not start or not end:
         flash("Please select a date range.", "warning")
         return redirect(url_for("index"))
-    return redirect(url_for("reports.sales_summary_report", start_date=start, end_date=end))
+    return redirect(url_for("reports.sales_summary_report", start_date=start.isoformat(), end_date=end.isoformat()))
 
 
 @reports_bp.route("/reports/sales-summary")
@@ -199,19 +238,30 @@ def sales_report_summary_pdf():
 @reports_bp.route("/reports/mechanic-supply")
 @login_required
 def mechanic_supply_report():
-    report_date = request.args.get("report_date")
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
+    report_date = _get_validated_date_arg("report_date", flash_label="Report date")
+    if request.args.get("report_date") and report_date is None:
+        return redirect(url_for("index"))
+
+    start_date = _get_validated_date_arg("start_date", flash_label="Start date")
+    if request.args.get("start_date") and start_date is None:
+        return redirect(url_for("index"))
+
+    end_date = _get_validated_date_arg("end_date", flash_label="End date")
+    if request.args.get("end_date") and end_date is None:
+        return redirect(url_for("index"))
 
     if report_date:
-        data = _build_mechanic_supply_report_context(report_date, report_date)
-        date_label = format_date(report_date)
+        report_date_iso = report_date.isoformat()
+        data = _build_mechanic_supply_report_context(report_date_iso, report_date_iso)
+        date_label = format_date(report_date_iso)
     elif start_date and end_date:
         if end_date < start_date:
             flash("End date cannot be before start date.", "warning")
             return redirect(url_for("index"))
-        data = _build_mechanic_supply_report_context(start_date, end_date)
-        date_label = f"{format_date(start_date)} to {format_date(end_date)}"
+        start_date_iso = start_date.isoformat()
+        end_date_iso = end_date.isoformat()
+        data = _build_mechanic_supply_report_context(start_date_iso, end_date_iso)
+        date_label = f"{format_date(start_date_iso)} to {format_date(end_date_iso)}"
     else:
         flash("Please select a date.", "warning")
         return redirect(url_for("index"))

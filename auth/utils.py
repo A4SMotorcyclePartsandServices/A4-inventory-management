@@ -1,6 +1,4 @@
-import threading
 import time
-from collections import defaultdict, deque
 from functools import wraps
 
 from flask import abort, flash, g, request, session, redirect, url_for, jsonify
@@ -9,8 +7,7 @@ from db.database import get_db
 
 _LOGIN_WINDOW_SECONDS = 15 * 60
 _LOGIN_MAX_ATTEMPTS = 5
-_login_attempt_lock = threading.Lock()
-_failed_login_attempts = defaultdict(deque)
+_LOGIN_RETENTION_SECONDS = 5 * 24 * 60 * 60
 
 
 def _client_ip():
@@ -24,36 +21,87 @@ def _login_key(username):
     return f"{_client_ip()}::{(username or '').strip().lower()}"
 
 
-def _prune_attempts(attempts, now_ts):
-    while attempts and (now_ts - attempts[0]) > _LOGIN_WINDOW_SECONDS:
-        attempts.popleft()
+def _normalized_username(username):
+    return (username or "").strip().lower()
+
+
+def purge_old_login_attempts():
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            DELETE FROM login_attempts
+            WHERE attempted_at < (NOW() - (%s * INTERVAL '1 second'))
+            """,
+            (_LOGIN_RETENTION_SECONDS,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def is_login_rate_limited(username):
-    now_ts = time.time()
-    key = _login_key(username)
-    with _login_attempt_lock:
-        attempts = _failed_login_attempts[key]
-        _prune_attempts(attempts, now_ts)
-        if len(attempts) < _LOGIN_MAX_ATTEMPTS:
-            return False, 0
-        retry_after = max(1, int(_LOGIN_WINDOW_SECONDS - (now_ts - attempts[0])))
-        return True, retry_after
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS attempt_count,
+                MIN(attempted_at) AS oldest_attempt
+            FROM login_attempts
+            WHERE username_normalized = %s
+              AND ip_address = %s
+              AND attempted_at >= (NOW() - (%s * INTERVAL '1 second'))
+            """,
+            (_normalized_username(username), _client_ip(), _LOGIN_WINDOW_SECONDS),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    attempt_count = int(row["attempt_count"] or 0)
+    if attempt_count < _LOGIN_MAX_ATTEMPTS:
+        return False, 0
+
+    oldest_attempt = row["oldest_attempt"]
+    if not oldest_attempt:
+        return True, _LOGIN_WINDOW_SECONDS
+
+    retry_after = max(
+        1,
+        int(_LOGIN_WINDOW_SECONDS - (time.time() - oldest_attempt.timestamp())),
+    )
+    return True, retry_after
 
 
 def register_failed_login_attempt(username):
-    now_ts = time.time()
-    key = _login_key(username)
-    with _login_attempt_lock:
-        attempts = _failed_login_attempts[key]
-        _prune_attempts(attempts, now_ts)
-        attempts.append(now_ts)
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO login_attempts (username_normalized, ip_address)
+            VALUES (%s, %s)
+            """,
+            (_normalized_username(username), _client_ip()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def clear_failed_login_attempts(username):
-    key = _login_key(username)
-    with _login_attempt_lock:
-        _failed_login_attempts.pop(key, None)
+    conn = get_db()
+    try:
+        conn.execute(
+            """
+            DELETE FROM login_attempts
+            WHERE username_normalized = %s
+              AND ip_address = %s
+            """,
+            (_normalized_username(username), _client_ip()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_current_user():

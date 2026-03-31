@@ -1,79 +1,39 @@
 ## Deployment Checklist
 
-Target: internet-facing production deployment for this Flask app.
+Target: Railway soft deployment tomorrow for internal testing, with planned client release next Monday.
 
-### Required before go-live
+### Current repo status
 
-- Set a real `FLASK_SECRET_KEY` in the production environment.
-- Set `SESSION_COOKIE_SECURE=1` in production.
-- Keep `SESSION_COOKIE_SAMESITE=Lax` unless a cross-site flow requires otherwise.
-- Do not expose the Flask development server directly to the internet.
-- Run the app behind HTTPS only.
-- Put a reverse proxy in front of the app.
-- Disable any development-only browser-opening behavior in the production start command.
-- Ensure the database is not publicly reachable except from the app host/network.
-- Keep `.env` out of git and manage production secrets outside the repository.
+- Done: production-style entrypoints exist in [wsgi.py](/c:/Dev/a4_inventory_system/wsgi.py) and [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py).
+- Done: duplicate protection is enforced at the database level.
+- Done: SQL injection hardening was completed in the runtime app code.
+- Done: access control was reviewed and documented in [ACCESS_CONTROL.md](/c:/Dev/a4_inventory_system/ACCESS_CONTROL.md).
+- Done: report date validation was tightened.
+- Done: login throttling is now database-backed with 5-day cleanup.
+- Done: the main DOM/XSS hotspots were reduced to low residual risk in [SECURITY_AUDIT.md](/c:/Dev/a4_inventory_system/SECURITY_AUDIT.md).
+- Done: Railway-compatible app startup is ready through [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py).
 
-### Python and app runtime
+### Tomorrow Soft Deploy
 
-- Use a production WSGI server such as `waitress` on Windows or `gunicorn` on Linux.
-- Run the Flask app as an imported application object, not via `python app.py` in production.
-- This repo now includes [wsgi.py](/c:/Dev/a4_inventory_system/wsgi.py) and [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py) for that purpose.
-- Set up service supervision so the process restarts on failure.
-- Capture structured application logs.
+Goal:
+- get the app running on a Railway-generated URL
+- use it for your own testing and issue-finding
+- do not treat it as final public release yet
 
-### Reverse proxy / network
+#### Before Creating The Railway Project
 
-- Terminate TLS at the proxy.
-- Redirect HTTP to HTTPS.
-- Preserve forwarded headers correctly.
-- Restrict request body size at the proxy as well as in Flask.
-- Add IP-based rate limiting on login and sensitive endpoints.
+- [ ] Confirm the soft deploy target is Railway.
+- [ ] Use the Railway domain only for tomorrow.
+- [ ] Keep the client custom domain for next week.
+- [ ] Generate a fresh production `FLASK_SECRET_KEY`.
+- [ ] Prepare a production DB password that is different from local development.
+- [ ] Keep the local `.env` values out of Railway unless they are intentionally reused.
+- [ ] Decide whether tomorrow will run as one web instance only.
+- [ ] Make sure the latest schema changes are committed to the branch you plan to deploy.
 
-### Session and auth
+#### Production Environment Variables
 
-- Verify production uses the intended `FLASK_SECRET_KEY`.
-- Verify session cookies are marked `Secure`, `HttpOnly`, and appropriate `SameSite`.
-- Verify CSRF failures return a safe response and are logged.
-- Consider moving login throttling to shared storage if you will run multiple app instances.
-
-### Top 5 auth fixes before deployment
-
-- Move login rate limiting out of in-memory process state and into shared storage so lockouts survive restarts and still work if you run multiple app instances.
-- Strengthen login throttling to include IP-based and account-based protections, not just the current `IP + username` key, so attackers cannot cheaply rotate usernames or spoof around the limit.
-- Only trust `X-Forwarded-For` when the app is behind a correctly configured reverse proxy; otherwise use the real client address so rate limiting cannot be bypassed by header spoofing.
-- Enforce HTTPS everywhere and keep `SESSION_COOKIE_SECURE=1` in production so login sessions cannot be stolen over plain HTTP.
-- Add audit logging and alerting for failed logins, lockouts, and privileged auth events so suspicious access attempts are visible during production use.
-
-### Database and secrets
-
-- Use a dedicated production database user with least privilege.
-- Rotate the current database password before production if it has been used in development/shared environments.
-- Back up the database before go-live and test restore procedures.
-- Store DB credentials in environment variables or a secrets manager, not in tracked files.
-
-### App-specific checks
-
-- Review every route listed in [ACCESS_CONTROL.md](/c:/Dev/a4_inventory_system/ACCESS_CONTROL.md) and confirm the staff/admin split is intentional.
-- Finish the remaining `innerHTML`-based DOM XSS cleanup in [SECURITY_AUDIT.md](/c:/Dev/a4_inventory_system/SECURITY_AUDIT.md).
-- Validate all date query params on reporting routes.
-- Confirm export endpoints are intended to be staff-accessible before internet exposure.
-- Decide whether debt and cash pages should be staff-visible or admin-only.
-
-### Operational checks
-
-- Important: hosting platform is still undecided, and the Payables cheque reminder system now depends on a production scheduler.
-- Important: before go-live, choose a hosting platform that supports a daily scheduled task / cron-style job.
-- Important: schedule `python scripts/run_payables_reminders.py` to run once daily at 8:00 AM Asia/Manila so 7-day and due-today cheque notifications are created without requiring a page visit.
-- Turn on monitoring for:
-  - application errors
-  - repeated login failures
-  - CSRF failures
-  - unusual export volume
-- Document deployment and rollback steps.
-- Test with separate admin and staff accounts after deployment.
-
-### Recommended production env baseline
+Set these in Railway service variables, not in the repo:
 
 ```env
 FLASK_SECRET_KEY=<long-random-secret>
@@ -81,17 +41,96 @@ SESSION_COOKIE_SECURE=1
 SESSION_COOKIE_SAMESITE=Lax
 SESSION_LIFETIME_HOURS=12
 MAX_CONTENT_LENGTH_MB=16
-DB_HOST=<prod-db-host>
+DB_HOST=<railway-db-host>
 DB_PORT=5432
-DB_NAME=<prod-db-name>
-DB_USER=<prod-db-user>
-DB_PASSWORD=<prod-db-password>
+DB_NAME=<railway-db-name>
+DB_USER=<railway-db-user>
+DB_PASSWORD=<railway-db-password>
+DB_POOL_MIN=1
+DB_POOL_MAX=10
+APP_THREADS=8
 ```
 
-### Final verification before launch
+Notes:
 
-1. Staff cannot access admin routes by direct URL.
-2. Login, logout, and all POST/DELETE actions still work with CSRF enabled.
-3. HTTPS is enforced.
-4. Production server is using [wsgi.py](/c:/Dev/a4_inventory_system/wsgi.py) or [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py), not Flask’s built-in dev server.
-5. Backup and restore have been tested.
+- Railway injects `PORT` automatically, and [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py) honors it.
+- `SESSION_COOKIE_SECURE=1` should stay enabled in production.
+- Start with one small instance and modest DB pool settings.
+
+#### Railway Project Setup
+
+- [ ] Create a new Railway project.
+- [ ] Add a PostgreSQL service.
+- [ ] Add a web service connected to the deployment branch/repo.
+- [ ] Set the start command to `python run_waitress.py`.
+- [ ] Confirm dependencies install from [requirements.txt](/c:/Dev/a4_inventory_system/requirements.txt).
+- [ ] Add all production environment variables to the web service.
+- [ ] Point the app at the Railway PostgreSQL credentials.
+- [ ] Deploy once and confirm the app boots without startup errors.
+- [ ] Confirm the latest DB schema additions create successfully, including `login_attempts`.
+
+#### Railway Scheduled Job
+
+The payables cheque reminders depend on a daily scheduled task.
+
+- [ ] Add a scheduled job / cron service in Railway.
+- [ ] Set the command to `python scripts/run_payables_reminders.py`.
+- [ ] Schedule it for 8:00 AM Asia/Manila.
+- [ ] If Railway cron uses UTC, set the schedule to the UTC equivalent.
+- [ ] Confirm the job can connect to the same production database variables.
+
+#### Soft Deploy Smoke Test
+
+- [ ] Open the Railway-generated HTTPS URL.
+- [ ] Confirm logged-out users are redirected to login for protected pages.
+- [ ] Confirm login works with a production admin account.
+- [ ] Confirm login works with a production staff account.
+- [ ] Confirm staff cannot reach admin-only pages by direct URL.
+- [ ] Confirm Bundles tab works.
+- [ ] Confirm Loyalty tab and search work.
+- [ ] Confirm inventory search and recent chips look correct.
+- [ ] Confirm cash ledger loads without backend errors.
+- [ ] Confirm sales entry works.
+- [ ] Confirm inventory updates work.
+- [ ] Confirm customer and debt flows work.
+- [ ] Confirm reports and exports load successfully.
+- [ ] Confirm PDF report pages render correctly.
+- [ ] Confirm file uploads still work under the configured max size.
+
+#### Soft Deploy Safety Checks
+
+- [ ] Verify production uses the intended `FLASK_SECRET_KEY`.
+- [ ] Verify session cookies are `Secure`, `HttpOnly`, and `SameSite=Lax`.
+- [ ] Verify HTTPS is active on the Railway URL.
+- [ ] Confirm the app is started with [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py), not `python app.py`.
+- [ ] Ensure the database is not exposed beyond what Railway requires.
+- [ ] Write down the Railway service URL, DB service name, and env var set used.
+- [ ] Take an initial production backup after the first stable deploy.
+- [ ] Document the rollback step: redeploy the previous successful Railway deployment.
+
+### Before Monday Release
+
+Goal:
+- use the soft-deployed app to iron out issues
+- only treat next Monday as the actual client-ready release checkpoint
+
+#### Stability Pass
+
+- [ ] Fix any issues found during live Railway testing.
+- [ ] Re-test the highest-risk areas after each fix.
+- [ ] Keep changes in `dev` first, then promote to `production` only after verification.
+
+#### Operations And Monitoring
+
+- [ ] Review Railway logs daily during the soft-deploy period.
+- [ ] Turn on error monitoring or at least define a log-check routine.
+- [ ] Watch Railway usage so the client has a realistic cost expectation.
+- [ ] Confirm the scheduled reminders job actually runs and creates expected results.
+
+#### Final Release Gate
+
+- [ ] Re-run admin/staff direct-URL access tests.
+- [ ] Re-run login throttling behavior once on the live environment.
+- [ ] Confirm backup/restore confidence.
+- [ ] Decide whether to add the client custom domain before release or shortly after.
+- [ ] If adding the domain, re-check cookies, HTTPS, and login flow on the final domain.

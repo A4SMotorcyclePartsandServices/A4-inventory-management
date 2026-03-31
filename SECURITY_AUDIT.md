@@ -1,6 +1,6 @@
 ## Security Audit
 
-Audit date: 2026-03-13
+Audit date: 2026-03-31
 
 Scope:
 
@@ -12,19 +12,20 @@ Scope:
 
 ### Findings
 
-1. Medium: client-side DOM XSS risk still exists, but the highest-risk hotspots were reduced.
+1. Low: no obvious high-risk DOM XSS sink remains in the main runtime screens that were previously called out.
    - Status:
-     - A shared `escapeHtml()` helper now exists in [templates/base.html](/c:/Dev/a4_inventory_system/templates/base.html#L839).
-     - High-risk dynamic HTML paths in the sale, debt, and admin screens were partially sanitized:
+     - Strict `escapeHtml()` / DOM-node rendering has now been pushed through the highest-risk data-driven screens:
+       - [templates/index.html](/c:/Dev/a4_inventory_system/templates/index.html)
        - [templates/transactions/out.html](/c:/Dev/a4_inventory_system/templates/transactions/out.html)
-       - [templates/transactions/utang.html](/c:/Dev/a4_inventory_system/templates/transactions/utang.html)
+       - [templates/cash/cash_ledger.html](/c:/Dev/a4_inventory_system/templates/cash/cash_ledger.html)
        - [templates/users/users.html](/c:/Dev/a4_inventory_system/templates/users/users.html)
+     - The previous problem pattern was large fetched datasets rendered into `innerHTML` tables, modals, and search results. Those paths were converted to DOM creation or escaped rendering.
    - Remaining representative references:
-     - [templates/transactions/out.html](/c:/Dev/a4_inventory_system/templates/transactions/out.html#L1371)
-     - [templates/index.html](/c:/Dev/a4_inventory_system/templates/index.html#L463)
-     - [templates/cash/cash_ledger.html](/c:/Dev/a4_inventory_system/templates/cash/cash_ledger.html#L1087)
-     - [templates/users/users.html](/c:/Dev/a4_inventory_system/templates/users/users.html#L1988)
-     - [templates/cash/cash_ledger.html](/c:/Dev/a4_inventory_system/templates/cash/cash_ledger.html#L1087)
+     - [templates/users/users.html](/c:/Dev/a4_inventory_system/templates/users/users.html)
+     - [templates/transactions/out.html](/c:/Dev/a4_inventory_system/templates/transactions/out.html)
+     - [templates/index.html](/c:/Dev/a4_inventory_system/templates/index.html)
+   - Residual note:
+     - Some `innerHTML` usage still exists for static skeleton markup, icon wrappers, or already-escaped helper output. That is materially lower risk than the previous state, but future edits should still prefer `textContent` and DOM node creation for untrusted data.
    - Why it matters:
      - If an attacker can get HTML/JS-like content stored in names, notes, reference numbers, service names, item names, or customer fields, any remaining unsafe `innerHTML` path can execute it in another user’s browser.
      - Jinja autoescaping protects server-rendered HTML templates, but it does not protect JavaScript string templates assigned to `innerHTML`.
@@ -32,26 +33,23 @@ Scope:
      - Continue replacing `innerHTML` usage with DOM node creation plus `textContent` where data is untrusted.
      - Where HTML templating in JS remains necessary, ensure every interpolated value passes through `escapeHtml()`.
 
-2. Medium: authorization is improved, but staff-access policy is still broad and not yet explicitly reviewed as a business rule.
+2. Low: staff-access scope is intentionally broad by business decision, with only enforcement consistency left to verify over time.
    - Representative references:
      - [ACCESS_CONTROL.md](/c:/Dev/a4_inventory_system/ACCESS_CONTROL.md)
      - [app.py](/c:/Dev/a4_inventory_system/app.py#L81)
-   - Why it matters:
-     - Current protection is mostly `logged-in` versus `admin-only`.
-     - Staff can still reach a wide set of export/report/debt/customer endpoints. That may be correct, but it is a business-risk decision, not just a code decision.
-   - Recommended fix:
-     - Review the current staff-access surface route by route and shrink it where needed, especially exports, audit views, and financial pages.
+   - Status:
+     - The current staff-access surface has now been discussed with the client and is considered intentional for this deployment.
+     - The remaining security concern is not policy ambiguity, but making sure future route changes continue to match that agreed access model.
+   - Residual note:
+     - If the business policy changes later, re-check exports, audit views, debt, cash, and financial report routes first.
 
-3. Medium: report date inputs are not strongly validated before use.
+3. Resolved: report date inputs are now strongly validated before use.
    - Representative references:
-     - [routes/reports_route.py](/c:/Dev/a4_inventory_system/routes/reports_route.py#L66)
-     - [routes/reports_route.py](/c:/Dev/a4_inventory_system/routes/reports_route.py#L76)
-     - [routes/reports_route.py](/c:/Dev/a4_inventory_system/routes/reports_route.py#L87)
-   - Why it matters:
-     - These routes accept date strings and pass them deeper into services without strict format validation.
-     - This is not an obvious SQL injection issue because parameters are still bound, but it increases error-handling and abuse surface.
-   - Recommended fix:
-     - Validate all date query params as strict `YYYY-MM-DD` before processing.
+     - [routes/reports_route.py](/c:/Dev/a4_inventory_system/routes/reports_route.py)
+   - Status:
+     - Date query parameters are now validated as strict `YYYY-MM-DD` before report processing.
+   - Residual note:
+     - Keep using the shared validation helpers when new report endpoints are added.
 
 4. Medium: login throttling is process-local only.
    - Representative references:
@@ -81,12 +79,11 @@ Scope:
 - Login now rotates session state and applies basic throttling.
 - SQL queries are mostly parameterized.
 - A production-oriented WSGI/Waitress startup path now exists.
-- Several high-risk DOM XSS hotspots were sanitized with `escapeHtml()`.
+- The main data-driven DOM XSS hotspots in inventory, sales, debt, cash, and admin screens were reduced to low residual risk.
 
 ### Recommended next security work
 
-1. Finish the remaining `innerHTML` / DOM XSS cleanup.
-2. Add strict validation helpers for date, numeric, and enum inputs.
-3. Review staff-access policy on financial/export endpoints.
-4. Move rate limiting to shared storage if deployment will use multiple processes or servers.
-5. Add centralized audit logging for failed logins and privileged actions.
+1. Move rate limiting to shared storage if deployment will use multiple processes or servers.
+2. Add centralized audit logging for failed logins and privileged actions.
+3. Keep new client-side rendering work on the DOM/textContent path instead of reintroducing raw `innerHTML` for fetched data.
+4. Re-verify route enforcement if the staff/admin access policy changes later.
