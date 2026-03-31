@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loyalty Program Report - {{ program.name }}</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.55;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: white;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+
+        .header-logo {
+            height: 60px;
+            width: auto;
+            margin-right: 20px;
+        }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 80px;
+        }
+
+        .report-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+
+        .report-date {
+            font-size: 15px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .meta-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin: 14px 0 18px;
+            flex-wrap: wrap;
+        }
+
+        .report-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #dbeafe;
+            border: 1px solid #93c5fd;
+            color: #1d4ed8;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .generated-note {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .summary-grid {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box {
+            flex: 1;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .summary-box-title {
+            background: #e8e8e8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .summary-box-body {
+            padding: 12px;
+            font-size: 24px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .info-card {
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .info-card-title {
+            background: #f6f6f6;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .info-card-body {
+            padding: 10px 12px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 6px 0;
+            border-bottom: 1px dashed #d1d5db;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #555;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .info-value {
+            text-align: right;
+            font-weight: 700;
+            color: #111;
+        }
+
+        .badge-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            border: 1px solid transparent;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .pill-green { background: #d4edda; color: #155724; border-color: #a3cfbb; }
+        .pill-blue { background: #dbeafe; color: #1d4ed8; border-color: #93c5fd; }
+        .pill-amber { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+        .pill-slate { background: #e5e7eb; color: #374151; border-color: #cbd5e1; }
+        .pill-red { background: #f8d7da; color: #721c24; border-color: #f1aeb5; }
+
+        .reward-box {
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            padding: 14px;
+            margin-bottom: 18px;
+            background: #fafafa;
+        }
+
+        .reward-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .reward-main {
+            font-size: 22px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        .reward-sub {
+            margin-top: 4px;
+            color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #999;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #bbb;
+            font-size: 13px;
+            vertical-align: top;
+        }
+
+        .cell-center {
+            text-align: center;
+        }
+
+        .rule-name {
+            font-weight: 700;
+        }
+
+        .cell-submeta {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #555;
+            line-height: 1.45;
+        }
+
+        .empty-state {
+            margin-top: 18px;
+            border: 1px dashed #bbb;
+            border-radius: 8px;
+            padding: 28px 24px;
+            text-align: center;
+            color: #666;
+            background: #fafafa;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        You can print or save this loyalty report as PDF.
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <div class="report-title">LOYALTY PROGRAM REPORT</div>
+            <div class="report-date">{{ program.name }}</div>
+        </div>
+    </div>
+
+    <div class="meta-strip">
+        <div class="report-badge">{{ program.program_mode_display }}</div>
+        <div class="generated-note">Generated: <strong>{{ generated_at }}</strong></div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box">
+            <div class="summary-box-title">Program Type</div>
+            <div class="summary-box-body">{{ program.display_type }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Status</div>
+            <div class="summary-box-body">{{ program.status_label }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Reward Basis</div>
+            <div class="summary-box-body">{{ program.reward_basis_display }}</div>
+        </div>
+        <div class="summary-box">
+            <div class="summary-box-title">Point Rules</div>
+            <div class="summary-box-body">{{ program.rule_count }}</div>
+        </div>
+    </div>
+
+    <div class="info-grid">
+        <div class="info-card">
+            <div class="info-card-title">Program Information</div>
+            <div class="info-card-body">
+                <div class="info-row">
+                    <div class="info-label">Qualifies On</div>
+                    <div class="info-value">{{ program.qualifying_display }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Period</div>
+                    <div class="info-value">{{ program.period_display }}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Mode</div>
+                    <div class="info-value">{{ program.program_mode_display }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <div class="info-card-title">Earning Setup</div>
+            <div class="info-card-body">
+                <div class="badge-list">
+                    {% if program.stamp_enabled_bool %}
+                    <span class="pill pill-green">Stamps Enabled</span>
+                    <span class="pill pill-green">Stamp Target {{ program.threshold_display }}</span>
+                    {% endif %}
+                    {% if program.points_enabled_bool %}
+                    <span class="pill pill-blue">Points Enabled</span>
+                    <span class="pill pill-blue">Points Target {{ program.points_threshold_display }}</span>
+                    {% endif %}
+                    {% if not program.stamp_enabled_bool and not program.points_enabled_bool %}
+                    <span class="pill pill-slate">No earning modes configured</span>
+                    {% endif %}
+                    <span class="pill pill-slate">{{ program.reward_basis_display }}</span>
+                    <span class="pill pill-amber">{{ program.program_mode_display }}</span>
+                    {% if program.status_label == 'Expired' %}
+                    <span class="pill pill-red">Expired</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="reward-box">
+        <div class="reward-title">Reward</div>
+        <div class="reward-main">{{ program.reward_display }}</div>
+        {% if program.reward_subtext %}
+        <div class="reward-sub">{{ program.reward_subtext }}</div>
+        {% endif %}
+    </div>
+
+    {% if program.rules %}
+    <table>
+        <thead>
+            <tr>
+                <th width="8%" class="cell-center">#</th>
+                <th width="25%">Rule</th>
+                <th width="11%" class="cell-center">Points</th>
+                <th width="40%">Conditions</th>
+                <th width="16%">Behavior</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rule in program.rules %}
+            <tr>
+                <td class="cell-center">{{ loop.index }}</td>
+                <td>
+                    <div class="rule-name">{{ rule.display_name }}</div>
+                    <div class="cell-submeta">Priority {{ rule.priority or loop.index }}</div>
+                </td>
+                <td class="cell-center">{{ rule.points }}</td>
+                <td>{{ rule.condition_text }}</td>
+                <td>{{ 'Stop on match' if rule.stop_on_match else 'Continue scanning' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        No point rules configured for this loyalty program.
+    </div>
+    {% endif %}
+</body>
+</html>

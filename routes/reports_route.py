@@ -6,6 +6,7 @@ from flask import Response
 from db.database import get_db
 from flask import Blueprint, request, render_template, redirect, url_for, flash
 from auth.utils import login_required
+from services.loyalty_service import get_all_programs
 from services.reports_service import (
     get_sales_by_date,
     get_sales_by_range,
@@ -39,6 +40,77 @@ def _get_validated_date_arg(param_name, *, flash_label):
         flash(f"{flash_label} must be a valid date in YYYY-MM-DD format.", "warning")
         return None
     return parsed
+
+
+def _loyalty_reward_label(program):
+    reward_type = str(program.get("reward_type") or "").upper()
+    reward_value = float(program.get("reward_value") or 0)
+    mapping = {
+        "NONE": "Earn-only campaign",
+        "FREE_SERVICE": "Free Service",
+        "FREE_ITEM": "Free Item",
+        "DISCOUNT_PERCENT": f"{reward_value:g}% off",
+        "DISCOUNT_AMOUNT": f"P{reward_value:,.2f} off",
+        "RAFFLE_ENTRY": f"{reward_value:.0f} raffle {'entry' if int(reward_value or 1) == 1 else 'entries'}",
+    }
+    return mapping.get(reward_type, reward_type or "-")
+
+
+def _loyalty_rule_condition_text(rule):
+    conditions = []
+    if int(rule.get("requires_any_service") or 0) == 1:
+        conditions.append("Any service")
+    if int(rule.get("requires_any_item") or 0) == 1:
+        conditions.append("Any item")
+    if rule.get("service_name"):
+        conditions.append(f"Service: {rule['service_name']}")
+    elif rule.get("service_id"):
+        conditions.append(f"Service #{rule['service_id']}")
+    if rule.get("item_name"):
+        conditions.append(f"Item: {rule['item_name']}")
+    elif rule.get("item_id"):
+        conditions.append(f"Item #{rule['item_id']}")
+    return " + ".join(conditions) if conditions else "Applies without extra conditions"
+
+
+def _build_loyalty_program_report(program):
+    rules = []
+    for idx, raw_rule in enumerate(program.get("point_rules") or [], start=1):
+        rule = dict(raw_rule)
+        rule["display_name"] = rule.get("rule_name") or f"Rule {idx}"
+        rule["condition_text"] = _loyalty_rule_condition_text(rule)
+        rules.append(rule)
+
+    is_expired = int(program.get("is_expired") or 0) == 1
+    is_active = int(program.get("is_active") or 0) == 1
+    program_mode = str(program.get("program_mode") or "REDEEMABLE").upper()
+    reward_basis = str(program.get("reward_basis") or "STAMPS").replace("_", " ").title()
+
+    reward_description = (program.get("reward_description") or "").strip()
+    reward_label = _loyalty_reward_label(program)
+    reward_display = reward_description or reward_label
+    if reward_description and reward_label and reward_description != reward_label:
+        reward_subtext = reward_label
+    else:
+        reward_subtext = ""
+
+    return {
+        **program,
+        "display_type": "Service" if program.get("program_type") == "SERVICE" else "Item",
+        "status_label": "Expired" if is_expired else ("Active" if is_active else "Inactive"),
+        "qualifying_display": program.get("qualifying_name") or f"ID: {program.get('qualifying_id')}",
+        "period_display": f"{format_date(program.get('period_start'))} to {format_date(program.get('period_end'))}",
+        "reward_basis_display": reward_basis,
+        "program_mode_display": "Earn Only" if program_mode == "EARN_ONLY" else "Redeemable",
+        "reward_display": reward_display,
+        "reward_subtext": reward_subtext,
+        "rules": rules,
+        "rule_count": len(rules),
+        "stamp_enabled_bool": int(program.get("stamp_enabled") or 0) == 1,
+        "points_enabled_bool": int(program.get("points_enabled") or 0) == 1,
+        "threshold_display": int(program.get("threshold") or 0),
+        "points_threshold_display": int(program.get("points_threshold") or 0),
+    }
 
 
 def _build_sales_report_context():
@@ -185,6 +257,21 @@ def purchase_order_report(po_id):
         report_data["item_pages"] = [[]]
 
     return render_template("reports/purchase_order_pdf.html", po=report_data)
+
+
+@reports_bp.route("/reports/loyalty-program/<int:program_id>")
+@login_required
+def loyalty_program_report(program_id):
+    programs = get_all_programs(include_rules=True)
+    program = next((row for row in programs if int(row.get("id") or 0) == program_id), None)
+    if not program:
+        return "Loyalty program not found.", 404
+
+    return render_template(
+        "reports/loyalty_info_pdf.html",
+        program=_build_loyalty_program_report(program),
+        generated_at=datetime.now().strftime("%b %d, %Y %I:%M %p"),
+    )
 
 
 @reports_bp.route("/reports/daily")

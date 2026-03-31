@@ -20,7 +20,7 @@ loyalty_bp = Blueprint("loyalty", __name__)
 # ─────────────────────────────────────────────────────────────
 
 @loyalty_bp.route("/api/loyalty/programs", methods=["GET"])
-@admin_required
+@login_required
 def list_programs():
     programs = get_all_programs(include_rules=True)
     return jsonify({"programs": programs})

@@ -1602,7 +1602,10 @@
     <!-- LOYALTY PROGRAMS TAB -->
     <div class="tab-pane fade {% if active_tab == 'loyalty-tab' %}show active{% endif %}" id="loyalty-tab">
 
+        {% set loyalty_can_manage = session.get('role') == 'admin' %}
+
         <!-- CREATE FORM -->
+        {% if loyalty_can_manage %}
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add Loyalty Program</h5>
 
@@ -1750,6 +1753,11 @@
 
             </div>
         </div>
+        {% else %}
+        <div class="alert alert-secondary border-secondary bg-dark text-white-50 mb-4" role="alert">
+            Loyalty programs are view-only for staff. You can open the details modal and print the loyalty report from the table below.
+        </div>
+        {% endif %}
 
         <!-- PROGRAMS TABLE -->
         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -1830,7 +1838,7 @@
                     </div>
                 </div>
                 <div class="modal-footer border-secondary">
-                    <a id="saleDetailsPrintBtn" href="#" target="_blank" class="btn btn-outline-warning btn-sm">
+                    <a id="loyaltyDetailsPrintBtn" href="#" target="_blank" class="btn btn-outline-warning btn-sm">
                         <i class="bi bi-printer me-1"></i>Print
                     </a>
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
@@ -5287,6 +5295,7 @@ function showLoyaltyFlash(message, type = 'success') {
 }
 
 let loyaltyProgramsCache = [];
+const loyaltyCanManage = {{ 'true' if session.get('role') == 'admin' else 'false' }};
 
 function formatLoyaltyDate(value) {
     if (!value) return '-';
@@ -5361,7 +5370,10 @@ async function loadLoyaltyPrograms() {
         loyaltyProgramsCache = programs;
 
         if (!programs.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No programs yet. Create one above.</td></tr>';
+            const emptyMessage = loyaltyCanManage
+                ? 'No programs yet. Create one above.'
+                : 'No loyalty programs available.';
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">${emptyMessage}</td></tr>`;
             return;
         }
 
@@ -5423,35 +5435,49 @@ async function loadLoyaltyPrograms() {
             ].join('');
 
             const isExpired = Number(p.is_expired || 0) === 1;
-            const extendButton = isExpired
-                ? `<button class="btn btn-sm btn-outline-secondary text-muted" disabled title="Expired programs can no longer be extended">
-                        <i class="bi bi-wrench"></i>
-                    </button>`
-                : `<button class="btn btn-sm btn-outline-warning" onclick="event.stopPropagation(); openExtendLoyaltyProgramModal(${p.id})" title="Extend program period">
-                        <i class="bi bi-wrench"></i>
-                    </button>`;
-            const actionsHtml = `
-                <div class="btn-group btn-group-sm" role="group" aria-label="Loyalty actions">
-                    <button class="btn btn-sm btn-outline-info me-1" onclick="event.stopPropagation(); openLoyaltyProgramDetails(${p.id})" title="View details">
-                        <i class="bi bi-eye"></i>
+            const extendButton = loyaltyCanManage
+                ? (isExpired
+                    ? `<button class="btn btn-sm btn-outline-secondary text-muted" disabled title="Expired programs can no longer be extended">
+                            <i class="bi bi-wrench"></i>
+                        </button>`
+                    : `<button class="btn btn-sm btn-outline-warning" onclick="event.stopPropagation(); openExtendLoyaltyProgramModal(${p.id})" title="Extend program period">
+                            <i class="bi bi-wrench"></i>
+                        </button>`)
+                : '';
+            const actionsHtml = loyaltyCanManage
+                ? `
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Loyalty actions">
+                        <button class="btn btn-sm btn-outline-info me-1" onclick="event.stopPropagation(); openLoyaltyProgramDetails(${p.id})" title="View details">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                        ${extendButton}
+                    </div>
+                `
+                : `
+                    <button class="btn btn-sm btn-outline-info" onclick="event.stopPropagation(); openLoyaltyProgramDetails(${p.id})" title="View details">
+                        <i class="bi bi-eye me-1"></i>View
                     </button>
-                    ${extendButton}
-                </div>
-            `;
-            const statusBtn = isExpired
-                ? `<div class="text-warning" title="This program's active period has ended.">
-                    <i class="bi bi-clock-history fs-4"></i>
-                    <small class="d-block fw-bold" style="font-size:0.65rem;">EXPIRED</small>
-                </div>`
-                : p.is_active
-                    ? `<button class="toggle-btn text-success" onclick="event.stopPropagation(); toggleLoyaltyProgram(${p.id}, false)" title="Click to deactivate">
-                        <i class="bi bi-toggle-on fs-3"></i>
-                        <small class="d-block fw-bold" style="font-size:0.65rem;">ACTIVE</small>
-                    </button>`
-                    : `<button class="toggle-btn text-muted" onclick="event.stopPropagation(); toggleLoyaltyProgram(${p.id}, true)" title="Click to activate">
-                        <i class="bi bi-toggle-off fs-3"></i>
-                        <small class="d-block fw-bold" style="font-size:0.65rem;">INACTIVE</small>
-                    </button>`;
+                `;
+            const statusBtn = loyaltyCanManage
+                ? (isExpired
+                    ? `<div class="text-warning" title="This program's active period has ended.">
+                        <i class="bi bi-clock-history fs-4"></i>
+                        <small class="d-block fw-bold" style="font-size:0.65rem;">EXPIRED</small>
+                    </div>`
+                    : p.is_active
+                        ? `<button class="toggle-btn text-success" onclick="event.stopPropagation(); toggleLoyaltyProgram(${p.id}, false)" title="Click to deactivate">
+                            <i class="bi bi-toggle-on fs-3"></i>
+                            <small class="d-block fw-bold" style="font-size:0.65rem;">ACTIVE</small>
+                        </button>`
+                        : `<button class="toggle-btn text-muted" onclick="event.stopPropagation(); toggleLoyaltyProgram(${p.id}, true)" title="Click to activate">
+                            <i class="bi bi-toggle-off fs-3"></i>
+                            <small class="d-block fw-bold" style="font-size:0.65rem;">INACTIVE</small>
+                        </button>`)
+                : (isExpired
+                    ? `<span class="badge bg-warning text-dark">Expired</span>`
+                    : Number(p.is_active || 0) === 1
+                        ? `<span class="badge bg-success">Active</span>`
+                        : `<span class="badge bg-secondary">Inactive</span>`);
 
             // qualifying_name is joined in by the API (see note below)
             const qualifyingDisplay = p.qualifying_name
@@ -5514,6 +5540,7 @@ function openLoyaltyProgramDetails(programId) {
     document.getElementById('loyaltyDetailPeriod').textContent = `${formatLoyaltyDate(program.period_start)} to ${formatLoyaltyDate(program.period_end)}`;
     document.getElementById('loyaltyDetailEarning').innerHTML = getLoyaltyEarningBadges(program) || '<span class="text-muted">None</span>';
     document.getElementById('loyaltyDetailReward').innerHTML = rewardDisplay;
+    document.getElementById('loyaltyDetailsPrintBtn').href = `/reports/loyalty-program/${encodeURIComponent(program.id)}`;
     document.getElementById('loyaltyDetailRules').innerHTML = rules.length
         ? rules.map(rule => {
             const conditions = [];
