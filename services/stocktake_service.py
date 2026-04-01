@@ -357,8 +357,9 @@ def get_stocktake_overall_report(start_date, end_date):
             LEFT JOIN stocktake_items si ON si.session_id = ss.id
             LEFT JOIN items i ON i.id = si.item_id
             WHERE DATE(ss.created_at) BETWEEN %s AND %s
+              AND ss.status IN (%s, %s)
             """,
-            (start_date, end_date),
+            (start_date, end_date, STOCKTAKE_STATUS_DRAFT, STOCKTAKE_STATUS_CONFIRMED),
         ).fetchone()
 
         session_rows = conn.execute(
@@ -371,9 +372,39 @@ def get_stocktake_overall_report(start_date, end_date):
                 confirmed_at
             FROM stocktake_sessions
             WHERE DATE(created_at) BETWEEN %s AND %s
+              AND status IN (%s, %s, %s)
             ORDER BY created_at DESC, id DESC
             """,
-            (start_date, end_date),
+            (
+                start_date,
+                end_date,
+                STOCKTAKE_STATUS_DRAFT,
+                STOCKTAKE_STATUS_CONFIRMED,
+                STOCKTAKE_STATUS_CANCELLED,
+            ),
+        ).fetchall()
+
+        item_rows = conn.execute(
+            """
+            SELECT
+                si.*,
+                i.name,
+                i.category,
+                i.pack_size,
+                i.a4s_selling_price,
+                i.cost_per_piece,
+                ss.session_number,
+                ss.status AS session_status,
+                ss.created_at AS session_created_at,
+                ss.confirmed_at AS session_confirmed_at
+            FROM stocktake_items si
+            JOIN stocktake_sessions ss ON ss.id = si.session_id
+            JOIN items i ON i.id = si.item_id
+            WHERE DATE(ss.created_at) BETWEEN %s AND %s
+              AND ss.status IN (%s, %s)
+            ORDER BY ss.created_at DESC, ss.id DESC, si.id DESC
+            """,
+            (start_date, end_date, STOCKTAKE_STATUS_DRAFT, STOCKTAKE_STATUS_CONFIRMED),
         ).fetchall()
 
         session_status_counts = {
@@ -391,12 +422,19 @@ def get_stocktake_overall_report(start_date, end_date):
             elif status == STOCKTAKE_STATUS_CANCELLED:
                 session_status_counts["cancelled"] += 1
 
+        report_items = [_serialize_item_row(row) for row in item_rows]
+        for item in report_items:
+            item["session_status"] = str(item.get("session_status") or STOCKTAKE_STATUS_DRAFT).upper()
+            item["session_created_at_display"] = format_date(item.get("session_created_at"), show_time=True)
+            item["session_confirmed_at_display"] = format_date(item.get("session_confirmed_at"), show_time=True)
+        _attach_baseline_history(conn, {"items": report_items})
+
         return {
             "start_date": start_date,
             "end_date": end_date,
             "date_range_display": f"{format_date(start_date)} to {format_date(end_date)}",
             "summary": {
-                "session_count": int(summary_row["session_count"] or 0),
+                "session_count": session_status_counts["completed"] + session_status_counts["ongoing"],
                 "item_count": int(summary_row["item_count"] or 0),
                 "variance_item_count": int(summary_row["variance_item_count"] or 0),
                 "shortage_item_count": int(summary_row["shortage_item_count"] or 0),
@@ -407,6 +445,7 @@ def get_stocktake_overall_report(start_date, end_date):
                 "overage_items_value": float(summary_row["overage_items_value"] or 0),
             },
             "session_status_counts": session_status_counts,
+            "items": report_items,
         }
     finally:
         conn.close()

@@ -11,9 +11,6 @@ password_reset_bp = Blueprint("password_reset", __name__)
 
 
 def _client_ip():
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
     return request.remote_addr or "unknown"
 
 

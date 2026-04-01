@@ -188,6 +188,177 @@
             color: #0a58ca;
         }
 
+        .note-banner {
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 11px 13px;
+            margin-bottom: 18px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th, td {
+            border: 1px solid var(--line);
+            padding: 8px 7px;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #f3f4f6;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            text-align: center;
+        }
+
+        td:nth-child(2),
+        td:nth-child(3),
+        td:nth-child(4),
+        td:nth-child(5) {
+            text-align: center;
+        }
+
+        .session-cell {
+            display: grid;
+            gap: 6px;
+            text-align: left;
+            line-height: 1.25;
+        }
+
+        .session-cell strong {
+            font-size: 0.84rem;
+        }
+
+        .session-meta {
+            font-size: 0.72rem;
+            color: var(--muted);
+        }
+
+        .status-pill {
+            display: inline-block;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .status-pill.draft { background: #fef3c7; color: #92400e; }
+        .status-pill.confirmed { background: #dcfce7; color: #166534; }
+
+        .stock-metric {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: center;
+            line-height: 1.2;
+        }
+
+        .stock-metric-qty {
+            font-weight: 700;
+        }
+
+        .stock-metric-value {
+            font-size: 0.76rem;
+        }
+
+        .drift-card {
+            display: grid;
+            gap: 6px;
+            text-align: left;
+            font-size: 0.74rem;
+            line-height: 1.25;
+        }
+
+        .drift-card-row {
+            color: var(--muted);
+        }
+
+        .drift-card-row strong {
+            color: var(--ink);
+        }
+
+        .drift-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: fit-content;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .drift-badge.refreshed {
+            background: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffecb5;
+        }
+
+        .drift-badge.captured {
+            background: #e5e7eb;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+
+        .value-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 84px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+        }
+
+        .value-chip.system-chip {
+            background: #e8f1ff;
+            border-color: #b6d4fe;
+            color: #0a58ca;
+        }
+
+        .value-chip.counted-chip {
+            background: #fff3cd;
+            border-color: #ffecb5;
+            color: #664d03;
+        }
+
+        .value-chip.variance-pos {
+            background: #dcfce7;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .value-chip.variance-neg {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+
+        .value-chip.variance-zero {
+            background: #f3f4f6;
+            border-color: #e5e7eb;
+            color: #6b7280;
+        }
+
+        .variance-pos { color: #166534; font-weight: 800; }
+        .variance-neg { color: #991b1b; font-weight: 800; }
+        .variance-zero { color: #6b7280; font-weight: 800; }
+
         .footer {
             margin-top: 18px;
             padding-top: 10px;
@@ -201,6 +372,30 @@
         @media print {
             .print-bar { display: none; }
             body { padding: 8px 10px; max-width: none; }
+            .meta-grid,
+            .summary-grid {
+                break-inside: avoid;
+            }
+            tr, td, th {
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+            thead { display: table-header-group; }
+
+            .stock-metric {
+                gap: 3px;
+            }
+
+            .value-chip {
+                display: inline;
+                min-width: 0;
+                padding: 0;
+                border: 0;
+                border-radius: 0;
+                background: transparent !important;
+                box-shadow: none;
+                white-space: normal;
+            }
         }
     </style>
 </head>
@@ -227,7 +422,6 @@
         <div class="meta-card">
             <span class="meta-label">Sessions Included</span>
             <div class="meta-value">{{ report.summary.session_count }}</div>
-            {% if report.session_status_counts %}
             <div class="session-badges">
                 {% if report.session_status_counts.completed %}
                 <span class="session-badge completed">
@@ -239,13 +433,7 @@
                     {{ report.session_status_counts.ongoing }} Ongoing
                 </span>
                 {% endif %}
-                {% if report.session_status_counts.cancelled %}
-                <span class="session-badge cancelled">
-                    {{ report.session_status_counts.cancelled }} Cancelled
-                </span>
-                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 
@@ -291,6 +479,113 @@
             </div>
         </div>
     </div>
+
+    <div class="note-banner">
+        Only ongoing and completed stocktake sessions are included in this report.
+        {% if report.session_status_counts.cancelled %}
+            {{ report.session_status_counts.cancelled }} cancelled session(s) in the selected date range were excluded.
+        {% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 16%;">Session</th>
+                <th style="width: 19%;">Item</th>
+                <th style="width: 10%;">System Stock</th>
+                <th style="width: 10%;">Counted Stock</th>
+                <th style="width: 10%;">Variance</th>
+                <th style="width: 18%;">Item Drift</th>
+                <th style="width: 17%;">Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report["items"] %}
+            <tr>
+                <td>
+                    <div class="session-cell">
+                        <strong>{{ item.session_number or '-' }}</strong>
+                        <span class="status-pill {{ item.session_status|lower }}">{{ item.session_status }}</span>
+                        <div class="session-meta">
+                            Created: {{ item.session_created_at_display }}
+                            {% if item.session_status == 'CONFIRMED' and item.session_confirmed_at_display != '-' %}
+                            <br>Confirmed: {{ item.session_confirmed_at_display }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div style="font-weight: 700;">{{ item.name }}</div>
+                    <div style="font-size: 0.78rem; color: #666;">{{ item.category or '-' }}</div>
+                </td>
+                <td>
+                    <div class="stock-metric">
+                        <div class="stock-metric-qty">{{ item.system_stock }} pcs</div>
+                        <div class="stock-metric-value value-chip system-chip">&#8369;{{ "{:,.2f}".format(item.system_value or 0) }}</div>
+                    </div>
+                </td>
+                <td>
+                    <div class="stock-metric">
+                        <div class="stock-metric-qty">{{ item.counted_stock if item.counted_stock is not none else '-' }}{% if item.counted_stock is not none %} pcs{% endif %}</div>
+                        <div class="stock-metric-value value-chip counted-chip">
+                            {% if item.counted_value is not none %}
+                                &#8369;{{ "{:,.2f}".format(item.counted_value) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td class="{% if item.variance > 0 %}variance-pos{% elif item.variance < 0 %}variance-neg{% else %}variance-zero{% endif %}">
+                    <div class="stock-metric">
+                        <div class="stock-metric-qty">{% if item.variance > 0 %}+{% endif %}{{ item.variance }} pcs</div>
+                        <div class="stock-metric-value value-chip {% if item.variance > 0 %}variance-pos{% elif item.variance < 0 %}variance-neg{% else %}variance-zero{% endif %}">
+                            {% if item.variance_value > 0 %}+{% elif item.variance_value < 0 %}-{% endif %}&#8369;{{ "{:,.2f}".format(item.variance_value|abs) }}
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="drift-card">
+                        <span class="drift-badge {% if item.has_refreshed_baseline %}refreshed{% else %}captured{% endif %}">
+                            {{ item.baseline_mode }}
+                        </span>
+                        <div class="drift-card-row">
+                            Active baseline: <strong>{{ item.active_system_stock }} pcs</strong>
+                            <br>
+                            &#8369;{{ "{:,.2f}".format(item.active_system_value or 0) }}
+                        </div>
+                        <div class="drift-card-row">
+                            Captured variance:
+                            <strong>{% if item.captured_variance > 0 %}+{% endif %}{{ item.captured_variance }} pcs</strong>
+                            <br>
+                            {% if item.captured_variance_value > 0 %}+{% elif item.captured_variance_value < 0 %}-{% endif %}&#8369;{{ "{:,.2f}".format(item.captured_variance_value|abs) }}
+                        </div>
+                        <div class="drift-card-row">
+                            Refresh count: <strong>{{ item.baseline_refresh_count or 0 }}</strong>
+                        </div>
+                        {% if item.latest_baseline_refresh %}
+                        <div class="drift-card-row">
+                            Latest refresh:
+                            <strong>{{ item.latest_baseline_refresh.baseline_stock }} pcs</strong>
+                            {% if item.latest_baseline_refresh.created_at_display %}
+                            <br>{{ item.latest_baseline_refresh.created_at_display }}
+                            {% endif %}
+                            {% if item.latest_baseline_refresh.actor_username %}
+                            <br>by {{ item.latest_baseline_refresh.actor_username }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td>{{ item.notes or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align:center; color:#666;">No counted items were recorded for the selected date range.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
     <div class="footer">This is a system-generated aggregate stocktake report.</div>
 </body>

@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, session,
 
 from auth.utils import (
     clear_failed_login_attempts,
+    ensure_authenticated_user,
     is_login_rate_limited,
     login_required,
     purge_old_login_attempts,
@@ -14,6 +15,15 @@ auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "GET" and "user_id" in session:
+        user = ensure_authenticated_user()
+        if user:
+            if int(user.get("must_change_password") or 0) == 1:
+                return redirect(url_for("password_reset.change_password"))
+            if user["role"] == "admin":
+                return redirect(url_for("admin_users.manage_users"))
+            return redirect(url_for("index"))
+
     if request.method == "POST":
         purge_old_login_attempts()
         username = request.form["username"]

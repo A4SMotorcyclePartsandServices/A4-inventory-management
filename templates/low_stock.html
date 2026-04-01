@@ -157,9 +157,18 @@ function renderDebugBadge(flagged) {
         : '<span class="badge bg-secondary">NO</span>';
 }
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function renderDebugCell(value) {
     if (value === null || value === undefined || value === '') return '-';
-    return String(value);
+    return escapeHtml(value);
 }
 
 async function loadDebugRows() {

@@ -11,9 +11,6 @@ _LOGIN_RETENTION_SECONDS = 5 * 24 * 60 * 60
 
 
 def _client_ip():
-    forwarded_for = request.headers.get("X-Forwarded-For", "")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
     return request.remote_addr or "unknown"
 
 

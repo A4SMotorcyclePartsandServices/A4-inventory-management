@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 import webbrowser
 import threading
 
@@ -75,7 +76,31 @@ def _env_flag(name, default=False):
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _is_production_environment():
+    explicit_environment = (
+        os.environ.get("APP_ENV")
+        or os.environ.get("FLASK_ENV")
+        or os.environ.get("ENVIRONMENT")
+        or ""
+    ).strip().lower()
+    if explicit_environment in {"prod", "production"}:
+        return True
+
+    # Railway injects environment metadata in production deployments.
+    return bool(
+        os.environ.get("RAILWAY_ENVIRONMENT")
+        or os.environ.get("RAILWAY_PROJECT_ID")
+        or os.environ.get("RAILWAY_SERVICE_ID")
+    )
+
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=int(os.environ.get("TRUSTED_PROXY_FOR_COUNT", 1)),
+    x_proto=int(os.environ.get("TRUSTED_PROXY_PROTO_COUNT", 1)),
+    x_host=int(os.environ.get("TRUSTED_PROXY_HOST_COUNT", 1)),
+)
 app.config["SECRET_KEY"] = (
     os.environ.get("FLASK_SECRET_KEY")
     or os.environ.get("SECRET_KEY")
@@ -83,11 +108,15 @@ app.config["SECRET_KEY"] = (
 )
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
-app.config["SESSION_COOKIE_SECURE"] = _env_flag("SESSION_COOKIE_SECURE", default=False)
+app.config["SESSION_COOKIE_SECURE"] = _env_flag(
+    "SESSION_COOKIE_SECURE",
+    default=_is_production_environment(),
+)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
     hours=int(os.environ.get("SESSION_LIFETIME_HOURS", 12))
 )
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH_MB", 16)) * 1024 * 1024
+app.config["PREFERRED_URL_SCHEME"] = "https" if _is_production_environment() else "http"
 
 csrf = CSRFProtect(app)
 

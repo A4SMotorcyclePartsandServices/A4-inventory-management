@@ -321,7 +321,7 @@ def stocktake_overall_csv():
     writer.writerow(["Sessions Included", summary.get("session_count", 0)])
     writer.writerow(["Completed Sessions", report_data["session_status_counts"].get("completed", 0)])
     writer.writerow(["Ongoing Sessions", report_data["session_status_counts"].get("ongoing", 0)])
-    writer.writerow(["Cancelled Sessions", report_data["session_status_counts"].get("cancelled", 0)])
+    writer.writerow(["Cancelled Sessions Excluded", report_data["session_status_counts"].get("cancelled", 0)])
     writer.writerow(["Total Items Counted", summary.get("item_count", 0)])
     writer.writerow(["Total Value of Counted Items", summary.get("counted_items_value", 0)])
     writer.writerow(["No of Items w/ Variance", summary.get("variance_item_count", 0)])
@@ -330,6 +330,60 @@ def stocktake_overall_csv():
     writer.writerow(["Total Value of Items w/ Shortage", summary.get("shortage_items_value", 0)])
     writer.writerow(["No of Items w/ Overage", summary.get("overage_item_count", 0)])
     writer.writerow(["Total Value of Items w/ Overage", summary.get("overage_items_value", 0)])
+
+    writer.writerow([])
+    writer.writerow(["Counted Items"])
+    writer.writerow([
+        "Session Number",
+        "Session Status",
+        "Session Created",
+        "Session Confirmed",
+        "Item Name",
+        "Category",
+        "System Stock",
+        "System Value",
+        "Counted Stock",
+        "Counted Value",
+        "Variance",
+        "Variance Value",
+        "Baseline Mode",
+        "Active Baseline Stock",
+        "Active Baseline Value",
+        "Captured Variance",
+        "Captured Variance Value",
+        "Baseline Refresh Count",
+        "Latest Baseline Refresh Stock",
+        "Latest Baseline Refresh At",
+        "Latest Baseline Refresh By",
+        "Notes",
+    ])
+
+    for item in report_data.get("items", []):
+        latest_refresh = item.get("latest_baseline_refresh") or {}
+        writer.writerow([
+            item.get("session_number", ""),
+            item.get("session_status", ""),
+            item.get("session_created_at_display", ""),
+            item.get("session_confirmed_at_display", ""),
+            item.get("name", ""),
+            item.get("category", ""),
+            item.get("system_stock", 0),
+            item.get("system_value", 0),
+            item.get("counted_stock", ""),
+            item.get("counted_value", ""),
+            item.get("variance", 0),
+            item.get("variance_value", 0),
+            item.get("baseline_mode", ""),
+            item.get("active_system_stock", 0),
+            item.get("active_system_value", 0),
+            item.get("captured_variance", 0),
+            item.get("captured_variance_value", 0),
+            item.get("baseline_refresh_count", 0),
+            latest_refresh.get("baseline_stock", ""),
+            latest_refresh.get("created_at_display", ""),
+            latest_refresh.get("actor_username", ""),
+            item.get("notes", ""),
+        ])
 
     filename = f"stocktake-overall-{report_data['start_date']}-to-{report_data['end_date']}.csv"
     return Response(

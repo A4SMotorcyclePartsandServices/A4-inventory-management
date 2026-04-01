@@ -2,7 +2,7 @@ import json
 
 from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, flash, url_for
 
-from auth.utils import ensure_authenticated_user
+from auth.utils import admin_required, ensure_authenticated_user
 from services.admin_users_service import (
     _to_bool,
     create_bundle_record,
@@ -158,6 +158,7 @@ def toggle_user(user_id):
 
 
 @admin_users_bp.route("/password-resets/<int:request_id>/complete", methods=["POST"])
+@admin_required
 def complete_password_reset(request_id):
     temporary_password = request.form.get("temporary_password", "")
     admin_note = request.form.get("admin_note", "")
@@ -181,6 +182,7 @@ def complete_password_reset(request_id):
 
 
 @admin_users_bp.route("/password-resets/<int:request_id>/reject", methods=["POST"])
+@admin_required
 def reject_password_reset(request_id):
     admin_note = request.form.get("admin_note", "")
     try:
@@ -199,6 +201,7 @@ def reject_password_reset(request_id):
 
 
 @admin_users_bp.route("/stocktake-access/<int:approval_request_id>/approve", methods=["POST"])
+@admin_required
 def approve_stocktake_access(approval_request_id):
     expires_on = request.form.get("expires_on")
     admin_note = request.form.get("admin_note", "")
@@ -219,6 +222,7 @@ def approve_stocktake_access(approval_request_id):
 
 
 @admin_users_bp.route("/stocktake-access/<int:approval_request_id>/reject", methods=["POST"])
+@admin_required
 def reject_stocktake_access(approval_request_id):
     admin_note = request.form.get("admin_note", "")
     try:
@@ -237,6 +241,7 @@ def reject_stocktake_access(approval_request_id):
 
 
 @admin_users_bp.route("/stocktake-access/<int:approval_request_id>/revoke", methods=["POST"])
+@admin_required
 def revoke_stocktake_access_route(approval_request_id):
     admin_note = request.form.get("admin_note", "")
     try:
@@ -255,6 +260,7 @@ def revoke_stocktake_access_route(approval_request_id):
 
 
 @admin_users_bp.route("/mechanics/add", methods=["POST"])
+@admin_required
 def add_mechanic():
     name = request.form.get("name")
     commission = request.form.get("commission")
@@ -270,6 +276,7 @@ def add_mechanic():
 
 
 @admin_users_bp.route("/mechanics/toggle/<int:mechanic_id>", methods=["POST"])
+@admin_required
 def toggle_mechanic(mechanic_id):
     result = toggle_mechanic_active_status(mechanic_id)
     if result["status"] == "missing":
@@ -287,6 +294,7 @@ def toggle_mechanic(mechanic_id):
 
 
 @admin_users_bp.route("/mechanics/quota-topup", methods=["POST"])
+@admin_required
 def save_mechanic_quota_topup():
     try:
         result = save_mechanic_quota_topup_override(
@@ -308,6 +316,7 @@ def save_mechanic_quota_topup():
 
 
 @admin_users_bp.route("/mechanics/quota-topup/<int:override_id>/delete", methods=["POST"])
+@admin_required
 def delete_mechanic_quota_topup(override_id):
     try:
         result = delete_mechanic_quota_topup_override(override_id)
@@ -341,6 +350,7 @@ def manual_in_details(audit_group_id):
 
 
 @admin_users_bp.route("/services/add", methods=["POST"])
+@admin_required
 def add_service():
     result = add_service_record(
         name=request.form.get("name", ""),
@@ -364,6 +374,7 @@ def add_service():
 
 
 @admin_users_bp.route("/services/toggle/<int:service_id>", methods=["POST"])
+@admin_required
 def toggle_service(service_id):
     result = toggle_service_active_status(service_id)
     if result["status"] == "ok":
@@ -372,6 +383,7 @@ def toggle_service(service_id):
 
 
 @admin_users_bp.route("/bundles/add", methods=["POST"])
+@admin_required
 def add_bundle():
     try:
         variants = json.loads(request.form.get("variants_json") or "[]")
@@ -410,6 +422,7 @@ def add_bundle():
 
 
 @admin_users_bp.route("/bundles/<int:bundle_id>/edit", methods=["POST"])
+@admin_required
 def edit_bundle(bundle_id):
     try:
         variants = json.loads(request.form.get("variants_json") or "[]")
@@ -457,6 +470,7 @@ def edit_bundle(bundle_id):
 
 
 @admin_users_bp.route("/bundles/toggle/<int:bundle_id>", methods=["POST"])
+@admin_required
 def toggle_bundle(bundle_id):
     result = toggle_bundle_active_status(bundle_id)
     if result["status"] == "missing":
@@ -469,6 +483,7 @@ def toggle_bundle(bundle_id):
 
 
 @admin_users_bp.route("/api/bundles/<int:bundle_id>")
+@admin_required
 def bundle_details_api(bundle_id):
     try:
         return jsonify(get_bundle_edit_payload(bundle_id))
@@ -479,6 +494,7 @@ def bundle_details_api(bundle_id):
 
 
 @admin_users_bp.route("/payment-methods/add", methods=["POST"])
+@admin_required
 def add_payment_method():
     result = add_payment_method_record(
         name=request.form.get("name"),
@@ -499,6 +515,7 @@ def add_payment_method():
 
 
 @admin_users_bp.route("/payment-methods/toggle/<int:pm_id>", methods=["POST"])
+@admin_required
 def toggle_payment_method(pm_id):
     result = toggle_payment_method_active_status(pm_id)
     if result["status"] == "missing":
@@ -584,6 +601,7 @@ def payables_audit_api():
 
 
 @admin_users_bp.route("/api/item/<int:item_id>")
+@admin_required
 def get_item_details(item_id):
     try:
         item = get_item_details_payload(item_id)
