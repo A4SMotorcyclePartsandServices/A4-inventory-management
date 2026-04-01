@@ -4670,11 +4670,15 @@ function showDebtPaymentsModalForCustomer(customerId, saleReceipt = '', receiptC
             const payments = data.payments || [];
             const customerName = data.customer?.customer_name || 'Customer';
             const remaining = parseFloat(data.summary?.remaining || 0);
-            const receiptLabel = receiptCount > 1 ? `${receiptCount} active receipts` : (saleReceipt || '1 active receipt');
+            const showingPaidHistory = Boolean(data.summary?.showing_paid_history);
+            const recordCount = parseInt(data.summary?.sale_count || receiptCount || 1, 10);
+            const receiptLabel = recordCount > 1
+                ? `${recordCount} ${showingPaidHistory ? 'paid records' : 'active receipts'}`
+                : (saleReceipt || `1 ${showingPaidHistory ? 'paid record' : 'active receipt'}`);
             const header = `
                 <div class="mb-3">
                     <div>Customer <span class="fw-semibold text-warning">${escapeHtml(customerName)}</span></div>
-                    <div class="text-white-50 small">${escapeHtml(receiptLabel)} - Running balance &#8369;${remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                    <div class="text-white-50 small">${escapeHtml(receiptLabel)} - ${showingPaidHistory ? 'Settled balance' : 'Running balance'} &#8369;${remaining.toLocaleString(undefined, {minimumFractionDigits:2})}</div>
                 </div>`;
 
             if (!payments.length) {

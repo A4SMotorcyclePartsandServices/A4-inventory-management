@@ -201,45 +201,54 @@ def debt_summary_api():
             "customer_id": r["customer_id"],
             "sale_id": r["sale_id"],
             "customer_name": r["customer_name"] or "Walk-in",
-            "latest_sales_number": r["sales_number"],
-            "receipt_count": 0,
-            "total_amount": 0.0,
-            "total_paid": 0.0,
-            "remaining": 0.0,
-            "latest_transaction_date": r["transaction_date"],
+            "active_sales": [],
+            "paid_sales": [],
         })
 
-        entry["total_amount"] = round(entry["total_amount"] + total_amount, 2)
-        entry["total_paid"] = round(entry["total_paid"] + total_paid, 2)
-        entry["remaining"] = round(entry["remaining"] + remaining, 2)
-        entry["receipt_count"] += 1
-
-        current_txn = r["transaction_date"]
-        if current_txn and (entry["latest_transaction_date"] is None or current_txn > entry["latest_transaction_date"]):
-            entry["latest_transaction_date"] = current_txn
-            entry["latest_sales_number"] = r["sales_number"]
+        sale_summary = {
+            "sale_id": r["sale_id"],
+            "sales_number": r["sales_number"],
+            "transaction_date": r["transaction_date"],
+            "total_amount": total_amount,
+            "total_paid": total_paid,
+            "remaining": remaining,
+            "status": status,
+        }
+        if remaining > 0:
+            entry["active_sales"].append(sale_summary)
+        else:
+            entry["paid_sales"].append(sale_summary)
 
     result = []
     for entry in grouped.values():
-        if entry["remaining"] <= 0:
+        display_sales = entry["active_sales"] if entry["active_sales"] else entry["paid_sales"]
+        total_amount = round(sum(sale["total_amount"] for sale in display_sales), 2)
+        total_paid = round(sum(sale["total_paid"] for sale in display_sales), 2)
+        remaining = round(sum(sale["remaining"] for sale in display_sales), 2)
+        latest_sale = max(
+            display_sales,
+            key=lambda sale: (sale["transaction_date"] or "", sale["sale_id"]),
+        ) if display_sales else None
+
+        if remaining <= 0:
             status = "paid"
-        elif entry["total_paid"] > 0:
+        elif total_paid > 0:
             status = "partial"
         else:
             status = "unpaid"
 
         result.append({
             "customer_id": entry["customer_id"],
-            "sale_id": entry["sale_id"],
+            "sale_id": latest_sale["sale_id"] if latest_sale else entry["sale_id"],
             "customer_name": entry["customer_name"],
-            "latest_sales_number": entry["latest_sales_number"],
-            "receipt_count": entry["receipt_count"],
-            "total_amount": entry["total_amount"],
-            "total_paid": entry["total_paid"],
-            "remaining": entry["remaining"],
+            "latest_sales_number": latest_sale["sales_number"] if latest_sale else None,
+            "receipt_count": len(display_sales),
+            "total_amount": total_amount,
+            "total_paid": total_paid,
+            "remaining": remaining,
             "status": status,
-            "sort_date": entry["latest_transaction_date"],
-            "date": format_date(entry["latest_transaction_date"]),
+            "sort_date": latest_sale["transaction_date"] if latest_sale else None,
+            "date": format_date(latest_sale["transaction_date"]) if latest_sale else "-",
         })
 
     result.sort(key=lambda row: (row["sort_date"] or "", row["customer_name"].lower()), reverse=True)

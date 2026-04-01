@@ -232,10 +232,8 @@ def get_customer_debt_statement(customer_id):
         if not debt_sales:
             return None
 
+        all_sales = []
         active_sales = []
-        active_sale_ids = []
-        total_debt_amount = 0.0
-        total_paid_amount = 0.0
 
         for row in debt_sales:
             sale = dict(row)
@@ -250,15 +248,22 @@ def get_customer_debt_statement(customer_id):
             sale["item_remaining"] = round(max(0, sale["remaining"] - sale["service_remaining"]), 2)
             sale["transaction_date_display"] = format_date(sale["transaction_date"])
             sale["paid_at_display"] = format_date(sale["paid_at"])
+            sale["items"] = []
+            sale["services"] = []
+            all_sales.append(sale)
 
             if sale["remaining"] > 0:
                 active_sales.append(sale)
-                active_sale_ids.append(int(sale["id"]))
-                total_debt_amount += sale["total_amount"]
-                total_paid_amount += sale["total_paid"]
+
+        display_sales = active_sales if active_sales else all_sales
+        display_sale_ids = [int(sale["id"]) for sale in display_sales]
+        showing_paid_history = not bool(active_sales)
+
+        total_debt_amount = round(sum(sale["total_amount"] for sale in display_sales), 2)
+        total_paid_amount = round(sum(sale["total_paid"] for sale in display_sales), 2)
 
         payments = []
-        if active_sale_ids:
+        if display_sale_ids:
             item_rows = conn.execute(
                 """
                 SELECT
@@ -272,7 +277,7 @@ def get_customer_debt_statement(customer_id):
                 WHERE si.sale_id = ANY(%s)
                 ORDER BY si.sale_id ASC, i.name ASC, si.id ASC
                 """,
-                (active_sale_ids,),
+                (display_sale_ids,),
             ).fetchall()
 
             service_rows = conn.execute(
@@ -286,7 +291,7 @@ def get_customer_debt_statement(customer_id):
                 WHERE ss.sale_id = ANY(%s)
                 ORDER BY ss.sale_id ASC, sv.name ASC, ss.id ASC
                 """,
-                (active_sale_ids,),
+                (display_sale_ids,),
             ).fetchall()
 
             payment_rows = conn.execute(
@@ -308,7 +313,7 @@ def get_customer_debt_statement(customer_id):
                 WHERE dp.sale_id = ANY(%s)
                 ORDER BY dp.paid_at ASC, dp.id ASC
                 """,
-                (active_sale_ids,),
+                (display_sale_ids,),
             ).fetchall()
 
             items_by_sale = {}
@@ -327,7 +332,7 @@ def get_customer_debt_statement(customer_id):
                     "price": _money(row["price"]),
                 })
 
-            for sale in active_sales:
+            for sale in display_sales:
                 sale_id = int(sale["id"])
                 sale["items"] = items_by_sale.get(sale_id, [])
                 sale["services"] = services_by_sale.get(sale_id, [])
@@ -338,14 +343,9 @@ def get_customer_debt_statement(customer_id):
                 payment["amount_paid"] = _money(payment.get("amount_paid"))
                 payment["paid_at_display"] = format_date(payment["paid_at"])
                 payments.append(payment)
-        else:
-            for sale in active_sales:
-                sale["items"] = []
-                sale["services"] = []
-
         running_balance = 0.0
         ledger = []
-        for sale in active_sales:
+        for sale in display_sales:
             sale_reference = sale["sales_number"] or f"Sale #{sale['id']}"
             running_balance = round(running_balance + sale["total_amount"], 2)
             ledger.append({
@@ -392,12 +392,15 @@ def get_customer_debt_statement(customer_id):
             "customer": customer_dict,
             "summary": {
                 "active_sale_count": len(active_sales),
-                "total_amount": round(total_debt_amount, 2),
-                "total_paid": round(total_paid_amount, 2),
+                "sale_count": len(display_sales),
+                "total_amount": total_debt_amount,
+                "total_paid": total_paid_amount,
                 "remaining": round(max(0, total_debt_amount - total_paid_amount), 2),
+                "showing_paid_history": showing_paid_history,
                 "statement_date": format_date(datetime.now()),
             },
             "active_sales": active_sales,
+            "display_sales": display_sales,
             "payments": payments,
             "ledger": ledger,
         }

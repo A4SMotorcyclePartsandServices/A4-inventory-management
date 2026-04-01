@@ -478,22 +478,22 @@
 
     <div class="summary-grid">
         <div class="summary-card">
-            <label>Outstanding Transactions</label>
-            <div class="value">{{ data.summary.active_sale_count }}</div>
+            <label>{{ 'Paid Debt Records' if data.summary.showing_paid_history else 'Outstanding Transactions' }}</label>
+            <div class="value">{{ data.summary.sale_count }}</div>
         </div>
         <div class="summary-card paid">
             <label>Total Paid Amount</label>
             <div class="value">P{{ "%.2f"|format(data.summary.total_paid) }}</div>
         </div>
         <div class="summary-card remaining">
-            <label>Running Balance</label>
+            <label>{{ 'Remaining Balance' if not data.summary.showing_paid_history else 'Running Balance' }}</label>
             <div class="value">P{{ "%.2f"|format(data.summary.remaining) }}</div>
         </div>
     </div>
 </div>
 
-<div class="section-title">Outstanding Transactions</div>
-{% if data.active_sales %}
+<div class="section-title">{{ 'Paid Debt History' if data.summary.showing_paid_history else 'Outstanding Transactions' }}</div>
+{% if data.display_sales %}
 <table class="statement-table">
     <thead>
         <tr class="sale-row">
@@ -506,7 +506,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for sale in data.active_sales %}
+        {% for sale in data.display_sales %}
         <tr class="sale-row">
             <td>
                 <strong>{{ sale.sales_number or ('Sale #' ~ sale.id) }}</strong>
@@ -580,10 +580,10 @@
     </tbody>
 </table>
 {% else %}
-<p class="no-payments">No active utang found for this customer.</p>
+<p class="no-payments">No debt records found for this customer.</p>
 {% endif %}
 
-<div class="section-title">Payment History for Outstanding Transaction</div>
+<div class="section-title">{{ 'Payment History for Paid Debt' if data.summary.showing_paid_history else 'Payment History for Outstanding Transaction' }}</div>
 {% if data.payments %}
 <table class="statement-table">
     <thead>
@@ -613,7 +613,7 @@
 <p class="no-payments">No payments recorded yet.</p>
 {% endif %}
 
-<div class="section-title">Outstanding Balance</div>
+<div class="section-title">{{ 'Settlement Ledger' if data.summary.showing_paid_history else 'Outstanding Balance' }}</div>
 {% if data.ledger %}
 <table class="statement-table">
     <thead>

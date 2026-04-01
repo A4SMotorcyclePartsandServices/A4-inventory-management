@@ -3401,6 +3401,10 @@ def get_purchase_order_review_context(po_id, current_user_id=None, current_role=
                 **action,
                 "header_changes": header_changes,
                 "item_change_groups": list(grouped_item_changes.values()),
+                "has_no_change_resubmission": (
+                    str(action.get("action_type") or "").upper() in {"RESUBMITTED", "EDITED_AFTER_APPROVAL"}
+                    and not (action.get("change_entries") or [])
+                ),
             }
         )
 
