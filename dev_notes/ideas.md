@@ -1,3 +1,101 @@
+## Mobile Version Designing
+
+### Current edited pages
+
+- `templates/base.html`
+- `templates/index.html`
+- `templates/users/audit.html`
+- `templates/sales_analytics.html`
+
+### Current direction
+
+Goal:
+Make the existing desktop-first pages mobile-safe without creating a separate mobile version of every page.
+
+Current approach:
+- improve shared mobile behavior in `base.html` only when low-risk
+- prioritize page-level responsive polish for pages the client/admin actually uses on phone
+- keep layouts readable, tappable, and horizontally scrollable when full table conversion is not worth it yet
+
+### Page notes
+
+#### `templates/base.html`
+
+Current status:
+- topbar title / notification / profile layout was adjusted for smaller screens
+
+Potential problems:
+- mobile sidebar behavior is still fragile and should not be heavily refactored again without a safer isolated pass
+- the custom sidebar open/close logic can still be risky on mobile navigation flows
+
+Possible improvements:
+- keep future sidebar work minimal unless tested carefully
+- if revisited later, do a dedicated isolated prototype branch for mobile nav behavior only
+- avoid mixing mobile nav experiments with page-level responsive work
+
+#### `templates/index.html`
+
+Current status:
+- header actions stack better on mobile
+- search area is more phone-friendly
+- admin import controls are easier to use on narrow screens
+- inventory table remains scrollable with improved small-screen spacing
+
+Potential problems:
+- the inventory table is still dense on very small phones
+- price and stock columns may still feel cramped in portrait mode
+- admin import area can become tall and push the inventory list too far down
+
+Possible improvements:
+- consider hiding or collapsing lower-priority columns on very small screens
+- consider a compact item summary card layout for mobile only if the table still feels too heavy
+- consider moving admin import tools behind a collapsible section on phone
+
+#### `templates/users/audit.html`
+
+Current status:
+- header and back button stack more cleanly
+- top tab list is now horizontally scrollable
+- cards and tables are less cramped on smaller screens
+
+Known issue:
+- the audit tab in `audit.html` is still a little cramped on mobile
+
+Potential problems:
+- too many tabs for one row even with horizontal scrolling
+- some audit tables are still very wide and require a lot of sideways movement
+- filter and action-heavy sections may still feel crowded on smaller devices
+- modal content may still be dense for review-heavy admin workflows
+
+Possible improvements:
+- consider grouping lower-priority tabs into fewer admin sections later
+- add small mobile tab labels or icon-first labels if the tab bar still feels too long
+- selectively simplify the heaviest filter rows on phone
+- identify the most-used audit sub-tabs and give those the best mobile treatment first
+
+#### `templates/sales_analytics.html`
+
+Current status:
+- page already stacked reasonably well on mobile
+- spacing, KPI sizing, section headers, filter controls, and chart/table proportions were polished
+
+Potential problems:
+- tables still rely on horizontal scrolling for detailed breakdowns
+- some profit spotlight content can still feel text-heavy on smaller phones
+- charts may still look dense in portrait mode for quick reading
+
+Possible improvements:
+- consider shorter helper text on mobile for the profit section
+- consider reducing visible table columns for smaller screens if needed later
+- consider adding quick-jump links to the major sections of the analytics page
+
+### General reminder
+
+- mobile-safe is the current target, not full mobile redesign
+- prefer incremental page-level fixes over shared navigation rewrites
+- test each page in portrait width before moving to the next one
+- do not attempt another mobile sidebar redesign unless it is isolated and easy to revert
+
 # Blind Count Mode For Stocktake
 
 ## Section A - Client Discussion

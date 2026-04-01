@@ -1120,11 +1120,16 @@
                 line-height: 1.25;
             }
 
+            .topbar-left {
+                flex: 1 1 auto;
+            }
+
             .topbar-right {
                 gap: 8px;
                 margin-left: auto;
-                flex-wrap: wrap;
+                flex-wrap: nowrap;
                 justify-content: flex-end;
+                flex-shrink: 0;
             }
 
             main {
@@ -1162,12 +1167,27 @@
         }
 
         @media (max-width: 767.98px) {
+            .topbar {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: start;
+                column-gap: 10px;
+                row-gap: 8px;
+            }
+
+            .topbar-left {
+                display: grid;
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: start;
+                gap: 10px;
+            }
+
             .sidebar {
                 padding: 22px 16px 18px;
             }
 
             .sidebar .logo {
-                margin-bottom: 24px;
+                margin-bottom: 20px;
             }
 
             .sidebar img {
@@ -1189,8 +1209,23 @@
                 z-index: 1100;
             }
 
+            .topbar-title {
+                font-size: 0.98rem;
+                line-height: 1.15;
+                word-break: break-word;
+            }
+
             .topbar-right {
                 width: auto;
+                grid-column: 2;
+                grid-row: 1;
+                align-self: start;
+                justify-self: end;
+                align-items: flex-start;
+            }
+
+            .topbar-right .dropdown {
+                flex: 0 0 auto;
             }
 
             .notification-trigger,

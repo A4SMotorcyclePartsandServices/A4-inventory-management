@@ -313,6 +313,16 @@
         margin: 0;
     }
 
+    .table-scroll-note {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px 0;
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        letter-spacing: 0.2px;
+    }
+
     /* =====================
        PAGE HEADER
     ===================== */
@@ -320,6 +330,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
         margin-bottom: 24px;
     }
 
@@ -346,6 +358,7 @@
     .page-header-actions {
         display: flex;
         align-items: center;
+        justify-content: flex-end;
         gap: 10px;
         flex-wrap: wrap;
     }
@@ -454,6 +467,144 @@
         font-size: 0.8rem;
     }
 
+    @media (max-width: 991.98px) {
+        .admin-import-card {
+            padding: 18px 18px 20px;
+        }
+
+        .page-header {
+            align-items: flex-start;
+        }
+
+        .page-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .search-shell {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .table-scroll-note {
+            display: inline-flex;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .table th:nth-child(1) { width: 24%; }
+        .table th:nth-child(2) { width: 38%; }
+        .table th:nth-child(3),
+        .table th:nth-child(4) { width: 16%; }
+        .table th:nth-child(5) { width: 18%; }
+        .table th:nth-child(6) { width: 14%; }
+        .stock-col { width: 14%; }
+
+        .table {
+            font-size: 0.84rem;
+        }
+
+        .table td,
+        .table th {
+            padding: 0.7rem 0.55rem;
+        }
+
+        .description-cell {
+            font-size: 0.82rem;
+        }
+
+        .price-text {
+            font-size: 0.82rem;
+        }
+
+        .admin-import-card {
+            padding: 16px 14px 18px;
+            border-radius: 16px;
+        }
+
+        .admin-import-card .section-label {
+            margin-bottom: 12px;
+            letter-spacing: 1.4px;
+            line-height: 1.4;
+        }
+
+        .admin-import-card .input-group {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .admin-import-card .form-control,
+        .admin-import-card .btn {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .admin-import-card .btn {
+            min-height: 42px;
+            margin-top: 8px;
+        }
+
+        .page-header {
+            margin-bottom: 18px;
+        }
+
+        .page-title {
+            font-size: 1.15rem;
+            line-height: 1.3;
+        }
+
+        .page-header-actions {
+            gap: 8px;
+        }
+
+        .export-btn,
+        .item-count {
+            min-height: 40px;
+        }
+
+        .export-btn {
+            justify-content: center;
+            flex: 1 1 100%;
+            padding: 0 16px;
+        }
+
+        .item-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 8px 14px;
+        }
+
+        #inventorySearch {
+            height: 46px;
+            font-size: 0.95rem;
+        }
+
+        .chips-label,
+        .search-chip {
+            display: inline-flex;
+            margin-top: 6px;
+        }
+
+        .table-card {
+            border-radius: 14px;
+        }
+
+        .table-scroll-note {
+            padding: 12px 12px 0;
+            font-size: 0.76rem;
+        }
+
+        .pdf-filter-modal .modal-footer {
+            gap: 10px;
+        }
+
+        .pdf-filter-modal .modal-footer .btn {
+            width: 100%;
+        }
+    }
+
 </style>
 {% endblock %}
 
@@ -521,7 +672,7 @@
 
 <!-- SEARCH -->
 <div class="row justify-content-center mb-2">
-    <div class="col-md-6">
+    <div class="col-md-6 search-shell">
         <div class="search-wrapper">
             <i class="bi bi-search search-icon"></i>
             <input type="text" id="inventorySearch" class="form-control" placeholder="Search items or descriptions…">
@@ -530,13 +681,17 @@
 </div>
 
 <div class="row justify-content-center mb-4">
-    <div class="col-md-6">
+    <div class="col-md-6 search-shell">
         <div id="recentSearches" class="mt-2"></div>
     </div>
 </div>
 
 <!-- TABLE -->
 <div class="table-card">
+    <div class="table-scroll-note">
+        <i class="bi bi-arrows-move"></i>
+        <span>Swipe sideways to view all columns.</span>
+    </div>
     <div class="table-responsive">
         <table class="table table-dark mb-0">
             <thead>

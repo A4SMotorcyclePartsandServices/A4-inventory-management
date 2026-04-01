@@ -10,6 +10,45 @@
         margin-bottom: 2rem;
     }
 
+    .audit-page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .audit-page-header .btn {
+        flex-shrink: 0;
+    }
+
+    .audit-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 0.35rem;
+        scrollbar-width: thin;
+        scrollbar-color: #3b414f transparent;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .audit-tabs::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .audit-tabs::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .audit-tabs::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.16);
+        border-radius: 999px;
+    }
+
+    .audit-tabs .nav-item {
+        flex: 0 0 auto;
+    }
+
     .table-dark {
         background-color: #1e1e1e;
         border: 1px solid #333;
@@ -32,6 +71,7 @@
         border: 1px solid #333;
         color: #bbb;
         margin-right: 4px;
+        white-space: nowrap;
     }
 
     .nav-tabs .nav-link.active {
@@ -47,6 +87,19 @@
         border-top: none;
         padding: 1.5rem;
         border-radius: 0 0 8px 8px;
+    }
+
+    .tab-pane > .table-responsive,
+    .tab-pane .admin-card + .table-responsive {
+        border: 1px solid #333;
+        border-radius: 12px;
+        background: #1a1a1a;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-pane > .table-responsive .table,
+    .tab-pane .admin-card + .table-responsive .table {
+        margin-bottom: 0;
     }
     /* CRITICAL FIX: Prevent base.html and striped rows from hiding icons */
     .toggle-btn {
@@ -597,6 +650,31 @@
     }
 
     @media (max-width: 991.98px) {
+        .audit-page-header {
+            align-items: flex-start;
+        }
+
+        .audit-page-header .btn {
+            width: 100%;
+        }
+
+        .tab-content {
+            padding: 1.1rem;
+        }
+
+        .admin-card {
+            padding: 1.15rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .tab-pane form .btn.w-100 {
+            min-height: 44px;
+        }
+
+        .tab-pane .table-responsive > .table {
+            min-width: 760px;
+        }
+
         #passwordResetReviewActions,
         .password-reset-review-form-grid {
             grid-template-columns: 1fr;
@@ -751,6 +829,50 @@
     }
 
     @media (max-width: 767.98px) {
+        .audit-page-header {
+            margin-bottom: 1.1rem !important;
+        }
+
+        .audit-page-header h2 {
+            margin-bottom: 0;
+            font-size: 1.4rem;
+            line-height: 1.2;
+        }
+
+        .audit-tabs {
+            margin-left: -0.1rem;
+            margin-right: -0.1rem;
+            padding-bottom: 0.45rem;
+        }
+
+        .audit-tabs .nav-link {
+            padding: 0.72rem 0.9rem;
+            font-size: 0.84rem;
+        }
+
+        .tab-content {
+            padding: 0.95rem 0.85rem;
+        }
+
+        .admin-card {
+            padding: 1rem 0.9rem;
+            border-radius: 12px;
+        }
+
+        .tab-pane .table-responsive > .table {
+            min-width: 680px;
+            font-size: 0.86rem;
+        }
+
+        .tab-pane .table th,
+        .tab-pane .table td {
+            padding: 0.72rem 0.6rem;
+        }
+
+        .toggle-btn small {
+            font-size: 0.56rem;
+        }
+
         .password-reset-meta-grid {
             grid-template-columns: 1fr;
         }
@@ -1112,7 +1234,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="audit-page-header mb-4">
     <h2><i class="bi bi-shield-lock-fill"></i> Admin Panel</h2>
     <a href="/" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Back to Inventory
@@ -1120,7 +1242,7 @@
 </div>
 
 <!-- TABS -->
-<ul class="nav nav-tabs mb-0" role="tablist">
+<ul class="nav nav-tabs audit-tabs mb-0" role="tablist">
     <li class="nav-item">
         <button class="nav-link {% if active_tab == 'users-tab' %}active{% endif %}" data-bs-toggle="tab" data-bs-target="#users-tab" type="button">
             <i class="bi bi-people-fill"></i> Users
