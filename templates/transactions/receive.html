@@ -245,21 +245,21 @@
 
                             <div class="receive-main-cell text-center">
                                 <span class="badge {% if (item.purchase_mode or 'PIECE') == 'BOX' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-                                    {% if (item.purchase_mode or 'PIECE') == 'BOX' %}Per Box{% else %}Per Piece{% endif %}
+                                    {% if (item.purchase_mode or 'PIECE') == 'BOX' %}Per Box/Plastic{% else %}Per Piece{% endif %}
                                 </span>
                             </div>
 
                             <div class="receive-main-cell receive-main-metric">
-                                <div class="receive-metric">{{ item.quantity_ordered }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                                <div class="receive-metric">{{ item.quantity_ordered }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box/plastic{% else %}pcs{% endif %}</div>
                             </div>
 
                             <div class="receive-main-cell receive-main-metric">
-                                <div class="receive-metric is-info">{{ item.quantity_received }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                                <div class="receive-metric is-info">{{ item.quantity_received }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box/plastic{% else %}pcs{% endif %}</div>
                             </div>
 
                             <div class="receive-main-cell">
                                 <div class="receive-input-stack">
-                                    <div class="receive-input-label">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Boxes Received Today{% else %}Pieces Received Today{% endif %}</div>
+                                    <div class="receive-input-label">{% if (item.purchase_mode or 'PIECE') == 'BOX' %}Boxes/Plastic Received Today{% else %}Pieces Received Today{% endif %}</div>
                                     <input type="number"
                                         class="form-control form-control-lg receive-table-input bg-black text-white border-danger text-center qty-input"
                                         value="{{ remaining }}"
@@ -289,14 +289,14 @@
                         <div class="receive-helper-row">
                             <div class="receive-helper-block receive-helper-item">
                                 {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
-                                <span class="receive-box-hint">Enter boxes received today.</span>
-                                <span class="receive-box-warning">Count every piece from all boxes today.</span>
+                                <span class="receive-box-hint">Enter boxes/plastic received today.</span>
+                                <span class="receive-box-warning">Count every piece from all boxes/plastic today.</span>
                                 {% endif %}
                             </div>
 
                             <div class="receive-helper-block receive-helper-pending">
                                 {% if remaining > 0 %}
-                                <div class="receive-pending">Pending: {{ remaining }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box(es){% else %}pcs{% endif %}</div>
+                                <div class="receive-pending">Pending: {{ remaining }} {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box/plastic{% else %}pcs{% endif %}</div>
                                 {% else %}
                                 <div class="text-success receive-subhint">Fully Received</div>
                                 {% endif %}
@@ -304,7 +304,7 @@
 
                             <div class="receive-helper-block receive-helper-preview">
                                 {% if (item.purchase_mode or 'PIECE') == 'BOX' %}
-                                <div class="text-info receive-subhint">Required for all boxes received today.</div>
+                                <div class="text-info receive-subhint">Required for all box/plastic received today.</div>
                                 <div class="receive-cost-preview">Effective cost per piece will appear here.</div>
                                 {% else %}
                                 <div class="text-muted receive-subhint">Matches arrived qty for piece mode</div>
@@ -398,7 +398,7 @@ function updateReceivePreview(row) {
     const lineTotal = qtyReceived * unitCost;
     const pieceCost = lineTotal / countedPieces;
     preview.innerHTML = `
-        <span class="preview-formula">${qtyReceived} box(es) x P${unitCost.toFixed(2)} / ${countedPieces} pcs</span>
+        <span class="preview-formula">${qtyReceived} box/plastic x P${unitCost.toFixed(2)} / ${countedPieces} pcs</span>
         <span class="preview-result">P${pieceCost.toFixed(2)} per piece</span>
     `;
 }

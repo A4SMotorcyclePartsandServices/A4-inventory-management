@@ -4,8 +4,8 @@ import io
 from datetime import datetime, date
 from flask import Response
 from db.database import get_db
-from flask import Blueprint, request, render_template, redirect, url_for, flash
-from auth.utils import login_required
+from flask import Blueprint, request, render_template, redirect, url_for, flash, session
+from auth.utils import login_required, admin_required
 from services.loyalty_service import get_all_programs
 from services.reports_service import (
     get_sales_by_date,
@@ -447,7 +447,7 @@ def mechanic_supply_report():
 
 
 @reports_bp.route("/reports/items-overall")
-@login_required
+@admin_required
 def items_overall_report():
     selected_categories = _normalize_requested_item_categories(request.args.getlist("category"))
     items = _get_items_export_rows(selected_categories)
@@ -574,8 +574,9 @@ def export_items_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
+    is_admin = session.get("role") == "admin"
 
-    writer.writerow([
+    headers = [
         "Item ID",
         "Name",
         "Description",
@@ -584,16 +585,18 @@ def export_items_csv():
         "Vendor Price",
         "Cost Per Piece",
         "Selling Price",
-        "Markup (%)",
         "Reorder Level",
         "Current Stock",
         "Vendor",
-    ])
+    ]
+    if is_admin:
+        headers.insert(8, "Markup (%)")
+    writer.writerow(headers)
 
     for row in rows:
         markup_value = row["markup"]
         markup_percent = round(float(markup_value or 0) * 100, 2)
-        writer.writerow([
+        csv_row = [
             row["id"],
             row["name"] or "",
             row["description"] or "",
@@ -602,11 +605,13 @@ def export_items_csv():
             row["vendor_price"] or 0,
             row["cost_per_piece"] or 0,
             row["a4s_selling_price"] or 0,
-            markup_percent,
             row["reorder_level"] or 0,
             row["current_stock"] or 0,
             row["vendor_name"] or "",
-        ])
+        ]
+        if is_admin:
+            csv_row.insert(8, markup_percent)
+        writer.writerow(csv_row)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"items_export_{timestamp}.csv"

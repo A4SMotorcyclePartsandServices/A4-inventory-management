@@ -507,10 +507,12 @@
             <i class="bi bi-filetype-csv"></i>
             <span>Export CSV</span>
         </a>
+        {% if session.get('role') == 'admin' %}
         <button type="button" class="export-btn pdf-btn" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
             <i class="bi bi-filetype-pdf"></i>
             <span>Export PDF</span>
         </button>
+        {% endif %}
         <div class="item-count" id="itemCountBadge">
             {{ items | length }} items
         </div>
@@ -576,6 +578,7 @@
     </div>
 </div>
 
+{% if session.get('role') == 'admin' %}
 <div class="modal fade pdf-filter-modal" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -620,6 +623,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 {% endblock %}
 

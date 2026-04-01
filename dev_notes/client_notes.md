@@ -199,7 +199,7 @@ Future upgrade: move to Redis or DB
 ## March 29, 2026
 - [X] ~~*stocktake report page changes, need total card for overage and shortage items then*~~ [2026-03-30] 
 - [X] ~~*new pdf report for stocktake. aggregate based on date range. show totals for items counted, items w variance, items with shortages and items with overage. then show total cost of inventory formula is add everything in counted stock column. same with variance column, total all item cost of both overage and shortages. also csv*~~ [2026-03-30]
-- [ ] Edit page and index page. wait for confirmation to hide cost per piece and vendor price column from staff users. 
+- [X] ~~*Edit page and index page. wait for confirmation to hide cost per piece and vendor price column from staff users.*~~ [2026-04-01] 
 - [X] ~~*in edit item page hide markup input. do the same for add item page*~~ [2026-03-30]
 - [X] ~~*Stocktake page needs admin approval. expiration of approval is by date range*~~ [2026-03-30]
 - [X] ~~*hide variance items column in staff side*~~ [2026-03-30]

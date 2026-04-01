@@ -3,6 +3,9 @@
 {% block styles %}
 <style>
     .order-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; }
+    .order-card.order-header-card {
+        padding: 18px;
+    }
     .order-page-shell {
         width: min(1560px, calc(100vw - 420px));
         max-width: 100%;
@@ -102,23 +105,23 @@
         background: rgba(230, 57, 70, 0.08);
     }
     .table-order .col-item-name {
-        width: 24%;
+        width: 26%;
         min-width: 180px;
     }
     .table-order .col-stock-status {
-        width: 15%;
+        width: 14%;
     }
     .table-order .col-purchase-mode {
-        width: 13%;
-    }
-    .table-order .col-qty {
         width: 12%;
     }
+    .table-order .col-qty {
+        width: 10%;
+    }
     .table-order .col-unit-cost {
-        width: 14%;
+        width: 17%;
     }
     .table-order .col-line-total {
-        width: 14%;
+        width: 13%;
     }
     .table-order .col-actions {
         width: 64px;
@@ -181,18 +184,27 @@
     }
     .order-cell-label {
         color: #facc15;
-        font-size: 0.72rem;
+        font-size: 0.68rem;
         font-weight: 800;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.035em;
         text-transform: uppercase;
         margin-bottom: 6px;
         line-height: 1.15;
+        white-space: normal;
+        word-break: break-word;
+    }
+    .order-cell-label.order-cell-label-single-line {
+        white-space: nowrap;
+        word-break: normal;
+        font-size: 0.63rem;
+        letter-spacing: 0.02em;
     }
     .order-cell-hint {
         color: #fcd34d;
-        font-size: 0.74rem;
+        font-size: 0.72rem;
         line-height: 1.15;
         margin-top: 6px;
+        white-space: normal;
         word-break: break-word;
     }
     .order-stock-stack {
@@ -436,9 +448,9 @@
         <span id="poStatusBadge" class="badge bg-secondary">Status: DRAFT</span>
     </div>
 
-    <div class="row">
+    <div class="row g-4">
         <div class="col-xl-3 col-lg-4">
-            <div class="order-card mb-3">
+            <div class="order-card order-header-card mb-3">
                 <h5>Order Header</h5>
                 <div class="mb-3 position-relative">
                     <label class="form-label text">Vendor / Supplier</label>
@@ -637,7 +649,7 @@ function normalizePurchaseMode(mode) {
 }
 
 function getUnitCostLabel(item) {
-    return normalizePurchaseMode(item.purchase_mode) === 'BOX' ? 'Cost per box' : 'Cost per piece';
+    return normalizePurchaseMode(item.purchase_mode) === 'BOX' ? 'Cost per box/plastic' : 'Cost per piece';
 }
 
 function getLineTotal(item) {
@@ -1045,10 +1057,10 @@ function renderTable() {
                 : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`);
         const lineTotal = getLineTotal(item);
         const modeHint = purchaseMode === 'BOX'
-            ? 'Order by box. Cost below is for 1 box.'
+            ? 'Order by box/plastic. Cost below is for 1 box/plastic.'
             : 'Order by piece. Cost below is for 1 piece.';
         const costHint = purchaseMode === 'BOX'
-            ? 'Enter 1-box cost only.'
+            ? 'Enter 1-box/plastic cost only.'
             : 'Enter 1-piece cost only.';
 
         return `
@@ -1076,7 +1088,7 @@ function renderTable() {
                             <select class="form-select form-select-sm bg-dark text-white"
                                 onchange="updatePurchaseMode(${index}, this.value)">
                                 <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Per Piece</option>
-                                <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Per Box</option>
+                                <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Per Box/Plastic</option>
                             </select>
                         </div>
                         <div class="order-cell-hint-placeholder">helper</div>
@@ -1084,7 +1096,7 @@ function renderTable() {
                 </td>
                 <td>
                     <div class="order-cell-stack">
-                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Boxes to Order' : 'Pieces to Order'}</div>
+                        <div class="order-cell-label order-cell-label-single-line">${purchaseMode === 'BOX' ? 'Boxes to Order' : 'Pcs to Order'}</div>
                         <div class="order-cell-main is-input">
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
                                 value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
@@ -1094,7 +1106,7 @@ function renderTable() {
                 </td>
                 <td>
                     <div class="order-cell-stack">
-                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Cost Per Box' : 'Cost Per Piece'}</div>
+                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Cost Per Box/Plastic' : 'Cost Per Piece'}</div>
                         <div class="order-cell-main is-input">
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
                                 value="${Number(item.cost || 0)}" step="0.01" min="0"
@@ -1112,7 +1124,7 @@ function renderTable() {
                         <div class="order-cell-main">
                             <div class="order-line-total">P${lineTotal.toFixed(2)}</div>
                         </div>
-                        <div class="order-line-formula">${escapeHtml(String(item.qty || 0))} ${purchaseMode === 'BOX' ? 'box(es)' : 'pc(s)'} x P${Number(item.cost || 0).toFixed(2)}</div>
+                        <div class="order-line-formula">${purchaseMode === 'BOX' ? '1 box/plastic' : `${escapeHtml(String(item.qty || 0))} pc(s)`} x P${Number(item.cost || 0).toFixed(2)}</div>
                     </div>
                 </td>
                 <td>
@@ -1170,6 +1182,59 @@ function showOrderAlert(message, type) {
     if (window.A4Flash?.show) {
         return window.A4Flash.show(message, type || 'info', { replace: true });
     }
+}
+
+async function showBoxCostConfirmDialog(boxItems) {
+    const summaryList = boxItems.map(item => `
+        <div class="text-start" style="padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.08);">
+            <div style="font-weight: 700; color: #f9fafb;">${escapeHtml(item.name || 'Unnamed Item')}</div>
+            <div style="font-size: 0.92rem; color: #d1d5db;">
+                1 box/plastic at
+                <strong style="color: #fcd34d;">P${escapeHtml(Number(item.cost || 0).toFixed(2))}</strong>
+                per box/plastic
+            </div>
+        </div>
+    `).join('');
+
+    if (window.Swal?.fire) {
+        const result = await window.Swal.fire({
+            title: 'Confirm Box Costs',
+            html: `
+                <div style="text-align: left;">
+                    <div style="color: #d1d5db; margin-bottom: 10px;">
+                        Please confirm each box-based item uses the cost of <strong>one box/plastic only</strong>.
+                    </div>
+                    <div style="border-top: 1px solid rgba(255,255,255,0.08);">
+                        ${summaryList}
+                    </div>
+                </div>
+            `,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Confirm',
+            cancelButtonText: 'Review',
+            reverseButtons: true,
+            focusCancel: false,
+            confirmButtonColor: '#c1121f',
+            background: '#1c1f26',
+            color: '#f5f5f5',
+            customClass: {
+                popup: 'a4-swal-popup',
+                title: 'a4-swal-title',
+                htmlContainer: 'a4-swal-text',
+                confirmButton: 'a4-swal-confirm',
+                cancelButton: 'a4-swal-cancel',
+            },
+        });
+        return Boolean(result.isConfirmed);
+    }
+
+    const fallbackSummary = boxItems
+        .map(item => `- ${item.name}: 1 box/plastic at P${Number(item.cost || 0).toFixed(2)} per box/plastic`)
+        .join('\n');
+    return window.confirm(
+        `Please confirm each box-based item uses the cost of one box/plastic only.\n\n${fallbackSummary}`
+    );
 }
 
 function renderRevisionTracker(approval) {
@@ -1238,12 +1303,7 @@ async function submitOrder() {
     const boxItems = orderItems.filter(item => normalizePurchaseMode(item.purchase_mode) === 'BOX');
     let boxCostConfirmed = false;
     if (boxItems.length) {
-        const summary = boxItems
-            .map(item => `- ${item.name}: ${Number(item.qty || 0)} box(es) @ P${Number(item.cost || 0).toFixed(2)} per box`)
-            .join('\n');
-        boxCostConfirmed = window.confirm(
-            `Please confirm all box-based lines use the cost of ONE box only.\n\n${summary}\n\nClick OK to continue saving this PO.`
-        );
+        boxCostConfirmed = await showBoxCostConfirmDialog(boxItems);
         if (!boxCostConfirmed) {
             showOrderAlert('Review the box-based costs before saving the purchase order.', 'warning');
             return;
