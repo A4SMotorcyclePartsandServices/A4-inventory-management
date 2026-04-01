@@ -372,6 +372,88 @@
         border-color: rgba(103, 194, 228, 0.55);
         background: rgba(103, 194, 228, 0.16);
     }
+
+    .export-btn.pdf-btn {
+        border-color: rgba(220, 53, 69, 0.35);
+        background: rgba(220, 53, 69, 0.1);
+        color: #ff8c96;
+    }
+
+    .export-btn.pdf-btn:hover {
+        color: #ffe3e6;
+        border-color: rgba(220, 53, 69, 0.55);
+        background: rgba(220, 53, 69, 0.18);
+    }
+
+    .pdf-filter-modal .modal-content {
+        background: #171b23;
+        color: var(--text-primary);
+        border: 1px solid rgba(193, 18, 31, 0.24);
+        border-radius: 18px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    }
+
+    .pdf-filter-modal .modal-header,
+    .pdf-filter-modal .modal-footer {
+        border-color: var(--border-soft);
+    }
+
+    .pdf-filter-modal .modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }
+
+    .pdf-filter-note {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 16px;
+    }
+
+    .pdf-filter-grid {
+        display: grid;
+        gap: 10px;
+    }
+
+    .pdf-filter-option {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #11151d;
+        border: 1px solid var(--border-soft);
+    }
+
+    .pdf-filter-option .form-check-input {
+        margin-top: 0;
+        width: 1.1rem;
+        height: 1.1rem;
+        background-color: #0f131a;
+        border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .pdf-filter-option .form-check-input:checked {
+        background-color: var(--accent);
+        border-color: var(--accent);
+    }
+
+    .pdf-filter-option .form-check-label {
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+
+    .pdf-filter-option strong {
+        color: var(--text-primary);
+        font-size: 0.95rem;
+    }
+
+    .pdf-filter-option span {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
 </style>
 {% endblock %}
 
@@ -425,6 +507,10 @@
             <i class="bi bi-filetype-csv"></i>
             <span>Export CSV</span>
         </a>
+        <button type="button" class="export-btn pdf-btn" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
+            <i class="bi bi-filetype-pdf"></i>
+            <span>Export PDF</span>
+        </button>
         <div class="item-count" id="itemCountBadge">
             {{ items | length }} items
         </div>
@@ -490,6 +576,51 @@
     </div>
 </div>
 
+<div class="modal fade pdf-filter-modal" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exportPdfModalLabel">
+                    <i class="bi bi-file-earmark-pdf me-2" style="color: #ff8c96;"></i>Export PDF Report
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="pdf-filter-note">Choose any categories you want. If none are selected, the PDF will include the full item list.</div>
+                <div class="pdf-filter-grid">
+                    <div class="pdf-filter-option form-check">
+                        <input class="form-check-input pdf-category-checkbox" type="checkbox" value="Oil" id="pdfCategoryOil">
+                        <label class="form-check-label" for="pdfCategoryOil">
+                            <strong>Oil</strong>
+                            <span>Include all Oil items</span>
+                        </label>
+                    </div>
+                    <div class="pdf-filter-option form-check">
+                        <input class="form-check-input pdf-category-checkbox" type="checkbox" value="Pms" id="pdfCategoryPms">
+                        <label class="form-check-label" for="pdfCategoryPms">
+                            <strong>Pms</strong>
+                            <span>Include all PMS items</span>
+                        </label>
+                    </div>
+                    <div class="pdf-filter-option form-check">
+                        <input class="form-check-input pdf-category-checkbox" type="checkbox" value="Acc" id="pdfCategoryAcc">
+                        <label class="form-check-label" for="pdfCategoryAcc">
+                            <strong>Acc</strong>
+                            <span>Includes both Acc and ACC entries</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger btn-sm" id="confirmPdfExportBtn">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Open PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -500,6 +631,9 @@ const inventoryTableBody = document.querySelector('table tbody');
 const itemCountBadge = document.getElementById('itemCountBadge');
 const initialTableMarkup = inventoryTableBody ? inventoryTableBody.innerHTML : "";
 const initialBadgeText = itemCountBadge ? itemCountBadge.textContent : "";
+const pdfCategoryCheckboxes = Array.from(document.querySelectorAll('.pdf-category-checkbox'));
+const confirmPdfExportBtn = document.getElementById('confirmPdfExportBtn');
+const exportPdfModalEl = document.getElementById('exportPdfModal');
 function escapeHtml(value) {
     return String(value ?? "")
         .replaceAll('&', '&amp;')
@@ -716,6 +850,28 @@ function removeRecentSearch(term) {
 function applyRecentSearch(term) {
     inventorySearchInput.value = term;
     performSearch();
+}
+
+function getSelectedPdfCategories() {
+    return pdfCategoryCheckboxes
+        .filter(checkbox => checkbox.checked)
+        .map(checkbox => checkbox.value);
+}
+
+if (confirmPdfExportBtn) {
+    confirmPdfExportBtn.addEventListener('click', () => {
+        const selectedCategories = getSelectedPdfCategories();
+        const params = new URLSearchParams();
+        selectedCategories.forEach(category => params.append('category', category));
+        const queryString = params.toString();
+        const reportUrl = queryString ? `/reports/items-overall?${queryString}` : '/reports/items-overall';
+        window.open(reportUrl, '_blank', 'noopener');
+
+        const modalInstance = bootstrap.Modal.getInstance(exportPdfModalEl);
+        if (modalInstance) {
+            modalInstance.hide();
+        }
+    });
 }
 
 inventorySearchInput.addEventListener('input', debounce(() => {

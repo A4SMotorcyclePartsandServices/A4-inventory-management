@@ -16,9 +16,95 @@ from services.reports_service import (
 )
 from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
 from services.cash_service import get_cash_entries_for_report
+from services.inventory_service import attach_restock_recommendation
 from utils.formatters import format_date
 
 reports_bp = Blueprint("reports", __name__)
+
+
+def _normalize_item_category(value):
+    normalized = str(value or "").strip().upper()
+    if normalized == "SVC":
+        return "SVC"
+    if normalized == "ACC":
+        return "ACC"
+    if normalized == "OIL":
+        return "OIL"
+    if normalized == "PMS":
+        return "PMS"
+    return normalized
+
+
+def _normalize_requested_item_categories(values):
+    normalized = []
+    for value in values or []:
+        category = _normalize_item_category(value)
+        if category in {"OIL", "PMS", "ACC"} and category not in normalized:
+            normalized.append(category)
+    return normalized
+
+
+def _get_items_export_rows(selected_categories=None):
+    conn = get_db()
+    try:
+        rows = conn.execute("""
+            SELECT
+                i.id,
+                i.name,
+                i.description,
+                i.category,
+                i.pack_size,
+                i.vendor_price,
+                i.cost_per_piece,
+                i.a4s_selling_price,
+                i.markup,
+                i.reorder_level,
+                COALESCE(v.vendor_name, i.vendor) AS vendor_name,
+                COALESCE(inv.current_stock, 0) AS current_stock
+            FROM items i
+            LEFT JOIN vendors v ON v.id = i.vendor_id
+            LEFT JOIN (
+                SELECT
+                    item_id,
+                    SUM(
+                        CASE
+                            WHEN transaction_type = 'IN' THEN quantity
+                            WHEN transaction_type = 'OUT' THEN -quantity
+                            ELSE 0
+                        END
+                    ) AS current_stock
+                FROM inventory_transactions
+                GROUP BY item_id
+            ) AS inv ON inv.item_id = i.id
+            ORDER BY i.name ASC
+        """).fetchall()
+
+        items = [dict(row) for row in rows]
+        attach_restock_recommendation(
+            conn,
+            items,
+            item_id_key="id",
+            category_key="category",
+            current_stock_key="current_stock",
+        )
+
+        items = [
+            item
+            for item in items
+            if _normalize_item_category(item.get("category")) != "SVC"
+        ]
+
+        normalized_categories = _normalize_requested_item_categories(selected_categories)
+        if normalized_categories:
+            items = [
+                item
+                for item in items
+                if _normalize_item_category(item.get("category")) in normalized_categories
+            ]
+
+        return items
+    finally:
+        conn.close()
 
 
 def _parse_strict_iso_date(value):
@@ -360,6 +446,49 @@ def mechanic_supply_report():
     )
 
 
+@reports_bp.route("/reports/items-overall")
+@login_required
+def items_overall_report():
+    selected_categories = _normalize_requested_item_categories(request.args.getlist("category"))
+    items = _get_items_export_rows(selected_categories)
+    total_stock = sum(int(item.get("current_stock") or 0) for item in items)
+    low_stock_count = sum(1 for item in items if item.get("should_restock"))
+    total_inventory_cost = round(
+        sum(
+            float(item.get("cost_per_piece") or 0) * float(item.get("current_stock") or 0)
+            for item in items
+        ),
+        2,
+    )
+    potential_inventory_income = round(
+        sum(
+            float(item.get("a4s_selling_price") or 0) * float(item.get("current_stock") or 0)
+            for item in items
+        ),
+        2,
+    )
+    category_labels = {
+        "OIL": "Oil",
+        "PMS": "Pms",
+        "ACC": "Acc",
+    }
+    selected_category_labels = [category_labels[category] for category in selected_categories]
+
+    return render_template(
+        "reports/items_overall_report.html",
+        report={
+            "items": items,
+            "generated_at": datetime.now().strftime("%b %d, %Y %I:%M %p"),
+            "total_items": len(items),
+            "total_stock": total_stock,
+            "total_inventory_cost": total_inventory_cost,
+            "potential_inventory_income": potential_inventory_income,
+            "low_stock_count": low_stock_count,
+            "selected_categories": selected_category_labels,
+        },
+    )
+
+
 @reports_bp.route("/export/inventory-snapshot")
 @login_required
 def export_inventory_snapshot():
@@ -441,39 +570,7 @@ def export_items_csv():
     Exports the current item catalog shown in the inventory page.
     Includes stored item fields plus computed current stock.
     """
-    conn = get_db()
-    rows = conn.execute("""
-        SELECT
-            i.id,
-            i.name,
-            i.description,
-            i.category,
-            i.pack_size,
-            i.vendor_price,
-            i.cost_per_piece,
-            i.a4s_selling_price,
-            i.markup,
-            i.reorder_level,
-            COALESCE(v.vendor_name, i.vendor) AS vendor_name,
-            COALESCE(inv.current_stock, 0) AS current_stock
-        FROM items i
-        LEFT JOIN vendors v ON v.id = i.vendor_id
-        LEFT JOIN (
-            SELECT
-                item_id,
-                SUM(
-                    CASE
-                        WHEN transaction_type = 'IN' THEN quantity
-                        WHEN transaction_type = 'OUT' THEN -quantity
-                        ELSE 0
-                    END
-                ) AS current_stock
-            FROM inventory_transactions
-            GROUP BY item_id
-        ) AS inv ON inv.item_id = i.id
-        ORDER BY i.name ASC
-    """).fetchall()
-    conn.close()
+    rows = _get_items_export_rows()
 
     output = io.StringIO()
     writer = csv.writer(output)

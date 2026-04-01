@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Items Overall Report</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            color: #111;
+            line-height: 1.5;
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .no-print {
+            background: #222;
+            color: #fff;
+            padding: 14px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .no-print button {
+            margin-left: 12px;
+            padding: 7px 20px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #fff;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            border-bottom: 3px solid #111;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+
+        .header-logo {
+            height: 60px;
+            width: auto;
+            margin-right: 20px;
+        }
+
+        .header-text {
+            flex-grow: 1;
+            text-align: center;
+            margin-right: 80px;
+        }
+
+        .report-title {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            margin: 0;
+        }
+
+        .report-date {
+            font-size: 16px;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .meta-strip {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 14px;
+            margin: 14px 0 18px;
+            flex-wrap: wrap;
+        }
+
+        .report-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            color: #b91c1c;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .generated-note {
+            font-size: 12px;
+            color: #555;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-rows: repeat(2, auto);
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box {
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .summary-box.items-card {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .summary-box.cost-card {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .summary-box.stock-card {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .summary-box.low-stock-card {
+            grid-column: 3;
+            grid-row: 1;
+        }
+
+        .summary-box.income-card {
+            grid-column: 2;
+            grid-row: 2;
+        }
+
+        .summary-box-title {
+            background: #e8e8e8;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #bbb;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .summary-box-body {
+            padding: 12px;
+            font-size: 24px;
+            font-weight: 800;
+            color: #111;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        th {
+            background: #e8e8e8;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #999;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        td {
+            padding: 10px;
+            border: 1px solid #bbb;
+            font-size: 12px;
+            vertical-align: top;
+        }
+
+        .cell-center {
+            text-align: center;
+        }
+
+        .cell-right {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .item-name {
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .cell-submeta {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #555;
+            line-height: 1.45;
+        }
+
+        .stock-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #1f2937;
+        }
+
+        .stock-badge.low {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #991b1b;
+        }
+
+        .empty-state {
+            margin-top: 18px;
+            border: 1px dashed #bbb;
+            padding: 22px;
+            text-align: center;
+            color: #666;
+        }
+
+        @media print {
+            .no-print { display: none; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        You can print or save this items report as PDF.
+        <button onclick="window.print()">SAVE AS PDF / PRINT</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="header-logo">
+        <div class="header-text">
+            <h1 class="report-title">ITEMS OVERALL REPORT</h1>
+            <div class="report-date">Current inventory item list</div>
+        </div>
+    </div>
+
+    <div class="meta-strip">
+        <div class="report-badge">
+            {% if report["selected_categories"] %}
+                Categories: {{ report["selected_categories"]|join(", ") }}
+            {% else %}
+                Inventory Master List
+            {% endif %}
+        </div>
+        <div class="generated-note">Generated: {{ report["generated_at"] }}</div>
+    </div>
+
+    <div class="summary-grid">
+        <div class="summary-box items-card">
+            <div class="summary-box-title">Total Items</div>
+            <div class="summary-box-body">{{ report["total_items"] }}</div>
+        </div>
+        <div class="summary-box cost-card">
+            <div class="summary-box-title">Total Cost Of Inventory</div>
+            <div class="summary-box-body">P{{ "{:,.2f}".format(report["total_inventory_cost"]) }}</div>
+        </div>
+        <div class="summary-box stock-card">
+            <div class="summary-box-title">Total Stock Units</div>
+            <div class="summary-box-body">{{ report["total_stock"] }}</div>
+        </div>
+        <div class="summary-box income-card">
+            <div class="summary-box-title">Potential Inventory Income</div>
+            <div class="summary-box-body">P{{ "{:,.2f}".format(report["potential_inventory_income"]) }}</div>
+        </div>
+        <div class="summary-box low-stock-card">
+            <div class="summary-box-title">Low Stock Items</div>
+            <div class="summary-box-body">{{ report["low_stock_count"] }}</div>
+        </div>
+    </div>
+
+    {% if report["items"] %}
+    <table>
+        <thead>
+            <tr>
+                <th width="29%">Item / Description</th>
+                <th width="17%">Category / Vendor</th>
+                <th width="10%" class="cell-center">Pack Size</th>
+                <th width="11%" class="cell-right">Vendor Price</th>
+                <th width="11%" class="cell-right">Cost / Piece</th>
+                <th width="11%" class="cell-right">Selling Price</th>
+                <th width="11%" class="cell-center">Stock</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report["items"] %}
+            {% set markup_percent = ((item.markup or 0) * 100) %}
+            <tr>
+                <td>
+                    <div class="item-name">{{ item.name or '-' }}</div>
+                    <div class="cell-submeta">{{ item.description or 'No description' }}</div>
+                </td>
+                <td>
+                    <div>{{ item.category or '-' }}</div>
+                    <div class="cell-submeta">Vendor: {{ item.vendor_name or '-' }}</div>
+                </td>
+                <td class="cell-center">{{ item.pack_size or '-' }}</td>
+                <td class="cell-right">P{{ "{:,.2f}".format(item.vendor_price or 0) }}</td>
+                <td class="cell-right">P{{ "{:,.2f}".format(item.cost_per_piece or 0) }}</td>
+                <td class="cell-right">
+                    P{{ "{:,.2f}".format(item.a4s_selling_price or 0) }}
+                    <div class="cell-submeta">Markup: {{ "{:,.2f}".format(markup_percent) }}%</div>
+                </td>
+                <td class="cell-center">
+                    <span class="stock-badge{% if item.should_restock %} low{% endif %}">{{ item.current_stock or 0 }}</span>
+                    <div class="cell-submeta">Reorder: {{ item.reorder_level or 0 }}</div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        No items found in the database{% if report["selected_categories"] %} for {{ report["selected_categories"]|join(", ") }}{% endif %}.
+    </div>
+    {% endif %}
+</body>
+</html>
