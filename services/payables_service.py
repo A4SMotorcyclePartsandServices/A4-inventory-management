@@ -67,8 +67,15 @@ def _parse_iso_date(raw_value, field_label):
         raise ValueError(f"{field_label} must be a valid date.")
 
 
-def _payables_action_url():
-    return "/transaction/payables"
+def _payables_action_url(payable_id=None, cheque_id=None):
+    params = []
+    if payable_id is not None:
+        params.append(f"payable_id={int(payable_id)}")
+    if cheque_id is not None:
+        params.append(f"cheque_id={int(cheque_id)}")
+    if not params:
+        return "/transaction/payables"
+    return f"/transaction/payables?{'&'.join(params)}"
 
 
 def _normalize_page(page):
@@ -1272,7 +1279,7 @@ def run_payable_cheque_due_reminders():
     try:
         upcoming_rows = conn.execute(
             """
-            SELECT pc.id, pc.cheque_no, pc.due_date, p.payee_name
+            SELECT pc.id, pc.payable_id, pc.cheque_no, pc.due_date, p.payee_name
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
             WHERE pc.status = %s
@@ -1299,7 +1306,7 @@ def run_payable_cheque_due_reminders():
 
         today_rows = conn.execute(
             """
-            SELECT pc.id, pc.cheque_no, pc.due_date, p.payee_name
+            SELECT pc.id, pc.payable_id, pc.cheque_no, pc.due_date, p.payee_name
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
             WHERE pc.status = %s
@@ -1331,9 +1338,9 @@ def run_payable_cheque_due_reminders():
                 category="payables",
                 entity_type="PAYABLE_CHEQUE",
                 entity_id=int(row["id"]),
-                action_url=_payables_action_url(),
+                action_url=_payables_action_url(payable_id=row["payable_id"], cheque_id=row["id"]),
                 external_conn=conn,
-                metadata={"cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
+                metadata={"payable_id": int(row["payable_id"]), "cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
             )
 
         for row in today_rows:
@@ -1345,9 +1352,9 @@ def run_payable_cheque_due_reminders():
                 category="payables",
                 entity_type="PAYABLE_CHEQUE",
                 entity_id=int(row["id"]),
-                action_url=_payables_action_url(),
+                action_url=_payables_action_url(payable_id=row["payable_id"], cheque_id=row["id"]),
                 external_conn=conn,
-                metadata={"cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
+                metadata={"payable_id": int(row["payable_id"]), "cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
             )
 
         conn.commit()

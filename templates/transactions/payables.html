@@ -730,7 +730,7 @@
 
     {% if po_based_payables %}
         {% for payable in po_based_payables %}
-        <div class="payable-card">
+        <div class="payable-card" data-payable-card data-payable-id="{{ payable.id }}">
             <div class="payable-card-header">
                 <div>
                     <div class="payable-title"><span class="payable-po-number">{{ payable.po_number_snapshot }}</span> • {{ payable.vendor_name_snapshot or payable.payee_name }}</div>
@@ -827,7 +827,7 @@
 
     {% if manual_payables %}
         {% for payable in manual_payables %}
-        <div class="payable-card">
+        <div class="payable-card" data-payable-card data-payable-id="{{ payable.id }}">
             <div class="payable-card-header">
                 <div>
                     <div class="payable-title">{{ payable.payee_name }}</div>
@@ -1014,6 +1014,9 @@ const CURRENT_PAYABLE_SEARCH_QUERY = {{ (search_query or '')|tojson }};
 const CURRENT_PAYABLE_STATUS_FILTERS = {{ (selected_statuses or [])|tojson }};
 const ACTIVE_PAYABLE_TOTAL = {{ active_total_count|int }};
 const HISTORY_PAYABLE_TOTAL = {{ history_total_count|int }};
+const PAYABLE_PAGE_URL_PARAMS = new URLSearchParams(window.location.search);
+const TARGET_PAYABLE_ID = PAYABLE_PAGE_URL_PARAMS.get('payable_id') || '';
+const TARGET_CHEQUE_ID = PAYABLE_PAGE_URL_PARAMS.get('cheque_id') || '';
 
 function formatPayableCurrency(amount) {
     const parsed = Number(amount || 0);
@@ -1035,7 +1038,7 @@ function renderChequeHistoryRow(cheque) {
     ].filter(Boolean).join('');
 
     return `
-        <div class="cheque-row">
+        <div class="cheque-row" data-cheque-row data-cheque-id="${escapeHtml(String(cheque.id || ''))}">
             <div class="cheque-row-head">
                 <div>
                     <div class="payable-title"><span class="payable-cheque-number">Cheque #${escapeHtml(cheque.cheque_no || '-')}</span> • ${escapeHtml(formatPayableCurrency(cheque.cheque_amount))}</div>
@@ -1103,7 +1106,7 @@ function renderHistoryPayableCard(payable) {
         : '';
 
     return `
-        <div class="payable-card">
+        <div class="payable-card" data-payable-card data-payable-id="${escapeHtml(String(payable.id || ''))}">
             <div class="payable-card-header">
                 <div>
                     ${isPo ? `
@@ -1199,6 +1202,16 @@ function renderHistoryMonthGroups(groups) {
     `).join('');
 }
 
+function highlightPayableTarget(targetEl) {
+    if (!targetEl) {
+        return;
+    }
+    targetEl.classList.remove('flash-target-highlight');
+    void targetEl.offsetWidth;
+    targetEl.classList.add('flash-target-highlight');
+    window.setTimeout(() => targetEl.classList.remove('flash-target-highlight'), 1800);
+}
+
 function bindPayablesHistoryMonthLoader(bodyEl) {
     const collapseEl = bodyEl.closest('.collapse');
     if (!collapseEl) {
@@ -1240,6 +1253,79 @@ async function loadPayablesHistoryMonthIfNeeded(bodyEl) {
     } finally {
         bodyEl.dataset.historyLoading = 'false';
     }
+}
+
+async function expandPayableHistory(button) {
+    if (!button) {
+        return null;
+    }
+
+    const panel = button.parentElement?.querySelector('[data-history-panel]');
+    if (!panel) {
+        return null;
+    }
+
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    if (!isExpanded) {
+        button.setAttribute('aria-expanded', 'true');
+        button.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Hide cheque history';
+        panel.classList.remove('d-none');
+    }
+
+    if (panel.dataset.loaded === '1') {
+        return panel;
+    }
+
+    panel.innerHTML = '<div class="history-loading"><i class="bi bi-hourglass-split me-1"></i> Loading cheque history...</div>';
+
+    try {
+        const payableId = button.getAttribute('data-payable-id');
+        const response = await fetch(`/api/payables/${encodeURIComponent(payableId)}/cheques`);
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load cheque history.');
+        }
+
+        panel.innerHTML = renderChequeHistoryPanel(data);
+        panel.dataset.loaded = '1';
+        panel.querySelectorAll('.cheque-status-form').forEach(syncChequeStatusFormState);
+        return panel;
+    } catch (error) {
+        panel.innerHTML = `<div class="history-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i> ${escapeHtml(error.message || 'Failed to load cheque history.')}</div>`;
+        return panel;
+    }
+}
+
+async function focusNotificationTarget() {
+    if (!TARGET_PAYABLE_ID) {
+        return;
+    }
+
+    const payableCard = document.querySelector(`[data-payable-card][data-payable-id="${CSS.escape(TARGET_PAYABLE_ID)}"]`);
+    if (!payableCard) {
+        return;
+    }
+
+    payableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    highlightPayableTarget(payableCard);
+
+    if (!TARGET_CHEQUE_ID) {
+        return;
+    }
+
+    const historyButton = payableCard.querySelector('[data-history-toggle]');
+    if (!historyButton) {
+        return;
+    }
+
+    const panel = await expandPayableHistory(historyButton);
+    const chequeRow = panel?.querySelector(`[data-cheque-row][data-cheque-id="${CSS.escape(TARGET_CHEQUE_ID)}"]`);
+    if (!chequeRow) {
+        return;
+    }
+
+    chequeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightPayableTarget(chequeRow);
 }
 
 function syncChequeStatusFormState(form) {
@@ -1317,6 +1403,8 @@ document.addEventListener('DOMContentLoaded', function () {
         setActivePayablesTab('history');
         loadPayablesHistory();
     }
+
+    focusNotificationTarget();
 
     if (rangeInput && startHidden && endHidden && typeof flatpickr === 'function') {
         flatpickr(rangeInput, {
@@ -1439,9 +1527,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const payableId = button.getAttribute('data-payable-id');
         const panel = button.parentElement?.querySelector('[data-history-panel]');
-        if (!payableId || !panel) {
+        if (!panel) {
             return;
         }
 
@@ -1453,29 +1540,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        button.setAttribute('aria-expanded', 'true');
-        button.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Hide cheque history';
-        panel.classList.remove('d-none');
-
-        if (panel.dataset.loaded === '1') {
-            return;
-        }
-
-        panel.innerHTML = '<div class="history-loading"><i class="bi bi-hourglass-split me-1"></i> Loading cheque history...</div>';
-
-        try {
-            const response = await fetch(`/api/payables/${encodeURIComponent(payableId)}/cheques`);
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to load cheque history.');
-            }
-
-            panel.innerHTML = renderChequeHistoryPanel(data);
-            panel.dataset.loaded = '1';
-            panel.querySelectorAll('.cheque-status-form').forEach(syncChequeStatusFormState);
-        } catch (error) {
-            panel.innerHTML = `<div class="history-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i> ${escapeHtml(error.message || 'Failed to load cheque history.')}</div>`;
-        }
+        await expandPayableHistory(button);
     });
 
     document.addEventListener('click', function (event) {
