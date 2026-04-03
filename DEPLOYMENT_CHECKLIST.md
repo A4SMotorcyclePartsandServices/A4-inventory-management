@@ -78,6 +78,8 @@ The payables cheque reminders depend on a daily scheduled task.
 - [ ] Schedule it for 8:00 AM Asia/Manila.
 - [ ] If Railway cron uses UTC, set the schedule to the UTC equivalent.
 - [ ] Confirm the job can connect to the same production database variables.
+- [ ] Verify the cron service itself has `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`, not just the web service.
+- [ ] After the first run, confirm the logs include `[payables-reminders] Completed successfully`.
 
 #### Soft Deploy Smoke Test
 
