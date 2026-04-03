@@ -18,6 +18,7 @@ from services.transactions_service import get_purchase_order_export_data, get_sa
 from services.cash_service import get_cash_entries_for_report
 from services.inventory_service import attach_restock_recommendation
 from utils.formatters import format_date
+from utils.timezone import now_local, today_local
 
 reports_bp = Blueprint("reports", __name__)
 
@@ -285,7 +286,7 @@ def sales_receipt_report(sale_id):
     return render_template(
         "reports/sales_receipt_pdf.html",
         sale=data,
-        generated_at=format_date(datetime.now(), show_time=True),
+        generated_at=format_date(now_local(), show_time=True),
     )
 
 
@@ -356,7 +357,7 @@ def loyalty_program_report(program_id):
     return render_template(
         "reports/loyalty_info_pdf.html",
         program=_build_loyalty_program_report(program),
-        generated_at=datetime.now().strftime("%b %d, %Y %I:%M %p"),
+        generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
     )
 
 
@@ -478,7 +479,7 @@ def items_overall_report():
         "reports/items_overall_report.html",
         report={
             "items": items,
-            "generated_at": datetime.now().strftime("%b %d, %Y %I:%M %p"),
+            "generated_at": now_local().strftime("%b %d, %Y %I:%M %p"),
             "total_items": len(items),
             "total_stock": total_stock,
             "total_inventory_cost": total_inventory_cost,
@@ -553,7 +554,7 @@ def export_inventory_snapshot():
             round(row["total_revenue"] or 0, 2),
         ])
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = now_local().strftime("%Y%m%d_%H%M%S")
     filename = f"inventory_snapshot_{timestamp}.csv"
 
     return Response(
@@ -613,7 +614,7 @@ def export_items_csv():
             csv_row.insert(8, markup_percent)
         writer.writerow(csv_row)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = now_local().strftime("%Y%m%d_%H%M%S")
     filename = f"items_export_{timestamp}.csv"
 
     return Response(
@@ -626,7 +627,7 @@ def export_items_csv():
 @reports_bp.route("/export/items-sold-today")
 @login_required
 def export_items_sold_today():
-    today = date.today()
+    today = today_local()
     today_iso = today.isoformat()
     today_display = today.strftime("%B %d, %Y").replace(" 0", " ")
     conn = get_db()
@@ -726,7 +727,7 @@ def export_items_sold_today():
 @reports_bp.route("/export/services-sold-today")
 @login_required
 def export_services_sold_today():
-    today = date.today()
+    today = today_local()
     today_iso = today.isoformat()
 
     conn = get_db()

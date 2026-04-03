@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from db.database import get_db
 from utils.formatters import format_date
+from utils.timezone import today_local
 
 
 def _expire_elapsed_programs(conn):
@@ -380,7 +381,7 @@ def toggle_program(program_id, is_active):
         if not row:
             raise ValueError("Loyalty program not found.")
 
-        if is_active and row["period_end"] and row["period_end"] < date.today():
+        if is_active and row["period_end"] and row["period_end"] < today_local():
             conn.execute(
                 "UPDATE loyalty_programs SET is_active = 0 WHERE id = %s",
                 (program_id,),
@@ -424,7 +425,7 @@ def extend_program_period(program_id, new_period_end):
 
         current_start = row["period_start"]
         current_end = row["period_end"]
-        today = date.today()
+        today = today_local()
 
         if current_end and current_end < today:
             raise ValueError("Expired loyalty programs can no longer be extended.")
@@ -628,7 +629,7 @@ def log_stamps_for_sale(sale_id, customer_id, service_ids, item_ids, sale_date, 
 
 def get_customer_eligibility(customer_id, branch_id=None):
     conn = get_db()
-    today = date.today().isoformat()
+    today = today_local().isoformat()
 
     programs = conn.execute(
         """
@@ -773,7 +774,7 @@ def get_customer_eligibility_bulk(customer_ids, branch_id=None):
         return {}
 
     conn = get_db()
-    today = date.today().isoformat()
+    today = today_local().isoformat()
 
     programs = conn.execute(
         """
@@ -926,7 +927,7 @@ def get_customer_eligibility_bulk(customer_ids, branch_id=None):
 
 def get_customer_earn_only(customer_id, branch_id=None):
     conn = get_db()
-    today = date.today().isoformat()
+    today = today_local().isoformat()
 
     programs = conn.execute(
         """
@@ -1010,7 +1011,7 @@ def get_customer_earn_only_bulk(customer_ids, branch_id=None):
         return {}
 
     conn = get_db()
-    today = date.today().isoformat()
+    today = today_local().isoformat()
 
     programs = conn.execute(
         """
@@ -1139,7 +1140,7 @@ def get_customer_points_bulk(customer_ids, branch_id=None):
 
 def redeem_reward(customer_id, program_id, sale_id, user_id):
     conn = get_db()
-    today = date.today().isoformat()
+    today = today_local().isoformat()
 
     try:
         conn.execute("BEGIN")

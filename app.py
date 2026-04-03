@@ -16,6 +16,9 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 import webbrowser
 import threading
+from utils.timezone import configure_process_timezone, today_local
+
+configure_process_timezone()
 
 # ------------------------
 # Database & initialization
@@ -164,7 +167,7 @@ def add_security_headers(response):
 def inject_globals():
     current_user = getattr(g, "current_user", None)
     return {
-        "current_date": date.today().isoformat(),
+        "current_date": today_local().isoformat(),
         "current_user": current_user,
         "stocktake_access_state": get_stocktake_access_state(
             current_user.get("id") if current_user else None,
@@ -304,7 +307,7 @@ def sales_analytics():
     """
     Sales-focused analytics deep dive.
     """
-    today = date.today()
+    today = today_local()
     default_start = today - timedelta(days=29)
 
     start_date = (request.args.get("start_date") or default_start.isoformat()).strip()

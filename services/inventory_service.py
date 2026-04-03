@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 
 from db.database import get_db
 from utils.formatters import format_date
+from utils.timezone import now_local_naive, today_local
 
 
 STOCKTAKE_WARNING_DAYS = 30
@@ -31,7 +32,7 @@ def _normalize_anchor_date(snapshot_date=None):
             return date.fromisoformat(snapshot_date)
         except ValueError:
             pass
-    return datetime.now().date()
+    return today_local()
 
 
 def attach_inventory_history_profile(conn, items, item_id_key="id", category_key="category", snapshot_date=None):
@@ -377,7 +378,7 @@ def attach_recent_stocktake_metadata(conn, items, item_id_key="id", exclude_sess
     history_rows = conn.execute(query, tuple(params)).fetchall()
 
     history_map = {int(row["item_id"]): dict(row) for row in history_rows}
-    now = datetime.now()
+    now = now_local_naive()
 
     for item in items:
         try:

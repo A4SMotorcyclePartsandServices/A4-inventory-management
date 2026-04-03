@@ -1,6 +1,7 @@
 from db.database import get_db
 from datetime import datetime
 from utils.formatters import format_date
+from utils.timezone import now_local, now_local_str
 
 
 def _money(value):
@@ -397,7 +398,7 @@ def get_customer_debt_statement(customer_id):
                 "total_paid": total_paid_amount,
                 "remaining": round(max(0, total_debt_amount - total_paid_amount), 2),
                 "showing_paid_history": showing_paid_history,
-                "statement_date": format_date(datetime.now()),
+                "statement_date": format_date(now_local()),
             },
             "active_sales": active_sales,
             "display_sales": display_sales,
@@ -502,7 +503,7 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
                 f"Payment of ₱{amount_paid:,.2f} exceeds remaining balance of ₱{remaining:,.2f}."
             )
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_local_str()
 
         # 3) Insert payment row with service_portion
         service_portion = round(min(amount_paid, max(remaining_service, 0.0)), 2)

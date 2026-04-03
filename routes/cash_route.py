@@ -19,6 +19,7 @@ from services.cash_service import (
     CASH_OUT_CATEGORIES,
 )
 from services.reports_service import get_mechanic_payouts_for_dates
+from utils.timezone import now_local, today_local
 
 cash_bp = Blueprint('cash', __name__)
 LEDGER_PAGE_SIZE = 20
@@ -69,7 +70,7 @@ def _resolve_report_date_range():
     elif end_date and not start_date:
         start_date = end_date
     elif not start_date and not end_date:
-        today = date_today.today()
+        today = today_local()
         start_date = today.replace(day=1)
         if today.month == 12:
             end_date = today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1)
@@ -124,7 +125,7 @@ def _build_cash_report_context(branch_id):
         "report_title": report_title,
         "report_badge": report_badge,
         "date_label": date_label,
-        "generated_at": datetime.now().strftime("%b %d, %Y %I:%M %p"),
+        "generated_at": now_local().strftime("%b %d, %Y %I:%M %p"),
         "start_date": start_date,
         "end_date": end_date,
         "entry_type": entry_type,
@@ -164,7 +165,7 @@ def _build_pending_payouts_payload(branch_id, target_date):
 
 def _build_overdue_payouts_payload(branch_id, reminder_days, today):
     reminder_dates = [
-        (date_today.today() - timedelta(days=days_ago)).isoformat()
+        (today_local() - timedelta(days=days_ago)).isoformat()
         for days_ago in range(1, reminder_days + 1)
     ]
     payouts_by_date = get_mechanic_payouts_for_dates(reminder_dates)
@@ -247,7 +248,7 @@ def cash_ledger():
     end_entry   = offset + len(entries)
 
     # --- Mechanic Payout Panel ---
-    today = date_today.today().isoformat()
+    today = today_local().isoformat()
 
     # --- Missed mechanic payouts for the past N days (quick reminder) ---
     reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
@@ -383,7 +384,7 @@ def cash_ledger_api():
 @login_required
 def cash_pending_payouts_panel_api():
     branch_id = _get_branch_id()
-    today = date_today.today().isoformat()
+    today = today_local().isoformat()
     payload = _build_pending_payouts_payload(branch_id=branch_id, target_date=today)
     return jsonify(payload)
 
@@ -394,7 +395,7 @@ def cash_overdue_payouts_panel_api():
     branch_id = _get_branch_id()
     reminder_days = request.args.get("reminder_days", default=REMINDER_DAYS_DEFAULT, type=int) or REMINDER_DAYS_DEFAULT
     reminder_days = max(1, min(REMINDER_DAYS_MAX, reminder_days))
-    today = date_today.today().isoformat()
+    today = today_local().isoformat()
     payload = _build_overdue_payouts_payload(
         branch_id=branch_id,
         reminder_days=reminder_days,

@@ -4,6 +4,7 @@ import json
 import re
 from psycopg2 import errors as pg_errors
 from utils.formatters import format_date
+from utils.timezone import now_local, now_local_naive, now_local_str, today_local
 from services.loyalty_service import log_stamps_for_sale
 from services.approval_service import (
     approve_request,
@@ -50,7 +51,7 @@ def add_transaction(item_id, quantity, transaction_type, user_id=None, user_name
         if len(final_time) == 16:
             final_time += ":00"
     else:
-        final_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        final_time = now_local_str()
 
     conn.execute("""
         INSERT INTO inventory_transactions 
@@ -699,7 +700,7 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
     conn = get_db()
     try:
         conn.execute("BEGIN")
-        clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean_time = now_local_str()
 
         # 1) Log the manual IN
         add_transaction(
@@ -815,7 +816,7 @@ def record_sale(data, user_id, username):
             raise ValueError("Mechanic Supply must use a cash payment method.")
         sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
 
-        now_obj = datetime.now()
+        now_obj = now_local()
         raw_date = data.get("transaction_date")
         current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
         if raw_date:
@@ -1363,7 +1364,7 @@ REFUND_WINDOW_DAYS = 7
 
 
 def _normalize_db_timestamp(raw_value=None):
-    now_obj = datetime.now()
+    now_obj = now_local()
     if raw_value:
         clean_time = str(raw_value).replace('T', ' ')
         if len(clean_time) == 16:
@@ -1374,7 +1375,7 @@ def _normalize_db_timestamp(raw_value=None):
 
 def _build_refund_number(conn, sales_number, sale_id, reference_time=None):
     or_number = str(sales_number or sale_id).strip()
-    stamp_source = reference_time or datetime.now()
+    stamp_source = reference_time or now_local_naive()
     stamp = stamp_source.strftime("%m%d")
     base_number = f"RF-{or_number}-{stamp}"
 
@@ -1442,7 +1443,7 @@ def _build_exchange_number(conn, sales_number, sale_id):
 
 def _build_exchange_replacement_sales_number(conn, sales_number, sale_id, reference_time=None):
     or_number = str(sales_number or sale_id).strip()
-    stamp_source = reference_time or datetime.now()
+    stamp_source = reference_time or now_local_naive()
     stamp = stamp_source.strftime("%m%d")
     base_number = f"SW-{or_number}-{stamp}"
 
@@ -1851,7 +1852,7 @@ def get_sale_refund_context(sale_id):
 
     sale_data = dict(sale)
     cutoff_date = _sale_refund_cutoff(sale)
-    today = datetime.now().date()
+    today = today_local()
 
     refundable_items = []
     for row in item_rows:
@@ -2072,7 +2073,7 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
     finally:
         conn.close()
 
-    today = datetime.now().date()
+    today = today_local()
     results = []
     for row in rows:
         cutoff_date = _sale_refund_cutoff(row)
@@ -2889,7 +2890,7 @@ def create_purchase_order(data, user_id, username, user_role):
     NOTE (future branches): add branch_id when ready.
     """
     conn = get_db()
-    now_obj = datetime.now()
+    now_obj = now_local()
     clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
     month_str = now_obj.strftime("%Y%m")
     normalized = _normalize_po_payload(data)
@@ -3429,7 +3430,7 @@ def get_purchase_order_review_context(po_id, current_user_id=None, current_role=
 def update_purchase_order(po_id, data, user_id, username, user_role):
     normalized = _normalize_po_payload(data)
     conn = get_db()
-    clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    clean_time = now_local_str()
 
     try:
         conn.execute("BEGIN")
@@ -3699,7 +3700,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
     NOTE (future branches): add branch_id when ready.
     """
     conn = get_db()
-    clean_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    clean_time = now_local_str()
 
     try:
         conn.execute("BEGIN")

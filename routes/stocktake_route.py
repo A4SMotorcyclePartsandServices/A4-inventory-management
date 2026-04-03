@@ -1,6 +1,5 @@
 import csv
 import io
-from datetime import date
 
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, session, url_for
 
@@ -20,6 +19,7 @@ from services.stocktake_service import (
     remove_stocktake_item,
     update_stocktake_item,
 )
+from utils.timezone import today_local
 
 
 stocktake_bp = Blueprint("stocktake", __name__)
@@ -256,7 +256,7 @@ def stocktake_csv(session_id):
 @stocktake_bp.route("/stocktake/overall-report")
 @stocktake_access_required
 def stocktake_overall_report():
-    today = date.today()
+    today = today_local()
     default_start = today.replace(day=1)
 
     start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
@@ -290,7 +290,7 @@ def stocktake_overall_report():
 @stocktake_bp.route("/stocktake/overall-csv")
 @stocktake_access_required
 def stocktake_overall_csv():
-    today = date.today()
+    today = today_local()
     default_start = today.replace(day=1)
 
     start_date = (request.args.get("start_date") or default_start.isoformat()).strip()

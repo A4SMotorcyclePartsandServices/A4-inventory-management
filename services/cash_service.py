@@ -1,7 +1,8 @@
 from db.database import get_db
 from utils.formatters import format_date
-from datetime import date as date_today, timedelta
+from datetime import timedelta
 import re
+from utils.timezone import today_local
 
 # --- CATEGORIES ---
 CASH_IN_CATEGORIES  = ['For Payables', 'From Bank Account', 'From Gcash/E-Wallet Account', 'Others', 'Petty Cash']
@@ -808,7 +809,7 @@ def add_cash_entry(
     if category == 'Mechanic Payout' and normalized_reference_id is not None:
         reference_type = 'MECHANIC_PAYOUT'
         if payout_for_date in ("", None):
-            payout_for_date = date_today.today().isoformat()
+            payout_for_date = today_local().isoformat()
     else:
         payout_for_date = None
 

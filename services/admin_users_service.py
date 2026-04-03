@@ -13,6 +13,7 @@ from services.sales_admin_service import get_sales_paginated
 from services.stocktake_access_service import list_stocktake_access_requests
 from services.transactions_service import get_sale_refund_context
 from utils.formatters import format_date, norm_text
+from utils.timezone import now_local_str
 
 
 def _to_bool(value):
@@ -154,7 +155,7 @@ def create_staff_user(username, password, phone_no, created_by):
 
     conn = get_db()
     try:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_local_str()
         conn.execute(
             """
             INSERT INTO users (username, password_hash, phone_no, role, created_at, created_by)

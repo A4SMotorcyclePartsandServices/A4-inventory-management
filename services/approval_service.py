@@ -1,9 +1,8 @@
-from datetime import datetime
-
 import psycopg2.extras
 
 from db.database import get_db
 from utils.formatters import format_date
+from utils.timezone import now_local_str
 
 APPROVAL_STATUSES = {"PENDING", "REVISIONS_NEEDED", "APPROVED", "CANCELLED"}
 APPROVAL_ACTIONS = {
@@ -20,7 +19,7 @@ APPROVAL_ACTIONS = {
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_local_str()
 
 
 def _normalize_upper(value, field_name):

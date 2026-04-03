@@ -11,6 +11,7 @@ from services.notification_service import (
     list_active_user_ids,
 )
 from utils.formatters import format_date
+from utils.timezone import now_local_naive, now_local_str, today_local
 
 
 STOCKTAKE_ACCESS_APPROVAL_TYPE = "STOCKTAKE_ACCESS"
@@ -27,7 +28,7 @@ STOCKTAKE_ACCESS_REQUESTER_NOTIFICATION_TYPES = {
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_local_str()
 
 
 def _jsonb(value):
@@ -52,7 +53,7 @@ def _coerce_expiry_date(value):
     except ValueError:
         raise ValueError("Access expiry date must be a valid date.")
 
-    if parsed < date.today():
+    if parsed < today_local():
         raise ValueError("Access expiry date cannot be in the past.")
 
     return parsed
@@ -68,7 +69,7 @@ def _serialize_grant_row(row):
     data["granted_at_display"] = format_date(data.get("granted_at"), show_time=True)
     data["expires_at_display"] = format_date(expires_at, show_time=True)
     data["revoked_at_display"] = format_date(revoked_at, show_time=True)
-    data["is_active"] = bool(expires_at and not revoked_at and expires_at >= datetime.now())
+    data["is_active"] = bool(expires_at and not revoked_at and expires_at >= now_local_naive())
     return data
 
 

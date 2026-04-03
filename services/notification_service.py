@@ -1,9 +1,8 @@
-from datetime import datetime
-
 import psycopg2.extras
 
 from db.database import get_db
 from utils.formatters import format_date
+from utils.timezone import now_local_str
 
 
 DEFAULT_NOTIFICATION_LIMIT = 10
@@ -11,7 +10,7 @@ MAX_NOTIFICATION_LIMIT = 50
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_local_str()
 
 
 def _jsonb(value):

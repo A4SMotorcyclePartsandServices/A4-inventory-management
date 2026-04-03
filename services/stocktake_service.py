@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from db.database import get_db
 from services.inventory_service import STOCKTAKE_WARNING_DAYS, attach_recent_stocktake_metadata
 from utils.formatters import format_date
+from utils.timezone import now_local, now_local_naive, now_local_str
 
 
 PARTIAL_STOCKTAKE_LABEL = "This is a partial stocktake. Only items added to this session will be adjusted when confirmed."
@@ -19,7 +20,7 @@ def _normalize_scope(scope):
 
 
 def _generate_session_number(conn):
-    date_stamp = datetime.now().strftime("%m%d")
+    date_stamp = now_local().strftime("%m%d")
     for _ in range(25):
         candidate = f"ST-{date_stamp}-{random.randint(0, 999):03d}"
         exists = conn.execute(
@@ -269,7 +270,7 @@ def _update_session_counters(conn, session_id):
 def get_recent_stocktake_activity(window_days=STOCKTAKE_WARNING_DAYS):
     conn = get_db()
     try:
-        cutoff = datetime.now() - timedelta(days=int(window_days or STOCKTAKE_WARNING_DAYS))
+        cutoff = now_local_naive() - timedelta(days=int(window_days or STOCKTAKE_WARNING_DAYS))
         summary_row = conn.execute(
             """
             SELECT
@@ -1119,7 +1120,7 @@ def confirm_stocktake_session(session_id, user_id, username):
                     row["item_id"],
                     adjustment_quantity,
                     adjustment_type,
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    now_local_str(),
                     user_id,
                     username,
                     session_id,

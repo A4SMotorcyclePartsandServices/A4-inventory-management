@@ -1,4 +1,4 @@
-from datetime import datetime
+from utils.timezone import to_local_datetime
 
 
 def format_date(dt_str, show_time=False):
@@ -13,13 +13,9 @@ def format_date(dt_str, show_time=False):
     """
     if not dt_str or str(dt_str).strip() == '':
         return "-"
-    try:
-        dt = datetime.strptime(str(dt_str)[:19], "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        try:
-            dt = datetime.strptime(str(dt_str)[:10], "%Y-%m-%d")
-        except ValueError:
-            return str(dt_str)  # fallback if format is unexpected
+    dt = to_local_datetime(dt_str)
+    if dt is None:
+        return str(dt_str)  # fallback if format is unexpected
     if show_time:
         return dt.strftime("%b %d, %Y %I:%M %p")
     return dt.strftime("%b %d, %Y")

@@ -36,6 +36,7 @@ from services.transactions_service import (
     update_purchase_order,
     get_purchase_order_review_context,
 )
+from utils.timezone import now_local
 
 transaction_bp = Blueprint('transaction', __name__)
 
@@ -556,7 +557,7 @@ def export_purchase_order_csv(po_id):
         ch if ch.isalnum() or ch in ("-", "_") else "_"
         for ch in (po_data.get("po_number") or f"po_{po_id}")
     )
-    filename = f"{safe_po}_{datetime.now().strftime('%Y%m%d')}.csv"
+    filename = f"{safe_po}_{now_local().strftime('%Y%m%d')}.csv"
 
     return Response(
         output.getvalue(),

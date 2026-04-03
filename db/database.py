@@ -5,8 +5,10 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 from dotenv import load_dotenv
+from utils.timezone import configure_process_timezone, get_app_timezone_name
 
 load_dotenv()
+configure_process_timezone()
 
 
 class DbCursor:
@@ -87,6 +89,8 @@ def get_db():
     pool = _get_pool()
     raw_conn = pool.getconn()
     raw_conn.autocommit = False
+    with raw_conn.cursor() as cursor:
+        cursor.execute("SET TIME ZONE %s", (get_app_timezone_name(),))
     return DbConnection(raw_conn, pool=pool)
 
 

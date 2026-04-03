@@ -1,6 +1,5 @@
 import csv
 import io
-from datetime import datetime
 
 from flask import Blueprint, abort, request, jsonify, render_template, Response
 from psycopg2 import errors as pg_errors
@@ -14,6 +13,7 @@ from services.loyalty_service import (
     get_customer_earn_only_bulk,
     get_customer_points_bulk,
 )
+from utils.timezone import now_local
 
 customer_bp = Blueprint('customer', __name__)
 
@@ -27,14 +27,8 @@ POINT_TIERS = {
 def _format_export_date(value):
     if not value or str(value).strip() == "":
         return ""
-    try:
-        parsed = datetime.strptime(str(value)[:19], "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        try:
-            parsed = datetime.strptime(str(value)[:10], "%Y-%m-%d")
-        except ValueError:
-            return str(value)
-    return parsed.strftime("%b %d, %Y")
+    formatted = format_date(value)
+    return "" if formatted == "-" else formatted
 
 
 def _get_customer_export_rows():
@@ -399,7 +393,7 @@ def export_customers_csv():
             customer["membership_date"],
         ])
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = now_local().strftime("%Y%m%d_%H%M%S")
     filename = f"customers_export_{timestamp}.csv"
 
     return Response(
@@ -435,7 +429,7 @@ def customer_points_report():
         "reports/customer_points_pdf.html",
         customers=filtered_customers,
         tier_label=tier["label"],
-        generated_at=datetime.now().strftime("%b %d, %Y %I:%M %p"),
+        generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
     )
 
 

@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from db.database import get_db
 from services.notification_service import create_notifications_for_users, list_active_user_ids
 from utils.formatters import format_date
+from utils.timezone import now_local, now_local_str, today_local
 
 
 ACTIVE_CHEQUE_STATUSES = ("ISSUED", "CLEARED")
@@ -28,7 +29,7 @@ PAYABLE_SEARCH_STATUS_OPTIONS = (
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_local_str()
 
 
 def _normalize_money(value):
@@ -742,11 +743,11 @@ def _payable_history_anchor(row):
                     return parsed.date()
                 except ValueError:
                     continue
-    return date.today()
+    return today_local()
 
 
 def _get_payable_summary_rows(search_query=None, statuses=None):
-    today_value = date.today()
+    today_value = today_local()
     month_start = today_value.replace(day=1)
     if month_start.month == 12:
         next_month_start = month_start.replace(year=month_start.year + 1, month=1, day=1)
@@ -937,13 +938,13 @@ def get_payables_page_context(search_query=None, statuses=None):
         "selected_statuses": explicit_statuses,
         "has_status_filter": bool(explicit_statuses),
         "payable_status_filter_options": list(PAYABLE_SEARCH_STATUS_OPTIONS),
-        "today": date.today().isoformat(),
+        "today": today_local().isoformat(),
     }
 
 
 def get_payables_history_month_summaries(search_query=None, statuses=None):
     rows = _get_payable_summary_rows(search_query=search_query, statuses=statuses)
-    current_month_key = date.today().strftime("%Y-%m")
+    current_month_key = today_local().strftime("%Y-%m")
     groups_map = {}
 
     for row in rows:
@@ -1010,7 +1011,7 @@ def get_payables_history_by_month(month_key, search_query=None, statuses=None):
 
 
 def get_payable_cheque_history(payable_id):
-    today_value = date.today()
+    today_value = today_local()
     month_start = today_value.replace(day=1)
     if month_start.month == 12:
         next_month_start = month_start.replace(year=month_start.year + 1, month=1, day=1)
@@ -1083,7 +1084,7 @@ def build_payables_report_context(start_date=None, end_date=None):
     start_value = str(start_date or "").strip()
     end_value = str(end_date or "").strip()
 
-    today_value = date.today()
+    today_value = today_local()
     if not start_value and not end_value:
         start_value = today_value.replace(day=1).isoformat()
         end_value = today_value.isoformat()
@@ -1142,7 +1143,7 @@ def build_payables_report_context(start_date=None, end_date=None):
     return {
         "report_title": "Payables Cheque Report",
         "date_label": f"{format_date(start_value)} to {format_date(end_value)}",
-        "generated_at": format_date(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), show_time=True),
+        "generated_at": format_date(now_local(), show_time=True),
         "items": items,
         "total_amount": round(total_amount, 2),
         "start_date": start_value,
@@ -1272,7 +1273,7 @@ def run_payable_cheque_due_reminders():
     if not recipient_user_ids:
         return {"due_in_7_days": 0, "due_today": 0}
 
-    today_value = date.today()
+    today_value = today_local()
     due_in_7_days = today_value + timedelta(days=7)
 
     conn = get_db()

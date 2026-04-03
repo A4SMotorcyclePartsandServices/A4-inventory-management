@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from db.database import get_db
@@ -9,12 +7,13 @@ from services.notification_service import (
     list_active_user_ids,
 )
 from utils.formatters import format_date
+from utils.timezone import now_local_str
 
 PASSWORD_RESET_NOTIFICATION_TYPES = {"PASSWORD_RESET_REQUEST"}
 
 
 def _now():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return now_local_str()
 
 
 def _admin_password_reset_url():
