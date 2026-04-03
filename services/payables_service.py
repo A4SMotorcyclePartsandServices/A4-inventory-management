@@ -1276,10 +1276,25 @@ def run_payable_cheque_due_reminders():
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
             WHERE pc.status = %s
-              AND pc.due_date = %s
-              AND pc.reminded_due_minus_7 = 0
+              AND pc.due_date > %s
+              AND pc.due_date <= %s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM notifications n
+                  WHERE n.entity_type = %s
+                    AND n.entity_id = pc.id
+                    AND n.notification_type = %s
+                    AND DATE(n.created_at) = %s
+              )
             """,
-            (CHEQUE_STATUS_ISSUED, due_in_7_days.isoformat()),
+            (
+                CHEQUE_STATUS_ISSUED,
+                today_value.isoformat(),
+                due_in_7_days.isoformat(),
+                "PAYABLE_CHEQUE",
+                "PAYABLE_CHEQUE_DUE_IN_7_DAYS",
+                today_value.isoformat(),
+            ),
         ).fetchall()
 
         today_rows = conn.execute(
@@ -1289,16 +1304,29 @@ def run_payable_cheque_due_reminders():
             JOIN payables p ON p.id = pc.payable_id
             WHERE pc.status = %s
               AND pc.due_date = %s
-              AND pc.reminded_due_today = 0
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM notifications n
+                  WHERE n.entity_type = %s
+                    AND n.entity_id = pc.id
+                    AND n.notification_type = %s
+                    AND DATE(n.created_at) = %s
+              )
             """,
-            (CHEQUE_STATUS_ISSUED, today_value.isoformat()),
+            (
+                CHEQUE_STATUS_ISSUED,
+                today_value.isoformat(),
+                "PAYABLE_CHEQUE",
+                "PAYABLE_CHEQUE_DUE_TODAY",
+                today_value.isoformat(),
+            ),
         ).fetchall()
 
         for row in upcoming_rows:
             create_notifications_for_users(
                 recipient_user_ids,
                 "PAYABLE_CHEQUE_DUE_IN_7_DAYS",
-                "Cheque due in 7 days",
+                "Cheque due within 7 days",
                 f"Cheque #{row['cheque_no']} for {row['payee_name'] or 'payee'} is due on {format_date(row['due_date'])}.",
                 category="payables",
                 entity_type="PAYABLE_CHEQUE",
@@ -1306,15 +1334,6 @@ def run_payable_cheque_due_reminders():
                 action_url=_payables_action_url(),
                 external_conn=conn,
                 metadata={"cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
-            )
-            conn.execute(
-                """
-                UPDATE payable_cheques
-                SET reminded_due_minus_7 = 1,
-                    updated_at = %s
-                WHERE id = %s
-                """,
-                (_now(), int(row["id"])),
             )
 
         for row in today_rows:
@@ -1329,15 +1348,6 @@ def run_payable_cheque_due_reminders():
                 action_url=_payables_action_url(),
                 external_conn=conn,
                 metadata={"cheque_id": int(row["id"]), "due_date": str(row["due_date"])},
-            )
-            conn.execute(
-                """
-                UPDATE payable_cheques
-                SET reminded_due_today = 1,
-                    updated_at = %s
-                WHERE id = %s
-                """,
-                (_now(), int(row["id"])),
             )
 
         conn.commit()
