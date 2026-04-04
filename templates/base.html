@@ -480,11 +480,13 @@
 
         /* NOTIFICATIONS */
 
-        .notification-dropdown {
+        .notification-dropdown,
+        .stock-alert-dropdown {
             position: relative;
         }
 
-        .notification-trigger {
+        .notification-trigger,
+        .stock-alert-trigger {
             position: relative;
             width: 44px;
             height: 44px;
@@ -498,7 +500,8 @@
             transition: all 0.2s ease;
         }
 
-        .notification-trigger i {
+        .notification-trigger i,
+        .stock-alert-trigger i {
             font-size: 1rem;
             line-height: 1;
         }
@@ -508,14 +511,22 @@
             transform-origin: top center;
         }
 
+        .stock-alert-trigger.ring-once i {
+            animation: stockAlertPulse 0.6s ease-in-out 1;
+            transform-origin: center;
+        }
+
         .notification-trigger:hover,
-        .notification-trigger:focus {
+        .notification-trigger:focus,
+        .stock-alert-trigger:hover,
+        .stock-alert-trigger:focus {
             background: rgba(255,255,255,0.05) !important;
             color: var(--text-primary) !important;
             box-shadow: none !important;
         }
 
-        .notification-badge {
+        .notification-badge,
+        .stock-alert-badge {
             position: absolute;
             top: -4px;
             right: -4px;
@@ -534,7 +545,13 @@
             z-index: 1;
         }
 
-        .notification-badge.d-none {
+        .stock-alert-badge {
+            background: #f4c430;
+            color: #111;
+        }
+
+        .notification-badge.d-none,
+        .stock-alert-badge.d-none {
             display: none !important;
         }
 
@@ -548,7 +565,24 @@
             100% { transform: rotate(0deg); }
         }
 
+        @keyframes stockAlertPulse {
+            0% { transform: scale(1); }
+            35% { transform: scale(1.18); }
+            70% { transform: scale(0.94); }
+            100% { transform: scale(1); }
+        }
+
         .notification-menu {
+            width: 380px;
+            max-width: calc(100vw - 32px);
+            padding: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-soft);
+            border-radius: 18px;
+            overflow: hidden;
+        }
+
+        .stock-alert-menu {
             width: 380px;
             max-width: calc(100vw - 32px);
             padding: 0;
@@ -572,6 +606,20 @@
             border-bottom: 1px solid var(--border-soft);
         }
 
+        .stock-alert-header,
+        .stock-alert-footer {
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .stock-alert-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
         .notification-title {
             font-size: 0.92rem;
             font-weight: 700;
@@ -586,7 +634,26 @@
             letter-spacing: 0.6px;
         }
 
+        .stock-alert-title {
+            font-size: 0.92rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .stock-alert-subtitle {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
         .notification-list {
+            max-height: 420px;
+            overflow-y: auto;
+        }
+
+        .stock-alert-list {
             max-height: 420px;
             overflow-y: auto;
         }
@@ -653,6 +720,14 @@
             font-size: 0.84rem;
         }
 
+        .stock-alert-empty,
+        .stock-alert-loading {
+            padding: 24px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.84rem;
+        }
+
         .notification-mark-all {
             border: 0;
             background: transparent;
@@ -667,6 +742,86 @@
         .notification-mark-all:disabled {
             opacity: 0.45;
             cursor: not-allowed;
+        }
+
+        .stock-alert-view-all {
+            border: 0;
+            background: transparent;
+            color: #f4c430;
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            padding: 0;
+            text-decoration: none;
+        }
+
+        .stock-alert-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 14px 16px;
+            border: 0;
+            border-bottom: 1px solid var(--border-soft);
+            background: transparent;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: background 0.15s ease;
+        }
+
+        .stock-alert-item:hover,
+        .stock-alert-item:focus {
+            background: rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+
+        .stock-alert-item:last-child {
+            border-bottom: 0;
+        }
+
+        .stock-alert-item.is-critical {
+            background: rgba(220,53,69,0.08);
+        }
+
+        .stock-alert-item.is-warning {
+            background: rgba(244,196,48,0.08);
+        }
+
+        .stock-alert-item-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+
+        .stock-alert-item-title {
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .stock-alert-item-status {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .stock-alert-item-status.is-critical {
+            color: #ff8a93;
+        }
+
+        .stock-alert-item-status.is-warning {
+            color: #f4c430;
+        }
+
+        .stock-alert-item-message {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.45;
         }
 
         /* PROFILE DROPDOWN */
@@ -1145,6 +1300,7 @@
             }
 
             .notification-menu,
+            .stock-alert-menu,
             .profile-card {
                 max-width: min(92vw, 380px);
             }
@@ -1229,6 +1385,7 @@
             }
 
             .notification-trigger,
+            .stock-alert-trigger,
             .profile-trigger {
                 min-height: 42px;
             }
@@ -1413,6 +1570,37 @@
 
             <div class="topbar-right">
             {% if session.get('user_id') %}
+            <div class="dropdown stock-alert-dropdown">
+                <button
+                    id="stockAlertDropdownButton"
+                    class="stock-alert-trigger"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    aria-label="Open low stock warnings">
+                    <i class="bi bi-exclamation-octagon-fill"></i>
+                    <span id="stockAlertBadge" class="stock-alert-badge d-none">0</span>
+                </button>
+
+                <div class="dropdown-menu dropdown-menu-end stock-alert-menu shadow-lg">
+                    <div class="stock-alert-header">
+                        <div>
+                            <div class="stock-alert-subtitle">Inventory</div>
+                            <h6 class="stock-alert-title">Low Stock Warnings</h6>
+                        </div>
+                        <a href="/low-stock" class="stock-alert-view-all">
+                            View all
+                        </a>
+                    </div>
+                    <div id="stockAlertList" class="stock-alert-list">
+                        <div class="stock-alert-loading">
+                            <i class="bi bi-hourglass-split me-1"></i> Loading low stock warnings...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="dropdown notification-dropdown">
                 <button
                     id="notificationDropdownButton"
@@ -1875,6 +2063,15 @@ const notificationState = {
     hasInitializedCount: false,
 };
 
+const stockAlertState = {
+    totalCount: 0,
+    items: [],
+    hasLoaded: false,
+    isLoading: false,
+    hasInitializedCount: false,
+    lastLoadedAt: 0,
+};
+
 function notificationDetailUrl(item) {
     if (item?.entity_type === 'purchase_order' && item?.entity_id) {
         const genericOverviewUrl = '/transaction/orders/list';
@@ -2031,6 +2228,127 @@ function setAllNotificationsReadLocally() {
     }));
     updateNotificationBadge(0);
     renderNotificationList(notificationState.items);
+}
+
+function stockAlertDetailUrl(item) {
+    const itemId = Number(item?.id ?? 0);
+    if (itemId > 0) {
+        return `/low-stock?item_id=${encodeURIComponent(itemId)}`;
+    }
+    return '/low-stock';
+}
+
+function updateStockAlertBadge(totalCount) {
+    const badge = document.getElementById('stockAlertBadge');
+    const trigger = document.getElementById('stockAlertDropdownButton');
+    if (!badge) {
+        return;
+    }
+
+    const previousCount = stockAlertState.totalCount;
+    const safeCount = Number.isFinite(Number(totalCount)) ? Number(totalCount) : 0;
+    stockAlertState.totalCount = safeCount;
+    badge.textContent = safeCount > 99 ? '99+' : String(safeCount);
+    badge.classList.toggle('d-none', safeCount <= 0);
+
+    if (trigger && stockAlertState.hasInitializedCount && safeCount > previousCount) {
+        trigger.classList.remove('ring-once');
+        void trigger.offsetWidth;
+        trigger.classList.add('ring-once');
+    }
+
+    if (trigger) {
+        trigger.addEventListener('animationend', () => {
+            trigger.classList.remove('ring-once');
+        }, { once: true });
+    }
+
+    stockAlertState.hasInitializedCount = true;
+}
+
+function stockAlertLabel(status) {
+    return String(status || '').toLowerCase() === 'critical' ? 'Critical' : 'Reorder soon';
+}
+
+function renderStockAlertList(items) {
+    const list = document.getElementById('stockAlertList');
+    if (!list) {
+        return;
+    }
+
+    if (!items.length) {
+        list.innerHTML = `
+            <div class="stock-alert-empty">
+                <i class="bi bi-shield-check me-1"></i> No low stock warnings right now.
+            </div>`;
+        return;
+    }
+
+    list.innerHTML = items.map((item) => {
+        const status = String(item.restock_status || 'warning').toLowerCase();
+        const currentStock = Number(item.current_stock ?? 0);
+        const restockPoint = Number(item.suggested_restock_point ?? 0);
+        return `
+            <button
+                type="button"
+                class="stock-alert-item ${status === 'critical' ? 'is-critical' : 'is-warning'}"
+                data-stock-alert-url="${escapeHtml(stockAlertDetailUrl(item))}">
+                <div class="stock-alert-item-head">
+                    <div class="stock-alert-item-title">${escapeHtml(item.name || 'Item')}</div>
+                    <div class="stock-alert-item-status ${status === 'critical' ? 'is-critical' : 'is-warning'}">${escapeHtml(stockAlertLabel(status))}</div>
+                </div>
+                <div class="stock-alert-item-message">
+                    Stock ${escapeHtml(currentStock)} of ${escapeHtml(restockPoint)} suggested reorder point.
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+async function loadStockAlerts(options = {}) {
+    const { limit = 8, force = false, minIntervalMs = 15000 } = options;
+    if (stockAlertState.isLoading) {
+        return;
+    }
+    const now = Date.now();
+    if (force && stockAlertState.lastLoadedAt && (now - stockAlertState.lastLoadedAt) < minIntervalMs) {
+        return;
+    }
+    if (stockAlertState.hasLoaded && !force) {
+        return;
+    }
+
+    const list = document.getElementById('stockAlertList');
+    if (list && !stockAlertState.hasLoaded) {
+        list.innerHTML = `
+            <div class="stock-alert-loading">
+                <i class="bi bi-hourglass-split me-1"></i> Loading low stock warnings...
+            </div>`;
+    }
+
+    stockAlertState.isLoading = true;
+    try {
+        const response = await fetch(`/api/low-stock/summary?limit=${encodeURIComponent(limit)}`);
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load low stock warnings.');
+        }
+
+        stockAlertState.items = Array.isArray(data.items) ? data.items : [];
+        stockAlertState.hasLoaded = true;
+        stockAlertState.lastLoadedAt = Date.now();
+        updateStockAlertBadge(data.total_count || 0);
+        renderStockAlertList(stockAlertState.items);
+    } catch (error) {
+        if (list) {
+            list.innerHTML = `
+                <div class="stock-alert-empty text-danger">
+                    <i class="bi bi-exclamation-triangle me-1"></i> ${escapeHtml(error.message || 'Failed to load low stock warnings.')}
+                </div>`;
+        }
+    } finally {
+        stockAlertState.isLoading = false;
+    }
 }
 
 function appendCsrfTokenToForms() {
@@ -2374,10 +2692,31 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 document.addEventListener('DOMContentLoaded', function () {
+    const stockAlertDropdownButton = document.getElementById('stockAlertDropdownButton');
+    const stockAlertDropdownRoot = stockAlertDropdownButton?.closest('.stock-alert-dropdown');
+    const stockAlertList = document.getElementById('stockAlertList');
     const dropdownButton = document.getElementById('notificationDropdownButton');
     const dropdownRoot = dropdownButton?.closest('.notification-dropdown');
     const notificationList = document.getElementById('notificationList');
     const markAllBtn = document.getElementById('notificationMarkAllBtn');
+
+    if (stockAlertDropdownButton && stockAlertList) {
+        loadStockAlerts({ force: true });
+
+        stockAlertDropdownRoot?.addEventListener('show.bs.dropdown', () => {
+            loadStockAlerts({ force: true });
+        });
+
+        stockAlertList.addEventListener('click', (event) => {
+            const target = event.target.closest('.stock-alert-item');
+            if (!target) {
+                return;
+            }
+
+            const targetUrl = target.getAttribute('data-stock-alert-url') || '/low-stock';
+            window.location.href = targetUrl;
+        });
+    }
 
     if (!dropdownButton || !notificationList) {
         return;
@@ -2430,11 +2769,13 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     window.setInterval(() => {
+        loadStockAlerts({ force: true });
         loadNotifications({ force: true });
     }, 45000);
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+            loadStockAlerts({ force: true });
             loadNotifications({ force: true });
         }
     });

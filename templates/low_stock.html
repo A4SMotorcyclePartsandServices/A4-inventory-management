@@ -16,6 +16,42 @@
     .status-badge-critical { background: #dc3545; color: #fff; }
     .status-badge-warning { background: #ffc107; color: #111; }
     .status-badge-healthy { background: #6c757d; color: #fff; }
+    .status-badge-learning { background: #17a2b8; color: #fff; }
+    .pagination-panel {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+        color: #adb5bd;
+    }
+    .pagination-summary {
+        font-size: 0.9rem;
+    }
+    .pagination-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .pagination-nav .btn.disabled,
+    .pagination-nav .btn:disabled {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+    .low-stock-row-target {
+        animation: lowStockRowHighlight 2.2s ease;
+        box-shadow: inset 0 0 0 9999px rgba(244, 196, 48, 0.18);
+    }
+    @keyframes lowStockRowHighlight {
+        0% {
+            box-shadow: inset 0 0 0 9999px rgba(244, 196, 48, 0.34);
+        }
+        100% {
+            box-shadow: inset 0 0 0 9999px rgba(244, 196, 48, 0);
+        }
+    }
     .debug-table {
         table-layout: auto;
         font-size: 0.84rem;
@@ -61,12 +97,19 @@
         </thead>
         <tbody>
             {% for item in low_stock_items %}
-            <tr>
-                <td>{{ item.name }}</td>
+            <tr id="low-stock-item-{{ item.id }}" data-item-id="{{ item.id }}">
+                <td>
+                    {{ item.name }}
+                    {% if item.is_watchlist %}
+                        <span class="badge status-badge-learning ms-2">LEARNING</span>
+                    {% endif %}
+                </td>
                 <td class="text-danger fw-bold">{{ item.current_stock }}</td>
                 <td>{{ item.suggested_restock_point or 0 }}</td>
                 <td>
-                    {% if item.restock_status == 'critical' %}
+                    {% if item.is_watchlist %}
+                        <span class="badge status-badge-learning">WATCHLIST</span>
+                    {% elif item.restock_status == 'critical' %}
                         <span class="badge status-badge-critical">
                             {% if item.current_stock <= 0 %}OUT OF STOCK{% else %}CRITICAL{% endif %}
                         </span>
@@ -80,6 +123,26 @@
             {% endfor %}
         </tbody>
     </table>
+    <div class="pagination-panel">
+        <div class="pagination-summary">
+            Showing {{ low_stock_page.start_index }}-{{ low_stock_page.end_index }} of {{ low_stock_page.total_count }} low stock items
+        </div>
+        <div class="pagination-nav">
+            <a
+                href="{{ url_for('low_stock', page=low_stock_page.prev_page) }}"
+                class="btn btn-outline-secondary btn-sm {% if not low_stock_page.has_prev %}disabled{% endif %}"
+                {% if not low_stock_page.has_prev %}aria-disabled="true"{% endif %}>
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+            <span class="small text-light">Page {{ low_stock_page.page }} of {{ low_stock_page.total_pages }}</span>
+            <a
+                href="{{ url_for('low_stock', page=low_stock_page.next_page) }}"
+                class="btn btn-outline-secondary btn-sm {% if not low_stock_page.has_next %}disabled{% endif %}"
+                {% if not low_stock_page.has_next %}aria-disabled="true"{% endif %}>
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
     {% else %}
     <div class="alert alert-success text-center bg-dark text-success border-success">
         <i class="bi bi-check-circle-fill"></i> 🎉 All items are well-stocked!
@@ -134,6 +197,8 @@
 {% endif %}
 
 <script>
+const highlightItemId = Number('{{ highlight_item_id or 0 }}');
+
 document.getElementById('inventorySearch').addEventListener('keyup', function() {
     let filter = this.value.toLowerCase();
     let rows = document.querySelectorAll('#lowStockTable tbody tr, #debugRestockTableBody tr');
@@ -141,6 +206,24 @@ document.getElementById('inventorySearch').addEventListener('keyup', function() 
         let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
         row.style.display = itemName.includes(filter) ? "" : "none";
     });
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (!highlightItemId) {
+        return;
+    }
+
+    const targetRow = document.getElementById(`low-stock-item-${highlightItemId}`);
+    if (!targetRow) {
+        return;
+    }
+
+    targetRow.classList.add('low-stock-row-target');
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    window.setTimeout(() => {
+        targetRow.classList.remove('low-stock-row-target');
+    }, 2400);
 });
 
 {% if debug_mode %}

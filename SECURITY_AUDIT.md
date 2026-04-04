@@ -70,6 +70,20 @@ Scope:
      - Use `run_waitress.py` or `wsgi.py` for hosting and keep `python app.py` for local development only.
      - Complete the deployment items in [DEPLOYMENT_CHECKLIST.md](/c:/Dev/a4_inventory_system/DEPLOYMENT_CHECKLIST.md).
 
+6. Resolved: low-stock polling and item-target routing were reduced from a medium availability risk to low residual risk.
+   - Representative references:
+     - [app.py](/c:/Dev/a4_inventory_system/app.py#L367)
+     - [services/analytics_service.py](/c:/Dev/a4_inventory_system/services/analytics_service.py)
+     - [templates/base.html](/c:/Dev/a4_inventory_system/templates/base.html)
+   - Status:
+     - The low-stock summary path now uses a short server-side TTL cache to reduce repeated full recomputation from authenticated topbar polling.
+     - The `/low-stock?item_id=...` path now reuses one computed dataset per request instead of doing two full passes for page targeting plus pagination.
+     - The browser-side stock-alert loader now ignores force-refresh requests that arrive again within a short cooldown window, reducing duplicate fetches from page load followed immediately by dropdown open.
+   - Residual note:
+     - The mitigation is still process-local and compute still scales with item count whenever the cache expires.
+   - Recommended fix:
+     - If inventory size or user concurrency grows further, move low-stock summary generation toward a scheduled snapshot/materialized table or shared cache.
+
 ### What is already in better shape
 
 - Non-public routes require login.
@@ -80,6 +94,7 @@ Scope:
 - SQL queries are mostly parameterized.
 - A production-oriented WSGI/Waitress startup path now exists.
 - The main data-driven DOM XSS hotspots in inventory, sales, debt, cash, and admin screens were reduced to low residual risk.
+- The low-stock tray and highlight flow were hardened against unnecessary repeat recomputation.
 
 ### Recommended next security work
 

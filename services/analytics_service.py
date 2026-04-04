@@ -1,9 +1,15 @@
+import copy
+import time
+
 from db.database import get_db
 from services.inventory_service import (
     attach_inventory_history_profile,
     attach_restock_recommendation,
     get_items_with_stock,
 )
+
+LOW_STOCK_CACHE_TTL_SECONDS = 20
+_low_stock_cache = {}
 
 
 def _restock_status_rank(status):
@@ -14,6 +20,67 @@ def _restock_status_rank(status):
     if status == "healthy":
         return 2
     return 3
+
+
+def _restock_confidence_rank(confidence):
+    if confidence == "high":
+        return 0
+    if confidence == "low":
+        return 1
+    return 2
+
+
+def _copy_low_stock_rows(rows):
+    return [dict(item) for item in (rows or [])]
+
+
+def _compute_low_stock_items(include_watchlist=False):
+    conn = get_db()
+    try:
+        item_rows = conn.execute("SELECT * FROM items").fetchall()
+        stock_rows = get_items_with_stock()
+        stock_map = {row["id"]: row["current_stock"] for row in stock_rows}
+
+        rows = []
+        for row in item_rows:
+            item = dict(row)
+            item["current_stock"] = stock_map.get(row["id"], 0)
+            rows.append(item)
+
+        attach_restock_recommendation(conn, rows, item_id_key="id", category_key="category", current_stock_key="current_stock")
+        rows = [
+            item for item in rows
+            if item.get("should_restock") or (include_watchlist and item.get("is_watchlist"))
+        ]
+        rows.sort(
+            key=lambda item: (
+                _restock_confidence_rank(item.get("restock_confidence")),
+                _restock_status_rank(item.get("restock_status")),
+                float(item.get("current_stock") or 0),
+                item.get("name") or "",
+            )
+        )
+        return rows
+    finally:
+        conn.close()
+
+
+def get_low_stock_items(*, include_watchlist=False, use_cache=True):
+    cache_key = bool(include_watchlist)
+
+    if use_cache:
+        cached_entry = _low_stock_cache.get(cache_key)
+        if cached_entry:
+            cached_at = float(cached_entry.get("cached_at") or 0)
+            if (time.monotonic() - cached_at) < LOW_STOCK_CACHE_TTL_SECONDS:
+                return _copy_low_stock_rows(cached_entry.get("rows"))
+
+    rows = _compute_low_stock_items(include_watchlist=include_watchlist)
+    _low_stock_cache[cache_key] = {
+        "cached_at": time.monotonic(),
+        "rows": copy.deepcopy(rows),
+    }
+    return _copy_low_stock_rows(rows)
 
 def get_dashboard_stats():
     conn = get_db()
@@ -90,29 +157,96 @@ def get_dead_stock(days=60):
     return rows
 
 
-def get_low_stock_items():
-    conn = get_db()
-    item_rows = conn.execute("SELECT * FROM items").fetchall()
-    stock_rows = get_items_with_stock()
-    stock_map = {row["id"]: row["current_stock"] for row in stock_rows}
+def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None):
+    try:
+        safe_page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        safe_page = 1
 
-    rows = []
-    for row in item_rows:
-        item = dict(row)
-        item["current_stock"] = stock_map.get(row["id"], 0)
-        rows.append(item)
+    try:
+        safe_per_page = max(1, min(int(per_page or 75), 200))
+    except (TypeError, ValueError):
+        safe_per_page = 75
 
-    attach_restock_recommendation(conn, rows, item_id_key="id", category_key="category", current_stock_key="current_stock")
-    rows = [item for item in rows if item.get("should_restock")]
-    rows.sort(
-        key=lambda item: (
-            _restock_status_rank(item.get("restock_status")),
-            float(item.get("current_stock") or 0),
-            item.get("name") or "",
+    source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=include_watchlist)
+    total_count = len(source_rows)
+    total_pages = max(1, (total_count + safe_per_page - 1) // safe_per_page)
+    safe_page = min(safe_page, total_pages)
+
+    start_index = (safe_page - 1) * safe_per_page
+    end_index = start_index + safe_per_page
+
+    return {
+        "items": source_rows[start_index:end_index],
+        "page": safe_page,
+        "per_page": safe_per_page,
+        "total_count": total_count,
+        "total_pages": total_pages,
+        "has_prev": safe_page > 1,
+        "has_next": safe_page < total_pages,
+        "prev_page": safe_page - 1,
+        "next_page": safe_page + 1,
+        "start_index": start_index + 1 if total_count else 0,
+        "end_index": min(end_index, total_count),
+    }
+
+
+def get_low_stock_page_for_item(item_id, per_page=75, *, include_watchlist=False, rows=None):
+    try:
+        target_item_id = int(item_id)
+    except (TypeError, ValueError):
+        target_item_id = 0
+
+    if target_item_id <= 0:
+        return None
+
+    try:
+        safe_per_page = max(1, min(int(per_page or 75), 200))
+    except (TypeError, ValueError):
+        safe_per_page = 75
+
+    source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=include_watchlist)
+    for index, item in enumerate(source_rows):
+        try:
+            current_item_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            current_item_id = 0
+        if current_item_id == target_item_id:
+            return (index // safe_per_page) + 1
+
+    return None
+
+
+def get_low_stock_summary(limit=8, *, rows=None):
+    source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=False)
+
+    try:
+        safe_limit = max(1, min(int(limit or 8), 50))
+    except (TypeError, ValueError):
+        safe_limit = 8
+
+    critical_count = sum(1 for item in source_rows if item.get("restock_status") == "critical")
+    warning_count = sum(1 for item in source_rows if item.get("restock_status") == "warning")
+
+    summary_items = []
+    for item in source_rows[:safe_limit]:
+        summary_items.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name") or "Item",
+                "current_stock": float(item.get("current_stock") or 0),
+                "suggested_restock_point": int(item.get("suggested_restock_point") or 0),
+                "restock_status": item.get("restock_status") or "warning",
+                "restock_basis": item.get("restock_basis") or "",
+            }
         )
-    )
-    conn.close()
-    return rows
+
+    return {
+        "total_count": len(source_rows),
+        "critical_count": critical_count,
+        "warning_count": warning_count,
+        "items": summary_items,
+    }
 
 
 def get_restock_debug_items(offset=0, limit=None):

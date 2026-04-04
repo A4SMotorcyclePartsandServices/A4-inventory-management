@@ -40,6 +40,9 @@ from services.analytics_service import (
     get_hot_items,
     get_dead_stock,
     get_low_stock_items,
+    get_low_stock_page,
+    get_low_stock_page_for_item,
+    get_low_stock_summary,
     get_restock_debug_items,
 )
 from services.sales_analytics_service import get_sales_analytics_snapshot
@@ -365,8 +368,37 @@ def low_stock():
     """
     Items at or below reorder level.
     """
+    page_raw = (request.args.get("page") or "").strip()
+    item_id_raw = (request.args.get("item_id") or "").strip()
+    highlight_item_id = None
+    if item_id_raw:
+        try:
+            highlight_item_id = int(item_id_raw)
+        except (TypeError, ValueError):
+            highlight_item_id = None
+
+    low_stock_rows = get_low_stock_items(include_watchlist=True)
+
+    if highlight_item_id and not page_raw:
+        resolved_page = get_low_stock_page_for_item(
+            highlight_item_id,
+            per_page=75,
+            include_watchlist=True,
+            rows=low_stock_rows,
+        )
+        if resolved_page:
+            page_raw = str(resolved_page)
+
+    if not page_raw:
+        page_raw = "1"
+
+    low_stock_page = get_low_stock_page(
+        page=page_raw,
+        per_page=75,
+        include_watchlist=True,
+        rows=low_stock_rows,
+    )
     debug_mode = False
-    low_stock_items = get_low_stock_items()
     debug_total_count = 0
     if debug_mode:
         debug_result = get_restock_debug_items(offset=0, limit=100)
@@ -375,11 +407,20 @@ def low_stock():
         debug_result = {"items": [], "total_count": 0}
     return render_template(
         "low_stock.html",
-        low_stock_items=low_stock_items,
+        low_stock_items=low_stock_page["items"],
+        low_stock_page=low_stock_page,
+        highlight_item_id=highlight_item_id,
         debug_mode=debug_mode,
         debug_items=debug_result["items"],
         debug_total_count=debug_total_count,
     )
+
+
+@app.route("/api/low-stock/summary")
+@login_required
+def low_stock_summary_api():
+    limit_raw = (request.args.get("limit") or "8").strip()
+    return jsonify(get_low_stock_summary(limit=limit_raw))
 
 
 @app.route("/api/restock-debug")

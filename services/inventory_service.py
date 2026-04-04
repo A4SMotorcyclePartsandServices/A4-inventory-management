@@ -22,6 +22,9 @@ RESTOCK_STATUS_EXCLUDED = "excluded"
 RESTOCK_STATUS_HEALTHY = "healthy"
 RESTOCK_STATUS_WARNING = "warning"
 RESTOCK_STATUS_CRITICAL = "critical"
+RESTOCK_CONFIDENCE_NONE = "none"
+RESTOCK_CONFIDENCE_LOW = "low"
+RESTOCK_CONFIDENCE_HIGH = "high"
 
 
 def _normalize_anchor_date(snapshot_date=None):
@@ -296,31 +299,36 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         item["lead_time_demand"] = 0
         item["safety_stock"] = 0
         item["restock_status"] = RESTOCK_STATUS_HEALTHY
+        item["restock_confidence"] = RESTOCK_CONFIDENCE_NONE
+        item["is_watchlist"] = False
 
         if item.get("history_status") == "excluded":
             item["suggested_restock_point"] = None
             item["should_restock"] = False
             item["restock_basis"] = "excluded"
             item["restock_status"] = RESTOCK_STATUS_EXCLUDED
+            item["restock_confidence"] = RESTOCK_CONFIDENCE_NONE
             continue
 
         if item.get("history_status") == "dead_stock":
             item["suggested_restock_point"] = 0
-            item["should_restock"] = current_stock <= 0
-            item["restock_basis"] = "dead_stock_out_of_stock" if item["should_restock"] else "dead_stock"
-            item["restock_status"] = RESTOCK_STATUS_CRITICAL if item["should_restock"] else RESTOCK_STATUS_HEALTHY
+            item["should_restock"] = False
+            item["restock_basis"] = "dead_stock_excluded_from_reorder_alerts"
+            item["restock_status"] = RESTOCK_STATUS_HEALTHY
+            item["restock_confidence"] = RESTOCK_CONFIDENCE_NONE
             continue
 
         if item.get("history_status") == "recovering":
             suggested_restock_point = LOW_HISTORY_FALLBACK_FLOOR
             item["suggested_restock_point"] = suggested_restock_point
-            item["should_restock"] = current_stock <= suggested_restock_point
-            item["restock_basis"] = "recovering_floor_only"
+            item["should_restock"] = False
+            item["is_watchlist"] = current_stock <= suggested_restock_point
+            item["restock_basis"] = "recovering_learning_watchlist"
             item["restock_status"] = (
-                RESTOCK_STATUS_CRITICAL if current_stock <= 0
-                else RESTOCK_STATUS_WARNING if item["should_restock"]
+                RESTOCK_STATUS_WARNING if item["is_watchlist"]
                 else RESTOCK_STATUS_HEALTHY
             )
+            item["restock_confidence"] = RESTOCK_CONFIDENCE_LOW
             continue
 
         lead_time_demand = math.ceil(avg_daily_usage * effective_lead_time_days)
@@ -330,7 +338,9 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         item["safety_stock"] = safety_stock
         item["suggested_restock_point"] = suggested_restock_point
         item["should_restock"] = current_stock <= suggested_restock_point
+        item["is_watchlist"] = False
         item["restock_basis"] = "movement_based"
+        item["restock_confidence"] = RESTOCK_CONFIDENCE_HIGH
         item["restock_status"] = (
             RESTOCK_STATUS_CRITICAL if current_stock <= 0 or current_stock <= lead_time_demand
             else RESTOCK_STATUS_WARNING if item["should_restock"]

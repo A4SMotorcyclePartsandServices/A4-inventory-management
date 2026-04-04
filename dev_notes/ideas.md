@@ -258,6 +258,78 @@ Applied:
   - slow movers / recovery checks use `90 days`
 - [x] Added better inactivity / recovery rules
   - active classification now requires multiple distinct sale days, not only total quantity
+- [x] Added confidence-based alert behavior
+  - `active` items are treated as trusted / high-confidence reorder candidates
+  - `recovering` items are treated as learning / watchlist items
+  - learning items can still appear on `/low-stock` with a badge, but they do not trigger tray alerts yet
+
+## Re order algorithm - long term upgrades
+
+### Immediate safeguard now applied
+
+- `dead_stock` items are no longer included in reorder alerts just because `current_stock <= 0`
+- low-stock warnings are now meant to represent likely reorder action, not old catalog cleanup
+
+### Problems to solve long term
+
+- some catalog items are old, obsolete, seasonal, or not yet stock-count-verified, so movement math alone is not enough
+- zero stock can mean very different things:
+  - truly needs reorder
+  - obsolete / no longer carried
+  - not yet counted
+  - temporarily unavailable
+- the system needs a business eligibility layer before the reorder algorithm is allowed to alert
+
+### Recommended data model upgrades
+
+- add `is_reorder_enabled`
+  - master switch for whether an item may appear in reorder alerts
+- add `item_status`
+  - suggested values: `active`, `inactive`, `obsolete`, `seasonal`
+- add `inventory_verified_at`
+  - lets us suppress reorder alerts for items that have not been validated during a recent count
+- optionally add `reorder_review_note` or `inventory_status_note`
+  - useful when the team is cleaning up old shop data
+
+### Recommended alert gating rule
+
+- only raise reorder alerts if all are true:
+  - item is reorder-enabled
+  - item status is eligible for purchasing
+  - item is not obsolete/inactive
+  - item has qualifying demand history or a specifically approved low-history fallback rule
+  - stock has been recently verified when strict stocktake mode is active
+
+### Suggested workflow improvements
+
+- add an admin review queue for items with:
+  - `0 stock`
+  - no recent demand
+  - unclear catalog status
+- separate pages or filters for:
+  - `reorder candidates`
+  - `dead stock / obsolete candidates`
+  - `needs stock verification`
+- make low-stock alerts show only actionable reorder items, not data cleanup work
+
+### Recommended future UI changes
+
+- add filters on the low-stock page for:
+  - `active`
+  - `recovering`
+  - `dead stock`
+  - `verified only`
+- show why an item was suppressed from alerts
+  - example: `obsolete`, `not verified`, `reorder disabled`
+- add an admin toggle in item maintenance for reorder eligibility
+
+### Suggested implementation order
+
+1. Add `is_reorder_enabled`
+2. Add `item_status`
+3. Update reorder logic to check business eligibility before demand math
+4. Add optional stock verification gating after the client finishes the counting workflow design
+5. Add admin cleanup tools for obsolete / inactive items
 - [x] Added lazy-loaded debug table on `/low-stock?debug=1`
   - reduces browser lag by loading debug rows in chunks
 
