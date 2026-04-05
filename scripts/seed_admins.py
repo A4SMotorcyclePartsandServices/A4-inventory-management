@@ -87,10 +87,10 @@ def main():
         for entry in admin_entries:
             cursor = conn.execute(
                 """
-                INSERT INTO users (username, password_hash, role)
-                VALUES (%s, %s, 'admin')
+                INSERT INTO users (username, password_hash, role, must_change_password)
+                VALUES (%s, %s, 'admin', 1)
                 ON CONFLICT (username) DO NOTHING
-                RETURNING username
+                RETURNING username, must_change_password
                 """,
                 (
                     entry["username"],
@@ -108,7 +108,10 @@ def main():
         conn.close()
 
     if seeded_usernames:
-        print(f"Admin accounts seeded: {', '.join(seeded_usernames)}")
+        print(
+            "Admin accounts seeded with forced password change: "
+            f"{', '.join(seeded_usernames)}"
+        )
     else:
         print("No admin accounts were created. Usernames may already exist.")
 
