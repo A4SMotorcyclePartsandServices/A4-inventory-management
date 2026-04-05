@@ -636,7 +636,7 @@
             </form>
         </div>
         <div class="col-md-4">
-            <form action="/import/inventory" method="POST" enctype="multipart/form-data">
+            <form id="inventoryImportForm" action="/import/inventory" method="POST" enctype="multipart/form-data">
                 <label class="form-label">Import Inventory</label>
                 <div class="input-group input-group-sm">
                     <input type="file" name="file" class="form-control" required>
@@ -1042,5 +1042,93 @@ inventorySearchInput.addEventListener('input', debounce(() => {
 
 renderRecentSearches();
 bindInventoryRowLinks(inventoryTableBody || document);
+
+const inventoryImportForm = document.getElementById('inventoryImportForm');
+
+function getAttachmentFilename(contentDisposition, fallback = 'download.csv') {
+    if (!contentDisposition) {
+        return fallback;
+    }
+
+    const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+        return decodeURIComponent(utf8Match[1]);
+    }
+
+    const plainMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+    return plainMatch?.[1] || fallback;
+}
+
+function triggerBlobDownload(blob, filename) {
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+}
+
+if (inventoryImportForm) {
+    inventoryImportForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const submitButton = inventoryImportForm.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton?.innerHTML;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = 'Importing...';
+        }
+
+        try {
+            const response = await fetch(inventoryImportForm.action, {
+                method: 'POST',
+                body: new FormData(inventoryImportForm),
+            });
+
+            const contentType = response.headers.get('Content-Type') || '';
+            const importMessage = response.headers.get('X-Import-Message');
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Inventory import failed.');
+            }
+
+            if (contentType.includes('text/csv')) {
+                const blob = await response.blob();
+                const filename = getAttachmentFilename(
+                    response.headers.get('Content-Disposition'),
+                    'skipped_inventory_rows.csv'
+                );
+                triggerBlobDownload(blob, filename);
+                showFlashMessage(
+                    importMessage || 'Inventory import complete. Skipped rows CSV downloaded.',
+                    'warning',
+                    { replace: true }
+                );
+            } else if (contentType.includes('application/json')) {
+                const payload = await response.json();
+                showFlashMessage(
+                    payload.message || 'Inventory import complete.',
+                    'success',
+                    { replace: true }
+                );
+            } else {
+                const text = await response.text();
+                showFlashMessage(text || 'Inventory import complete.', 'success', { replace: true });
+            }
+
+            inventoryImportForm.reset();
+        } catch (error) {
+            showFlashMessage(error.message || 'Inventory import failed.', 'danger', { replace: true });
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
+        }
+    });
+}
 </script>
 {% endblock %}

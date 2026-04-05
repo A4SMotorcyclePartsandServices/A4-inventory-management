@@ -6,6 +6,8 @@
 # - wiring to services / importers
 # ============================================================
 
+import csv
+import io
 import os
 import secrets
 from datetime import date, timedelta
@@ -80,6 +82,19 @@ def _env_flag(name, default=False):
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_csv_cell(value):
+    """
+    Neutralize spreadsheet formula execution in downloaded CSV files.
+    """
+    if value is None:
+        return ""
+
+    text = str(value)
+    if text[:1] in ("=", "+", "-", "@"):
+        return f"'{text}"
+    return text
 
 
 def _is_production_environment():
@@ -519,14 +534,40 @@ def import_inventory():
     if not success:
         return result, 400
 
-    return (
-        f"Inventory import complete.<br>"
-        f"Imported: {result['imported']}<br>"
-        f"Skipped: {result['skipped']}<br>"
-        f"Missing fields: {result['skip_reasons']['missing_fields']}<br>"
-        f"Bad quantity: {result['skip_reasons']['bad_quantity']}<br>"
-        f"Item not found: {result['skip_reasons']['item_not_found']}"
+    summary = (
+        f"Inventory import complete. "
+        f"Imported: {result['imported']}. "
+        f"Skipped: {result['skipped']}. "
+        f"Missing fields: {result['skip_reasons']['missing_fields']}. "
+        f"Bad quantity: {result['skip_reasons']['bad_quantity']}. "
+        f"Item not found: {result['skip_reasons']['item_not_found']}. "
+        f"Zero or negative quantity: {result['skip_reasons']['zero_quantity']}."
     )
+
+    skipped_rows = result.get("skipped_rows") or []
+    if skipped_rows:
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=skipped_rows[0].keys())
+        writer.writeheader()
+        writer.writerows([
+            {key: _safe_csv_cell(value) for key, value in row.items()}
+            for row in skipped_rows
+        ])
+
+        return Response(
+            output.getvalue(),
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=skipped_inventory_rows.csv",
+                "X-Content-Type-Options": "nosniff",
+                "X-Import-Message": summary,
+            },
+        )
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"message": summary})
+
+    return summary.replace(". ", ".<br>")
 
 
 # ============================================================

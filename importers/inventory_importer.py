@@ -1,5 +1,5 @@
 import csv
-from datetime import datetime
+
 from db.database import get_db
 
 # 🔒 Single source of truth for this import
@@ -126,18 +126,10 @@ def import_inventory_csv(file):
     conn.commit()
     conn.close()
 
-    if skipped_rows:
-        with open("skipped_inventory_rows.csv", "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=skipped_rows[0].keys()
-            )
-            writer.writeheader()
-            writer.writerows(skipped_rows)
-
     return True, {
         "imported": imported,
         "skipped": skipped,
         "skip_reasons": skip_reasons,
-        "snapshot_date": BASELINE_SNAPSHOT_DATE
+        "snapshot_date": BASELINE_SNAPSHOT_DATE,
+        "skipped_rows": skipped_rows,
     }
