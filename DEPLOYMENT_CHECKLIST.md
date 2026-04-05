@@ -49,6 +49,7 @@ DB_PASSWORD=<railway-db-password>
 DB_POOL_MIN=1
 DB_POOL_MAX=10
 APP_THREADS=8
+ADMIN_SEED_JSON=[{"username":"owner","password":"use-a-long-unique-password"}]
 ```
 
 Notes:
@@ -56,6 +57,7 @@ Notes:
 - Railway injects `PORT` automatically, and [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py) honors it.
 - `SESSION_COOKIE_SECURE=1` should stay enabled in production.
 - Start with one small instance and modest DB pool settings.
+- Treat `ADMIN_SEED_JSON` as a one-time secret for fresh databases only, then delete it from Railway variables after seeding.
 
 #### Railway Project Setup
 
@@ -68,6 +70,8 @@ Notes:
 - [ ] Point the app at the Railway PostgreSQL credentials.
 - [ ] Deploy once and confirm the app boots without startup errors.
 - [ ] Confirm the latest DB schema additions create successfully, including `login_attempts`.
+- [ ] If this is a fresh database, run `python scripts/seed_admins.py` once with `ADMIN_SEED_JSON` set.
+- [ ] Remove `ADMIN_SEED_JSON` from Railway after the seed succeeds.
 
 #### Railway Scheduled Job
 
