@@ -623,6 +623,184 @@
         font-weight: 700;
     }
 
+    .sale-batch-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .sale-batch-modal .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+    }
+
+    .sale-batch-modal .modal-header,
+    .sale-batch-modal .modal-footer {
+        border-color: var(--border-soft);
+    }
+
+    .sale-batch-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px;
+        border-radius: 999px;
+        background: #141720;
+        border: 1px solid var(--border-soft);
+    }
+
+    .sale-batch-mode-btn {
+        border: none;
+        border-radius: 999px;
+        padding: 8px 14px;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        transition: all 0.18s ease;
+    }
+
+    .sale-batch-mode-btn.active {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 8px 22px rgba(193,18,31,0.22);
+    }
+
+    .sale-batch-search {
+        position: relative;
+    }
+
+    .sale-batch-results {
+        display: none;
+        margin-top: 8px;
+        max-height: 280px;
+        overflow-y: auto;
+        border-radius: 12px;
+        border: 1px solid var(--border-soft);
+        background: #141720;
+        box-shadow: 0 16px 34px rgba(0,0,0,0.34);
+    }
+
+    .sale-batch-result {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: start;
+        width: 100%;
+        padding: 12px 14px;
+        border: none;
+        border-bottom: 1px solid var(--border-soft);
+        background: transparent;
+        color: var(--text-primary);
+        text-align: left;
+    }
+
+    .sale-batch-result:last-child {
+        border-bottom: none;
+    }
+
+    .sale-batch-result:hover,
+    .sale-batch-result:focus {
+        background: rgba(193,18,31,0.08);
+    }
+
+    .sale-batch-result-main {
+        min-width: 0;
+    }
+
+    .sale-batch-result-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .sale-batch-result-meta {
+        margin-top: 4px;
+        font-size: 0.76rem;
+        color: var(--text-muted);
+        line-height: 1.4;
+    }
+
+    .sale-batch-result-note {
+        margin-top: 6px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: #f7d66b;
+    }
+
+    .sale-batch-result-action {
+        align-self: center;
+        white-space: nowrap;
+    }
+
+    .sale-batch-empty {
+        padding: 18px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.02);
+        color: var(--text-muted);
+        font-size: 0.84rem;
+    }
+
+    .sale-batch-table td,
+    .sale-batch-table th {
+        vertical-align: middle;
+    }
+
+    .sale-batch-table tbody td {
+        height: 72px;
+    }
+
+    .sale-batch-table input {
+        min-width: 0;
+    }
+
+    .sale-batch-table .sale-batch-cell-stack {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+    }
+
+    .sale-batch-table .sale-batch-center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+    }
+
+    .sale-batch-table .sale-batch-item-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        height: 100%;
+    }
+
+    .sale-batch-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.03);
+        font-size: 0.82rem;
+    }
+
+    .sale-batch-summary-row strong {
+        color: #f4c430;
+        font-family: 'Courier New', monospace;
+    }
+
     @media (max-width: 991px) {
         .bundle-sale-grid {
             grid-template-columns: 1fr;
@@ -647,7 +825,7 @@
 
 <div class="form-card">
     <div class="quick-sale-note" id="quick-sale-note">
-        <i class="bi bi-lightning-charge-fill"></i><strong>Quick Sale rule:</strong> items only, each item must be priced below &#8369;100, and total due must not exceed &#8369;100.
+        <i class="bi bi-lightning-charge-fill"></i><strong>Quick Sale rule:</strong> use the full sale flow without customer lookup, exclude bundles, keep item choices up to &#8369;500, and keep total due within &#8369;500.
     </div>
     <div class="new-sale-note" id="new-sale-note">
         <i class="bi bi-receipt-cutoff"></i><strong>New Sale rule:</strong> use the full sales form for regular customer transactions
@@ -802,7 +980,7 @@
                     <th style="width:38%;">Item</th>
                     <th style="width:10%;">Stock</th>
                     <th style="width:13%;">Qty Out</th>
-                    <th style="width:10%;" class="discount-column">Disc %</th>
+                    <th style="width:10%;" class="discount-column">Disc (₱)</th>
                     <th style="width:14%;">Price</th>
                     <th style="width:13%;">Subtotal</th>
                     <th style="width:5%;"></th>
@@ -830,7 +1008,7 @@
                         <div class="stock-warning-text" style="display:none;">Insufficient stock</div>
                     </td>
                     <td class="discount-column">
-                        <input type="number" class="form-control form-control-sm discount-input" min="0" max="50" step="1" value="0">
+                        <input type="number" class="form-control form-control-sm discount-input" min="0" step="0.01" value="0">
                     </td>
                     <td>
                         <div class="d-flex flex-column">
@@ -846,9 +1024,14 @@
             </tbody>
         </table>
 
-        <button class="btn btn-outline-danger btn-sm" id="add-row-btn">
-            <i class="bi bi-plus-circle me-1"></i> Add Item
-        </button>
+        <div class="sale-batch-actions">
+            <button class="btn btn-outline-danger btn-sm" id="add-row-btn">
+                <i class="bi bi-plus-circle me-1"></i> Add Item
+            </button>
+            <button class="btn btn-outline-warning btn-sm" id="open-sale-batch-btn" type="button" style="display:none;">
+                <i class="bi bi-table me-1"></i> Batch Add / Price Check
+            </button>
+        </div>
     </div>
     <div id="mechanic-services-block">
     <!-- SECTION: MECHANIC & SERVICES -->
@@ -1035,6 +1218,69 @@
     </div>
 </div>
 
+<div class="modal fade sale-batch-modal" id="saleBatchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-1">Batch Add / Price Check</h5>
+                    <div class="small text-info" id="saleBatchHelperText">Search items, add multiple lines at once, or check price and stock without leaving this sale.</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body d-grid gap-3">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div class="sale-batch-mode-toggle">
+                        <button type="button" class="sale-batch-mode-btn active" data-sale-batch-mode="batch">Batch Add</button>
+                        <button type="button" class="sale-batch-mode-btn" data-sale-batch-mode="lookup">Price Check</button>
+                    </div>
+                    <div class="small text-warning" id="saleBatchSummaryText">0 item(s) ready to apply.</div>
+                </div>
+
+                <div class="sale-batch-search">
+                    <input type="text" id="saleBatchSearchInput" class="form-control" placeholder="Search item name, category, or description">
+                    <div class="sale-batch-results" id="saleBatchSearchResults"></div>
+                </div>
+
+                <div id="saleBatchLookupEmpty" class="sale-batch-empty" style="display:none;">
+                    Search an item here to check selling price and stock while keeping the current sale draft intact.
+                </div>
+
+                <div id="saleBatchBatchPane">
+                    <div id="saleBatchEmptyState" class="sale-batch-empty">
+                        Search for an item, add it to the batch list, adjust quantity and optional discount, then apply it to the sale.
+                    </div>
+                    <div class="table-responsive" id="saleBatchTableWrap" style="display:none;">
+                        <table class="table table-dark align-middle mb-0 sale-batch-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:34%;">Item</th>
+                                    <th style="width:14%;">Stock</th>
+                                    <th style="width:14%;">Qty</th>
+                                    <th style="width:14%;">Disc (₱)</th>
+                                    <th style="width:14%;">Subtotal</th>
+                                    <th style="width:10%;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="saleBatchTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="sale-batch-summary-row mt-3" id="saleBatchTotalsRow" style="display:none;">
+                        <span>Batch Preview Total</span>
+                        <strong id="saleBatchPreviewTotal">₱0.00</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-warning" id="applySaleBatchBtn">
+                    <i class="bi bi-save me-1"></i> Apply to Sale
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1086,12 +1332,17 @@ function flagError(el, message) {
    INITIALIZATION
 ========================================================= */
 let dateWasManuallyChanged = false;
-const QUICK_SALE_MAX_PRICE = 100;
+const QUICK_SALE_MAX_PRICE = 500;
 const DEFAULT_CASH_PAYMENT_ID = "{{ cash_pm_id }}";
 let currentSaleMode = 'quick';
 let quickSaleOverLimitWarned = false;
 let bundleOptions = [];
 let selectedBundleConfig = null;
+let saleBatchModal = null;
+let saleBatchMode = 'batch';
+let saleBatchEntries = [];
+let saleBatchSearchDebounce = null;
+let lastSaleBatchSearchItems = [];
 
 function getActiveSaleMode() {
     return document.querySelector('.sale-mode-btn.active')?.dataset.saleMode
@@ -1130,7 +1381,7 @@ function updateQuickSaleItemHints() {
         const basePrice = parseFloat(row.dataset.basePrice || row.querySelector('.price-input').value || 0);
         const itemInput = row.querySelector('.item-input');
         if (!row.querySelector('.item-id-input').value || !basePrice) return;
-        if (basePrice >= QUICK_SALE_MAX_PRICE) {
+        if (basePrice > QUICK_SALE_MAX_PRICE) {
             itemInput.classList.add('border-danger');
             itemInput.style.boxShadow = '0 0 0 2px rgba(193,18,31,0.18)';
         } else {
@@ -1147,6 +1398,10 @@ function getGrandTotalValue() {
 function formatPeso(value) {
     const numericValue = Number(value || 0);
     return `₱${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function roundMoney(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 function getBundleSubtotalValue() {
@@ -1403,9 +1658,10 @@ function setSaleMode(mode) {
     document.getElementById('mechanic-supply-note').style.display = isMechanicSupply ? 'block' : 'none';
     document.getElementById('loyalty-banner-wrapper').style.display = isFull ? document.getElementById('loyalty-banner-wrapper').style.display : 'none';
     document.getElementById('bundle-sale-block').style.display = isFull ? '' : 'none';
-    document.getElementById('mechanic-services-block').style.display = isQuick ? 'none' : '';
-    document.getElementById('payment-section-divider').style.display = isFull ? '' : 'none';
-    document.getElementById('payment-controls-col').style.display = isFull ? '' : 'none';
+    document.getElementById('mechanic-services-block').style.display = '';
+    document.getElementById('payment-section-divider').style.display = isMechanicSupply ? 'none' : '';
+    document.getElementById('payment-controls-col').style.display = isMechanicSupply ? 'none' : '';
+    document.getElementById('open-sale-batch-btn').style.display = isFull ? 'inline-flex' : 'none';
     document.getElementById('bundle-sale-card').classList.toggle('disabled', isQuick);
     document.getElementById('sales-number-group').style.display = isMechanicSupply ? 'none' : '';
     document.querySelectorAll('.discount-column').forEach(el => {
@@ -1413,8 +1669,8 @@ function setSaleMode(mode) {
     });
 
     const paymentTotalCol = document.getElementById('payment-total-col');
-    paymentTotalCol.classList.toggle('col-md-12', !isFull);
-    paymentTotalCol.classList.toggle('col-md-6', isFull);
+    paymentTotalCol.classList.toggle('col-md-12', isMechanicSupply);
+    paymentTotalCol.classList.toggle('col-md-6', !isMechanicSupply);
 
     const salesNumberLabel = document.getElementById('sales-number-label');
     const salesNumberInput = document.getElementById('sales-number');
@@ -1427,17 +1683,11 @@ function setSaleMode(mode) {
 
     if (isQuick) {
         quickSaleOverLimitWarned = false;
-        document.getElementById('payment-category').value = DEFAULT_CASH_PAYMENT_ID;
-        document.getElementById('payment-method').value = '';
-        document.getElementById('ref-no').value = '';
-        document.getElementById('trans-notes').value = '';
-        document.getElementById('mechanic-id').value = '';
-        document.getElementById('services-section').style.display = 'none';
-        clearServices();
         clearBundleSelection();
         if (window.clearSelectedCustomer) {
             window.clearSelectedCustomer();
         }
+        document.getElementById('vehicle-id').value = '';
         syncQuickCustomerName();
     } else {
         document.getElementById('quick-customer-name').classList.remove('border-danger');
@@ -1464,6 +1714,12 @@ function setSaleMode(mode) {
         });
     }
 
+    if (!isFull) {
+        saleBatchMode = 'batch';
+        updateSaleBatchModeUI();
+        saleBatchModal?.hide();
+    }
+
     const mechanicLabelHint = document.getElementById('mechanic-label');
     if (mechanicLabelHint) {
         mechanicLabelHint.innerHTML = isMechanicSupply
@@ -1471,7 +1727,7 @@ function setSaleMode(mode) {
             : 'Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span>';
     }
 
-    document.getElementById('services-section').style.display = (!isQuick && !isMechanicSupply && document.getElementById('mechanic-id').value !== '') ? 'block' : 'none';
+    document.getElementById('services-section').style.display = (!isMechanicSupply && document.getElementById('mechanic-id').value !== '') ? 'block' : 'none';
     updatePaymentCategoryUI();
     updateQuickSaleItemHints();
     recalculateAllItemRows();
@@ -1495,6 +1751,209 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('bundle-variant-select').addEventListener('change', renderBundleDetails);
     document.querySelectorAll('.sale-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
+    });
+    saleBatchModal = new bootstrap.Modal(document.getElementById('saleBatchModal'));
+    updateSaleBatchModeUI();
+    document.getElementById('open-sale-batch-btn').addEventListener('click', () => {
+        if (!isFullSaleMode()) {
+            showAlert('Batch Add / Price Check is available only in New Sale.', 'warning');
+            return;
+        }
+        renderSaleBatchEntries();
+        updateSaleBatchModeUI();
+        saleBatchModal.show();
+    });
+    document.querySelectorAll('.sale-batch-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            saleBatchMode = btn.dataset.saleBatchMode || 'batch';
+            updateSaleBatchModeUI();
+        });
+    });
+    document.getElementById('saleBatchSearchInput').addEventListener('input', function () {
+        const query = this.value.trim();
+        clearTimeout(saleBatchSearchDebounce);
+        if (query.length < 2) {
+            document.getElementById('saleBatchSearchResults').style.display = 'none';
+            document.getElementById('saleBatchSearchResults').innerHTML = '';
+            return;
+        }
+
+        saleBatchSearchDebounce = setTimeout(async () => {
+            try {
+                const items = await fetchSaleBatchSearchResults(query);
+                renderSaleBatchSearchResults(items);
+            } catch (error) {
+                showAlert(error.message || 'Failed to search items.', 'danger');
+            }
+        }, 220);
+    });
+    document.getElementById('saleBatchSearchInput').addEventListener('keydown', function (event) {
+        const resultsBox = document.getElementById('saleBatchSearchResults');
+        const firstResult = resultsBox.querySelector('.sale-batch-result');
+
+        if (event.key === 'Enter' && firstResult) {
+            event.preventDefault();
+            firstResult.click();
+            return;
+        }
+
+        if (event.key === 'ArrowDown' && firstResult) {
+            event.preventDefault();
+            firstResult.focus();
+        }
+    });
+    document.getElementById('saleBatchSearchResults').addEventListener('click', function (event) {
+        const result = event.target.closest('.sale-batch-result');
+        if (!result) return;
+        const itemId = Number(result.dataset.saleBatchItemId);
+        const item = lastSaleBatchSearchItems.find(entry => Number(entry.id) === itemId);
+        if (!item) return;
+
+        if (saleBatchMode === 'lookup') {
+            if (selectedItemIds.has(String(item.id))) return;
+            applySingleItemToSale(item);
+            renderSaleBatchSearchResults(lastSaleBatchSearchItems);
+            showAlert(`${item.name} added to the current sale.`, 'success');
+            return;
+        }
+
+        upsertSaleBatchEntry(item);
+        renderSaleBatchEntries();
+        renderSaleBatchSearchResults(lastSaleBatchSearchItems);
+        const qtyInput = document.querySelector(`#saleBatchTableBody tr[data-sale-batch-item-id="${item.id}"] .sale-batch-qty-input`);
+        qtyInput?.focus();
+        qtyInput?.select();
+    });
+    document.getElementById('saleBatchSearchResults').addEventListener('keydown', function (event) {
+        const result = event.target.closest('.sale-batch-result');
+        if (!result) return;
+        const allResults = [...document.querySelectorAll('#saleBatchSearchResults .sale-batch-result')];
+        const currentIndex = allResults.indexOf(result);
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            result.click();
+            return;
+        }
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const nextResult = allResults[currentIndex + 1] || allResults[currentIndex];
+            nextResult?.focus();
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (currentIndex <= 0) {
+                document.getElementById('saleBatchSearchInput')?.focus();
+                return;
+            }
+            const prevResult = allResults[currentIndex - 1];
+            prevResult?.focus();
+        }
+    });
+    document.getElementById('saleBatchTableBody').addEventListener('input', function (event) {
+        const row = event.target.closest('tr[data-sale-batch-item-id]');
+        if (!row) return;
+        const entry = getSaleBatchEntry(Number(row.dataset.saleBatchItemId));
+        if (!entry) return;
+
+        if (event.target.classList.contains('sale-batch-qty-input')) {
+            entry.quantity = event.target.value;
+        }
+        if (event.target.classList.contains('sale-batch-discount-input')) {
+            entry.discount = event.target.value;
+        }
+    });
+    document.getElementById('saleBatchTableBody').addEventListener('change', function (event) {
+        const row = event.target.closest('tr[data-sale-batch-item-id]');
+        if (!row) return;
+        const entry = getSaleBatchEntry(Number(row.dataset.saleBatchItemId));
+        if (!entry) return;
+
+        if (event.target.classList.contains('sale-batch-qty-input')) {
+            entry.quantity = Math.max(1, parseInt(event.target.value, 10) || 1);
+        }
+        if (event.target.classList.contains('sale-batch-discount-input')) {
+            const maxDiscount = Math.max(0, roundMoney(Number(entry.selling_price || 0) * 0.5));
+            entry.discount = Math.min(maxDiscount, Math.max(0, Number(event.target.value || 0)));
+        }
+        renderSaleBatchEntries();
+    });
+    document.getElementById('saleBatchTableBody').addEventListener('focusin', function (event) {
+        if (event.target.classList.contains('sale-batch-qty-input') || event.target.classList.contains('sale-batch-discount-input')) {
+            event.target.select();
+        }
+    });
+    document.getElementById('saleBatchTableBody').addEventListener('click', function (event) {
+        const row = event.target.closest('tr[data-sale-batch-item-id]');
+        if (!row || !event.target.closest('.remove-sale-batch-entry-btn')) return;
+        saleBatchEntries = saleBatchEntries.filter(entry => Number(entry.item_id) !== Number(row.dataset.saleBatchItemId));
+        renderSaleBatchEntries();
+        renderSaleBatchSearchResults(lastSaleBatchSearchItems);
+    });
+    document.getElementById('saleBatchTableBody').addEventListener('keydown', function (event) {
+        const row = event.target.closest('tr[data-sale-batch-item-id]');
+        if (!row) return;
+        const rows = [...document.querySelectorAll('#saleBatchTableBody tr[data-sale-batch-item-id]')];
+        const rowIndex = rows.indexOf(row);
+
+        if (event.key === 'Enter' && event.target.classList.contains('sale-batch-qty-input')) {
+            event.preventDefault();
+            const discountInput = row.querySelector('.sale-batch-discount-input');
+            discountInput?.focus();
+            discountInput?.select();
+            return;
+        }
+
+        if (event.key === 'Enter' && event.target.classList.contains('sale-batch-discount-input')) {
+            event.preventDefault();
+            const nextRow = rows[rowIndex + 1];
+            const nextQtyInput = nextRow?.querySelector('.sale-batch-qty-input');
+            if (nextQtyInput) {
+                nextQtyInput.focus();
+                nextQtyInput.select();
+            } else {
+                document.getElementById('applySaleBatchBtn')?.focus();
+            }
+            return;
+        }
+
+        if (event.key === 'ArrowDown' && (event.target.classList.contains('sale-batch-qty-input') || event.target.classList.contains('sale-batch-discount-input'))) {
+            event.preventDefault();
+            const selector = event.target.classList.contains('sale-batch-qty-input') ? '.sale-batch-qty-input' : '.sale-batch-discount-input';
+            const nextInput = rows[rowIndex + 1]?.querySelector(selector);
+            nextInput?.focus();
+            nextInput?.select();
+            return;
+        }
+
+        if (event.key === 'ArrowUp' && (event.target.classList.contains('sale-batch-qty-input') || event.target.classList.contains('sale-batch-discount-input'))) {
+            event.preventDefault();
+            const selector = event.target.classList.contains('sale-batch-qty-input') ? '.sale-batch-qty-input' : '.sale-batch-discount-input';
+            const prevInput = rows[rowIndex - 1]?.querySelector(selector);
+            if (prevInput) {
+                prevInput.focus();
+                prevInput.select();
+            } else {
+                document.getElementById('saleBatchSearchInput')?.focus();
+            }
+        }
+    });
+    document.getElementById('applySaleBatchBtn').addEventListener('click', applySaleBatchEntries);
+    document.getElementById('saleBatchModal').addEventListener('shown.bs.modal', () => {
+        const searchInput = document.getElementById('saleBatchSearchInput');
+        searchInput?.focus();
+        searchInput?.select();
+    });
+    document.getElementById('saleBatchModal').addEventListener('hidden.bs.modal', () => {
+        document.getElementById('saleBatchSearchResults').style.display = 'none';
+    });
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.sale-batch-search')) {
+            document.getElementById('saleBatchSearchResults').style.display = 'none';
+        }
     });
     document.getElementById('quick-customer-name').addEventListener('input', syncQuickCustomerName);
     document.addEventListener('change', (event) => {
@@ -1544,13 +2003,14 @@ function calculateRow(row) {
     const discountInput = row.querySelector('.discount-input');
 
     let discount = parseFloat(discountInput.value) || 0;
+    const maxDiscountAmount = isMechanicSupplyMode() ? 0 : Math.max(0, roundMoney(basePrice * 0.5));
     if (discount < 0) discount = 0;
-    if (discount > 50) discount = 50;
+    if (discount > maxDiscountAmount) discount = maxDiscountAmount;
     if (isMechanicSupplyMode()) discount = 0;
-    discountInput.value = discount;
+    discountInput.value = discount === 0 ? '0' : discount.toFixed(2).replace(/\.?0+$/, '');
     row.dataset.basePrice = basePrice.toFixed(2);
 
-    const discountedPrice = basePrice * (1 - discount / 100);
+    const discountedPrice = Math.max(0, roundMoney(basePrice - discount));
     priceInput.value = discountedPrice.toFixed(2);
 
     const originalPriceEl = row.querySelector('.original-price');
@@ -1582,7 +2042,7 @@ function calculateRow(row) {
         if (warningLabel) warningLabel.style.display = 'none';
     }
 
-    const subtotal = qty * discountedPrice;
+    const subtotal = roundMoney(qty * discountedPrice);
     row.querySelector('.subtotal-display').innerText =
         `₱${subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
@@ -1615,7 +2075,7 @@ function calculateGrandTotal() {
         grandTotalEl.classList.toggle('text-danger', overLimit);
 
         if (overLimit && !quickSaleOverLimitWarned) {
-            showAlert('Quick Sale total due cannot exceed ₱100. Remove an item, reduce quantity, or switch to New Sale.', 'warning');
+            showAlert('Quick Sale total due cannot exceed ₱500. Remove an item, reduce quantity, discount, or switch to New Sale.', 'warning');
             quickSaleOverLimitWarned = true;
         } else if (!overLimit) {
             quickSaleOverLimitWarned = false;
@@ -1652,7 +2112,7 @@ const handleTableSearch = async (input) => {
 
         let items = data.items || [];
         if (isQuickSaleMode()) {
-            items = items.filter(item => Number(item.a4s_selling_price || 0) < QUICK_SALE_MAX_PRICE);
+            items = items.filter(item => Number(item.a4s_selling_price || 0) <= QUICK_SALE_MAX_PRICE);
         }
 
         if (!items.length) {
@@ -1661,7 +2121,7 @@ const handleTableSearch = async (input) => {
                 emptyState.className = 'list-group-item';
                 emptyState.style.color = '#f7d66b';
                 emptyState.style.fontSize = '0.78rem';
-                emptyState.textContent = 'Quick Sale only allows items priced below ₱100.';
+                emptyState.textContent = 'Quick Sale only allows items priced up to ₱500.';
                 suggestions.appendChild(emptyState);
                 suggestions.style.display = 'block';
                 return;
@@ -1720,21 +2180,8 @@ const handleTableSearch = async (input) => {
                 btn.style.cursor = "not-allowed";
             } else {
                 btn.onclick = () => {
-                    rebuildSelectedItemIds();
-                    input.value = item.name;
-                    input.dataset.confirmedName = item.name;
-                    row.querySelector('.item-id-input').value = item.id;
-                    row.dataset.sellingPrice = Number(item.a4s_selling_price || 0).toFixed(2);
-                    row.dataset.costPrice = Number(item.cost_per_piece || 0).toFixed(2);
-                    row.dataset.basePrice = isMechanicSupplyMode()
-                        ? row.dataset.costPrice
-                        : row.dataset.sellingPrice;
-                    row.querySelector('.price-input').value = row.dataset.basePrice;
-                    row.querySelector('.stock-input').value = item.current_stock;
-                    rebuildSelectedItemIds();
+                    assignItemToRow(row, item);
                     suggestions.style.display = 'none';
-                    calculateRow(row);
-                    updateQuickSaleItemHints();
                 };
             }
 
@@ -1746,6 +2193,231 @@ const handleTableSearch = async (input) => {
         console.error('Search error:', err);
     }
 };
+
+/* =========================================================
+SALE BATCH ADD / PRICE CHECK
+========================================================= */
+function getSaleBatchEntry(itemId) {
+    return saleBatchEntries.find(entry => Number(entry.item_id) === Number(itemId)) || null;
+}
+
+function getSaleBatchPreviewTotal() {
+    return saleBatchEntries.reduce((total, entry) => {
+        const qty = Math.max(1, parseInt(entry.quantity, 10) || 1);
+        const unitPrice = Number(entry.selling_price || 0);
+        const maxDiscount = Math.max(0, roundMoney(unitPrice * 0.5));
+        const discount = Math.min(maxDiscount, Math.max(0, Number(entry.discount || 0)));
+        return total + roundMoney(qty * Math.max(0, unitPrice - discount));
+    }, 0);
+}
+
+function updateSaleBatchModeUI() {
+    document.querySelectorAll('.sale-batch-mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.saleBatchMode === saleBatchMode);
+    });
+
+    const helper = document.getElementById('saleBatchHelperText');
+    const summary = document.getElementById('saleBatchSummaryText');
+    const batchPane = document.getElementById('saleBatchBatchPane');
+    const lookupEmpty = document.getElementById('saleBatchLookupEmpty');
+    const applyBtn = document.getElementById('applySaleBatchBtn');
+
+    if (saleBatchMode === 'lookup') {
+        helper.textContent = 'Search items to check selling price and stock without changing the current sale unless you choose Add to Sale.';
+        summary.textContent = 'Lookup mode keeps the current draft untouched.';
+        batchPane.style.display = 'none';
+        lookupEmpty.style.display = 'block';
+        applyBtn.style.display = 'none';
+    } else {
+        helper.textContent = 'Search items, add multiple lines at once, or check price and stock without leaving this sale.';
+        summary.textContent = `${saleBatchEntries.length} item(s) ready to apply.`;
+        batchPane.style.display = '';
+        lookupEmpty.style.display = 'none';
+        applyBtn.style.display = '';
+    }
+}
+
+function renderSaleBatchEntries() {
+    const body = document.getElementById('saleBatchTableBody');
+    const empty = document.getElementById('saleBatchEmptyState');
+    const wrap = document.getElementById('saleBatchTableWrap');
+    const totalRow = document.getElementById('saleBatchTotalsRow');
+    const previewTotal = document.getElementById('saleBatchPreviewTotal');
+    const summary = document.getElementById('saleBatchSummaryText');
+
+    if (!saleBatchEntries.length) {
+        body.innerHTML = '';
+        empty.style.display = 'block';
+        wrap.style.display = 'none';
+        totalRow.style.display = 'none';
+        previewTotal.textContent = formatPeso(0);
+        if (saleBatchMode === 'batch') {
+            summary.textContent = '0 item(s) ready to apply.';
+        }
+        return;
+    }
+
+    empty.style.display = 'none';
+    wrap.style.display = 'block';
+    totalRow.style.display = 'flex';
+    previewTotal.textContent = formatPeso(getSaleBatchPreviewTotal());
+    if (saleBatchMode === 'batch') {
+        summary.textContent = `${saleBatchEntries.length} item(s) ready to apply.`;
+    }
+
+    body.innerHTML = saleBatchEntries.map(entry => {
+        const unitPrice = Number(entry.selling_price || 0);
+        const maxDiscount = Math.max(0, roundMoney(unitPrice * 0.5));
+        const qty = Math.max(1, parseInt(entry.quantity, 10) || 1);
+        const discount = Math.min(maxDiscount, Math.max(0, Number(entry.discount || 0)));
+        const subtotal = roundMoney(qty * Math.max(0, unitPrice - discount));
+        return `
+            <tr data-sale-batch-item-id="${entry.item_id}">
+                <td>
+                    <div class="sale-batch-item-cell">
+                        <strong>${escapeHtml(entry.name || '')}</strong>
+                        <div class="small text-muted mt-1">
+                            Price ${formatPeso(unitPrice)} • Stock ${Number(entry.current_stock || 0)}
+                        </div>
+                    </div>
+                </td>
+                <td><div class="sale-batch-center">${Number(entry.current_stock || 0)}</div></td>
+                <td>
+                    <div class="sale-batch-cell-stack">
+                        <input type="number" class="form-control form-control-sm sale-batch-qty-input" min="1" step="1" value="${qty}">
+                    </div>
+                </td>
+                <td>
+                    <div class="sale-batch-cell-stack">
+                        <input type="number" class="form-control form-control-sm sale-batch-discount-input" min="0" step="0.01" max="${maxDiscount}" value="${discount}">
+                    </div>
+                </td>
+                <td><div class="sale-batch-center fw-bold text-warning">${formatPeso(subtotal)}</div></td>
+                <td><div class="sale-batch-center"><button type="button" class="btn btn-sm btn-outline-danger remove-sale-batch-entry-btn">Remove</button></div></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function upsertSaleBatchEntry(item, quantity = 1) {
+    const existing = getSaleBatchEntry(item.id);
+    if (existing) {
+        existing.quantity = Math.max(1, (parseInt(existing.quantity, 10) || 1) + quantity);
+        return existing;
+    }
+
+    const entry = {
+        item_id: Number(item.id),
+        name: item.name || '',
+        selling_price: Number(item.a4s_selling_price || 0),
+        cost_per_piece: Number(item.cost_per_piece || 0),
+        current_stock: Number(item.current_stock || 0),
+        quantity: Math.max(1, quantity),
+        discount: 0,
+    };
+    saleBatchEntries.push(entry);
+    return entry;
+}
+
+function renderSaleBatchSearchResults(items) {
+    const container = document.getElementById('saleBatchSearchResults');
+    container.innerHTML = '';
+    lastSaleBatchSearchItems = items;
+
+    if (!items.length) {
+        container.innerHTML = '<div class="sale-batch-empty">No matching items found.</div>';
+        container.style.display = 'block';
+        return;
+    }
+
+    container.innerHTML = items.slice(0, 12).map(item => {
+        const alreadyInSale = selectedItemIds.has(String(item.id));
+        const alreadyInBatch = Boolean(getSaleBatchEntry(item.id));
+        const note = alreadyInSale
+            ? 'Already in current sale.'
+            : (alreadyInBatch ? 'Already in batch list.' : '');
+        const actionLabel = saleBatchMode === 'lookup'
+            ? (alreadyInSale ? 'In Sale' : 'Add to Sale')
+            : (alreadyInBatch ? 'Add More' : 'Add to Batch');
+        const actionDisabled = saleBatchMode === 'lookup' ? alreadyInSale : false;
+        return `
+            <button type="button" class="sale-batch-result" data-sale-batch-item-id="${item.id}">
+                <div class="sale-batch-result-main">
+                    <div class="sale-batch-result-top">
+                        <strong>${escapeHtml(item.name || '')}</strong>
+                        <span class="suggestion-price-badge">₱${Number(item.a4s_selling_price || 0).toFixed(2)}</span>
+                    </div>
+                    <div class="sale-batch-result-meta">
+                        Stock: ${Number(item.current_stock || 0)}${item.category ? ` • ${escapeHtml(item.category)}` : ''}${item.description ? ` • ${escapeHtml(item.description)}` : ''}
+                    </div>
+                    ${note ? `<div class="sale-batch-result-note">${note}</div>` : ''}
+                </div>
+                <span class="btn btn-sm ${actionDisabled ? 'btn-outline-secondary' : 'btn-outline-warning'} sale-batch-result-action" ${actionDisabled ? 'aria-disabled="true"' : ''}>${actionLabel}</span>
+            </button>
+        `;
+    }).join('');
+    container.style.display = 'block';
+}
+
+async function fetchSaleBatchSearchResults(query) {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    let items = data.items || [];
+    items = items.filter(item => Number(item.current_stock || 0) >= 0);
+    return items;
+}
+
+function applySingleItemToSale(item, { quantity = 1, discount = 0 } = {}) {
+    const existingRow = getItemRowByItemId(item.id);
+    if (existingRow) {
+        const currentQty = Math.max(1, parseInt(existingRow.querySelector('.qty-input').value, 10) || 1);
+        existingRow.querySelector('.qty-input').value = currentQty + Math.max(1, parseInt(quantity, 10) || 1);
+        const existingDiscount = Math.max(0, Number(existingRow.querySelector('.discount-input').value || 0));
+        if (existingDiscount <= 0 && Number(discount || 0) > 0) {
+            existingRow.querySelector('.discount-input').value = Number(discount || 0);
+        }
+        assignItemToRow(existingRow, item, {
+            quantity: existingRow.querySelector('.qty-input').value,
+            discount: existingRow.querySelector('.discount-input').value,
+        });
+        return;
+    }
+
+    const targetRow = getReusableEmptyItemRow() || createBlankItemRow();
+    assignItemToRow(targetRow, item, { quantity, discount });
+}
+
+function applySaleBatchEntries() {
+    if (!isFullSaleMode()) {
+        showAlert('Batch Add / Price Check is available only in New Sale.', 'warning');
+        return;
+    }
+    if (!saleBatchEntries.length) {
+        showAlert('Add at least one item to the batch list before applying.', 'warning');
+        return;
+    }
+
+    saleBatchEntries.forEach(entry => {
+        applySingleItemToSale({
+            id: entry.item_id,
+            name: entry.name,
+            a4s_selling_price: entry.selling_price,
+            cost_per_piece: entry.cost_per_piece,
+            current_stock: entry.current_stock,
+        }, {
+            quantity: entry.quantity,
+            discount: entry.discount,
+        });
+    });
+
+    saleBatchEntries = [];
+    renderSaleBatchEntries();
+    document.getElementById('saleBatchSearchInput').value = '';
+    document.getElementById('saleBatchSearchResults').innerHTML = '';
+    document.getElementById('saleBatchSearchResults').style.display = 'none';
+    saleBatchModal?.hide();
+    showAlert('Batch items applied to the current sale.', 'success');
+}
 
 /* =========================================================
 SERVICE SEARCH
@@ -2411,6 +3083,70 @@ function rebuildSelectedItemIds() {
     });
 }
 
+function createBlankItemRow() {
+    const tbody = document.getElementById('transaction-body');
+    const newRow = tbody.querySelector('.item-row').cloneNode(true);
+
+    newRow.querySelector('.item-id-input').value = '';
+    newRow.querySelector('.item-input').value = '';
+    newRow.querySelector('.item-input').dataset.confirmedName = '';
+    newRow.querySelector('.price-input').value = '';
+    newRow.querySelector('.qty-input').value = 1;
+    newRow.querySelector('.stock-input').value = '--';
+    newRow.querySelector('.subtotal-display').innerText = '₱0.00';
+    newRow.querySelector('.discount-input').value = 0;
+    delete newRow.dataset.basePrice;
+    delete newRow.dataset.sellingPrice;
+    delete newRow.dataset.costPrice;
+
+    const originalPriceEl = newRow.querySelector('.original-price');
+    if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
+
+    const qtyInput = newRow.querySelector('.qty-input');
+    qtyInput.classList.remove('border-danger');
+    qtyInput.style.color = '';
+    qtyInput.style.boxShadow = "none";
+
+    const newWarning = newRow.querySelector('.stock-warning-text');
+    if (newWarning) newWarning.style.display = 'none';
+
+    newRow.querySelector('.search-suggestions').style.display = 'none';
+    tbody.appendChild(newRow);
+    return newRow;
+}
+
+function getReusableEmptyItemRow() {
+    return [...document.querySelectorAll('.item-row')].find(row => {
+        const itemId = row.querySelector('.item-id-input')?.value;
+        const typedName = row.querySelector('.item-input')?.value.trim();
+        return !itemId && !typedName;
+    }) || null;
+}
+
+function getItemRowByItemId(itemId) {
+    return [...document.querySelectorAll('.item-row')].find(row =>
+        String(row.querySelector('.item-id-input')?.value || '') === String(itemId)
+    ) || null;
+}
+
+function assignItemToRow(row, item, { quantity = 1, discount = 0 } = {}) {
+    const qtyValue = Math.max(1, parseInt(quantity, 10) || 1);
+    const discountValue = Math.max(0, Number(discount || 0));
+    row.querySelector('.item-input').value = item.name || '';
+    row.querySelector('.item-input').dataset.confirmedName = item.name || '';
+    row.querySelector('.item-id-input').value = item.id;
+    row.dataset.sellingPrice = Number(item.a4s_selling_price || 0).toFixed(2);
+    row.dataset.costPrice = Number(item.cost_per_piece || 0).toFixed(2);
+    row.dataset.basePrice = isMechanicSupplyMode() ? row.dataset.costPrice : row.dataset.sellingPrice;
+    row.querySelector('.price-input').value = row.dataset.basePrice;
+    row.querySelector('.stock-input').value = item.current_stock;
+    row.querySelector('.qty-input').value = qtyValue;
+    row.querySelector('.discount-input').value = discountValue;
+    rebuildSelectedItemIds();
+    calculateRow(row);
+    updateQuickSaleItemHints();
+}
+
 function clearItemRow(row) {
     row.querySelector('.item-id-input').value = '';
     const itemInput = row.querySelector('.item-input');
@@ -2548,35 +3284,7 @@ document.addEventListener('paste', (e) => {
 
 document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
-    const tbody  = document.getElementById('transaction-body');
-    const newRow = tbody.querySelector('.item-row').cloneNode(true);
-
-    newRow.querySelector('.item-id-input').value = '';
-    newRow.querySelector('.item-input').value = '';
-    newRow.querySelector('.item-input').dataset.confirmedName = '';
-    newRow.querySelector('.price-input').value = '';
-    newRow.querySelector('.qty-input').value = 1;
-    newRow.querySelector('.stock-input').value = '--';
-    newRow.querySelector('.subtotal-display').innerText = '₱0.00';
-    newRow.querySelector('.discount-input').value = 0;
-    delete newRow.dataset.basePrice;
-    delete newRow.dataset.sellingPrice;
-    delete newRow.dataset.costPrice;
-
-    const originalPriceEl = newRow.querySelector('.original-price');
-    if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
-
-    const qtyInput = newRow.querySelector('.qty-input');
-    qtyInput.classList.remove('border-danger');
-    qtyInput.style.color = '';
-    qtyInput.style.boxShadow = "none";
-
-    const newWarning = newRow.querySelector('.stock-warning-text');
-    if (newWarning) newWarning.style.display = 'none';
-
-    newRow.querySelector('.search-suggestions').style.display = 'none';
-
-    tbody.appendChild(newRow);
+    createBlankItemRow();
     rebuildSelectedItemIds();
 });
 
@@ -2606,8 +3314,8 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo         = document.getElementById('ref-no').value.trim();
     const notes         = document.getElementById('trans-notes').value.trim();
-    const needsProvider = fullSaleMode && (paymentCat === 'Online' || paymentCat === 'Bank');
-    const needsNotes    = fullSaleMode && isOthersPaymentCategory();
+    const needsProvider = !mechanicSupplyMode && (paymentCat === 'Online' || paymentCat === 'Bank');
+    const needsNotes    = !mechanicSupplyMode && isOthersPaymentCategory();
     const vehicleId     = document.getElementById('vehicle-id').value;
     const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
     const vehicleIsActive  = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
@@ -2645,10 +3353,10 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         if (name && !id) hasUnconfirmedItem = true;
 
         if (id && qty > 0) {
-            const discountPercent = parseFloat(row.querySelector('.discount-input').value) || 0;
+            const discountAmount  = parseFloat(row.querySelector('.discount-input').value) || 0;
             const originalPrice   = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
             const finalPrice      = parseFloat(row.querySelector('.price-input').value);
-            validItems.push({ item_id: id, quantity: qty, original_price: originalPrice, discount_percent: discountPercent, final_price: finalPrice });
+            validItems.push({ item_id: id, quantity: qty, original_price: originalPrice, discount_amount: discountAmount, final_price: finalPrice });
         }
     });
 
@@ -2712,13 +3420,8 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (quickSaleMode && validServices.length > 0) {
-        showAlert('Quick Sale only supports item sales. Switch to New Sale to add services.', 'warning');
-        return;
-    }
-
     if (quickSaleMode && hasBundleSelected) {
-        showAlert('Quick Sale only supports item sales. Switch to New Sale to add a bundle.', 'warning');
+        showAlert('Quick Sale does not support bundles. Switch to New Sale to add a bundle.', 'warning');
         return;
     }
 
@@ -2767,27 +3470,27 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (fullSaleMode && mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
+    if (!mechanicSupplyMode && mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
         showAlert('Assigned mechanic requires at least one service entry.', 'warning');
         document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
     if (validItems.length === 0 && validServices.length === 0 && !hasBundleSelected) {
-        showAlert('Please add at least one item, service, or bundle before submitting.', 'warning');
+        showAlert(fullSaleMode ? 'Please add at least one item, service, or bundle before submitting.' : 'Please add at least one item or service before submitting.', 'warning');
         return;
     }
 
     if (quickSaleMode) {
         const invalidQuickSaleItems = validItems.filter(item =>
-            Number(item.original_price || 0) >= QUICK_SALE_MAX_PRICE || Number(item.final_price || 0) >= QUICK_SALE_MAX_PRICE
+            Number(item.original_price || 0) > QUICK_SALE_MAX_PRICE || Number(item.final_price || 0) > QUICK_SALE_MAX_PRICE
         );
         if (invalidQuickSaleItems.length > 0) {
-            showAlert('Quick Sale only allows items priced below ₱100. Remove the higher-priced item(s) or switch to New Sale.', 'warning');
+            showAlert('Quick Sale only allows items priced up to ₱500. Remove the higher-priced item(s) or switch to New Sale.', 'warning');
             return;
         }
         if (getGrandTotalValue() > QUICK_SALE_MAX_PRICE) {
-            showAlert('Quick Sale total due cannot exceed ₱100. Remove an item, reduce quantity, or switch to New Sale.', 'warning');
+            showAlert('Quick Sale total due cannot exceed ₱500. Remove an item, reduce quantity, discount, or switch to New Sale.', 'warning');
             return;
         }
     }
@@ -2801,6 +3504,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
 async function saveTransaction(items, services, bundles) {
     const submitBtn = document.getElementById('submit-btn');
+    const requestTimeoutMs = 15000;
 
     function resetSubmitButton() {
         submitBtn.disabled = false;
@@ -2811,51 +3515,64 @@ async function saveTransaction(items, services, bundles) {
     let refNo = null;
     const quickSaleMode = isQuickSaleMode();
     const fullSaleMode = isFullSaleMode();
-
-    if (quickSaleMode) {
-        syncQuickCustomerName();
-    }
-
-    let finalDate;
-    if (dateWasManuallyChanged) {
-        finalDate = document.getElementById('trans-date').value;
-    } else {
-        const now = new Date();
-        const offset = now.getTimezoneOffset() * 60000;
-        finalDate = new Date(now - offset).toISOString().slice(0, 19);
-    }
-
-    if (fullSaleMode && (paymentId === 'Online' || paymentId === 'Bank')) {
-        paymentId = document.getElementById('payment-method').value;
-        refNo = document.getElementById('ref-no').value || null;
-    }
-
-    const payload = {
-        transaction_class: getTransactionClass(),
-        quick_sale:        quickSaleMode,
-        sales_number:      document.getElementById('sales-number').value.trim() || null,
-        customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : (fullSaleMode ? document.getElementById('customer-name').value : ''),
-        customer_id:       fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
-        mechanic_id:       quickSaleMode ? null : (document.getElementById('mechanic-id').value || null),
-        vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
-        payment_method_id: fullSaleMode ? paymentId : DEFAULT_CASH_PAYMENT_ID,
-        reference_no:      refNo,
-        total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
-        notes:             fullSaleMode ? document.getElementById('trans-notes').value : '',
-        transaction_date:  finalDate,
-        items,
-        services:          fullSaleMode ? services : [],
-        bundles:           fullSaleMode ? bundles : []
-    };
+    const mechanicSupplyMode = isMechanicSupplyMode();
 
     try {
-        const res    = await fetch('/transaction/out/save', {
+        if (quickSaleMode) {
+            syncQuickCustomerName();
+        }
+
+        let finalDate;
+        if (dateWasManuallyChanged) {
+            finalDate = document.getElementById('trans-date').value;
+        } else {
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000;
+            finalDate = new Date(now - offset).toISOString().slice(0, 19);
+        }
+
+        if (!mechanicSupplyMode && (paymentId === 'Online' || paymentId === 'Bank')) {
+            paymentId = document.getElementById('payment-method').value;
+            refNo = document.getElementById('ref-no').value || null;
+        }
+
+        const payload = {
+            transaction_class: getTransactionClass(),
+            quick_sale:        quickSaleMode,
+            sales_number:      document.getElementById('sales-number').value.trim() || null,
+            customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : (fullSaleMode ? document.getElementById('customer-name').value : ''),
+            customer_id:       fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
+            mechanic_id:       document.getElementById('mechanic-id').value || null,
+            vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
+            payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : paymentId,
+            reference_no:      refNo,
+            total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
+            notes:             mechanicSupplyMode ? '' : document.getElementById('trans-notes').value,
+            transaction_date:  finalDate,
+            items,
+            services:          mechanicSupplyMode ? [] : services,
+            bundles:           fullSaleMode ? bundles : []
+        };
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+        const res = await fetch('/transaction/out/save', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(payload)
+            body:    JSON.stringify(payload),
+            signal:  controller.signal,
         });
+        clearTimeout(timeoutId);
 
-        const result = await res.json();
+        let result = null;
+        try {
+            result = await res.json();
+        } catch (parseErr) {
+            const fallbackMessage = res.ok
+                ? 'Sale was submitted but the server response could not be read correctly.'
+                : 'The server returned an invalid response while saving the transaction.';
+            throw new Error(fallbackMessage);
+        }
 
         if (!res.ok) {
             showAlert(result.message);
@@ -2891,7 +3608,11 @@ async function saveTransaction(items, services, bundles) {
 
     } catch (err) {
         console.error('Submission failed:', err);
-        showAlert('Submission failed. Please try again.', 'danger');
+        if (err.name === 'AbortError') {
+            showAlert('Save request timed out. Please check Sales History before retrying this transaction.', 'warning');
+        } else {
+            showAlert(err.message || 'Submission failed. Please try again.', 'danger');
+        }
         resetSubmitButton();
     }
 }

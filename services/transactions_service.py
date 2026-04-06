@@ -810,8 +810,6 @@ def record_sale(data, user_id, username):
             raise ValueError("Invalid or inactive payment method selected.")
 
         payment_category = (pm["category"] or "").strip()
-        if quick_sale and payment_category != "Cash":
-            raise ValueError("Quick Sale must use a cash payment method.")
         if mechanic_supply and payment_category != "Cash":
             raise ValueError("Mechanic Supply must use a cash payment method.")
         sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
@@ -883,24 +881,29 @@ def record_sale(data, user_id, username):
                 if quantity <= 0:
                     raise ValueError("Item quantities must be at least 1.")
 
-                try:
-                    discount_percent_whole = float(item.get("discount_percent", 0) or 0)
-                except (TypeError, ValueError):
-                    raise ValueError("One or more item discounts are invalid.")
-                if discount_percent_whole < 0 or discount_percent_whole > 50:
-                    raise ValueError("Item discount must be between 0 and 50 percent.")
-
                 cost_per_piece_snapshot = round(float(item_row.get("cost_per_piece") or 0), 2)
                 master_price = round(
                     cost_per_piece_snapshot if mechanic_supply else float(item_row.get("a4s_selling_price") or 0),
                     2,
                 )
-                if mechanic_supply and discount_percent_whole != 0:
+                try:
+                    discount_amount = round(float(item.get("discount_amount", 0) or 0), 2)
+                except (TypeError, ValueError):
+                    raise ValueError("One or more item discounts are invalid.")
+                max_discount_amount = 0.0 if mechanic_supply else round(master_price * 0.5, 2)
+                if discount_amount < 0 or discount_amount > max_discount_amount:
+                    raise ValueError("Item discount cannot exceed 50% of the selling price.")
+
+                discount_percent_whole = 0.0
+                if not mechanic_supply and master_price > 0:
+                    discount_percent_whole = round((discount_amount / master_price) * 100, 2)
+
+                if mechanic_supply and discount_amount != 0:
                     raise ValueError("Mechanic Supply item discounts are not allowed.")
                 submitted_original_price = round(float(item.get("original_price", 0) or 0), 2)
                 submitted_final_price = round(float(item.get("final_price", 0) or 0), 2)
                 expected_final_price = round(
-                    master_price if mechanic_supply else master_price * (1 - (discount_percent_whole / 100)),
+                    master_price if mechanic_supply else (master_price - discount_amount),
                     2,
                 )
 
@@ -919,7 +922,7 @@ def record_sale(data, user_id, username):
                         "discount_percent_whole": 0.0 if mechanic_supply else discount_percent_whole,
                         "discount_percent_decimal": 0.0 if mechanic_supply else (discount_percent_whole / 100),
                         "final_price": expected_final_price,
-                        "discount_amount": 0.0 if mechanic_supply else round(master_price - expected_final_price, 2),
+                        "discount_amount": 0.0 if mechanic_supply else discount_amount,
                     }
                 )
 
@@ -1087,29 +1090,33 @@ def record_sale(data, user_id, username):
             raise ValueError("Bundle sales require a selected mechanic before submitting.")
 
         if quick_sale:
-            if raw_services or raw_bundles:
-                raise ValueError("Quick Sale only supports item sales.")
-            if data.get("mechanic_id"):
-                raise ValueError("Quick Sale cannot be assigned to a mechanic.")
+            if raw_bundles:
+                raise ValueError("Quick Sale does not support bundle entries.")
             customer_name = str(data.get("customer_name") or "").strip()
             if not customer_name:
                 raise ValueError("Quick Sale requires a customer name.")
-            if not raw_items:
-                raise ValueError("Quick Sale requires at least one item.")
+            if not (raw_items or raw_services):
+                raise ValueError("Quick Sale requires at least one item or service.")
+
+            if data.get("mechanic_id") and not raw_services:
+                raise ValueError("Assigned mechanic requires at least one service entry.")
 
             computed_quick_total = 0.0
             for item in normalized_items:
                 master_price = float(item["original_price"] or 0)
                 final_price = float(item["final_price"] or 0)
                 quantity = int(item["quantity"] or 0)
-                if master_price >= 100:
-                    raise ValueError(f"'{item['name']}' is not eligible for Quick Sale because its catalog price is 100 pesos or more.")
-                if final_price >= 100:
-                    raise ValueError("Quick Sale only allows items priced below 100 pesos.")
+                if master_price > 500:
+                    raise ValueError(f"'{item['name']}' is not eligible for Quick Sale because its catalog price is above 500 pesos.")
+                if final_price > 500:
+                    raise ValueError("Quick Sale only allows items priced up to 500 pesos.")
                 computed_quick_total += quantity * final_price
 
-            if round(computed_quick_total, 2) > 100:
-                raise ValueError("Quick Sale total due cannot exceed 100 pesos.")
+            for service in normalized_services:
+                computed_quick_total += float(service["price"] or 0)
+
+            if round(computed_quick_total, 2) > 500:
+                raise ValueError("Quick Sale total due cannot exceed 500 pesos.")
         elif mechanic_supply:
             if raw_services:
                 raise ValueError("Mechanic Supply only supports item stock-outs.")
