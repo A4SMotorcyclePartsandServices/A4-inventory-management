@@ -600,7 +600,9 @@ def index2():
                 CASE 
                     WHEN inventory_transactions.transaction_type = 'IN' 
                     THEN inventory_transactions.quantity
-                    ELSE -inventory_transactions.quantity
+                    WHEN inventory_transactions.transaction_type = 'OUT'
+                    THEN -inventory_transactions.quantity
+                    ELSE 0
                 END
             ), 0) AS current_stock
         FROM items
@@ -639,7 +641,9 @@ def debug_integrity():
                 CASE 
                     WHEN inventory_transactions.transaction_type = 'IN'
                     THEN inventory_transactions.quantity
-                    ELSE -inventory_transactions.quantity
+                    WHEN inventory_transactions.transaction_type = 'OUT'
+                    THEN -inventory_transactions.quantity
+                    ELSE 0
                 END
             ), 0) AS current_stock
         FROM items
@@ -650,7 +654,9 @@ def debug_integrity():
             CASE 
                 WHEN inventory_transactions.transaction_type = 'IN'
                 THEN inventory_transactions.quantity
-                ELSE -inventory_transactions.quantity
+                WHEN inventory_transactions.transaction_type = 'OUT'
+                THEN -inventory_transactions.quantity
+                ELSE 0
             END
         ), 0) < 0
     """).fetchall()

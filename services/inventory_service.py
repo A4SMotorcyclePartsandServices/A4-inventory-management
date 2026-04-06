@@ -460,7 +460,9 @@ def get_items_with_stock(snapshot_date=None):
                 CASE 
                     WHEN inventory_transactions.transaction_type = 'IN'
                     THEN inventory_transactions.quantity
-                    ELSE -inventory_transactions.quantity
+                    WHEN inventory_transactions.transaction_type = 'OUT'
+                    THEN -inventory_transactions.quantity
+                    ELSE 0
                 END
             ), 0) AS current_stock
         FROM items
