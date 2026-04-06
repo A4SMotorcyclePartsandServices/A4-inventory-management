@@ -47,3 +47,10 @@
 - [X] ~~*Correction session flow for fixing mistakes after confirmation*~~ [2026-03-25]
 - [X] ~~*Printable stocktake reports / PDF polish*~~ [2026-03-25]
 - [X] ~~*Filters by category and vendor for stocktake item selection*~~ [2026-03-25]
+
+
+## Live Test Changes
+- [ ] change out page from percentage based to peso based
+- [ ] Quick sale move up to 500 copy the new sale format, add in a mechanic and payment method. basically a redundant version of new sale but with a hard cap of 500 pesos
+- [ ] bug at user panel. blocked creation of mechanic when user tried to create it
+- [X] ~~*bug in refund page. for some reason it works on my laptop but does not work on client pc. i narrowed the problem down to account blocking. something must be blocking users from accessing the details of a sale after searching*~~ [2026-04-06]

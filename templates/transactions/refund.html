@@ -1400,7 +1400,7 @@ function openRefundSale(saleId) {
         loadRefundSearch(false);
     }
 
-    fetch(`/sales/details/${saleId}`)
+    fetch(`/api/sales/${saleId}/refund-context`)
         .then(r => r.json())
         .then(data => {
             if (data.error) {
