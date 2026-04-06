@@ -7,6 +7,7 @@ from utils.formatters import format_date
 # ─────────────────────────────────────────────
 
 MECHANIC_QUOTA = 625.0
+MECHANIC_PAYOUT_CAP = 500.0
 
 
 def _num(value):
@@ -487,8 +488,8 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             2,
         )
 
-        if applies_quota_topup and payout_base_total > 0 and combined_services < MECHANIC_QUOTA:
-            shop_topup = max(0.0, round(MECHANIC_QUOTA - total_mech_cut_this, 2))
+        if applies_quota_topup and payout_base_total > 0 and combined_services <= MECHANIC_QUOTA:
+            shop_topup = max(0.0, round(MECHANIC_PAYOUT_CAP - total_mech_cut_this, 2))
         else:
             shop_topup = 0.0
 
