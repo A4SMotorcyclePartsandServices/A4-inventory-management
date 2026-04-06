@@ -6,7 +6,7 @@ from utils.formatters import format_date
 # CONSTANTS
 # ─────────────────────────────────────────────
 
-MECHANIC_QUOTA = 500.0
+MECHANIC_QUOTA = 625.0
 
 
 def _num(value):

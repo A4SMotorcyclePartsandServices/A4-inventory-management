@@ -54,3 +54,4 @@
 - [ ] Quick sale move up to 500 copy the new sale format, add in a mechanic and payment method. basically a redundant version of new sale but with a hard cap of 500 pesos
 - [ ] bug at user panel. blocked creation of mechanic when user tried to create it
 - [X] ~~*bug in refund page. for some reason it works on my laptop but does not work on client pc. i narrowed the problem down to account blocking. something must be blocking users from accessing the details of a sale after searching*~~ [2026-04-06]
+- [X] ~~*change mechanic payout calculation. the threshold is not 500, it is 625 for both 50 and 80 percent cut mechanic*~~ [2026-04-06]
