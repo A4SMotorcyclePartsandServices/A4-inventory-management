@@ -1290,7 +1290,7 @@
     <div class="tab-pane fade {% if active_tab == 'users-tab' %}show active{% endif %}" id="users-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Create New Staff Account</h5>
-            <form method="post" action="{{ url_for('admin_users.manage_users') }}" class="row g-3">
+            <form method="post" action="{{ url_for('admin_audit.create_user') }}" class="row g-3">
                 <div class="col-md-4">
                     <input name="username" class="form-control" placeholder="New staff username" required>
                 </div>
@@ -1346,7 +1346,7 @@
                                     <i class="bi bi-shield-check"></i> PROTECTED
                                 </span>
                             {% else %}
-                                <form action="{{ url_for('admin_users.toggle_user', user_id=user.id) }}" method="POST">
+                                <form action="{{ url_for('admin_audit.toggle_user', user_id=user.id) }}" method="POST">
                                     {% if user.is_active == 1 %}
                                         <button type="submit" class="toggle-btn p-0 text-success">
                                             <i class="bi bi-toggle-on fs-4"></i>

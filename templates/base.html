@@ -1425,7 +1425,7 @@
         {% if session.get('user_id') %}
             <div class="sidebar-nav">
                 <div class="nav-group">
-                    <button type="button" class="nav-group-toggle" aria-expanded="{% if request.path == '/' or request.path == '/customers' or request.path == url_for('admin_users.manage_users') %}true{% else %}false{% endif %}">
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if request.path == '/' or request.path == '/customers' or request.path == url_for('users_panel.users_panel') %}true{% else %}false{% endif %}">
                         <span class="nav-group-title">Setup</span>
                         <i class="bi bi-chevron-down nav-group-caret"></i>
                     </button>
@@ -1436,8 +1436,8 @@
                         <a href="/customers" class="{% if request.path == '/customers' %}active-link{% endif %}">
                             <i class="bi bi-people"></i> Customers
                         </a>
-                        <a href="{{ url_for('admin_users.manage_users') }}"
-                        class="{% if request.path == url_for('admin_users.manage_users') %}active-link{% endif %}">
+                        <a href="{{ url_for('users_panel.users_panel') }}"
+                        class="{% if request.path == url_for('users_panel.users_panel') %}active-link{% endif %}">
                             <i class="bi bi-plus-circle-dotted"></i> User Panel
                         </a>
                     </div>
@@ -1534,7 +1534,7 @@
 
                 {% if session.get('role') == 'admin' %}
                 <div class="nav-group admin-section">
-                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'sales-analytics' in request.path or 'items-analytics' in request.path or request.path == url_for('admin_users.audit_dashboard') %}true{% else %}false{% endif %}">
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'sales-analytics' in request.path or 'items-analytics' in request.path or request.path == url_for('admin_audit.audit_dashboard') %}true{% else %}false{% endif %}">
                         <span class="nav-group-title">Admin</span>
                         <i class="bi bi-chevron-down nav-group-caret"></i>
                     </button>
@@ -1545,8 +1545,8 @@
                         <a href="/items-analytics" class="{% if 'items-analytics' in request.path %}active-link{% endif %}">
                             <i class="bi bi-speedometer2"></i> Item Analytics
                         </a>
-                        <a href="{{ url_for('admin_users.audit_dashboard') }}"
-                        class="{% if request.path == url_for('admin_users.audit_dashboard') %}active-link{% endif %}">
+                        <a href="{{ url_for('admin_audit.audit_dashboard') }}"
+                        class="{% if request.path == url_for('admin_audit.audit_dashboard') %}active-link{% endif %}">
                             <i class="bi bi-shield-lock-fill"></i> Admin Panel
                         </a>
                     </div>

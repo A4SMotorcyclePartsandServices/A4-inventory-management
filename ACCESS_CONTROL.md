@@ -134,6 +134,10 @@ Notifications and approvals:
 Loyalty:
 
 - `/api/loyalty/eligibility/<customer_id>`
+- `/api/loyalty/programs` `GET`
+- `/api/loyalty/programs` `POST`
+- `/api/loyalty/programs/<program_id>/toggle`
+- `/api/loyalty/programs/<program_id>/extend`
 - `/api/loyalty/redeem`
 - `/api/loyalty/customer/<customer_id>/summary`
 
@@ -142,6 +146,19 @@ Account/session:
 - `/logout`
 - `/change-password`
 - `/stocktake/access/request`
+- `/users`
+- `/mechanics/add`
+- `/mechanics/toggle/<mechanic_id>`
+- `/mechanics/quota-topup`
+- `/mechanics/quota-topup/<override_id>/delete`
+- `/services/add`
+- `/services/toggle/<service_id>`
+- `/bundles/add`
+- `/bundles/<bundle_id>/edit`
+- `/bundles/toggle/<bundle_id>`
+- `/api/bundles/<bundle_id>`
+- `/payment-methods/add`
+- `/payment-methods/toggle/<pm_id>`
 
 ### Stocktake-Approved Routes
 
@@ -177,7 +194,6 @@ Analytics and debug:
 
 Admin user management and audit:
 
-- `/users`
 - `/users/audit`
 - `/users/toggle/<user_id>`
 - `/password-resets/<request_id>/complete`
@@ -185,25 +201,13 @@ Admin user management and audit:
 - `/stocktake-access/<approval_request_id>/approve`
 - `/stocktake-access/<approval_request_id>/reject`
 - `/stocktake-access/<approval_request_id>/revoke`
-- `/mechanics/add`
-- `/mechanics/toggle/<mechanic_id>`
-- `/mechanics/quota-topup`
-- `/mechanics/quota-topup/<override_id>/delete`
 - `/sales/details/<reference_id>`
 - `/audit/manual-in/<audit_group_id>`
-- `/services/add`
-- `/services/toggle/<service_id>`
-- `/bundles/add`
-- `/bundles/<bundle_id>/edit`
-- `/bundles/toggle/<bundle_id>`
-- `/api/bundles/<bundle_id>`
-- `/payment-methods/add`
-- `/payment-methods/toggle/<pm_id>`
+- `/api/item/<item_id>`
 - `/api/audit/trail`
 - `/api/audit/item-edits`
 - `/api/admin/sales`
 - `/api/payables/audit`
-- `/api/item/<item_id>`
 
 Approval admin APIs:
 
@@ -215,13 +219,6 @@ Approval admin APIs:
 - `/api/order/<po_id>/approval/approve`
 - `/api/order/<po_id>/approval/revisions`
 - `/transaction/order/<po_id>/review`
-
-Loyalty admin APIs:
-
-- `/api/loyalty/programs` `GET`
-- `/api/loyalty/programs` `POST`
-- `/api/loyalty/programs/<program_id>/toggle`
-- `/api/loyalty/programs/<program_id>/extend`
 
 Cash admin APIs:
 
@@ -245,8 +242,9 @@ Stocktake export admin route:
   - `static`
 - `@admin_required` and `@login_required` are defined in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
 - Stocktake routes use a separate gate, `@stocktake_access_required`, also in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
-- The `admin_users` blueprint has its own `before_request` guard in [routes/admin_users_route.py](/C:/Dev/a4_inventory_system/routes/admin_users_route.py), with a small allowlist for non-admin user-panel endpoints and hard admin enforcement for audit/admin screens.
-- Loyalty admin endpoints do not use `@admin_required`; they enforce admin access inline by checking `session["role"]`.
+- The shared `users.html` page lives under the `users_panel` blueprint in [routes/users_panel_route.py](/C:/Dev/a4_inventory_system/routes/users_panel_route.py) and is available to all logged-in users.
+- The separate admin audit surface lives under the `admin_audit` blueprint in [routes/admin_audit_route.py](/C:/Dev/a4_inventory_system/routes/admin_audit_route.py) and remains admin-only.
+- Loyalty program management endpoints are currently open to all logged-in users.
 - `Flask-WTF` CSRF protection applies globally to unsafe methods.
 
 ### Drift From Previous Audit

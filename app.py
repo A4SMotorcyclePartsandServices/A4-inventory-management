@@ -32,7 +32,8 @@ from db.schema import init_db
 # Services (business logic)
 # ------------------------
 from routes.auth_route import auth_bp
-from routes.admin_users_route import admin_users_bp
+from routes.admin_audit_route import admin_audit_bp
+from routes.users_panel_route import users_panel_bp
 from routes.password_reset_route import password_reset_bp
 from auth.utils import ensure_authenticated_user, admin_required, login_required
 from services.inventory_service import attach_restock_recommendation, get_items_with_stock, search_items_with_stock
@@ -198,7 +199,8 @@ init_db()  # Safe to call on startup (creates tables if missing)
 app.register_blueprint(dashboard_api)
 app.register_blueprint(approval_bp)
 app.register_blueprint(auth_bp)
-app.register_blueprint(admin_users_bp)
+app.register_blueprint(admin_audit_bp)
+app.register_blueprint(users_panel_bp)
 app.register_blueprint(password_reset_bp)
 app.register_blueprint(transaction_bp)
 app.register_blueprint(reports_bp)

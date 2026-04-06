@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session
-from auth.utils import admin_required, login_required
+from auth.utils import login_required
 from db.database import get_db
 from services.loyalty_service import (
     get_all_programs,
@@ -16,7 +16,7 @@ loyalty_bp = Blueprint("loyalty", __name__)
 
 
 # ─────────────────────────────────────────────────────────────
-# PROGRAM ADMIN
+# PROGRAM MANAGEMENT
 # ─────────────────────────────────────────────────────────────
 
 @loyalty_bp.route("/api/loyalty/programs", methods=["GET"])
@@ -27,7 +27,7 @@ def list_programs():
 
 
 @loyalty_bp.route("/api/loyalty/programs", methods=["POST"])
-@admin_required
+@login_required
 def add_program():
     data = request.get_json(silent=True) or {}
     try:
@@ -44,7 +44,7 @@ def add_program():
 
 
 @loyalty_bp.route("/api/loyalty/programs/<int:program_id>/toggle", methods=["POST"])
-@admin_required
+@login_required
 def toggle_program_route(program_id):
     data      = request.get_json(silent=True) or {}
     is_active = bool(data.get("is_active", True))
@@ -70,7 +70,7 @@ def toggle_program_route(program_id):
 
 
 @loyalty_bp.route("/api/loyalty/programs/<int:program_id>/extend", methods=["POST"])
-@admin_required
+@login_required
 def extend_program_route(program_id):
     data = request.get_json(silent=True) or {}
     try:

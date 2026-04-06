@@ -41,8 +41,8 @@ Tabs and backend wiring
 - `Sales` tab
 - Frontend loader: `loadSalesAdmin()`
 - API: `/api/admin/sales`
-- Route: `routes/admin_users_route.py`
-- Wrapper: `services/admin_users_service.py -> get_admin_sales_page()`
+- Route: `routes/admin_audit_route.py`
+- Wrapper: `services/admin_audit_service.py -> get_audit_sales_page()`
 - Query service: `services/sales_admin_service.py -> get_sales_paginated()`
 
 - `Debt Payments` tab
@@ -54,15 +54,15 @@ Tabs and backend wiring
 - `Audit Trail` tab
 - Frontend loader: `loadAuditTrail()`
 - API: `/api/audit/trail`
-- Route: `routes/admin_users_route.py`
-- Wrapper: `services/admin_users_service.py -> get_audit_trail_page()`
+- Route: `routes/admin_audit_route.py`
+- Wrapper: `services/admin_audit_service.py -> get_audit_trail_page()`
 - Query service: `services/audit_service.py -> get_audit_trail()`
 
 - `Payables Audit` tab
 - Frontend loader: `loadPayablesAudit()`
 - API: `/api/payables/audit`
-- Route: `routes/admin_users_route.py`
-- Wrapper: `services/admin_users_service.py -> get_payables_audit_page()`
+- Route: `routes/admin_audit_route.py`
+- Wrapper: `services/admin_audit_service.py -> get_payables_audit_page()`
 - Query service: `services/payables_service.py -> get_payables_audit_log()`
 
 Why Sales and Audit use separate services

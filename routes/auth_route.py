@@ -21,7 +21,7 @@ def login():
             if int(user.get("must_change_password") or 0) == 1:
                 return redirect(url_for("password_reset.change_password"))
             if user["role"] == "admin":
-                return redirect(url_for("admin_users.manage_users"))
+                return redirect(url_for("users_panel.users_panel"))
             return redirect(url_for("index"))
 
     if request.method == "POST":
@@ -58,7 +58,7 @@ def login():
         if int(user.get("must_change_password") or 0) == 1:
             return redirect(url_for("password_reset.change_password"))
         if user["role"] == "admin":
-            return redirect(url_for("admin_users.manage_users"))
+            return redirect(url_for("users_panel.users_panel"))
         return redirect(url_for("index"))
 
     return render_template("users/login.html")

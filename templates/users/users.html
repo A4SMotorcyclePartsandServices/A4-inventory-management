@@ -1153,7 +1153,7 @@
     <div class="tab-pane fade {% if active_tab == 'mechanics-tab' %}show active{% endif %}" id="mechanics-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Mechanic</h5>
-            <form action="{{ url_for('admin_users.add_mechanic') }}" method="POST" class="row g-3" id="addMechanicForm" novalidate>
+            <form action="{{ url_for('users_panel.add_mechanic') }}" method="POST" class="row g-3" id="addMechanicForm" novalidate>
                 <div class="col-md-5">
                     <input name="name" class="form-control" placeholder="Mechanic Name" required>
                 </div>
@@ -1183,7 +1183,7 @@
             <p class="text-info small mb-3">
                 Default behavior is to apply quota top-up. Add a date override here when a mechanic should be excluded or explicitly included for a specific day.
             </p>
-            <form action="{{ url_for('admin_users.save_mechanic_quota_topup') }}" method="POST" class="row g-3 align-items-end">
+            <form action="{{ url_for('users_panel.save_mechanic_quota_topup') }}" method="POST" class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label class="form-label text-white-50">Mechanic</label>
                     <select name="mechanic_id" class="form-select bg-dark text-white border-secondary" required>
@@ -1233,7 +1233,7 @@
                         </td>
                         <td class="text-white-50">{{ mechanic.phone or '---' }}</td>
                         <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_mechanic', mechanic_id=mechanic.id) }}" method="POST">
+                            <form action="{{ url_for('users_panel.toggle_mechanic', mechanic_id=mechanic.id) }}" method="POST">
                                 {% if mechanic.is_active == 1 %}
                                     <button type="submit" class="toggle-btn text-success" title="Click to Disable">
                                         <i class="bi bi-toggle-on fs-3"></i>
@@ -1282,7 +1282,7 @@
                         </td>
                         <td class="text-white-50">{{ override.updated_at_display }}</td>
                         <td class="text-center">
-                            <form action="{{ url_for('admin_users.delete_mechanic_quota_topup', override_id=override.id) }}" method="POST">
+                            <form action="{{ url_for('users_panel.delete_mechanic_quota_topup', override_id=override.id) }}" method="POST">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                             </form>
                         </td>
@@ -1301,7 +1301,7 @@
     <div class="tab-pane fade {% if active_tab == 'manage-services-tab' %}show active{% endif %}" id="manage-services-tab">
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
-            <form action="{{ url_for('admin_users.add_service') }}" method="POST" class="row g-3">
+            <form action="{{ url_for('users_panel.add_service') }}" method="POST" class="row g-3">
                 <div class="col-md-4">
                     <input id="add-service-name-input" name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
                 </div>
@@ -1355,7 +1355,7 @@
                         <td class="fw-bold">{{ svc.name }}</td>
                         <td><span class="badge bg-dark border border-secondary text-info">{{ svc.category }}</span></td>
                         <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_service', service_id=svc.id) }}" method="POST">
+                            <form action="{{ url_for('users_panel.toggle_service', service_id=svc.id) }}" method="POST">
                                 {% if svc.is_active == 1 %}
                                     <button type="submit" class="toggle-btn text-success">
                                         <i class="bi bi-toggle-on fs-3"></i>
@@ -1393,7 +1393,7 @@
                 <span class="badge bg-dark border border-secondary text-info" id="bundle-form-mode-badge">Create Mode</span>
             </div>
 
-            <form action="{{ url_for('admin_users.add_bundle') }}" method="POST" id="bundle-create-form">
+            <form action="{{ url_for('users_panel.add_bundle') }}" method="POST" id="bundle-create-form">
                 <input type="hidden" name="variants_json" id="bundle-variants-json">
                 <input type="hidden" name="services_json" id="bundle-services-json">
                 <input type="hidden" name="items_json" id="bundle-items-json">
@@ -1503,7 +1503,7 @@
                             </div>
                         </td>
                         <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_bundle', bundle_id=bundle.id) }}" method="POST">
+                            <form action="{{ url_for('users_panel.toggle_bundle', bundle_id=bundle.id) }}" method="POST">
                                 {% if bundle.is_active == 1 %}
                                     <button type="submit" class="toggle-btn text-success">
                                         <i class="bi bi-toggle-on fs-3"></i>
@@ -1533,7 +1533,7 @@
 
     <div class="admin-card shadow-sm">
         <h5 class="mb-3 text-white-50">Add New Payment Method</h5>
-        <form action="{{ url_for('admin_users.add_payment_method') }}" method="POST" class="row g-3">
+        <form action="{{ url_for('users_panel.add_payment_method') }}" method="POST" class="row g-3">
             <div class="col-md-6">
                 <input name="name" class="form-control" placeholder="Payment Method Name (e.g. Metrobank)" required>
             </div>
@@ -1572,7 +1572,7 @@
                             </span>
                         </td>
                         <td class="text-center">
-                            <form action="{{ url_for('admin_users.toggle_payment_method', pm_id=pm.id) }}" method="POST">
+                            <form action="{{ url_for('users_panel.toggle_payment_method', pm_id=pm.id) }}" method="POST">
                                 {% if pm.is_active == 1 %}
                                     <button type="submit" class="toggle-btn text-success">
                                         <i class="bi bi-toggle-on fs-3"></i>
@@ -1602,7 +1602,7 @@
     <!-- LOYALTY PROGRAMS TAB -->
     <div class="tab-pane fade {% if active_tab == 'loyalty-tab' %}show active{% endif %}" id="loyalty-tab">
 
-        {% set loyalty_can_manage = session.get('role') == 'admin' %}
+        {% set loyalty_can_manage = session.get('user_id') is not none %}
 
         <!-- CREATE FORM -->
         {% if loyalty_can_manage %}
@@ -1885,267 +1885,6 @@
         </div>
     </div>
 
-        <!-- SALES MODAL -->
-    <div class="modal fade" id="saleDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white sale-modal-content">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-danger">
-                        <i class="bi bi-receipt-cutoff me-2"></i>Sale Receipt Details
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="sale-receipt-shell">
-                        <div class="sale-receipt">
-                            <div class="sale-receipt-top">
-                                <div>
-                                    <div class="sale-receipt-kicker">A4s Analytics System</div>
-                                    <div class="sale-receipt-no">Receipt #<span id="modalSaleID"></span></div>
-                                </div>
-                                <div id="saleDetailsPaymentPill" class="sale-payment-pill sale-payment-other">Payment</div>
-                            </div>
-
-                            <div id="saleDetailsMeta" class="sale-receipt-meta-grid"></div>
-                            <div id="saleDetailsSummary" class="sale-receipt-summary"></div>
-
-                            <div class="sale-receipt-table-wrap">
-                                <table class="table table-sm sale-receipt-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Item / Service</th>
-                                            <th class="text-center">Unit Price</th>
-                                            <th class="text-center">Qty</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="saleItemsList"></tbody>
-                                </table>
-                            </div>
-
-                            <div id="saleRefundHistory" class="sale-receipt-refunds"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ORDERS MODAL -->
-    <div class="modal fade" id="poDetailsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content bg-dark text-white border-secondary">
-        <div class="modal-header border-secondary">
-            <h5 class="modal-title" id="poModalLabel">Purchase Order Details</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-            <!-- Header info -->
-            <div class="row mb-4">
-            <div class="col-6">
-                <small class="text-white-50 d-block">PO NUMBER</small>
-                <strong id="modal-po-number" class="text-danger fs-5"></strong>
-            </div>
-            <div class="col-6 text-end">
-                <small class="text-white-50 d-block">STATUS</small>
-                <span id="modal-po-status" class="badge"></span>
-            </div>
-            </div>
-
-            <!-- Vendor & Dates -->
-            <div class="row mb-4">
-            <div class="col-6">
-                <small class="text-white-50 d-block">VENDOR</small>
-                <span id="modal-po-vendor"></span>
-            </div>
-            <div class="col-6 text-end">
-                <small class="text-white-50 d-block">ORDER DATE</small>
-                <span id="modal-po-order-date"></span>
-                <br>
-                <small class="text-white-50 d-block mt-2">RECEIVED DATE</small>
-                <span id="modal-po-received-date"></span>
-            </div>
-            </div>
-
-            <div id="po-movement-details" class="d-none"></div>
-
-            <!-- Items table -->
-            <table class="table table-dark table-hover border-secondary">
-            <thead>
-                <tr class="text-muted">
-                <th>Item Name</th>
-                <th class="text-center" id="modal-po-qty-label">Qty</th>
-                <th class="text-end">Unit Price</th>
-                <th class="text-end">Subtotal</th>
-                </tr>
-            </thead>
-            <tbody id="po-items-list"></tbody>
-            <tfoot>
-                <tr class="border-top border-danger">
-                <td colspan="3" class="fw-bold text-danger pt-3">GRAND TOTAL</td>
-                <td id="modal-po-total" class="fw-bold text-danger text-end pt-3 fs-5"></td>
-                </tr>
-            </tfoot>
-            </table>
-        </div>
-        </div>
-    </div>
-</div>
-    <div class="modal fade" id="payablesAuditDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-warning">
-                        <i class="bi bi-journal-check me-1 text-warning"></i> Payables Audit Details
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="payablesAuditDetailsBody">
-                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Select a payable audit row.</div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- ITEM CREATED MODAL -->
-    <div class="modal fade" id="itemCreatedModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-success">
-                        <i class="bi bi-box-seam me-1 text-success"></i> Item Created
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="itemCreatedBody">
-                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="manualInDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-success">
-                        <i class="bi bi-box-arrow-in-down me-1 text-success"></i> Manual Stock IN Details
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="manualInDetailsBody">
-                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal fade" id="passwordResetReviewModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-danger">
-                        <i class="bi bi-eye me-2"></i>Review Password Reset Request
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="password-reset-review-card">
-                        <div class="password-reset-review-kicker">Request Summary</div>
-                        <div class="password-reset-review-title" id="passwordResetReviewUsername">Staff user</div>
-                        <p class="password-reset-review-subtitle" id="passwordResetReviewSubtitle">Review the request details and choose the next action.</p>
-                        <div class="password-reset-meta-grid mt-3">
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Requested</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewRequestedAt">-</div>
-                            </div>
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Status</div>
-                                <div class="password-reset-meta-value">
-                                    <span id="passwordResetReviewStatus" class="password-reset-status-pill pending">Pending</span>
-                                </div>
-                            </div>
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Request Note</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewRequestNote">No note provided.</div>
-                            </div>
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Request Activity</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewActivity">Single submission</div>
-                            </div>
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Request IP</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewIp">-</div>
-                            </div>
-                            <div class="password-reset-meta-item">
-                                <div class="password-reset-meta-label">Handled By</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewHandledBy">Pending</div>
-                            </div>
-                            <div class="password-reset-meta-item" style="grid-column: 1 / -1;">
-                                <div class="password-reset-meta-label">Admin Note</div>
-                                <div class="password-reset-meta-value" id="passwordResetReviewAdminNote">No admin note yet.</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="passwordResetReviewActions">
-                        <div class="password-reset-review-card">
-                            <div class="password-reset-review-kicker">Primary Action</div>
-                            <div class="password-reset-review-title">Set Temporary Password</div>
-                            <p class="password-reset-review-subtitle">The user will be forced to change this password immediately after signing in.</p>
-                            <form id="passwordResetCompleteForm" method="POST" class="row g-3 mt-1">
-                                <div class="col-md-6">
-                                    <label class="form-label text-white-50 small">Temporary Password</label>
-                                    <input id="passwordResetTempPassword" name="temporary_password" type="password" class="form-control" placeholder="At least 8 characters" minlength="8" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label text-white-50 small">Admin Note</label>
-                                    <input id="passwordResetCompleteNote" name="admin_note" class="form-control" placeholder="Optional note for internal tracking">
-                                </div>
-                                <div class="col-12">
-                                    <button type="submit" class="btn btn-danger">
-                                        <i class="bi bi-key me-1"></i> Set Temporary Password
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <div class="password-reset-review-card">
-                            <div class="password-reset-review-kicker">Secondary Action</div>
-                            <div class="password-reset-review-title">Reject Request</div>
-                            <p class="password-reset-review-subtitle">Use this if the request is invalid, duplicated in error, or should not be processed.</p>
-                            <form id="passwordResetRejectForm" method="POST" class="row g-3 mt-1">
-                                <div class="col-md-9">
-                                    <label class="form-label text-white-50 small">Rejection Note</label>
-                                    <input id="passwordResetRejectNote" name="admin_note" class="form-control" placeholder="Optional reason for rejection">
-                                </div>
-                                <div class="col-md-3 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-outline-warning w-100">
-                                        Reject Request
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-
-                    <div id="passwordResetReviewReadOnly" class="password-reset-review-card d-none">
-                        <div class="password-reset-review-kicker">Final State</div>
-                        <div class="password-reset-review-title">This request has already been handled.</div>
-                        <p class="password-reset-review-subtitle">Review the details above for the final decision and notes.</p>
-                    </div>
-
-                    <div id="passwordResetReviewNoMatch" class="password-reset-empty-state d-none">
-                        No eligible active staff account matched this request, so there is no reset action available from this screen.
-                    </div>
-                </div>
-                <div class="modal-footer border-secondary">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="modal fade" id="bundleDetailsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable bundle-modal-dialog">
             <div class="modal-content bg-dark border-secondary text-white bundle-modal-content">
@@ -2250,26 +1989,6 @@
                         </button>
                     </div>
                 </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- DEBT PAYMENTS MODAL -->
-    <div class="modal fade" id="debtPaymentsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content bg-dark border-secondary text-white">
-                <div class="modal-header border-secondary">
-                    <h5 class="modal-title text-warning">
-                        <i class="bi bi-clock-history me-1 text-warning"></i>
-                        Payment History
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="debt-payments-body">
-                    <div class="text-center text-muted py-3">
-                        <i class="bi bi-hourglass-split me-1"></i> Select a sale to view history.
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -3168,6 +2887,7 @@ document.addEventListener('click', (event) => {
     }
 });
 
+if (false) {
 function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
     document.getElementById('modalSaleID').innerText = displayNum || saleID;
     const list = document.getElementById('saleItemsList');
@@ -3271,6 +2991,7 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
             list.appendChild(totalRow);
         });
 }
+}
 
 function formatPeso(value) {
     return `&#8369;${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -3301,6 +3022,7 @@ function renderTableMessage(tbody, colspan, message, className = 'text-center py
     tbody.appendChild(row);
 }
 
+if (false) {
 function renderRefundHistory(data) {
     const historyEl = document.getElementById('saleRefundHistory');
     const refunds = data.refund_history || [];
@@ -5279,6 +5001,8 @@ function showDebtPaymentsModal(saleId, saleReceipt = '') {
         });
 }
 
+}
+
 /* =========================================================
 LOYALTY PROGRAMS ADMIN TAB
 ========================================================= */
@@ -5295,7 +5019,7 @@ function showLoyaltyFlash(message, type = 'success') {
 }
 
 let loyaltyProgramsCache = [];
-const loyaltyCanManage = {{ 'true' if session.get('role') == 'admin' else 'false' }};
+const loyaltyCanManage = {{ 'true' if session.get('user_id') else 'false' }};
 
 function formatLoyaltyDate(value) {
     if (!value) return '-';

@@ -17,7 +17,7 @@ def _now():
 
 
 def _admin_password_reset_url():
-    return "/users?tab=password-resets-tab"
+    return "/users/audit?tab=password-resets-tab"
 
 
 def get_eligible_staff_user_by_username(username, external_conn=None):
