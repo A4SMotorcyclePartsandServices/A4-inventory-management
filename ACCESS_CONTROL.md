@@ -43,9 +43,7 @@ Core pages and inventory:
 - `/api/search/items`
 - `/api/search/services`
 - `/api/search/vendors`
-- `/api/vendors/<vendor_id>`
 - `/api/vendors/add`
-- `/api/vendors/<vendor_id>/update`
 - `/api/bundles/sale-options`
 - `/api/bundles/<bundle_id>/sale-config`
 - `/api/vendors/<vendor_id>/recommended-items`
@@ -161,7 +159,6 @@ Account/session:
 - `/payment-methods/add`
 - `/payment-methods/toggle/<pm_id>`
 - `/vendors/add`
-- `/vendors/toggle/<vendor_id>`
 
 ### Stocktake-Approved Routes
 
@@ -211,6 +208,9 @@ Admin user management and audit:
 - `/api/audit/item-edits`
 - `/api/admin/sales`
 - `/api/payables/audit`
+- `/api/vendors/<vendor_id>`
+- `/api/vendors/<vendor_id>/update`
+- `/vendors/toggle/<vendor_id>`
 
 Approval admin APIs:
 

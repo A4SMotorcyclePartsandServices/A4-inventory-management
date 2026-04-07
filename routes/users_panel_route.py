@@ -2,7 +2,7 @@ import json
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, flash, url_for
 
-from auth.utils import ensure_authenticated_user, login_required
+from auth.utils import admin_required, ensure_authenticated_user, login_required
 from services.users_panel_service import (
     add_mechanic_record,
     add_payment_method_record,
@@ -343,7 +343,7 @@ def add_vendor():
 
 
 @users_panel_bp.route("/vendors/toggle/<int:vendor_id>", methods=["POST"])
-@login_required
+@admin_required
 def toggle_vendor(vendor_id):
     result = toggle_vendor_active_status(vendor_id)
     if result["status"] == "missing":

@@ -1715,8 +1715,10 @@
                         <th>Vendor</th>
                         <th>Contact</th>
                         <th>Address</th>
+                        {% if session.get('role') == 'admin' %}
                         <th class="text-center">Actions</th>
                         <th class="text-center">Status</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody id="vendorsBody">
@@ -1733,6 +1735,7 @@
                             <div class="small text-white-50 vendor-contact-no">{{ vendor.contact_no or '---' }}</div>
                         </td>
                         <td class="text-white-50 vendor-address">{{ vendor.address or '---' }}</td>
+                        {% if session.get('role') == 'admin' %}
                         <td class="text-center">
                             <button
                                 type="button"
@@ -1757,10 +1760,11 @@
                                 {% endif %}
                             </form>
                         </td>
+                        {% endif %}
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted">No vendors configured yet.</td>
+                        <td colspan="{% if session.get('role') == 'admin' %}5{% else %}3{% endif %}" class="text-center text-muted">No vendors configured yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -2162,6 +2166,7 @@
         </div>
     </div>
 
+    {% if session.get('role') == 'admin' %}
     <div class="modal fade" id="vendorEditModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content text-white border-secondary">
@@ -2203,6 +2208,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
 </div>
 {% endblock %}
@@ -2222,6 +2228,7 @@ function escapeHtml(value) {
 let initialServicesHTML = "";
 let initialVendorsHTML = "";
 let originalVendorEditorState = null;
+const vendorTableColumnCount = {{ 5 if session.get('role') == 'admin' else 3 }};
 document.addEventListener('DOMContentLoaded', () => {
     const servicesBody = document.getElementById('servicesBody');
     if (servicesBody) {
@@ -2352,7 +2359,7 @@ function filterVendors() {
     if (rows.length > 0 && visibleCount === 0) {
         const row = document.createElement('tr');
         row.id = 'vendors-empty-search-row';
-        row.innerHTML = '<td colspan="5" class="text-center text-muted">No vendors found.</td>';
+        row.innerHTML = `<td colspan="${vendorTableColumnCount}" class="text-center text-muted">No vendors found.</td>`;
         tbody.appendChild(row);
     }
 }

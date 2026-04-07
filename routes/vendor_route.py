@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, jsonify, request
 from werkzeug.exceptions import HTTPException
 
-from auth.utils import login_required
+from auth.utils import admin_required, login_required
 from db.database import get_db
 from services.vendor_service import add_vendor_record, get_vendor_payload, update_vendor_record
 
@@ -40,7 +40,7 @@ def search_vendors():
 
 
 @vendor_bp.route("/api/vendors/<int:vendor_id>")
-@login_required
+@admin_required
 def get_vendor(vendor_id):
     vendor = get_vendor_payload(vendor_id, active_only=False)
     if not vendor:
@@ -75,7 +75,7 @@ def add_vendor():
 
 
 @vendor_bp.route("/api/vendors/<int:vendor_id>/update", methods=["POST"])
-@login_required
+@admin_required
 def update_vendor(vendor_id):
     data = request.get_json(silent=True) or {}
 
