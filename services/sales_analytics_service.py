@@ -12,13 +12,15 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         """
         SELECT
             s.id,
-            s.total_amount
-        FROM sales s
-        JOIN payment_methods pm ON pm.id = s.payment_method_id
+            SUM(sp.amount) AS total_amount
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND pm.category IN ('Bank', 'Online')
+        GROUP BY s.id
         """,
         (start_date, end_date),
     ).fetchall()
@@ -341,10 +343,11 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         """
         SELECT
             COALESCE(pm.name, 'N/A') AS payment_method,
-            COUNT(*) AS sale_count,
-            COALESCE(SUM(s.total_amount), 0) AS total_amount
-        FROM sales s
-        LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            COUNT(DISTINCT s.id) AS sale_count,
+            COALESCE(SUM(sp.amount), 0) AS total_amount
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'

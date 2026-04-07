@@ -22,18 +22,46 @@ def _bool_flag(value, default=True):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _build_sale_payment_summary_map(conn, sale_ids):
+    normalized_sale_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
+    if not normalized_sale_ids:
+        return {}
+
+    rows = conn.execute(
+        """
+        SELECT
+            s.id AS sale_id,
+            COALESCE(
+                NULLIF(STRING_AGG(DISTINCT pm.name, ' + ' ORDER BY pm.name), ''),
+                legacy_pm.name,
+                '—'
+            ) AS payment_method
+        FROM sales s
+        LEFT JOIN sale_payments sp ON sp.sale_id = s.id
+        LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        LEFT JOIN payment_methods legacy_pm ON legacy_pm.id = s.payment_method_id
+        WHERE s.id = ANY(%s)
+        GROUP BY s.id, legacy_pm.name
+        """,
+        (normalized_sale_ids,),
+    ).fetchall()
+    return {int(row["sale_id"]): row["payment_method"] for row in rows}
+
+
 def _get_non_cash_floating_metrics(conn, start_date, end_date):
     sale_rows = conn.execute(
         """
         SELECT
             s.id,
-            s.total_amount
-        FROM sales s
-        JOIN payment_methods pm ON pm.id = s.payment_method_id
+            SUM(sp.amount) AS total_amount
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND pm.category IN ('Bank', 'Online')
+        GROUP BY s.id
         """,
         (start_date, end_date),
     ).fetchall()
@@ -980,15 +1008,13 @@ def get_all_unresolved_sales(conn):
             s.notes,
             s.transaction_date,
             m.name  AS mechanic_name,
-            pm.name AS payment_method,
             COALESCE(SUM(dp.amount_paid), 0) AS total_paid
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
-        LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-        GROUP BY s.id, m.name, pm.name
+        GROUP BY s.id, m.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
 
@@ -996,6 +1022,7 @@ def get_all_unresolved_sales(conn):
         return []
 
     sale_ids     = [row["id"] for row in unresolved_rows]
+    payment_method_map = _build_sale_payment_summary_map(conn, sale_ids)
     items_rows = conn.execute("""
         SELECT
             si.sale_id,
@@ -1034,7 +1061,7 @@ def get_all_unresolved_sales(conn):
             "total_paid":       total_paid,
             "remaining":        remaining,
             "status":           sale["status"],
-            "payment_method":   sale["payment_method"] or "—",
+            "payment_method":   payment_method_map.get(sale_id, "—"),
             "notes":            sale["notes"] or "",
             "transaction_date": format_date(sale["transaction_date"]),
             "products":         items_by_sale.get(sale_id, []),
@@ -1065,7 +1092,6 @@ def get_sales_report_by_date(report_date):
             m.name            AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
-            pm.name           AS payment_method,
             se.exchange_number,
             se.original_sale_id
         FROM sales s
@@ -1073,13 +1099,13 @@ def get_sales_report_by_date(report_date):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) = %s
         ORDER BY s.transaction_date ASC
     """, (report_date,)).fetchall()
 
     all_unresolved = get_all_unresolved_sales(conn)
+    sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -1274,7 +1300,7 @@ def get_sales_report_by_date(report_date):
                 "product_profit_total": sale_product_profit,
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
-                "payment_method": sale["payment_method"] or "-",
+                "payment_method": sale_payment_map.get(sale["id"], "-"),
                 "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,
@@ -1372,7 +1398,6 @@ def get_sales_report_by_range(start_date, end_date):
             m.name            AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
-            pm.name           AS payment_method,
             se.exchange_number,
             se.original_sale_id
         FROM sales s
@@ -1380,13 +1405,13 @@ def get_sales_report_by_range(start_date, end_date):
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
         ORDER BY s.transaction_date ASC
     """, (start_date, end_date)).fetchall()
 
     all_unresolved = get_all_unresolved_sales(conn)
+    sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -1581,7 +1606,7 @@ def get_sales_report_by_range(start_date, end_date):
                 "product_profit_total": sale_product_profit,
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
-                "payment_method": sale["payment_method"] or "-",
+                "payment_method": sale_payment_map.get(sale["id"], "-"),
                 "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,

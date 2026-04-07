@@ -1144,6 +1144,95 @@
                 </div>
 
                 <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="dual-payment-toggle">
+                        <label class="form-check-label text-light" for="dual-payment-toggle">Enable Dual Payment</label>
+                    </div>
+                    <div id="dual-payment-helper" class="text-muted small mt-1" style="display:none;">
+                        Split the total due across exactly two payment methods. Debt cannot be combined with another method.
+                    </div>
+                </div>
+
+                <div class="col-12" id="dual-payment-panel" style="display:none;">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <div class="border rounded-3 p-3" style="border-color: var(--border-soft) !important; background:#141720;">
+                                <div class="row g-2 align-items-end dual-payment-row" data-payment-row="1">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Method 1</label>
+                                        <select class="form-select dual-payment-category">
+                                            <option value="{{ cash_pm_id }}">Cash</option>
+                                            <option value="Bank">Bank</option>
+                                            <option value="Online">Online</option>
+                                            <option value="{{ others_pm_id }}">Others</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 dual-payment-provider-wrap" style="display:none;">
+                                        <label class="form-label info">Provider</label>
+                                        <select class="form-select border-info-soft dual-payment-provider">
+                                            <option value="">-- Select Provider --</option>
+                                            {% for method in payment_methods %}
+                                                {% if method.category in ['Online', 'Bank'] %}
+                                                    <option value="{{ method.id }}" data-category="{{ method.category }}" data-name="{{ (method.name or '')|lower|trim }}">{{ method.name }}</option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 dual-payment-ref-wrap" style="display:none;">
+                                        <label class="form-label info">Reference No.</label>
+                                        <input type="text" class="form-control border-info-soft dual-payment-reference" placeholder="Ref No. / Trace ID">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label accent">Amount</label>
+                                        <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded-3 p-3" style="border-color: var(--border-soft) !important; background:#141720;">
+                                <div class="row g-2 align-items-end dual-payment-row" data-payment-row="2">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Method 2</label>
+                                        <select class="form-select dual-payment-category">
+                                            <option value="{{ cash_pm_id }}">Cash</option>
+                                            <option value="Bank">Bank</option>
+                                            <option value="Online">Online</option>
+                                            <option value="{{ others_pm_id }}">Others</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 dual-payment-provider-wrap" style="display:none;">
+                                        <label class="form-label info">Provider</label>
+                                        <select class="form-select border-info-soft dual-payment-provider">
+                                            <option value="">-- Select Provider --</option>
+                                            {% for method in payment_methods %}
+                                                {% if method.category in ['Online', 'Bank'] %}
+                                                    <option value="{{ method.id }}" data-category="{{ method.category }}" data-name="{{ (method.name or '')|lower|trim }}">{{ method.name }}</option>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 dual-payment-ref-wrap" style="display:none;">
+                                        <label class="form-label info">Reference No.</label>
+                                        <input type="text" class="form-control border-info-soft dual-payment-reference" placeholder="Ref No. / Trace ID">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label accent">Amount</label>
+                                        <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="text-muted small">
+                                Split Total: <span id="dual-payment-total">₱0.00</span>
+                                <span class="ms-2">Remaining: <span id="dual-payment-remaining">₱0.00</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
                     <label class="form-label">
                         Notes
                         <span id="notes-required-indicator" class="req" style="display:none;">*</span>
@@ -1351,6 +1440,8 @@ function flagError(el, message) {
 let dateWasManuallyChanged = false;
 const QUICK_SALE_MAX_PRICE = 500;
 const DEFAULT_CASH_PAYMENT_ID = "{{ cash_pm_id }}";
+const DEFAULT_DEBT_PAYMENT_ID = "{{ debt_pm_id }}";
+const DEFAULT_OTHERS_PAYMENT_ID = "{{ others_pm_id }}";
 let currentSaleMode = 'quick';
 let quickSaleOverLimitWarned = false;
 let bundleOptions = [];
@@ -1827,6 +1918,7 @@ function setSaleMode(mode) {
             document.getElementById('payment-category').value = DEFAULT_CASH_PAYMENT_ID;
             document.getElementById('payment-method').value = '';
             document.getElementById('ref-no').value = '';
+            document.getElementById('dual-payment-toggle').checked = false;
             document.getElementById('trans-notes').value = '';
             document.getElementById('vehicle-id').value = '';
             document.getElementById('mechanic-id-secondary').value = '';
@@ -1860,6 +1952,7 @@ function setSaleMode(mode) {
 
     updateMechanicAndServiceUI({ preserveServices: false });
     updatePaymentCategoryUI();
+    toggleDualPaymentUI();
     updateQuickSaleItemHints();
     recalculateAllItemRows();
 }
@@ -1878,6 +1971,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
     document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
+    document.getElementById('dual-payment-toggle').addEventListener('change', () => {
+        clearFieldErrors();
+        toggleDualPaymentUI();
+    });
+    getDualPaymentRows().forEach(row => {
+        row.querySelector('.dual-payment-category')?.addEventListener('change', () => {
+            clearFieldErrors();
+            updateDualPaymentRowUI(row);
+        });
+        row.querySelector('.dual-payment-provider')?.addEventListener('change', clearFieldErrors);
+        row.querySelector('.dual-payment-reference')?.addEventListener('input', clearFieldErrors);
+        row.querySelector('.dual-payment-amount')?.addEventListener('input', () => {
+            clearFieldErrors();
+            updateDualPaymentTotals();
+        });
+    });
     document.getElementById('bundle-select').addEventListener('change', (e) => {
         loadBundleConfig(e.target.value);
         updateMechanicAndServiceUI({ preserveServices: true });
@@ -1888,6 +1997,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     saleBatchModal = new bootstrap.Modal(document.getElementById('saleBatchModal'));
     updateSaleBatchModeUI();
+    resetDualPaymentRows();
     document.getElementById('open-sale-batch-btn').addEventListener('click', () => {
         if (!isFullSaleMode()) {
             showAlert('Batch Add / Price Check is available only in New Sale.', 'warning');
@@ -2219,6 +2329,7 @@ function calculateGrandTotal() {
         quickSaleOverLimitWarned = false;
         document.getElementById('grand-total').classList.remove('text-warning', 'text-danger');
     }
+    updateDualPaymentTotals();
 }
 
 /* =========================================================
@@ -3153,6 +3264,133 @@ function isOthersPaymentCategory() {
     return selectedCatOption && selectedCatOption.textContent.trim().toLowerCase() === 'others';
 }
 
+function isDualPaymentEnabled() {
+    return document.getElementById('dual-payment-toggle')?.checked === true;
+}
+
+function getDualPaymentRows() {
+    return [...document.querySelectorAll('.dual-payment-row')];
+}
+
+function getDualPaymentCategoryLabel(value) {
+    if (String(value) === String(DEFAULT_CASH_PAYMENT_ID)) return 'Cash';
+    if (String(value) === String(DEFAULT_OTHERS_PAYMENT_ID)) return 'Others';
+    if (String(value) === String(DEFAULT_DEBT_PAYMENT_ID)) return 'Utang';
+    return value;
+}
+
+function updateDualPaymentRowUI(row) {
+    const categoryValue = row.querySelector('.dual-payment-category')?.value || '';
+    const providerWrap = row.querySelector('.dual-payment-provider-wrap');
+    const providerSelect = row.querySelector('.dual-payment-provider');
+    const refWrap = row.querySelector('.dual-payment-ref-wrap');
+    const needsProvider = categoryValue === 'Bank' || categoryValue === 'Online';
+
+    if (providerWrap) providerWrap.style.display = needsProvider ? '' : 'none';
+    if (refWrap) refWrap.style.display = needsProvider ? '' : 'none';
+
+    if (providerSelect) {
+        Array.from(providerSelect.options).forEach((opt, idx) => {
+            if (idx === 0) {
+                opt.style.display = 'block';
+                return;
+            }
+            opt.style.display = opt.dataset.category === categoryValue ? 'block' : 'none';
+        });
+        if (!needsProvider) {
+            providerSelect.value = '';
+        }
+    }
+
+    const refInput = row.querySelector('.dual-payment-reference');
+    if (refInput && !needsProvider) {
+        refInput.value = '';
+    }
+}
+
+function updateDualPaymentTotals() {
+    const total = getDualPaymentRows().reduce((sum, row) => {
+        return sum + (parseFloat(row.querySelector('.dual-payment-amount')?.value || 0) || 0);
+    }, 0);
+    const grandTotal = getGrandTotalValue();
+    const remaining = Math.max(0, grandTotal - total);
+    const totalEl = document.getElementById('dual-payment-total');
+    const remainingEl = document.getElementById('dual-payment-remaining');
+    if (totalEl) totalEl.textContent = formatPeso(total);
+    if (remainingEl) remainingEl.textContent = formatPeso(remaining);
+}
+
+function resetDualPaymentRows() {
+    getDualPaymentRows().forEach((row, index) => {
+        const categorySelect = row.querySelector('.dual-payment-category');
+        const providerSelect = row.querySelector('.dual-payment-provider');
+        const referenceInput = row.querySelector('.dual-payment-reference');
+        const amountInput = row.querySelector('.dual-payment-amount');
+
+        if (categorySelect) {
+            categorySelect.value = index === 0 ? String(DEFAULT_CASH_PAYMENT_ID) : 'Online';
+        }
+        if (providerSelect) providerSelect.value = '';
+        if (referenceInput) referenceInput.value = '';
+        if (amountInput) amountInput.value = '';
+        updateDualPaymentRowUI(row);
+    });
+    updateDualPaymentTotals();
+}
+
+function toggleDualPaymentUI() {
+    const enabled = isDualPaymentEnabled();
+    const panel = document.getElementById('dual-payment-panel');
+    const helper = document.getElementById('dual-payment-helper');
+    const legacyCategory = document.getElementById('payment-category');
+    const legacyMethod = document.getElementById('method-options');
+
+    if (panel) panel.style.display = enabled ? '' : 'none';
+    if (helper) helper.style.display = enabled ? 'block' : 'none';
+    if (legacyCategory) legacyCategory.disabled = enabled;
+    if (legacyMethod) legacyMethod.style.display = enabled ? 'none' : legacyMethod.style.display;
+
+    if (enabled) {
+        if (String(document.getElementById('payment-category').value) === String(DEFAULT_DEBT_PAYMENT_ID)) {
+            document.getElementById('payment-category').value = String(DEFAULT_CASH_PAYMENT_ID);
+        }
+        resetDualPaymentRows();
+    } else {
+        updatePaymentCategoryUI();
+    }
+}
+
+function buildPaymentPayload(grandTotal, mechanicSupplyMode) {
+    if (mechanicSupplyMode) {
+        return [];
+    }
+
+    if (!isDualPaymentEnabled()) {
+        let paymentId = document.getElementById('payment-category').value;
+        let refNo = null;
+        if (paymentId === 'Online' || paymentId === 'Bank') {
+            paymentId = document.getElementById('payment-method').value;
+            refNo = document.getElementById('ref-no').value.trim() || null;
+        }
+        return [{
+            payment_method_id: paymentId,
+            amount: grandTotal,
+            reference_no: refNo,
+        }];
+    }
+
+    return getDualPaymentRows().map(row => {
+        const categoryValue = row.querySelector('.dual-payment-category')?.value || '';
+        const providerValue = row.querySelector('.dual-payment-provider')?.value || '';
+        const paymentMethodId = (categoryValue === 'Bank' || categoryValue === 'Online') ? providerValue : categoryValue;
+        return {
+            payment_method_id: paymentMethodId,
+            amount: parseFloat(row.querySelector('.dual-payment-amount')?.value || 0) || 0,
+            reference_no: row.querySelector('.dual-payment-reference')?.value.trim() || null,
+        };
+    });
+}
+
 function updatePaymentCategoryUI() {
     const paymentCategory = document.getElementById('payment-category');
     const methodDiv       = document.getElementById('method-options');
@@ -3164,10 +3402,15 @@ function updatePaymentCategoryUI() {
     const notesHelper     = document.getElementById('notes-helper');
 
     const selectedCat  = paymentCategory.value;
-    const needsProvider = (selectedCat === 'Online' || selectedCat === 'Bank');
-    const needsNotes   = isOthersPaymentCategory();
+    const dualEnabled  = isDualPaymentEnabled();
+    const needsProvider = !dualEnabled && (selectedCat === 'Online' || selectedCat === 'Bank');
+    const needsNotes   = !dualEnabled && isOthersPaymentCategory();
 
-    if (needsProvider) {
+    if (dualEnabled) {
+        methodDiv.style.display = 'none';
+        submitBtn.className = 'btn btn-danger';
+        submitBtn.style.minWidth = '220px';
+    } else if (needsProvider) {
         Array.from(methodSelect.options).forEach((opt, idx) => {
             if (idx === 0) {
                 opt.style.display = 'block';
@@ -3456,14 +3699,15 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         ? document.getElementById('quick-customer-name').value.trim()
         : (fullSaleMode ? document.getElementById('customer-name').value.trim() : '');
     const paymentCat    = document.getElementById('payment-category').value;
+    const dualPaymentEnabled = isDualPaymentEnabled();
     const primaryMechanicId = getPrimaryMechanicId();
     const secondaryMechanicId = getSecondaryMechanicId();
     const selectedMechanicIds = getSelectedMechanicIds();
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo         = document.getElementById('ref-no').value.trim();
     const notes         = document.getElementById('trans-notes').value.trim();
-    const needsProvider = !mechanicSupplyMode && (paymentCat === 'Online' || paymentCat === 'Bank');
-    const needsNotes    = !mechanicSupplyMode && isOthersPaymentCategory();
+    const needsProvider = !mechanicSupplyMode && !dualPaymentEnabled && (paymentCat === 'Online' || paymentCat === 'Bank');
+    const needsNotes    = !mechanicSupplyMode && !dualPaymentEnabled && isOthersPaymentCategory();
     const vehicleId     = document.getElementById('vehicle-id').value;
     const vehicleOption = document.querySelector(`#vehicle-id option[value="${CSS.escape(vehicleId)}"]`);
     const vehicleIsActive  = !vehicleId ? false : vehicleOption ? (vehicleOption.dataset.active !== '0') : false;
@@ -3484,10 +3728,43 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     if (needsProvider && !refNo)                  markError(document.getElementById('ref-no'), 'Reference number is required.');
     if (needsNotes && !notes)                     markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
     if (!mechanicSupplyMode && secondaryMechanicId && !primaryMechanicId) markError(document.getElementById('mechanic-id'), 'Choose the primary mechanic first.');
+    if (!mechanicSupplyMode && dualPaymentEnabled) {
+        const grandTotal = getGrandTotalValue();
+        let dualTotal = 0;
+        const seenPaymentKeys = new Set();
+        for (const row of getDualPaymentRows()) {
+            const categoryValue = row.querySelector('.dual-payment-category')?.value || '';
+            const providerValue = row.querySelector('.dual-payment-provider')?.value || '';
+            const amountValue = parseFloat(row.querySelector('.dual-payment-amount')?.value || 0) || 0;
+            const refValue = row.querySelector('.dual-payment-reference')?.value.trim() || '';
+            const requiresProvider = categoryValue === 'Bank' || categoryValue === 'Online';
+            const paymentKey = requiresProvider ? providerValue : categoryValue;
+
+            if (!paymentKey) {
+                markError(requiresProvider ? row.querySelector('.dual-payment-provider') : row.querySelector('.dual-payment-category'), `Select ${getDualPaymentCategoryLabel(categoryValue)} payment details.`);
+            }
+            if (requiresProvider && !refValue) {
+                markError(row.querySelector('.dual-payment-reference'), `Reference number is required for ${getDualPaymentCategoryLabel(categoryValue)}.`);
+            }
+            if (amountValue <= 0) {
+                markError(row.querySelector('.dual-payment-amount'), 'Split payment amount must be greater than zero.');
+            }
+            if (paymentKey && seenPaymentKeys.has(String(paymentKey))) {
+                markError(requiresProvider ? row.querySelector('.dual-payment-provider') : row.querySelector('.dual-payment-category'), 'Split payment methods must be different.');
+            }
+            if (paymentKey) {
+                seenPaymentKeys.add(String(paymentKey));
+            }
+            dualTotal += amountValue;
+        }
+        if (Math.abs(dualTotal - grandTotal) > 0.01) {
+            markError(document.getElementById('dual-payment-panel'), 'Split payment amounts must exactly match the total due.');
+        }
+    }
 
     if (firstErrorEl) {
         firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        firstErrorEl.focus();
+        if (typeof firstErrorEl.focus === 'function') firstErrorEl.focus();
         return;
     }
 
@@ -3698,8 +3975,6 @@ async function saveTransaction(items, services, bundles) {
         submitBtn.innerHTML = 'SUBMIT TRANSACTION';
     }
 
-    let paymentId = document.getElementById('payment-category').value;
-    let refNo = null;
     const quickSaleMode = isQuickSaleMode();
     const fullSaleMode = isFullSaleMode();
     const mechanicSupplyMode = isMechanicSupplyMode();
@@ -3718,10 +3993,9 @@ async function saveTransaction(items, services, bundles) {
             finalDate = new Date(now - offset).toISOString().slice(0, 19);
         }
 
-        if (!mechanicSupplyMode && (paymentId === 'Online' || paymentId === 'Bank')) {
-            paymentId = document.getElementById('payment-method').value;
-            refNo = document.getElementById('ref-no').value || null;
-        }
+        const grandTotal = parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, ''));
+        const payments = buildPaymentPayload(grandTotal, mechanicSupplyMode);
+        const primaryPayment = payments[0] || null;
 
         const payload = {
             transaction_class: getTransactionClass(),
@@ -3732,9 +4006,10 @@ async function saveTransaction(items, services, bundles) {
             mechanic_id:       getPrimaryMechanicId() || null,
             secondary_mechanic_id: getSecondaryMechanicId() || null,
             vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
-            payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : paymentId,
-            reference_no:      refNo,
-            total_amount:      parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, '')),
+            payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : (primaryPayment?.payment_method_id || document.getElementById('payment-category').value),
+            reference_no:      primaryPayment?.reference_no || null,
+            payments,
+            total_amount:      grandTotal,
             notes:             mechanicSupplyMode ? '' : document.getElementById('trans-notes').value,
             transaction_date:  finalDate,
             items,

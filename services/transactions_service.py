@@ -30,6 +30,210 @@ def _build_where_clause(conditions):
     return " WHERE " + " AND ".join(conditions)
 
 
+def _money(value):
+    return round(float(value or 0), 2)
+
+
+def _build_sale_payment_summary(payment_rows):
+    cleaned_rows = [row for row in (payment_rows or []) if row]
+    if not cleaned_rows:
+        return {"payment_method_name": "—", "payment_method_category": "", "reference_no": "", "payment_lines": []}
+
+    names = []
+    seen_names = set()
+    references = []
+    payment_lines = []
+
+    for row in cleaned_rows:
+        method_name = str(row.get("payment_method_name") or row.get("name") or "").strip() or "Payment"
+        method_category = str(row.get("payment_method_category") or row.get("category") or "").strip()
+        amount = _money(row.get("amount"))
+        reference_no = str(row.get("reference_no") or "").strip()
+
+        lowered_name = method_name.lower()
+        if lowered_name not in seen_names:
+            seen_names.add(lowered_name)
+            names.append(method_name)
+        if reference_no:
+            references.append(reference_no)
+
+        payment_lines.append({
+            "payment_method_name": method_name,
+            "payment_method_category": method_category,
+            "amount": amount,
+            "reference_no": reference_no,
+        })
+
+    joined_names = " + ".join(names)
+    display_name = joined_names if len(names) > 1 else (names[0] if names else "—")
+    joined_references = ", ".join(references[:2])
+    if len(references) > 2:
+        joined_references += ", ..."
+
+    return {
+        "payment_method_name": display_name,
+        "payment_method_category": "Mixed" if len(names) > 1 else (payment_lines[0]["payment_method_category"] if payment_lines else ""),
+        "reference_no": joined_references,
+        "payment_lines": payment_lines,
+    }
+
+
+def _get_sale_payment_summary_map(conn, sale_ids):
+    normalized_sale_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
+    if not normalized_sale_ids:
+        return {}
+
+    rows = conn.execute(
+        """
+        SELECT
+            sp.sale_id,
+            sp.amount,
+            sp.reference_no,
+            pm.name AS payment_method_name,
+            pm.category AS payment_method_category
+        FROM sale_payments sp
+        LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        WHERE sp.sale_id = ANY(%s)
+        ORDER BY sp.sale_id ASC, sp.sequence_no ASC, sp.id ASC
+        """,
+        (normalized_sale_ids,),
+    ).fetchall()
+
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(int(row["sale_id"]), []).append(dict(row))
+
+    return {
+        sale_id: _build_sale_payment_summary(grouped.get(sale_id, []))
+        for sale_id in normalized_sale_ids
+    }
+
+
+def _normalize_sale_payments(conn, data, expected_total_amount, mechanic_supply=False):
+    expected_total_amount = _money(expected_total_amount)
+    raw_payments = (data or {}).get("payments") or []
+    sale_notes = str((data or {}).get("notes") or "").strip() or None
+
+    if not raw_payments:
+        raw_payment_method_id = (data or {}).get("payment_method_id")
+        raw_reference_no = str((data or {}).get("reference_no") or "").strip() or None
+        if raw_payment_method_id not in ("", None):
+            raw_payments = [{
+                "payment_method_id": raw_payment_method_id,
+                "amount": expected_total_amount,
+                "reference_no": raw_reference_no,
+                "notes": sale_notes,
+            }]
+
+    if mechanic_supply:
+        cash_payment_method = conn.execute(
+            """
+            SELECT id, name, category, is_active
+            FROM payment_methods
+            WHERE category = 'Cash'
+              AND is_active = 1
+            ORDER BY id ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        if not cash_payment_method:
+            raise ValueError("Cash payment method is required for mechanic supply.")
+        raw_payments = [{
+            "payment_method_id": int(cash_payment_method["id"]),
+            "amount": expected_total_amount,
+            "reference_no": None,
+            "notes": None,
+        }]
+
+    if not raw_payments:
+        raise ValueError("At least one payment method is required.")
+
+    normalized_rows = []
+    payment_method_ids = []
+    for index, raw_payment in enumerate(raw_payments, start=1):
+        raw_payment = raw_payment or {}
+        try:
+            payment_method_id = int(raw_payment.get("payment_method_id"))
+        except (TypeError, ValueError):
+            raise ValueError("One or more payment methods are invalid.")
+
+        try:
+            amount = _money(raw_payment.get("amount"))
+        except (TypeError, ValueError):
+            raise ValueError("One or more payment amounts are invalid.")
+
+        if amount <= 0:
+            raise ValueError("Payment amounts must be greater than zero.")
+
+        reference_no = str(raw_payment.get("reference_no") or "").strip() or None
+        notes = str(raw_payment.get("notes") or "").strip() or None
+        normalized_rows.append({
+            "payment_method_id": payment_method_id,
+            "amount": amount,
+            "reference_no": reference_no,
+            "notes": notes,
+            "sequence_no": index,
+        })
+        payment_method_ids.append(payment_method_id)
+
+    method_rows = conn.execute(
+        """
+        SELECT id, name, category, is_active
+        FROM payment_methods
+        WHERE id = ANY(%s)
+        """,
+        (payment_method_ids,),
+    ).fetchall()
+    payment_method_catalog = {int(row["id"]): dict(row) for row in method_rows}
+    if len(payment_method_catalog) != len(set(payment_method_ids)):
+        raise ValueError("One or more selected payment methods are invalid or inactive.")
+
+    total_allocated = 0.0
+    debt_entry_count = 0
+    for row in normalized_rows:
+        payment_method = payment_method_catalog.get(row["payment_method_id"])
+        if not payment_method or int(payment_method.get("is_active") or 0) != 1:
+            raise ValueError("One or more selected payment methods are invalid or inactive.")
+        category = str(payment_method.get("category") or "").strip()
+        if category == "Debt":
+            debt_entry_count += 1
+        row["payment_method_name"] = payment_method["name"]
+        row["payment_method_category"] = category
+        total_allocated = round(total_allocated + row["amount"], 2)
+
+    if debt_entry_count == 1 and len(normalized_rows) == 1:
+        primary_payment = normalized_rows[0]
+        return {
+            "rows": [],
+            "primary_payment_method_id": primary_payment["payment_method_id"],
+            "primary_reference_no": None,
+            "sale_status": "Unresolved",
+        }
+
+    if abs(total_allocated - expected_total_amount) > 0.01:
+        raise ValueError("Split payment total must exactly match the sale total.")
+
+    if debt_entry_count > 1:
+        raise ValueError("Debt payment can only be used once per sale.")
+    if debt_entry_count == 1 and len(normalized_rows) > 1:
+        raise ValueError("Debt cannot be combined with another payment method in the same sale.")
+
+    for row in normalized_rows:
+        category = row["payment_method_category"]
+        if category in {"Bank", "Online"} and not row["reference_no"]:
+            raise ValueError(f"Reference number is required for {row['payment_method_name']}.")
+
+    primary_payment = normalized_rows[0]
+    sale_status = "Unresolved" if primary_payment["payment_method_category"] == "Debt" else "Paid"
+
+    return {
+        "rows": normalized_rows,
+        "primary_payment_method_id": primary_payment["payment_method_id"],
+        "primary_reference_no": primary_payment["reference_no"],
+        "sale_status": sale_status,
+    }
+
+
 # ─────────────────────────────────────────────
 # CORE LEDGER
 # ─────────────────────────────────────────────
@@ -764,11 +968,6 @@ def record_sale(data, user_id, username):
     Records a full sale that may contain standalone items, services,
     and at most one bundle.
     """
-    try:
-        payment_method_id = int(data.get("payment_method_id"))
-    except (TypeError, ValueError):
-        raise ValueError("Invalid payment method selected.")
-
     requested_transaction_class = str(data.get("transaction_class") or "").strip().upper()
     raw_items = data.get("items", []) or []
     raw_services = data.get("services", []) or []
@@ -777,6 +976,10 @@ def record_sale(data, user_id, username):
     raw_sales_number = str(data.get("sales_number") or "").strip()
     raw_mechanic_id = data.get("mechanic_id")
     raw_secondary_mechanic_id = data.get("secondary_mechanic_id")
+    try:
+        submitted_total_amount = _money(data.get("total_amount"))
+    except (TypeError, ValueError):
+        raise ValueError("Invalid sale total submitted.")
 
     if not requested_transaction_class:
         requested_transaction_class = "QUICK_SALE" if bool(data.get("quick_sale")) else "NEW_SALE"
@@ -817,16 +1020,6 @@ def record_sale(data, user_id, username):
 
     conn = get_db()
     try:
-        pm = conn.execute(
-            """
-            SELECT id, category, is_active
-            FROM payment_methods WHERE id = %s
-            """,
-            (payment_method_id,),
-        ).fetchone()
-        if not pm or pm["is_active"] != 1:
-            raise ValueError("Invalid or inactive payment method selected.")
-
         mechanic_catalog = {}
         if selected_mechanic_ids:
             mechanic_rows = conn.execute(
@@ -842,10 +1035,14 @@ def record_sale(data, user_id, username):
             if len(mechanic_catalog) != len(set(selected_mechanic_ids)):
                 raise ValueError("One or more selected mechanics are invalid or inactive.")
 
-        payment_category = (pm["category"] or "").strip()
-        if mechanic_supply and payment_category != "Cash":
-            raise ValueError("Mechanic Supply must use a cash payment method.")
-        sale_status = "Unresolved" if payment_category == "Debt" else "Paid"
+        payment_context = _normalize_sale_payments(
+            conn,
+            data,
+            submitted_total_amount,
+            mechanic_supply=mechanic_supply,
+        )
+        payment_method_id = payment_context["primary_payment_method_id"]
+        sale_status = payment_context["sale_status"]
 
         now_obj = now_local()
         raw_date = data.get("transaction_date")
@@ -1250,7 +1447,7 @@ def record_sale(data, user_id, username):
                 vehicle_id,
                 sale_total_amount,
                 payment_method_id,
-                data.get("reference_no"),
+                payment_context["primary_reference_no"],
                 sale_status,
                 data.get("notes"),
                 user_id,
@@ -1400,10 +1597,35 @@ def record_sale(data, user_id, username):
                 )
 
         sale_total_amount = round(item_total_amount + service_subtotal + bundle_total_amount, 2)
+        if abs(submitted_total_amount - sale_total_amount) > 0.01:
+            raise ValueError("Computed sale total no longer matches the submitted payment allocation. Please review and try again.")
         conn.execute(
             "UPDATE sales SET total_amount = %s, service_fee = %s WHERE id = %s",
             (sale_total_amount, service_subtotal, new_sale_id),
         )
+        for payment_row in payment_context["rows"]:
+            conn.execute(
+                """
+                INSERT INTO sale_payments (
+                    sale_id,
+                    payment_method_id,
+                    amount,
+                    reference_no,
+                    notes,
+                    sequence_no,
+                    created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    new_sale_id,
+                    payment_row["payment_method_id"],
+                    payment_row["amount"],
+                    payment_row["reference_no"],
+                    payment_row["notes"],
+                    payment_row["sequence_no"],
+                    clean_time,
+                ),
+            )
 
         service_ids = [service["service_id"] for service in normalized_services] + bundle_service_ids
         item_ids = [item["item_id"] for item in normalized_items] + bundle_included_item_ids
@@ -1702,6 +1924,27 @@ def _create_exchange_replacement_sale(
     ).fetchone()
     replacement_sale_id = int(replacement_sale_row["id"])
     replacement_cost_snapshot = round(float(replacement_item_row["cost_per_piece"] or 0), 2)
+    conn.execute(
+        """
+        INSERT INTO sale_payments (
+            sale_id,
+            payment_method_id,
+            amount,
+            reference_no,
+            notes,
+            sequence_no,
+            created_at
+        ) VALUES (%s, %s, %s, %s, %s, 1, %s)
+        """,
+        (
+            replacement_sale_id,
+            cash_payment_method_id,
+            replacement_amount,
+            original_sale["sales_number"],
+            exchange_notes,
+            refund_time,
+        ),
+    )
 
     conn.execute(
         """
@@ -1793,14 +2036,11 @@ def get_sale_refund_context(sale_id):
                 s.transaction_date,
                 s.mechanic_id,
                 m.name AS mechanic_name,
-                pm.name AS payment_method_name,
-                pm.category AS payment_method_category,
                 se.exchange_number,
                 se.original_sale_id,
                 os.sales_number AS original_sales_number
             FROM sales s
             LEFT JOIN mechanics m ON m.id = s.mechanic_id
-            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
             LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
             LEFT JOIN sales os ON os.id = se.original_sale_id
             WHERE s.id = %s
@@ -1933,10 +2173,16 @@ def get_sale_refund_context(sale_id):
             """,
             (sale_id,),
         ).fetchall()
+        payment_summary = _get_sale_payment_summary_map(conn, [sale_id]).get(sale_id)
     finally:
         conn.close()
 
     sale_data = dict(sale)
+    if payment_summary:
+        sale_data["payment_method_name"] = payment_summary["payment_method_name"]
+        sale_data["payment_method_category"] = payment_summary["payment_method_category"]
+        sale_data["payment_reference_no"] = payment_summary["reference_no"]
+        sale_data["payment_lines"] = payment_summary["payment_lines"]
     cutoff_date = _sale_refund_cutoff(sale)
     today = today_local()
 
@@ -2120,15 +2366,12 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
                 s.total_amount,
                 s.status,
                 s.transaction_date,
-                pm.name AS payment_method_name,
-                pm.category AS payment_method_category,
                 COALESCE(refunds.total_refunded, 0) AS refunded_amount,
                 COALESCE(items.total_remaining_qty, 0) AS remaining_qty,
                 se.exchange_number,
                 se.original_sale_id,
                 os.sales_number AS original_sales_number
             FROM sales s
-            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
             LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
             LEFT JOIN sales os ON os.id = se.original_sale_id
             LEFT JOIN (
@@ -2163,6 +2406,7 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
         """
 
         rows = conn.execute(query_sql, params + [max(1, min(int(limit or 50), 100))]).fetchall()
+        payment_summary_map = _get_sale_payment_summary_map(conn, [int(row["id"]) for row in rows])
     finally:
         conn.close()
 
@@ -2175,13 +2419,14 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
             and int(row["remaining_qty"] or 0) > 0
             and (cutoff_date is None or today <= cutoff_date)
         )
+        payment_summary = payment_summary_map.get(int(row["id"])) or {}
         result = {
             "id": int(row["id"]),
             "sales_number": row["sales_number"] or f"#{row['id']}",
             "customer_name": row["customer_name"] or "Walk-in",
             "transaction_date": format_date(row["transaction_date"], show_time=True),
-            "payment_method_name": row["payment_method_name"] or "—",
-            "payment_method_category": row["payment_method_category"] or "",
+            "payment_method_name": payment_summary.get("payment_method_name", "—"),
+            "payment_method_category": payment_summary.get("payment_method_category", ""),
             "status": row["status"],
             "total_amount": round(float(row["total_amount"] or 0), 2),
             "refunded_amount": round(float(row["refunded_amount"] or 0), 2),

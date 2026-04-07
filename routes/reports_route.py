@@ -650,7 +650,12 @@ def export_items_sold_today():
                 COALESCE((SELECT SUM(ss.price) FROM sales_services ss WHERE ss.sale_id = s.id), 0) AS service_total,
                 COALESCE((SELECT SUM(dp.amount_paid) FROM debt_payments dp WHERE dp.sale_id = s.id), 0) AS total_paid,
                 COALESCE((SELECT SUM(dp.service_portion) FROM debt_payments dp WHERE dp.sale_id = s.id), 0) AS service_paid,
-                COALESCE(pm.name, 'N/A') AS payment_method_name
+                COALESCE((
+                    SELECT STRING_AGG(DISTINCT pm2.name, ' + ' ORDER BY pm2.name)
+                    FROM sale_payments sp
+                    LEFT JOIN payment_methods pm2 ON pm2.id = sp.payment_method_id
+                    WHERE sp.sale_id = s.id
+                ), COALESCE(pm.name, 'N/A')) AS payment_method_name
             FROM sales s
             LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
             WHERE DATE(s.transaction_date) = %s

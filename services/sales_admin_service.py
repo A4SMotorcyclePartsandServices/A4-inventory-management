@@ -5,6 +5,25 @@ PER_PAGE = 50
 VALID_SALE_STATUSES = {"Paid", "Partial", "Unresolved"}
 
 
+def _payment_summary_subquery():
+    return """
+        LEFT JOIN (
+            SELECT
+                s.id AS sale_id,
+                COALESCE(
+                    NULLIF(STRING_AGG(DISTINCT pm.name, ' + ' ORDER BY pm.name), ''),
+                    legacy_pm.name,
+                    '—'
+                ) AS payment_method_name
+            FROM sales s
+            LEFT JOIN sale_payments sp ON sp.sale_id = s.id
+            LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
+            LEFT JOIN payment_methods legacy_pm ON legacy_pm.id = s.payment_method_id
+            GROUP BY s.id, legacy_pm.name
+        ) pay ON pay.sale_id = s.id
+    """
+
+
 def _build_where_clause(conditions):
     if not conditions:
         return ""
@@ -64,12 +83,12 @@ def get_sales_paginated(page=1, start_date=None, end_date=None, search=None, has
             s.customer_name,
             s.total_amount,
             s.status,
-            pm.name AS payment_method_name,
+            pay.payment_method_name,
             COALESCE(r.total_refunded, 0) AS refunded_amount,
             r.last_refund_date,
             COALESCE(items.total_remaining_qty, 0) AS remaining_qty
         FROM sales s
-        LEFT JOIN payment_methods pm ON s.payment_method_id = pm.id
+    """ + _payment_summary_subquery() + """
         LEFT JOIN (
             SELECT
                 sale_id,

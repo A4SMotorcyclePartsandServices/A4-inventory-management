@@ -196,6 +196,51 @@ def init_db():
     SET transaction_class = 'NEW_SALE'
     WHERE transaction_class IS NULL
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS sale_payments (
+        id                  SERIAL PRIMARY KEY,
+        sale_id             INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        payment_method_id   INTEGER REFERENCES payment_methods(id),
+        amount              NUMERIC(12,2) NOT NULL DEFAULT 0,
+        reference_no        TEXT,
+        notes               TEXT,
+        sequence_no         INTEGER NOT NULL DEFAULT 1,
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (sale_id, sequence_no)
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_payments_sale_id ON sale_payments(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_payments_method_id ON sale_payments(payment_method_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sale_payments_created_at ON sale_payments(created_at DESC)")
+    cur.execute("""
+        INSERT INTO sale_payments (
+            sale_id,
+            payment_method_id,
+            amount,
+            reference_no,
+            notes,
+            sequence_no,
+            created_at
+        )
+        SELECT
+            s.id,
+            s.payment_method_id,
+            s.total_amount,
+            s.reference_no,
+            s.notes,
+            1,
+            COALESCE(s.paid_at, s.transaction_date, NOW())
+        FROM sales s
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM sale_payments sp
+            WHERE sp.sale_id = s.id
+        )
+          AND s.payment_method_id IS NOT NULL
+          AND COALESCE(s.total_amount, 0) > 0
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+    """)
 
     # 9. INVENTORY TRANSACTIONS
     # reference_id replaces sale_id (The "Universal Key")

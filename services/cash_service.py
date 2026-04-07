@@ -53,13 +53,17 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
             s.id AS sale_id,
             s.sales_number,
             s.customer_name,
-            s.total_amount AS amount,
+            SUM(sp.amount) AS amount,
             s.transaction_date,
-            pm.name AS payment_method_name,
-            pm.category AS payment_method_category,
+            STRING_AGG(DISTINCT pm.name, ' + ' ORDER BY pm.name) AS payment_method_name,
+            CASE
+                WHEN COUNT(DISTINCT pm.category) > 1 THEN 'Mixed'
+                ELSE MAX(pm.category)
+            END AS payment_method_category,
             u.username AS recorded_by
-        FROM sales s
-        JOIN payment_methods pm ON pm.id = s.payment_method_id
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
         LEFT JOIN users u ON u.id = s.user_id
         WHERE s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
@@ -73,7 +77,7 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
         query += " AND DATE(s.transaction_date) <= %s"
         params.append(date_to)
 
-    query += " ORDER BY s.transaction_date ASC, s.id ASC"
+    query += " GROUP BY s.id, s.sales_number, s.customer_name, s.transaction_date, u.username ORDER BY s.transaction_date ASC, s.id ASC"
     return conn.execute(query, params).fetchall()
 
 
@@ -167,16 +171,17 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
 
     query = """
         SELECT
-            s.id            AS reference_id,
+            s.id AS reference_id,
             s.sales_number,
             s.customer_name,
-            s.total_amount  AS amount,
+            SUM(sp.amount) AS amount,
             s.transaction_date AS created_at,
-            u.username      AS recorded_by,
+            u.username AS recorded_by,
             se.exchange_number
-        FROM sales s
-        JOIN payment_methods pm ON pm.id = s.payment_method_id
-        LEFT JOIN users u       ON u.id  = s.user_id
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        LEFT JOIN users u ON u.id = s.user_id
         LEFT JOIN sale_exchanges se ON se.replacement_sale_id = s.id
         WHERE pm.category = ANY(%s)
         AND s.status = 'Paid'
@@ -190,6 +195,7 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
         query += " AND DATE(s.transaction_date) <= %s"
         params.append(date_to)
 
+    query += " GROUP BY s.id, s.sales_number, s.customer_name, s.transaction_date, u.username, se.exchange_number ORDER BY s.transaction_date ASC, s.id ASC"
     return conn.execute(query, params).fetchall()
 
 
@@ -832,10 +838,10 @@ def add_cash_entry(
                 f"""
                 SELECT
                     s.id AS sale_id,
-                    s.total_amount AS amount,
-                    pm.category AS payment_method_category
-                FROM sales s
-                JOIN payment_methods pm ON pm.id = s.payment_method_id
+                    SUM(sp.amount) AS amount
+                FROM sale_payments sp
+                JOIN sales s ON s.id = sp.sale_id
+                JOIN payment_methods pm ON pm.id = sp.payment_method_id
                 LEFT JOIN cash_float_claims cfc ON cfc.sale_id = s.id
                 LEFT JOIN cash_entries ce
                     ON ce.id = cfc.cash_entry_id
@@ -845,6 +851,7 @@ def add_cash_entry(
                   AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
                   AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
                   AND ce.id IS NULL
+                GROUP BY s.id
                 """,
                 normalized_claim_sale_ids + list(FLOATING_PAYMENT_CATEGORIES),
             ).fetchall()
