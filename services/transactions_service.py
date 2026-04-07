@@ -520,7 +520,7 @@ def get_transaction_out_context():
 
     return {
         "payment_methods": payment_methods,
-        "mechanics": mechanics,
+        "mechanics": [dict(row) for row in mechanics],
         "cash_pm_id": cash_pm["id"] if cash_pm else None,
         "debt_pm_id": debt_pm["id"] if debt_pm else None,
         "others_pm_id": others_pm["id"] if others_pm else None,
@@ -776,6 +776,7 @@ def record_sale(data, user_id, username):
     raw_customer_name = str(data.get("customer_name") or "").strip()
     raw_sales_number = str(data.get("sales_number") or "").strip()
     raw_mechanic_id = data.get("mechanic_id")
+    raw_secondary_mechanic_id = data.get("secondary_mechanic_id")
 
     if not requested_transaction_class:
         requested_transaction_class = "QUICK_SALE" if bool(data.get("quick_sale")) else "NEW_SALE"
@@ -797,6 +798,23 @@ def record_sale(data, user_id, username):
     quick_sale = requested_transaction_class == "QUICK_SALE"
     mechanic_supply = requested_transaction_class == "MECHANIC_SUPPLY"
 
+    def _coerce_optional_mechanic_id(raw_value, field_label):
+        if raw_value in ("", None):
+            return None
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            raise ValueError(f"Invalid {field_label} selected.")
+
+    primary_mechanic_id = _coerce_optional_mechanic_id(raw_mechanic_id, "mechanic")
+    secondary_mechanic_id = _coerce_optional_mechanic_id(raw_secondary_mechanic_id, "secondary mechanic")
+    if primary_mechanic_id is None and secondary_mechanic_id is not None:
+        raise ValueError("Select the primary mechanic before adding a second mechanic.")
+    if primary_mechanic_id is not None and secondary_mechanic_id is not None and primary_mechanic_id == secondary_mechanic_id:
+        raise ValueError("Primary and secondary mechanics must be different.")
+
+    selected_mechanic_ids = [mechanic_id for mechanic_id in (primary_mechanic_id, secondary_mechanic_id) if mechanic_id]
+
     conn = get_db()
     try:
         pm = conn.execute(
@@ -808,6 +826,21 @@ def record_sale(data, user_id, username):
         ).fetchone()
         if not pm or pm["is_active"] != 1:
             raise ValueError("Invalid or inactive payment method selected.")
+
+        mechanic_catalog = {}
+        if selected_mechanic_ids:
+            mechanic_rows = conn.execute(
+                """
+                SELECT id, name
+                FROM mechanics
+                WHERE id = ANY(%s)
+                  AND is_active = 1
+                """,
+                (selected_mechanic_ids,),
+            ).fetchall()
+            mechanic_catalog = {int(row["id"]): dict(row) for row in mechanic_rows}
+            if len(mechanic_catalog) != len(set(selected_mechanic_ids)):
+                raise ValueError("One or more selected mechanics are invalid or inactive.")
 
         payment_category = (pm["category"] or "").strip()
         if mechanic_supply and payment_category != "Cash":
@@ -952,6 +985,7 @@ def record_sale(data, user_id, username):
             for service in raw_services:
                 service_id = int(service.get("service_id"))
                 raw_price = service.get("price")
+                service_mechanic_id = _coerce_optional_mechanic_id(service.get("mechanic_id"), "service mechanic")
                 if raw_price in (None, ""):
                     raise ValueError("Price is required for each selected service.")
                 try:
@@ -960,12 +994,18 @@ def record_sale(data, user_id, username):
                     raise ValueError("Invalid service price. Please enter a valid amount.")
                 if price < 0:
                     raise ValueError("Service price cannot be negative.")
+                if not service_mechanic_id:
+                    raise ValueError("Each selected service must be assigned to a mechanic.")
+                if service_mechanic_id not in mechanic_catalog:
+                    raise ValueError("One or more service mechanics are invalid or not selected above.")
 
                 normalized_services.append(
                     {
                         "service_id": service_id,
                         "name": service_catalog[service_id]["name"],
                         "price": price,
+                        "mechanic_id": service_mechanic_id,
+                        "mechanic_name": mechanic_catalog[service_mechanic_id]["name"],
                     }
                 )
 
@@ -1086,8 +1126,21 @@ def record_sale(data, user_id, username):
         if not (normalized_items or normalized_services or normalized_bundle):
             raise ValueError("Please add at least one item, service, or bundle before submitting.")
 
-        if normalized_bundle and not data.get("mechanic_id"):
+        if normalized_bundle and not primary_mechanic_id:
             raise ValueError("Bundle sales require a selected mechanic before submitting.")
+        if normalized_bundle and secondary_mechanic_id:
+            raise ValueError("Bundle sales can only be assigned to one mechanic.")
+
+        assigned_service_mechanic_ids = {int(service["mechanic_id"]) for service in normalized_services if service.get("mechanic_id")}
+        if normalized_services and not selected_mechanic_ids:
+            raise ValueError("At least one mechanic is required when services are included.")
+        if selected_mechanic_ids and not mechanic_supply and not normalized_bundle and not normalized_services:
+            raise ValueError("Assigned mechanics require at least one service entry.")
+        if normalized_services:
+            missing_mechanics = [mechanic_id for mechanic_id in selected_mechanic_ids if mechanic_id not in assigned_service_mechanic_ids]
+            if missing_mechanics:
+                missing_names = ", ".join(mechanic_catalog[mechanic_id]["name"] for mechanic_id in missing_mechanics if mechanic_id in mechanic_catalog)
+                raise ValueError(f"Each selected mechanic needs at least one assigned service. Missing: {missing_names}.")
 
         if quick_sale:
             if raw_bundles:
@@ -1098,7 +1151,7 @@ def record_sale(data, user_id, username):
             if not (raw_items or raw_services):
                 raise ValueError("Quick Sale requires at least one item or service.")
 
-            if data.get("mechanic_id") and not raw_services:
+            if selected_mechanic_ids and not raw_services:
                 raise ValueError("Assigned mechanic requires at least one service entry.")
 
             computed_quick_total = 0.0
@@ -1122,7 +1175,7 @@ def record_sale(data, user_id, username):
                 raise ValueError("Mechanic Supply only supports item stock-outs.")
             if raw_bundles:
                 raise ValueError("Mechanic Supply does not support bundle entries.")
-            if not data.get("mechanic_id"):
+            if not primary_mechanic_id:
                 raise ValueError("Mechanic Supply requires an assigned mechanic.")
             if not raw_items:
                 raise ValueError("Mechanic Supply requires at least one item.")
@@ -1202,7 +1255,7 @@ def record_sale(data, user_id, username):
                 data.get("notes"),
                 user_id,
                 clean_time,
-                data.get("mechanic_id") or None,
+                primary_mechanic_id,
                 requested_transaction_class,
             ),
         ).fetchone()
@@ -1256,10 +1309,10 @@ def record_sale(data, user_id, username):
             service_subtotal += float(service["price"])
             conn.execute(
                 """
-                INSERT INTO sales_services (sale_id, service_id, price)
-                VALUES (%s, %s, %s)
+                INSERT INTO sales_services (sale_id, service_id, price, mechanic_id)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (new_sale_id, service["service_id"], service["price"]),
+                (new_sale_id, service["service_id"], service["price"], service["mechanic_id"]),
             )
 
         bundle_total_amount = 0.0
@@ -1701,6 +1754,27 @@ def _sale_refund_cutoff(sale_row):
     return transaction_date.date() + timedelta(days=REFUND_WINDOW_DAYS)
 
 
+def _compose_sale_detail_mechanic_label(sale_row, service_rows=None, bundle_rows=None):
+    names = []
+    seen = set()
+
+    for row in service_rows or []:
+        name = str(row.get("mechanic_name") or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            names.append(name)
+
+    bundle_owner_name = str((sale_row or {}).get("mechanic_name") or "").strip()
+    if (bundle_rows or []) and bundle_owner_name and bundle_owner_name.lower() not in seen:
+        seen.add(bundle_owner_name.lower())
+        names.append(bundle_owner_name)
+
+    if names:
+        return ", ".join(names)
+
+    return bundle_owner_name or ""
+
+
 def get_sale_refund_context(sale_id):
     conn = get_db()
     try:
@@ -1764,9 +1838,14 @@ def get_sale_refund_context(sale_id):
 
         service_rows = conn.execute(
             """
-            SELECT sv.name, ss.price
+            SELECT
+                sv.name,
+                ss.price,
+                ss.mechanic_id,
+                m.name AS mechanic_name
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
+            LEFT JOIN mechanics m ON m.id = ss.mechanic_id
             WHERE ss.sale_id = %s
             ORDER BY sv.name ASC, ss.id ASC
             """,
@@ -1960,6 +2039,8 @@ def get_sale_refund_context(sale_id):
         "services": [
             {
                 **dict(row),
+                "mechanic_id": int(row["mechanic_id"]) if row["mechanic_id"] is not None else None,
+                "mechanic_name": row["mechanic_name"] or "",
                 "price": round(float(row["price"] or 0), 2),
             }
             for row in service_rows
@@ -1967,6 +2048,11 @@ def get_sale_refund_context(sale_id):
         "bundles": bundle_details,
         "refund_history": refund_history,
     })
+    sale_data["mechanic_name"] = _compose_sale_detail_mechanic_label(
+        sale_data,
+        sale_data.get("services", []),
+        sale_data.get("bundles", []),
+    )
     return sale_data
 
 

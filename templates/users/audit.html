@@ -2860,12 +2860,14 @@ function legacyViewSaleDetailsDeprecated(saleID, displayNum) {
 
             // 2. Show Services/Labor
             if(data.services && data.services.length > 0) {
-                let mechanicLabel = data.mechanic ? ` (by ${escapeHtml(data.mechanic)})` : '';
-                list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services${mechanicLabel}</td></tr>`;
+                list.innerHTML += `<tr class="table-dark"><td colspan="3" class="text-info fw-bold border-top border-secondary">Labor & Services</td></tr>`;
                 data.services.forEach(svc => {
+                    const serviceMechanicNote = svc.mechanic_name
+                        ? `<div class="small text-info">Mechanic: ${escapeHtml(svc.mechanic_name)}</div>`
+                        : '';
                     list.innerHTML += `
                         <tr>
-                            <td>${escapeHtml(svc.name)}</td>
+                            <td>${escapeHtml(svc.name)}${serviceMechanicNote}</td>
                             <td class="text-center">&#8369;${parseFloat(svc.price).toFixed(2)}</td>
                             <td class="text-center text-muted">1</td>
                         </tr>`;
@@ -3091,12 +3093,17 @@ function populateSaleDetails(data, saleID, displayNum) {
     });
 
     if (data.services && data.services.length > 0) {
-        const mechanicLabel = data.mechanic_name ? ` - ${escapeHtml(data.mechanic_name)}` : '';
-        list.innerHTML += `<tr class="sale-section-row"><td colspan="3">Labor & Services${mechanicLabel}</td></tr>`;
+        list.innerHTML += `<tr class="sale-section-row"><td colspan="3">Labor & Services</td></tr>`;
         data.services.forEach(svc => {
+            const serviceMechanicNote = svc.mechanic_name
+                ? `<div class="sale-line-note" style="color:#0f766e; font-weight:700;">Mechanic: ${escapeHtml(svc.mechanic_name)}</div>`
+                : '';
             list.innerHTML += `
                 <tr>
-                    <td><div class="sale-line-name">${escapeHtml(svc.name)}</div></td>
+                    <td>
+                        <div class="sale-line-name">${escapeHtml(svc.name)}</div>
+                        ${serviceMechanicNote}
+                    </td>
                     <td class="text-center"><div class="sale-line-name">${formatPeso(svc.price)}</div></td>
                     <td class="text-center">1</td>
                 </tr>`;
@@ -3107,7 +3114,7 @@ function populateSaleDetails(data, saleID, displayNum) {
         data.bundles.forEach(bundle => {
             list.innerHTML += `
                 <tr class="sale-section-row">
-                    <td colspan="3">Bundle - ${escapeHtml(bundle.bundle_name || 'Bundle')}</td>
+                    <td colspan="3">Bundle - ${escapeHtml(bundle.bundle_name || 'Bundle')}${data.mechanic_name ? ` - ${escapeHtml(data.mechanic_name)}` : ''}</td>
                 </tr>
                 <tr>
                     <td>

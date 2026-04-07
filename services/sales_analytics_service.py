@@ -170,19 +170,14 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
                 COALESCE(si.item_cost_total, 0) AS item_cost_total,
                 COALESCE(si.item_profit_total, 0) AS item_profit_total,
                 COALESCE(ss.services_total, 0) AS services_total,
+                COALESCE(ss.service_shop_share_total, 0) AS service_shop_share_total,
                 COALESCE(sb.bundle_product_revenue, 0) AS bundle_product_revenue,
                 COALESCE(sb.bundle_product_cost, 0) AS bundle_product_cost,
                 COALESCE(sb.bundle_product_profit, 0) AS bundle_product_profit,
                 COALESCE(sb.bundle_service_total, 0) AS bundle_service_total,
                 COALESCE(sb.bundle_shop_total, 0) AS bundle_shop_total,
-                (
-                    (
-                        COALESCE(ss.services_total, 0)
-                        + COALESCE(sb.bundle_service_total, 0)
-                    ) * (1 - COALESCE(m.commission_rate, 0))
-                ) + COALESCE(sb.bundle_shop_total, 0) AS service_shop_share
+                COALESCE(ss.service_shop_share_total, 0) + COALESCE(sb.bundle_shop_total, 0) AS service_shop_share
             FROM sales s
-            LEFT JOIN mechanics m ON m.id = s.mechanic_id
             LEFT JOIN (
                 SELECT
                     sale_id,
@@ -194,10 +189,14 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             ) si ON si.sale_id = s.id
             LEFT JOIN (
                 SELECT
-                    sale_id,
-                    SUM(price) AS services_total
-                FROM sales_services
-                GROUP BY sale_id
+                    ss.sale_id,
+                    SUM(ss.price) AS services_total,
+                    SUM(
+                        ss.price - (ss.price * COALESCE(m.commission_rate, 0))
+                    ) AS service_shop_share_total
+                FROM sales_services ss
+                LEFT JOIN mechanics m ON m.id = ss.mechanic_id
+                GROUP BY ss.sale_id
             ) ss ON ss.sale_id = s.id
             LEFT JOIN (
                 SELECT
@@ -234,16 +233,89 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
 
     debt_service_shop_row = conn.execute(
         """
+        WITH sale_service_totals AS (
+            SELECT
+                ss.sale_id,
+                ss.mechanic_id,
+                SUM(ss.price) AS mechanic_service_total
+            FROM sales_services ss
+            WHERE ss.mechanic_id IS NOT NULL
+            GROUP BY ss.sale_id, ss.mechanic_id
+        ),
+        sale_service_totals_by_sale AS (
+            SELECT
+                sale_id,
+                SUM(mechanic_service_total) AS total_service_total
+            FROM sale_service_totals
+            GROUP BY sale_id
+        ),
+        debt_allocations AS (
+            SELECT
+                dp.id AS debt_payment_id,
+                dp.sale_id,
+                dp.service_portion,
+                sst.mechanic_id,
+                COALESCE(m.commission_rate, 0) AS commission_rate,
+                ROUND(
+                    CASE
+                        WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
+                        ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
+                    END,
+                    2
+                ) AS allocated_service_portion,
+                ROW_NUMBER() OVER (
+                    PARTITION BY dp.id, dp.sale_id
+                    ORDER BY sst.mechanic_id ASC
+                ) AS allocation_index,
+                COUNT(*) OVER (
+                    PARTITION BY dp.id, dp.sale_id
+                ) AS allocation_count,
+                SUM(
+                    ROUND(
+                        CASE
+                            WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
+                            ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
+                        END,
+                        2
+                    )
+                ) OVER (
+                    PARTITION BY dp.id, dp.sale_id
+                    ORDER BY sst.mechanic_id ASC
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+                ) AS prior_allocated_total
+            FROM debt_payments dp
+            JOIN sales s ON s.id = dp.sale_id
+            JOIN sale_service_totals sst
+              ON sst.sale_id = dp.sale_id
+            JOIN sale_service_totals_by_sale st
+              ON st.sale_id = dp.sale_id
+            LEFT JOIN mechanics m
+              ON m.id = sst.mechanic_id
+            WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        )
         SELECT
             COALESCE(SUM(
-                COALESCE(dp.service_portion, 0)
-                - (COALESCE(dp.service_portion, 0) * COALESCE(m.commission_rate, 0))
+                allocation_service_portion
+                - (allocation_service_portion * commission_rate)
             ), 0) AS debt_shop_share
-        FROM debt_payments dp
-        JOIN sales s ON s.id = dp.sale_id
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
-          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        FROM (
+            SELECT
+                commission_rate,
+                GREATEST(
+                    0,
+                    CASE
+                        WHEN allocation_index = allocation_count THEN
+                            ROUND(
+                                COALESCE(service_portion, 0)
+                                - COALESCE(prior_allocated_total, 0),
+                                2
+                            )
+                        ELSE COALESCE(allocated_service_portion, 0)
+                    END
+                ) AS allocation_service_portion
+            FROM debt_allocations
+        ) allocated_rows
         """,
         (start_date, end_date),
     ).fetchone()

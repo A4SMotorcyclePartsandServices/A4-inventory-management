@@ -115,9 +115,10 @@ def get_debt_detail(sale_id):
     """, (sale_id,)).fetchall()
 
     services = conn.execute("""
-        SELECT sv.name AS service_name, ss.price
+        SELECT sv.name AS service_name, ss.price, m.name AS mechanic_name
         FROM sales_services ss
         JOIN services sv ON sv.id = ss.service_id
+        LEFT JOIN mechanics m ON m.id = ss.mechanic_id
         WHERE ss.sale_id = %s
     """, (sale_id,)).fetchall()
 
@@ -286,9 +287,11 @@ def get_customer_debt_statement(customer_id):
                 SELECT
                     ss.sale_id,
                     sv.name AS service_name,
-                    ss.price
+                    ss.price,
+                    m.name AS mechanic_name
                 FROM sales_services ss
                 JOIN services sv ON sv.id = ss.service_id
+                LEFT JOIN mechanics m ON m.id = ss.mechanic_id
                 WHERE ss.sale_id = ANY(%s)
                 ORDER BY ss.sale_id ASC, sv.name ASC, ss.id ASC
                 """,
@@ -331,6 +334,7 @@ def get_customer_debt_statement(customer_id):
                 services_by_sale.setdefault(int(row["sale_id"]), []).append({
                     "service_name": row["service_name"],
                     "price": _money(row["price"]),
+                    "mechanic_name": row["mechanic_name"] or "",
                 })
 
             for sale in display_sales:

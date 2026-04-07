@@ -1041,7 +1041,7 @@
 
     <div class="row g-3">
         <div class="col-md-4">
-            <label class="form-label info" id="mechanic-label">Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
+            <label class="form-label info" id="mechanic-label">Primary Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
             <select class="form-select border-info-soft" id="mechanic-id">
                 <option value="">-- No Mechanic --</option>
                 {% for mech in mechanics %}
@@ -1049,19 +1049,27 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="col-md-4" id="secondary-mechanic-group">
+            <label class="form-label info">Secondary Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span></label>
+            <select class="form-select border-info-soft" id="mechanic-id-secondary">
+                <option value="">-- No Second Mechanic --</option>
+            </select>
+            <div class="form-text text-white-50" id="secondary-mechanic-hint">Use this only when another mechanic has their own service lines in the same sale.</div>
+        </div>
     </div>
 
     <div id="services-section" style="display:none; margin-top:18px;">
         <label class="form-label info">
-            Performed Services <span style="color:var(--accent); font-weight:400; text-transform:none; letter-spacing:0;">* required if mechanic chosen</span>
+            Performed Services <span style="color:var(--accent); font-weight:400; text-transform:none; letter-spacing:0;">* each service must be assigned to one selected mechanic</span>
         </label>
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-2" id="services-table">
                 <thead>
                     <tr>
-                        <th style="width:55%;">Service Description</th>
-                        <th style="width:20%;">Price</th>
-                        <th style="width:13%;">Subtotal</th>
+                        <th style="width:43%;">Service Description</th>
+                        <th style="width:24%;">Mechanic</th>
+                        <th style="width:18%;">Price</th>
+                        <th style="width:10%;">Subtotal</th>
                         <th style="width:5%;"></th>
                     </tr>
                 </thead>
@@ -1073,6 +1081,11 @@
                                 <div class="search-suggestions list-group position-absolute w-100" style="display:none;"></div>
                                 <input type="hidden" class="service-id-input">
                             </div>
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm border-info-soft service-mechanic-select">
+                                <option value="">Select mechanic...</option>
+                            </select>
                         </td>
                         <td>
                             <input type="number" class="form-control form-control-sm border-info-soft service-price-input">
@@ -1307,12 +1320,16 @@ function showAlert(message, type = 'danger') {
 ========================================================= */
 function clearFieldErrors() {
     document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no', 'mechanic-id'].forEach(id => {
+    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no', 'mechanic-id', 'mechanic-id-secondary'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.classList.remove('border-danger');
             el.style.boxShadow = '';
         }
+    });
+    document.querySelectorAll('.service-mechanic-select').forEach(el => {
+        el.classList.remove('border-danger');
+        el.style.boxShadow = '';
     });
 }
 
@@ -1343,6 +1360,35 @@ let saleBatchMode = 'batch';
 let saleBatchEntries = [];
 let saleBatchSearchDebounce = null;
 let lastSaleBatchSearchItems = [];
+const mechanicOptions = {{ mechanics|tojson }};
+
+function getPrimaryMechanicId() {
+    return document.getElementById('mechanic-id')?.value || '';
+}
+
+function getSecondaryMechanicId() {
+    return document.getElementById('mechanic-id-secondary')?.value || '';
+}
+
+function getSelectedMechanicIds() {
+    return [getPrimaryMechanicId(), getSecondaryMechanicId()].filter(Boolean);
+}
+
+function getSelectedMechanicEntries() {
+    const lookup = new Map(mechanicOptions.map(mech => [String(mech.id), mech]));
+    return getSelectedMechanicIds().map(id => ({
+        id: String(id),
+        name: lookup.get(String(id))?.name || 'Mechanic',
+    }));
+}
+
+function getPreferredServiceMechanicId() {
+    return getPrimaryMechanicId() || getSecondaryMechanicId() || '';
+}
+
+function isBundleMechanicRestricted() {
+    return isFullSaleMode() && Boolean(document.getElementById('bundle-select')?.value);
+}
 
 function getActiveSaleMode() {
     return document.querySelector('.sale-mode-btn.active')?.dataset.saleMode
@@ -1367,6 +1413,88 @@ function getTransactionClass() {
     if (isQuickSaleMode()) return 'QUICK_SALE';
     if (isMechanicSupplyMode()) return 'MECHANIC_SUPPLY';
     return 'NEW_SALE';
+}
+
+function syncSecondaryMechanicSelect() {
+    const secondarySelect = document.getElementById('mechanic-id-secondary');
+    if (!secondarySelect) return;
+
+    const previousValue = secondarySelect.value;
+    const primaryMechanicId = getPrimaryMechanicId();
+    const isRestricted = isMechanicSupplyMode() || isBundleMechanicRestricted() || !primaryMechanicId;
+    const options = mechanicOptions.filter(mech => String(mech.id) !== String(primaryMechanicId));
+
+    secondarySelect.innerHTML = '<option value="">-- No Second Mechanic --</option>';
+    options.forEach((mech) => {
+        const option = document.createElement('option');
+        option.value = String(mech.id);
+        option.textContent = mech.name;
+        secondarySelect.appendChild(option);
+    });
+
+    const nextValue = (!isRestricted && options.some(mech => String(mech.id) === String(previousValue)))
+        ? String(previousValue)
+        : '';
+    secondarySelect.value = nextValue;
+    secondarySelect.disabled = isRestricted;
+
+    const hint = document.getElementById('secondary-mechanic-hint');
+    if (hint) {
+        hint.textContent = isMechanicSupplyMode()
+            ? 'Mechanic Supply only supports one assigned mechanic.'
+            : (isBundleMechanicRestricted()
+                ? 'Bundles can only belong to one mechanic in the same sale.'
+                : 'Use this only when another mechanic has their own service lines in the same sale.');
+    }
+}
+
+function syncServiceMechanicOptions() {
+    const selectedMechanics = getSelectedMechanicEntries();
+    document.querySelectorAll('.service-row').forEach((row) => {
+        const select = row.querySelector('.service-mechanic-select');
+        if (!select) return;
+
+        const previousValue = select.value;
+        select.innerHTML = '<option value="">Select mechanic...</option>';
+        selectedMechanics.forEach((mech) => {
+            const option = document.createElement('option');
+            option.value = mech.id;
+            option.textContent = mech.name;
+            select.appendChild(option);
+        });
+
+        if (selectedMechanics.some(mech => mech.id === String(previousValue))) {
+            select.value = String(previousValue);
+        } else if (selectedMechanics.length === 1) {
+            select.value = selectedMechanics[0].id;
+        } else {
+            select.value = '';
+        }
+    });
+}
+
+function updateMechanicAndServiceUI({ preserveServices = true } = {}) {
+    syncSecondaryMechanicSelect();
+
+    const servicesSection = document.getElementById('services-section');
+    const hasAnyMechanic = getSelectedMechanicIds().length > 0;
+    const shouldShowServices = !isMechanicSupplyMode() && hasAnyMechanic;
+
+    if (servicesSection) {
+        servicesSection.style.display = shouldShowServices ? 'block' : 'none';
+    }
+
+    if (!shouldShowServices && !preserveServices) {
+        clearServices();
+        return;
+    }
+
+    if (!shouldShowServices) {
+        clearServices();
+        return;
+    }
+
+    syncServiceMechanicOptions();
 }
 
 function syncQuickCustomerName() {
@@ -1659,6 +1787,7 @@ function setSaleMode(mode) {
     document.getElementById('loyalty-banner-wrapper').style.display = isFull ? document.getElementById('loyalty-banner-wrapper').style.display : 'none';
     document.getElementById('bundle-sale-block').style.display = isFull ? '' : 'none';
     document.getElementById('mechanic-services-block').style.display = '';
+    document.getElementById('secondary-mechanic-group').style.display = isMechanicSupply ? 'none' : '';
     document.getElementById('payment-section-divider').style.display = isMechanicSupply ? 'none' : '';
     document.getElementById('payment-controls-col').style.display = isMechanicSupply ? 'none' : '';
     document.getElementById('open-sale-batch-btn').style.display = isFull ? 'inline-flex' : 'none';
@@ -1700,6 +1829,7 @@ function setSaleMode(mode) {
             document.getElementById('ref-no').value = '';
             document.getElementById('trans-notes').value = '';
             document.getElementById('vehicle-id').value = '';
+            document.getElementById('mechanic-id-secondary').value = '';
             clearServices();
             clearBundleSelection();
             document.querySelectorAll('.discount-input').forEach(input => {
@@ -1709,6 +1839,7 @@ function setSaleMode(mode) {
     }
 
     if (isMechanicSupply) {
+        document.getElementById('mechanic-id-secondary').value = '';
         document.querySelectorAll('.discount-input').forEach(input => {
             input.value = 0;
         });
@@ -1724,10 +1855,10 @@ function setSaleMode(mode) {
     if (mechanicLabelHint) {
         mechanicLabelHint.innerHTML = isMechanicSupply
             ? 'Assigned Mechanic <span class="req">*</span>'
-            : 'Assigned Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span>';
+            : 'Primary Mechanic <span style="font-weight:400; text-transform:none; letter-spacing:0; color:var(--text-muted);">(optional)</span>';
     }
 
-    document.getElementById('services-section').style.display = (!isMechanicSupply && document.getElementById('mechanic-id').value !== '') ? 'block' : 'none';
+    updateMechanicAndServiceUI({ preserveServices: false });
     updatePaymentCategoryUI();
     updateQuickSaleItemHints();
     recalculateAllItemRows();
@@ -1747,7 +1878,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('payment-method').addEventListener('change', clearFieldErrors);
     document.getElementById('payment-category').addEventListener('change', clearFieldErrors);
-    document.getElementById('bundle-select').addEventListener('change', (e) => loadBundleConfig(e.target.value));
+    document.getElementById('bundle-select').addEventListener('change', (e) => {
+        loadBundleConfig(e.target.value);
+        updateMechanicAndServiceUI({ preserveServices: true });
+    });
     document.getElementById('bundle-variant-select').addEventListener('change', renderBundleDetails);
     document.querySelectorAll('.sale-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
@@ -2506,8 +2640,13 @@ function clearServiceRow(row) {
     priceInput.value = '';
     priceInput.readOnly = false;
     priceInput.classList.remove('bg-secondary');
+    const serviceMechanicSelect = row.querySelector('.service-mechanic-select');
+    if (serviceMechanicSelect) {
+        serviceMechanicSelect.value = '';
+    }
     row.querySelector('.service-subtotal-display').innerText = '₱0.00';
     delete row.dataset.loyaltyProgramId;
+    syncServiceMechanicOptions();
 }
 
 function appendBlankServiceRow() {
@@ -2516,6 +2655,7 @@ function appendBlankServiceRow() {
     clearServiceRow(newRow);
     newRow.querySelector('.search-suggestions').style.display = 'none';
     tbody.appendChild(newRow);
+    syncServiceMechanicOptions();
     return newRow;
 }
 
@@ -2534,7 +2674,7 @@ function getOrCreateServiceRowForLoyalty(programId) {
 function applyRedeemedServiceRow(redemption) {
     if (redemption.program_type !== 'SERVICE' || !redemption.qualifying_id) return;
 
-    const mechanicId = document.getElementById('mechanic-id').value;
+    const mechanicId = getPreferredServiceMechanicId();
     if (!mechanicId) return;
 
     document.getElementById('services-section').style.display = 'block';
@@ -2550,6 +2690,7 @@ function applyRedeemedServiceRow(redemption) {
         : '0.00';
     priceInput.readOnly = true;
     priceInput.classList.add('bg-secondary');
+    row.querySelector('.service-mechanic-select').value = String(mechanicId);
     row.querySelector('.search-suggestions').style.display = 'none';
 
     calculateServiceRow(row);
@@ -2679,8 +2820,8 @@ async function fetchLoyaltyEligibility(customerId) {
 
                         if (prog.program_type === 'SERVICE') {
                             const mechanicSelect = document.getElementById('mechanic-id');
-                            if (!mechanicSelect.value) {
-                                showAlert('Redeem selected. Choose Assigned Mechanic to auto-fill the redeemed service at ₱0.00.', 'info');
+                            if (!getPreferredServiceMechanicId()) {
+                                showAlert('Redeem selected. Choose at least one mechanic to auto-fill the redeemed service at ₱0.00.', 'info');
                                 mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 mechanicSelect.focus();
                             } else {
@@ -3175,17 +3316,22 @@ function clearItemRow(row) {
     calculateGrandTotal();
 }
 
-// Mechanic toggle
-document.getElementById('mechanic-id').addEventListener('change', function () {
-    const servicesSection = document.getElementById('services-section');
-    if (!isMechanicSupplyMode() && this.value !== "") {
-        servicesSection.style.display = 'block';
-        applyPendingRedeemedServices();
-    } else {
-        servicesSection.style.display = 'none';
-        clearServices();
+function handleMechanicSelectionChange() {
+    const primaryMechanicId = getPrimaryMechanicId();
+    const secondarySelect = document.getElementById('mechanic-id-secondary');
+    if (!primaryMechanicId && secondarySelect) {
+        secondarySelect.value = '';
     }
-});
+
+    updateMechanicAndServiceUI({ preserveServices: true });
+
+    if (!isMechanicSupplyMode() && getSelectedMechanicIds().length > 0) {
+        applyPendingRedeemedServices();
+    }
+}
+
+document.getElementById('mechanic-id').addEventListener('change', handleMechanicSelectionChange);
+document.getElementById('mechanic-id-secondary').addEventListener('change', handleMechanicSelectionChange);
 
 function clearServices() {
     const tbody = document.getElementById('services-body');
@@ -3310,7 +3456,9 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         ? document.getElementById('quick-customer-name').value.trim()
         : (fullSaleMode ? document.getElementById('customer-name').value.trim() : '');
     const paymentCat    = document.getElementById('payment-category').value;
-    const mechanicId    = document.getElementById('mechanic-id').value;
+    const primaryMechanicId = getPrimaryMechanicId();
+    const secondaryMechanicId = getSecondaryMechanicId();
+    const selectedMechanicIds = getSelectedMechanicIds();
     const selectedProvider = document.getElementById('payment-method').value;
     const refNo         = document.getElementById('ref-no').value.trim();
     const notes         = document.getElementById('trans-notes').value.trim();
@@ -3329,12 +3477,13 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
 
     if (!mechanicSupplyMode && !salesNum)         markError(document.getElementById('sales-number'), 'OR No. is required.');
     if (!mechanicSupplyMode && !customerName)     markError(document.getElementById(quickSaleMode ? 'quick-customer-name' : 'customer-search'), 'Customer is required.');
-    if (mechanicSupplyMode && !mechanicId)        markError(document.getElementById('mechanic-id'), 'Assigned mechanic is required.');
+    if (mechanicSupplyMode && !primaryMechanicId) markError(document.getElementById('mechanic-id'), 'Assigned mechanic is required.');
     if (vehicleRequired && !vehicleId)            markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
     if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
     if (needsProvider && !selectedProvider)       markError(document.getElementById('payment-method'), 'Please select a provider.');
     if (needsProvider && !refNo)                  markError(document.getElementById('ref-no'), 'Reference number is required.');
     if (needsNotes && !notes)                     markError(document.getElementById('trans-notes'), 'Please indicate Payment Details i.e amount and reference no');
+    if (!mechanicSupplyMode && secondaryMechanicId && !primaryMechanicId) markError(document.getElementById('mechanic-id'), 'Choose the primary mechanic first.');
 
     if (firstErrorEl) {
         firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3364,16 +3513,22 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     let hasUnconfirmedService = false;
     let missingServicePriceInput = null;
     let invalidServicePriceInput = null;
+    let missingServiceMechanicInput = null;
 
     for (const row of document.querySelectorAll('.service-row')) {
         const sId = row.querySelector('.service-id-input').value;
         const sName = row.querySelector('.service-input').value.trim();
         const priceEl = row.querySelector('.service-price-input');
+        const serviceMechanicEl = row.querySelector('.service-mechanic-select');
         const rawPrice = priceEl.value.trim();
 
         if (sName && !sId) hasUnconfirmedService = true;
 
         if (sId) {
+            if (!serviceMechanicEl.value) {
+                missingServiceMechanicInput = serviceMechanicEl;
+                break;
+            }
             if (!rawPrice) {
                 missingServicePriceInput = priceEl;
                 break;
@@ -3385,7 +3540,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
                 break;
             }
 
-            validServices.push({ service_id: sId, price: parsedPrice });
+            validServices.push({ service_id: sId, price: parsedPrice, mechanic_id: serviceMechanicEl.value });
         }
     }
 
@@ -3441,11 +3596,19 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (hasBundleSelected && !mechanicId) {
+    if (hasBundleSelected && !primaryMechanicId) {
         showAlert('Bundle sales require a selected mechanic before submitting.', 'warning');
         const mechanicSelect = document.getElementById('mechanic-id');
         mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
         mechanicSelect.focus();
+        return;
+    }
+
+    if (hasBundleSelected && secondaryMechanicId) {
+        showAlert('Bundle sales can only be assigned to one mechanic.', 'warning');
+        const secondarySelect = document.getElementById('mechanic-id-secondary');
+        secondarySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        secondarySelect.focus();
         return;
     }
 
@@ -3463,6 +3626,13 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
+    if (missingServiceMechanicInput) {
+        showAlert('Please assign a mechanic for every selected service before submitting.', 'warning');
+        missingServiceMechanicInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        missingServiceMechanicInput.focus();
+        return;
+    }
+
     if (invalidServicePriceInput) {
         showAlert('Service price must be a valid non-negative amount.', 'warning');
         invalidServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3470,10 +3640,27 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         return;
     }
 
-    if (!mechanicSupplyMode && mechanicId && validServices.length === 0 && bundleServicesCount === 0) {
+    if (!mechanicSupplyMode && selectedMechanicIds.length > 0 && validServices.length === 0 && bundleServicesCount === 0) {
         showAlert('Assigned mechanic requires at least one service entry.', 'warning');
         document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
+    }
+
+    if (!mechanicSupplyMode && validServices.length > 0 && selectedMechanicIds.length === 0) {
+        showAlert('Select at least one mechanic before submitting services.', 'warning');
+        document.getElementById('mechanic-id').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById('mechanic-id').focus();
+        return;
+    }
+
+    if (!mechanicSupplyMode && !hasBundleSelected && selectedMechanicIds.length > 0) {
+        const assignedMechanicIds = new Set(validServices.map(service => String(service.mechanic_id || '')));
+        const missingMechanicAssignment = selectedMechanicIds.find(mechanicId => !assignedMechanicIds.has(String(mechanicId)));
+        if (missingMechanicAssignment) {
+            showAlert('Each selected mechanic needs at least one assigned service.', 'warning');
+            document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
     }
 
     if (validItems.length === 0 && validServices.length === 0 && !hasBundleSelected) {
@@ -3542,7 +3729,8 @@ async function saveTransaction(items, services, bundles) {
             sales_number:      document.getElementById('sales-number').value.trim() || null,
             customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : (fullSaleMode ? document.getElementById('customer-name').value : ''),
             customer_id:       fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
-            mechanic_id:       document.getElementById('mechanic-id').value || null,
+            mechanic_id:       getPrimaryMechanicId() || null,
+            secondary_mechanic_id: getSecondaryMechanicId() || null,
             vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
             payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : paymentId,
             reference_no:      refNo,

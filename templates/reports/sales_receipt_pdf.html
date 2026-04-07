@@ -415,6 +415,9 @@
                                     <td>
                                         <div class="line-name">{{ svc.name }}</div>
                                         <div class="line-note">Service</div>
+                                        {% if svc.mechanic_name %}
+                                        <div class="line-note" style="color:#0f766e; font-weight:700;">Mechanic: {{ svc.mechanic_name }}</div>
+                                        {% endif %}
                                     </td>
                                     <td class="text-center"><div class="line-name">&#8369;{{ '%.2f'|format(svc.price or 0) }}</div></td>
                                     <td class="text-center"><div class="line-name">1</div></td>
@@ -431,6 +434,9 @@
                                     <td>
                                         <div class="line-name">{{ bundle.subcategory_name }}</div>
                                         <div class="line-note">{{ bundle.vehicle_category or 'Vehicle' }} • Version {{ bundle.version_no or 0 }}</div>
+                                        {% if sale.mechanic_name %}
+                                        <div class="line-note" style="color:#0f766e; font-weight:700;">Mechanic: {{ sale.mechanic_name }}</div>
+                                        {% endif %}
                                     </td>
                                     <td class="text-center">
                                         <div class="line-name">&#8369;{{ '%.2f'|format(bundle.bundle_price or 0) }}</div>

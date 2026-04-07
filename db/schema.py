@@ -309,9 +309,21 @@ def init_db():
         id          SERIAL PRIMARY KEY,
         sale_id     INTEGER NOT NULL REFERENCES sales(id),
         service_id  INTEGER NOT NULL REFERENCES services(id),
-        price       NUMERIC(12,2) NOT NULL
+        price       NUMERIC(12,2) NOT NULL,
+        mechanic_id INTEGER REFERENCES mechanics(id)
     )
     """)
+    cur.execute("ALTER TABLE sales_services ADD COLUMN IF NOT EXISTS mechanic_id INTEGER REFERENCES mechanics(id)")
+    cur.execute("""
+    UPDATE sales_services ss
+    SET mechanic_id = s.mechanic_id
+    FROM sales s
+    WHERE s.id = ss.sale_id
+      AND ss.mechanic_id IS NULL
+      AND s.mechanic_id IS NOT NULL
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_services_sale_id ON sales_services(sale_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_sales_services_mechanic_id ON sales_services(mechanic_id)")
 
     # 12. SALES ITEMS TABLE (Item-level sales & discounts)
     cur.execute("""

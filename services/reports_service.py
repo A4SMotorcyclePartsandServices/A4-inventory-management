@@ -375,6 +375,158 @@ def _load_bundles_by_sale(conn, sale_ids):
         bundles_by_sale.setdefault(bundle["sale_id"], []).append(bundle)
 
     return bundles_by_sale
+
+
+def _load_services_by_sale(conn, sale_ids):
+    if not sale_ids:
+        return {}
+
+    service_rows = conn.execute(
+        """
+        SELECT
+            ss.sale_id,
+            ss.service_id,
+            ss.price,
+            ss.mechanic_id,
+            sv.name AS service_name,
+            m.name AS mechanic_name,
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
+        FROM sales_services ss
+        JOIN sales s ON s.id = ss.sale_id
+        JOIN services sv ON sv.id = ss.service_id
+        LEFT JOIN mechanics m ON m.id = ss.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+          ON mqto.mechanic_id = ss.mechanic_id
+         AND mqto.quota_date = DATE(s.transaction_date)
+        WHERE ss.sale_id = ANY(%s)
+        ORDER BY ss.sale_id ASC, sv.name ASC, ss.id ASC
+        """,
+        (sale_ids,),
+    ).fetchall()
+
+    services_by_sale = {}
+    for row in service_rows:
+        payload = dict(row)
+        payload["mechanic_id"] = int(payload["mechanic_id"]) if payload.get("mechanic_id") is not None else None
+        services_by_sale.setdefault(row["sale_id"], []).append(payload)
+    return services_by_sale
+
+
+def _get_debt_payout_allocations(conn, *, report_date=None, start_date=None, end_date=None, report_dates=None):
+    normalized_dates = sorted({str(value) for value in (report_dates or []) if value})
+    params = []
+    date_condition = ""
+
+    if normalized_dates:
+        date_condition = "DATE(dp.paid_at) = ANY(%s::date[])"
+        params.append(normalized_dates)
+    elif report_date:
+        date_condition = "DATE(dp.paid_at) = %s"
+        params.append(report_date)
+    elif start_date and end_date:
+        date_condition = "DATE(dp.paid_at) BETWEEN %s AND %s"
+        params.extend([start_date, end_date])
+    else:
+        return []
+
+    rows = conn.execute(
+        f"""
+        WITH sale_service_totals AS (
+            SELECT
+                ss.sale_id,
+                ss.mechanic_id,
+                SUM(ss.price) AS mechanic_service_total
+            FROM sales_services ss
+            WHERE ss.mechanic_id IS NOT NULL
+            GROUP BY ss.sale_id, ss.mechanic_id
+        ),
+        sale_service_totals_by_sale AS (
+            SELECT
+                sale_id,
+                SUM(mechanic_service_total) AS total_service_total
+            FROM sale_service_totals
+            GROUP BY sale_id
+        )
+        SELECT
+            dp.id AS debt_payment_id,
+            dp.sale_id,
+            dp.amount_paid,
+            dp.service_portion,
+            dp.paid_at,
+            DATE(dp.paid_at) AS payout_date,
+            sst.mechanic_id,
+            m.name AS mechanic_name,
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
+            ROUND(
+                CASE
+                    WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
+                    ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
+                END,
+                2
+            ) AS allocated_service_portion
+        FROM debt_payments dp
+        JOIN sale_service_totals sst
+          ON sst.sale_id = dp.sale_id
+        JOIN sale_service_totals_by_sale st
+          ON st.sale_id = dp.sale_id
+        LEFT JOIN mechanics m
+          ON m.id = sst.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+          ON mqto.mechanic_id = sst.mechanic_id
+         AND mqto.quota_date = DATE(dp.paid_at)
+        WHERE {date_condition}
+        ORDER BY dp.paid_at ASC, dp.id ASC, sst.mechanic_id ASC
+        """,
+        tuple(params),
+    ).fetchall()
+
+    allocations = []
+    grouped_by_payment = {}
+    for row in rows:
+        payment_key = (
+            int(row["debt_payment_id"] or 0),
+            int(row["sale_id"] or 0),
+        )
+        grouped_by_payment.setdefault(payment_key, []).append(dict(row))
+
+    for group_rows in grouped_by_payment.values():
+        running_total = 0.0
+        for index, row in enumerate(group_rows):
+            allocated = round(_num(row.get("allocated_service_portion")), 2)
+            if index == len(group_rows) - 1:
+                allocated = round(_num(row.get("service_portion")) - running_total, 2)
+            else:
+                running_total = round(running_total + allocated, 2)
+            row["service_portion"] = max(0.0, allocated)
+            allocations.append(row)
+
+    return allocations
+
+
+def _compose_sale_mechanic_label(sale, services=None, bundles=None):
+    names = []
+    seen = set()
+
+    for service in services or []:
+        name = str(service.get("mechanic_name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+
+    if bundles:
+        bundle_owner_name = str((sale or {}).get("mechanic_name") or "").strip()
+        if bundle_owner_name and bundle_owner_name not in seen:
+            seen.add(bundle_owner_name)
+            names.append(bundle_owner_name)
+
+    if names:
+        return " / ".join(names)
+
+    fallback_name = str((sale or {}).get("mechanic_name") or "").strip()
+    return fallback_name or "-"
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────
@@ -387,17 +539,32 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
     mechanic_map      — regular paid services, quota applies
     debt_mechanic_map — debt service portions collected, quota does NOT apply
     """
-    mechanic_map      = {}
+    mechanic_map = {}
     debt_mechanic_map = {}
-    bundles_by_sale   = bundles_by_sale or {}
+    bundles_by_sale = bundles_by_sale or {}
 
     for sale in sales_rows:
-        sale_id         = sale["id"]
-        mechanic_id     = sale["mechanic_id"]
-        mechanic_name   = sale["mechanic_name"] or "—"
-        commission_rate = _num(sale["commission_rate"])
-        applies_quota_topup = _bool_flag(sale.get("applies_quota_topup"), default=True)
-        services_total  = sum(_num(svc["price"]) for svc in services_by_sale.get(sale_id, []))
+        sale_id = sale["id"]
+        service_rows = services_by_sale.get(sale_id, [])
+        service_totals_by_mechanic = {}
+
+        for svc in service_rows:
+            mechanic_id = svc.get("mechanic_id") or sale.get("mechanic_id")
+            if not mechanic_id:
+                continue
+            mechanic_id = int(mechanic_id)
+            entry = service_totals_by_mechanic.setdefault(mechanic_id, {
+                "mechanic_name": svc.get("mechanic_name") or sale.get("mechanic_name") or "-",
+                "commission_rate": _num(svc.get("commission_rate") if svc.get("commission_rate") is not None else sale.get("commission_rate")),
+                "applies_quota_topup": _bool_flag(
+                    svc.get("applies_quota_topup"),
+                    default=_bool_flag(sale.get("applies_quota_topup"), default=True),
+                ),
+                "services_total": 0.0,
+            })
+            entry["services_total"] += _num(svc["price"])
+
+        bundle_owner_mechanic_id = int(sale["mechanic_id"]) if sale.get("mechanic_id") is not None else None
         bundle_shop_share = round(
             sum(_num(bundle.get("shop_share_snapshot")) for bundle in bundles_by_sale.get(sale_id, [])),
             2,
@@ -406,21 +573,32 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
             sum(_num(bundle.get("mechanic_share_snapshot")) for bundle in bundles_by_sale.get(sale_id, [])),
             2,
         )
-        payout_service_total = round(services_total + bundle_mech_share, 2)
 
-        if sale["status"] == "Paid" and mechanic_id and (payout_service_total > 0 or bundle_shop_share > 0):
-            if mechanic_id not in mechanic_map:
-                mechanic_map[mechanic_id] = {
-                    "mechanic_name":            mechanic_name,
-                    "commission_rate":          commission_rate,
-                    "applies_quota_topup":      applies_quota_topup,
-                    "paid_services_total":      0.0,
-                    "bundle_shop_share_total":  0.0,
-                    "bundle_mech_share_total":  0.0,
-                }
-            mechanic_map[mechanic_id]["paid_services_total"] += services_total
-            mechanic_map[mechanic_id]["bundle_shop_share_total"] += bundle_shop_share
-            mechanic_map[mechanic_id]["bundle_mech_share_total"] += bundle_mech_share
+        if sale["status"] == "Paid":
+            for mechanic_id, mechanic_data in service_totals_by_mechanic.items():
+                if mechanic_id not in mechanic_map:
+                    mechanic_map[mechanic_id] = {
+                        "mechanic_name": mechanic_data["mechanic_name"],
+                        "commission_rate": mechanic_data["commission_rate"],
+                        "applies_quota_topup": mechanic_data["applies_quota_topup"],
+                        "paid_services_total": 0.0,
+                        "bundle_shop_share_total": 0.0,
+                        "bundle_mech_share_total": 0.0,
+                    }
+                mechanic_map[mechanic_id]["paid_services_total"] += round(_num(mechanic_data["services_total"]), 2)
+
+            if bundle_owner_mechanic_id and (bundle_mech_share > 0 or bundle_shop_share > 0):
+                if bundle_owner_mechanic_id not in mechanic_map:
+                    mechanic_map[bundle_owner_mechanic_id] = {
+                        "mechanic_name": sale["mechanic_name"] or "-",
+                        "commission_rate": _num(sale["commission_rate"]),
+                        "applies_quota_topup": _bool_flag(sale.get("applies_quota_topup"), default=True),
+                        "paid_services_total": 0.0,
+                        "bundle_shop_share_total": 0.0,
+                        "bundle_mech_share_total": 0.0,
+                    }
+                mechanic_map[bundle_owner_mechanic_id]["bundle_shop_share_total"] += bundle_shop_share
+                mechanic_map[bundle_owner_mechanic_id]["bundle_mech_share_total"] += bundle_mech_share
 
     for row in debt_collected_rows:
         mech_id         = row["mechanic_id"]
@@ -428,7 +606,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
         if mech_id and service_portion > 0:
             if mech_id not in debt_mechanic_map:
                 debt_mechanic_map[mech_id] = {
-                    "mechanic_name":      row["mechanic_name"] or "—",
+                    "mechanic_name":      row["mechanic_name"] or "-",
                     "commission_rate":    _num(row["commission_rate"]),
                     "applies_quota_topup": _bool_flag(row.get("applies_quota_topup"), default=True),
                     "debt_service_total": 0.0,
@@ -691,23 +869,7 @@ def get_mechanic_payouts_for_dates(report_dates):
           AND s.mechanic_id IS NOT NULL
     """, (normalized_dates,)).fetchall()
 
-    debt_collected_rows = conn.execute("""
-        SELECT
-            DATE(dp.paid_at) AS payout_date,
-            dp.service_portion,
-            s.mechanic_id,
-            m.name           AS mechanic_name,
-            m.commission_rate,
-            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
-        FROM debt_payments dp
-        JOIN sales s ON s.id = dp.sale_id
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        LEFT JOIN mechanic_quota_topup_overrides mqto
-            ON mqto.mechanic_id = s.mechanic_id
-           AND mqto.quota_date = DATE(dp.paid_at)
-        WHERE DATE(dp.paid_at) = ANY(%s::date[])
-          AND s.mechanic_id IS NOT NULL
-    """, (normalized_dates,)).fetchall()
+    debt_collected_rows = _get_debt_payout_allocations(conn, report_dates=normalized_dates)
 
     if not sales_rows and not debt_collected_rows:
         conn.close()
@@ -717,13 +879,7 @@ def get_mechanic_payouts_for_dates(report_dates):
     services_by_sale = {}
     bundles_by_sale = {}
     if sale_ids:
-        services_rows = conn.execute("""
-            SELECT ss.sale_id, ss.price
-            FROM sales_services ss
-            WHERE ss.sale_id = ANY(%s)
-        """, (sale_ids,)).fetchall()
-        for row in services_rows:
-            services_by_sale.setdefault(row["sale_id"], []).append({"price": row["price"]})
+        services_by_sale = _load_services_by_sale(conn, sale_ids)
         bundles_by_sale = _load_bundles_by_sale(conn, sale_ids)
     conn.close()
 
@@ -856,24 +1012,11 @@ def get_all_unresolved_sales(conn):
         ORDER BY si.sale_id, i.name
     """, (sale_ids,)).fetchall()
 
-    services_rows = conn.execute("""
-        SELECT
-            ss.sale_id,
-            sv.name AS service_name,
-            ss.price
-        FROM sales_services ss
-        JOIN services sv ON sv.id = ss.service_id
-        WHERE ss.sale_id = ANY(%s)
-        ORDER BY ss.sale_id, sv.name
-    """, (sale_ids,)).fetchall()
-
     items_by_sale    = {}
-    services_by_sale = {}
+    services_by_sale = _load_services_by_sale(conn, sale_ids)
     bundles_by_sale = _load_bundles_by_sale(conn, sale_ids)
     for row in items_rows:
         items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
-    for row in services_rows:
-        services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     result = []
     for sale in unresolved_rows:
@@ -881,10 +1024,12 @@ def get_all_unresolved_sales(conn):
         total_amount = _num(sale["total_amount"])
         total_paid = round(_num(sale["total_paid"]), 2)
         remaining  = round(total_amount - total_paid, 2)
+        sale_services = services_by_sale.get(sale_id, [])
+        sale_bundles = bundles_by_sale.get(sale_id, [])
         result.append({
             "sales_number":     sale["sales_number"] or f"#{sale_id}",
             "customer_name":    sale["customer_name"] or "Walk-in",
-            "mechanic_name":    sale["mechanic_name"] or "—",
+            "mechanic_name":    _compose_sale_mechanic_label(sale, sale_services, sale_bundles),
             "total_amount":     round(total_amount, 2),
             "total_paid":       total_paid,
             "remaining":        remaining,
@@ -893,8 +1038,8 @@ def get_all_unresolved_sales(conn):
             "notes":            sale["notes"] or "",
             "transaction_date": format_date(sale["transaction_date"]),
             "products":         items_by_sale.get(sale_id, []),
-            "services":         services_by_sale.get(sale_id, []),
-            "bundles":          bundles_by_sale.get(sale_id, []),
+            "services":         sale_services,
+            "bundles":          sale_bundles,
         })
     return result
 
@@ -963,6 +1108,7 @@ def get_sales_report_by_date(report_date):
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY dp.paid_at ASC
     """, (report_date,)).fetchall()
+    debt_payout_rows = _get_debt_payout_allocations(conn, report_date=report_date)
 
     refund_rows = conn.execute("""
         SELECT
@@ -1019,15 +1165,7 @@ def get_sales_report_by_date(report_date):
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        services_rows = conn.execute("""
-            SELECT ss.sale_id, sv.name AS service_name, ss.price
-            FROM sales_services ss
-            JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id = ANY(%s)
-            ORDER BY ss.sale_id, sv.name
-        """, (all_sale_ids,)).fetchall()
-        for row in services_rows:
-            services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+        services_by_sale = _load_services_by_sale(conn, all_sale_ids)
         bundles_by_sale = _load_bundles_by_sale(conn, all_sale_ids)
 
     refund_ids = [row["id"] for row in refund_rows]
@@ -1126,7 +1264,7 @@ def get_sales_report_by_date(report_date):
             sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
                 "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
-                "mechanic_name": sale["mechanic_name"] or "-",
+                "mechanic_name": _compose_sale_mechanic_label(sale, services_by_sale.get(sale_id, []), sale_bundles),
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
                 "bundle_service_total": bundle_service_total,
@@ -1157,7 +1295,7 @@ def get_sales_report_by_date(report_date):
 
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
         [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
-        debt_collected_rows,
+        debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
     )
@@ -1277,6 +1415,7 @@ def get_sales_report_by_range(start_date, end_date):
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
         ORDER BY dp.paid_at ASC
     """, (start_date, end_date)).fetchall()
+    debt_payout_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
 
     refund_rows = conn.execute("""
         SELECT
@@ -1333,15 +1472,7 @@ def get_sales_report_by_range(start_date, end_date):
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
     if all_sale_ids:
-        services_rows = conn.execute("""
-            SELECT ss.sale_id, sv.name AS service_name, ss.price
-            FROM sales_services ss
-            JOIN services sv ON sv.id = ss.service_id
-            WHERE ss.sale_id = ANY(%s)
-            ORDER BY ss.sale_id, sv.name
-        """, (all_sale_ids,)).fetchall()
-        for row in services_rows:
-            services_by_sale.setdefault(row["sale_id"], []).append(dict(row))
+        services_by_sale = _load_services_by_sale(conn, all_sale_ids)
         bundles_by_sale = _load_bundles_by_sale(conn, all_sale_ids)
 
     refund_ids = [row["id"] for row in refund_rows]
@@ -1440,7 +1571,7 @@ def get_sales_report_by_range(start_date, end_date):
             sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
                 "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
-                "mechanic_name": sale["mechanic_name"] or "-",
+                "mechanic_name": _compose_sale_mechanic_label(sale, services_by_sale.get(sale_id, []), sale_bundles),
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
                 "bundle_service_total": bundle_service_total,
@@ -1471,7 +1602,7 @@ def get_sales_report_by_range(start_date, end_date):
 
     mechanic_summary, totals, quota_failures = _calculate_range_mechanic_rollups(
         [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
-        debt_collected_rows,
+        debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
     )

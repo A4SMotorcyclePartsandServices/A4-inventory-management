@@ -787,11 +787,14 @@ def export_services_sold_today():
             SELECT
                 ss.sale_id,
                 sv.name AS service_name,
-                ss.price
+                ss.price,
+                COALESCE(m.name, 'N/A') AS mechanic_name,
+                COALESCE(m.commission_rate, 0.0) AS commission_rate
             FROM sales_services ss
             JOIN services sv ON sv.id = ss.service_id
+            LEFT JOIN mechanics m ON m.id = ss.mechanic_id
             WHERE ss.sale_id = ANY(%s)
-            ORDER BY ss.sale_id ASC, sv.name ASC
+            ORDER BY ss.sale_id ASC, sv.name ASC, mechanic_name ASC
         """, (sale_ids,)).fetchall()
 
     conn.close()
@@ -813,11 +816,11 @@ def export_services_sold_today():
         customer_name = sale.get("customer_name", "Walk-in")
         vehicle_name = sale.get("vehicle_name", "N/A")
         service_name = row["service_name"] or ""
-        mechanic_name = sale.get("mechanic_name", "N/A")
+        mechanic_name = row["mechanic_name"] or "N/A"
         sales_number = sale.get("sales_number", "")
 
         total = round(float(row["price"] or 0), 2)
-        commission_rate = round(float(sale.get("commission_rate", 0.0) or 0.0), 2)
+        commission_rate = round(float(row["commission_rate"] or 0.0), 2)
         mechanic_cut = round(total * commission_rate, 2)
         shop_cut = round(total - mechanic_cut, 2)
 
