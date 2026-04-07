@@ -59,3 +59,4 @@
 - [ ] out page search on services. do not search by category anymore
 - [ ] ok special case in one of the services. when service hangin is selcted and is recorded in the sale, the value of that fully goes to shop share. none of it goes to mechanic share
 - [ ] report page in profit card. extend the formula. subtract quota top up if applicable
+- [ ] cash ledger page double entry problem. check other submits for this problem
