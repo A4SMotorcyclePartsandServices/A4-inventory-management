@@ -1281,6 +1281,11 @@ function renderRevisionTracker(approval) {
 }
 
 async function submitOrder() {
+    const submitGuard = window.A4Submit?.createButtonGuard(submitOrderBtn, {
+        idleHtml: submitOrderBtn?.innerHTML || '<i class="fas fa-save"></i> Save Purchase Order',
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
+
     if (!vendorSelect.value || vendorSelect.value === NEW_VENDOR_OPTION) {
         vendorSelect.classList.add('border-danger');
         showOrderAlert('Select a vendor or add a new one first.', 'warning');
@@ -1310,6 +1315,10 @@ async function submitOrder() {
         }
     }
 
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
+
     const payload = {
         vendor_id: parseInt(vendorSelect.value, 10),
         notes: notesInput.value,
@@ -1321,18 +1330,24 @@ async function submitOrder() {
     };
 
     const endpoint = editingPoId ? `/api/order/${editingPoId}/update` : '/transaction/order/save';
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: submitGuard.buildHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(payload)
+        });
 
-    const result = await response.json();
-    if (result.status === 'success') {
-        sessionStorage.removeItem(DRAFT_KEY);
-        window.location.href = '/transaction/orders/list';
-    } else {
-        showOrderAlert('Error saving order: ' + result.message, 'danger');
+        const result = await response.json();
+        if (result.status === 'success') {
+            sessionStorage.removeItem(DRAFT_KEY);
+            window.location.href = '/transaction/orders/list';
+        } else {
+            submitGuard.reset();
+            showOrderAlert('Error saving order: ' + result.message, 'danger');
+        }
+    } catch (error) {
+        submitGuard.reset();
+        showOrderAlert('Network error while saving the purchase order.', 'danger');
     }
 }
 </script>

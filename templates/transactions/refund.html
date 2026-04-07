@@ -1478,17 +1478,26 @@ function confirmRefundSubmission() {
     }
 
     const btn = document.getElementById('submitRefundBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Processing...';
     const confirmSubmitBtn = document.getElementById('refundConfirmSubmitBtn');
-    confirmSubmitBtn.disabled = true;
+    const confirmGuard = window.A4Submit?.createButtonGuard(confirmSubmitBtn, {
+        idleHtml: confirmSubmitBtn?.innerHTML || 'Confirm Refund',
+        loadingHtml: '<i class="bi bi-arrow-repeat me-1"></i> Processing...',
+    });
+    if (!confirmGuard || !confirmGuard.begin()) {
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Processing...';
+    }
 
     fetch(`/api/sales/${selectedRefundSaleId}/refund`, {
         method: 'POST',
-        headers: {
+        headers: confirmGuard.buildHeaders({
             'Content-Type': 'application/json',
             'X-CSRFToken': APP_CSRF_TOKEN,
-        },
+        }),
         body: JSON.stringify(pendingRefundPayload),
     })
         .then(async response => {
@@ -1514,7 +1523,7 @@ function confirmRefundSubmission() {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise me-1"></i> Process Refund';
             }
-            confirmSubmitBtn.disabled = false;
+            confirmGuard.reset();
         });
 }
 

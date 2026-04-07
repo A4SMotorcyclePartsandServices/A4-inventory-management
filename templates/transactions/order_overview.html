@@ -2099,7 +2099,7 @@ async function openOrderDetails(poId) {
 
         const cancelBtn = document.getElementById('cancelBtn');
         cancelBtn.style.display = data.permissions?.can_cancel ? 'inline-flex' : 'none';
-        cancelBtn.onclick = () => cancelOrder(Boolean(data.permissions?.can_admin_cancel));
+        cancelBtn.onclick = () => cancelOrder(cancelBtn, Boolean(data.permissions?.can_admin_cancel));
 
         const receiveBtn = document.getElementById('receiveBtn');
         const secondaryGroup = document.getElementById('adminSecondaryActionGroup');
@@ -2301,7 +2301,7 @@ function renderAdminActions(permissions, currentPoStatus) {
 
     if (permissions?.can_admin_approve) {
         primaryGroup.innerHTML += `
-            <button type="button" class="btn btn-success btn-modal-approve" onclick="approveOrder()">
+            <button type="button" class="btn btn-success btn-modal-approve" onclick="approveOrder(this)">
                 <i class="bi bi-check2-circle me-1"></i> Approve
             </button>
         `;
@@ -2309,18 +2309,26 @@ function renderAdminActions(permissions, currentPoStatus) {
 
     if (permissions?.can_admin_request_revisions && !shouldHideRevisionsForAdminReady) {
         revisionsTargetGroup.innerHTML += `
-            <button type="button" class="btn btn-warning btn-modal-revisions" onclick="requestRevisions()">
+            <button type="button" class="btn btn-warning btn-modal-revisions" onclick="requestRevisions(this)">
                 <i class="bi bi-arrow-counterclockwise me-1"></i> Revise
             </button>
         `;
     }
 }
 
-async function approveOrder() {
-    await postOrderAction(`/api/order/${activeOrderId}/approval/approve`, {}, orderModal);
+function createOrderActionGuard(button, loadingHtml) {
+    return window.A4Submit?.createButtonGuard(button, {
+        idleHtml: button?.innerHTML || '',
+        loadingHtml,
+    });
 }
 
-async function cancelOrder(requireNotes) {
+async function approveOrder(button) {
+    const guard = createOrderActionGuard(button, '<span class="spinner-border spinner-border-sm me-2"></span>Approving...');
+    await postOrderAction(`/api/order/${activeOrderId}/approval/approve`, {}, orderModal, guard);
+}
+
+async function cancelOrder(button, requireNotes) {
     if (!activeOrderDetails) {
         return;
     }
@@ -2339,7 +2347,11 @@ async function submitCancellation() {
     }
 
     document.getElementById('cancelNotesError').style.display = 'none';
-    await postOrderAction(`/api/order/${activeOrderId}/cancel`, { notes }, cancelModal);
+    const guard = createOrderActionGuard(
+        document.getElementById('confirmCancelBtn'),
+        '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...'
+    );
+    await postOrderAction(`/api/order/${activeOrderId}/cancel`, { notes }, cancelModal, guard);
 }
 
 function renderRevisionItemsPreview(items) {
@@ -2388,7 +2400,7 @@ function renderHistoryRevisionItems(items) {
     `;
 }
 
-function requestRevisions() {
+function requestRevisions(button) {
     if (!activeOrderDetails) {
         return;
     }
@@ -2411,7 +2423,11 @@ async function submitRevisions() {
     }
 
     document.getElementById('revisionsNotesError').style.display = 'none';
-    await postOrderAction(`/api/order/${activeOrderId}/approval/revisions`, { notes, revision_items }, revisionsModal);
+    const guard = createOrderActionGuard(
+        document.getElementById('confirmRevisionsBtn'),
+        '<span class="spinner-border spinner-border-sm me-2"></span>Sending...'
+    );
+    await postOrderAction(`/api/order/${activeOrderId}/approval/revisions`, { notes, revision_items }, revisionsModal, guard);
 }
 
 function renderRevisionItemsPreview(items) {
@@ -2534,14 +2550,22 @@ function handleActionModalHidden() {
     }
 }
 
-async function postOrderAction(url, payload, sourceModal) {
+async function postOrderAction(url, payload, sourceModal, guard) {
+    if (guard && !guard.begin()) {
+        return;
+    }
     const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: guard
+            ? guard.buildHeaders({ 'Content-Type': 'application/json' })
+            : { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload || {})
     });
     const result = await response.json();
     if (!response.ok || result.status !== 'success') {
+        if (guard) {
+            guard.reset();
+        }
         alert(result.message || result.error || 'Action failed.');
         if (sourceModal) {
             sourceModal.show();
@@ -2549,6 +2573,9 @@ async function postOrderAction(url, payload, sourceModal) {
         return;
     }
 
+    if (guard) {
+        guard.succeed();
+    }
     if (sourceModal) {
         sourceModal.hide();
     }

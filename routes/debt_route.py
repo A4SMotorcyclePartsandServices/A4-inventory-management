@@ -8,6 +8,13 @@ from services.debt_service import (
     get_customer_id_for_debt_sale,
     record_payment,
 )
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 from db.database import get_db
 
 debt_bp = Blueprint('debt', __name__)
@@ -65,7 +72,24 @@ def debt_detail_api(sale_id):
 @debt_bp.route("/api/debt/<int:sale_id>/pay", methods=["POST"])
 @login_required
 def pay_debt(sale_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    scope = f"debt.pay:{sale_id}"
+    try:
+        user_id = session.get("user_id")
+        idempotency_key = extract_idempotency_key(request)
+        request_state = begin_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=data,
+        )
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+    if request_state["state"] in {"processing", "mismatch"}:
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
 
     try:
         result = record_payment(
@@ -74,7 +98,7 @@ def pay_debt(sale_id):
             payment_method_id=data.get('payment_method_id'),
             reference_no=data.get('reference_no', ''),
             notes=data.get('notes', ''),
-            paid_by=session.get('user_id'),
+            paid_by=user_id,
         )
 
         if result['new_status'] == 'Paid':
@@ -85,12 +109,39 @@ def pay_debt(sale_id):
                 "success"
             )
 
-        return jsonify({"status": "success", **result}), 200
+        response_body = {"status": "success", **result}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 200
 
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": "Server error: " + str(e)}), 500
+        response_body = {"status": "error", "message": "Server error: " + str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 @debt_bp.route("/api/debt/audit")
 @login_required

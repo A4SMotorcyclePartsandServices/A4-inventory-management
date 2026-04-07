@@ -404,6 +404,11 @@ function updateReceivePreview(row) {
 }
 
 async function submitReception() {
+    const submitBtn = document.querySelector('button[onclick="submitReception()"]');
+    const submitGuard = window.A4Submit?.createButtonGuard(submitBtn, {
+        idleHtml: submitBtn?.innerHTML || 'Confirm and Add to Stock',
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
     const rows = document.querySelectorAll('.item-row');
     const items = [];
     let hasError = false;
@@ -450,20 +455,30 @@ async function submitReception() {
         return;
     }
 
-    const response = await fetch('/transaction/receive/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            po_id: {{ po.id }},
-            items: items
-        })
-    });
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
 
-    const result = await response.json();
-    if (result.status === 'success') {
-        window.location.href = '/transaction/orders/list';
-    } else {
-        showToastFlash(result.message || "Failed to process reception.", "danger");
+    try {
+        const response = await fetch('/transaction/receive/confirm', {
+            method: 'POST',
+            headers: submitGuard.buildHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+                po_id: {{ po.id }},
+                items: items
+            })
+        });
+
+        const result = await response.json();
+        if (result.status === 'success') {
+            window.location.href = '/transaction/orders/list';
+        } else {
+            submitGuard.reset();
+            showToastFlash(result.message || "Failed to process reception.", "danger");
+        }
+    } catch (error) {
+        submitGuard.reset();
+        showToastFlash("Network error while confirming reception.", "danger");
     }
 }
 

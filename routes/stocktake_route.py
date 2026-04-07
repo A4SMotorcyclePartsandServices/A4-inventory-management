@@ -5,6 +5,13 @@ from datetime import date
 from flask import Blueprint, Response, flash, jsonify, redirect, render_template, request, session, url_for
 
 from auth.utils import admin_required, login_required, stocktake_access_required
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 from services.stocktake_access_service import submit_stocktake_access_request
 from services.stocktake_service import (
     PARTIAL_STOCKTAKE_LABEL,
@@ -26,6 +33,31 @@ from utils.timezone import today_local
 stocktake_bp = Blueprint("stocktake", __name__)
 
 
+def _begin_json_idempotent_request(scope, data):
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_state = begin_idempotent_request(
+        scope=scope,
+        actor_user_id=user_id,
+        idempotency_key=idempotency_key,
+        request_payload=data,
+    )
+    return user_id, idempotency_key, request_state
+
+
+def _idempotency_error_response(request_state):
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+    if request_state["state"] in {"processing", "mismatch"}:
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+    return None
+
+
+def _redirect_from_idempotency_replay(payload, default_endpoint):
+    flash(payload.get("flash_message", "Request already processed."), payload.get("flash_category", "info"))
+    return redirect(payload.get("redirect_to") or url_for(default_endpoint))
+
+
 @stocktake_bp.route("/stocktake")
 @stocktake_access_required
 def stocktake_list():
@@ -41,17 +73,84 @@ def stocktake_list():
 @stocktake_bp.route("/stocktake/new", methods=["POST"])
 @stocktake_access_required
 def create_stocktake():
+    payload = {
+        "notes": (request.form.get("notes") or "").strip(),
+        "count_scope": request.form.get("count_scope") or "PARTIAL",
+    }
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
     try:
-        stocktake = create_stocktake_session(
-            user_id=session.get("user_id"),
-            username=session.get("username"),
-            notes=(request.form.get("notes") or "").strip() or None,
-            count_scope=request.form.get("count_scope") or "PARTIAL",
+        request_state = begin_idempotent_request(
+            scope="stocktake.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=payload,
         )
-        flash(f"Stocktake session {stocktake['session_number']} created.", "success")
-        return redirect(url_for("stocktake.stocktake_detail", session_id=stocktake["id"]))
     except ValueError as exc:
         flash(str(exc), "danger")
+        return redirect(url_for("stocktake.stocktake_list"))
+
+    if request_state["state"] == "replay":
+        return _redirect_from_idempotency_replay(request_state["response_body"], "stocktake.stocktake_list")
+    if request_state["state"] in {"processing", "mismatch"}:
+        flash(request_state["message"], "warning")
+        return redirect(url_for("stocktake.stocktake_list"))
+
+    try:
+        stocktake = create_stocktake_session(
+            user_id=user_id,
+            username=session.get("username"),
+            notes=payload["notes"] or None,
+            count_scope=payload["count_scope"],
+        )
+        response_body = {
+            "redirect_to": url_for("stocktake.stocktake_detail", session_id=stocktake["id"]),
+            "flash_message": f"Stocktake session {stocktake['session_number']} created.",
+            "flash_category": "success",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="stocktake.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=302,
+            response_body=response_body,
+            resource_type="stocktake_session",
+            resource_id=stocktake["id"],
+        )
+        return redirect(response_body["redirect_to"])
+    except ValueError as exc:
+        response_body = {
+            "redirect_to": url_for("stocktake.stocktake_list"),
+            "flash_message": str(exc),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="stocktake.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+        return redirect(url_for("stocktake.stocktake_list"))
+    except Exception as exc:
+        response_body = {
+            "redirect_to": url_for("stocktake.stocktake_list"),
+            "flash_message": str(exc),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="stocktake.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
         return redirect(url_for("stocktake.stocktake_list"))
 
 
@@ -142,33 +241,111 @@ def stocktake_remove_item_api(session_id, item_id):
 @stocktake_bp.route("/api/stocktake/<int:session_id>/confirm", methods=["POST"])
 @stocktake_access_required
 def stocktake_confirm_api(session_id):
+    scope = f"stocktake.confirm:{session_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, {"session_id": session_id})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         result = confirm_stocktake_session(
             session_id=session_id,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             username=session.get("username"),
         )
-        return jsonify({"status": "success", "session": result})
+        response_body = {"status": "success", "session": result}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="stocktake_session",
+            resource_id=session_id,
+        )
+        return jsonify(response_body)
     except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+        response_body = {"status": "error", "message": str(exc)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        response_body = {"status": "error", "message": str(exc)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/cancel", methods=["POST"])
 @stocktake_access_required
 def stocktake_cancel_api(session_id):
+    scope = f"stocktake.cancel:{session_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, {"session_id": session_id})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         result = cancel_stocktake_session(
             session_id=session_id,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             username=session.get("username"),
         )
-        return jsonify({"status": "success", "session": result})
+        response_body = {"status": "success", "session": result}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="stocktake_session",
+            resource_id=session_id,
+        )
+        return jsonify(response_body)
     except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+        response_body = {"status": "error", "message": str(exc)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        response_body = {"status": "error", "message": str(exc)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @stocktake_bp.route("/stocktake/<int:session_id>/report")

@@ -59,4 +59,18 @@
 - [ ] out page search on services. do not search by category anymore
 - [ ] ok special case in one of the services. when service hangin is selcted and is recorded in the sale, the value of that fully goes to shop share. none of it goes to mechanic share
 - [ ] report page in profit card. extend the formula. subtract quota top up if applicable
-- [ ] cash ledger page double entry problem. check other submits for this problem
+- [X] ~~*cash ledger page double entry problem. check other submits for this problem*~~ [2026-04-08]
+- [ ] out page loyalty redemption is still a follow-up step after sale save. move it into the main backend transaction so sale save + loyalty redeem succeed or fail together
+
+## Duplication submit checking wave 3
+
+- [ ] Add shared frontend guard to user active/inactive toggle actions in [audit.html]
+- [ ] Add shared frontend guard to mechanic toggle actions in [users.html]
+- [ ] Add shared frontend guard to service toggle actions in [users.html]
+- [ ] Add shared frontend guard to bundle toggle actions in [users.html]
+- [ ] Add shared frontend guard to payment method toggle actions in [users.html]
+- [ ] Add shared frontend guard to vendor toggle actions in [users.html]
+- [ ] Add shared frontend guard to notification mark-read and mark-all-read actions in [base.html]
+- [ ] Add shared frontend guard to stocktake draft micro-actions in [stocktake/detail.html] (add item, save row, delete row, save draft if still needed)
+- [ ] Add shared frontend guard to cheque status update actions if still present in payables flow
+- [ ] Add shared frontend guard to mechanic quota top-up save/delete actions in [users.html]

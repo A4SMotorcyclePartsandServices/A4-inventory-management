@@ -938,6 +938,7 @@ def add_cash_entry(
                     (debt_payment_id, entry_id),
                 )
         conn.commit()
+        return entry_id
     except Exception:
         conn.rollback()
         raise

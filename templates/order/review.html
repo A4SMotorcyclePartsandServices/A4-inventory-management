@@ -948,15 +948,33 @@
 let reviewRevisionsModal;
 let reviewCancelModal;
 
-async function postReviewAction(url, payload = {}) {
+function createReviewActionGuard(button, loadingHtml) {
+    return window.A4Submit?.createButtonGuard(button, {
+        idleHtml: button?.innerHTML || '',
+        loadingHtml,
+    });
+}
+
+async function postReviewAction(url, payload = {}, guard = null) {
+    if (guard && !guard.begin()) {
+        return;
+    }
     const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: guard
+            ? guard.buildHeaders({ 'Content-Type': 'application/json' })
+            : { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
     });
     const result = await response.json();
     if (!response.ok || result.status !== 'success') {
+        if (guard) {
+            guard.reset();
+        }
         throw new Error(result.message || result.error || 'Action failed.');
+    }
+    if (guard) {
+        guard.succeed();
     }
     window.location.reload();
 }
@@ -1001,12 +1019,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('reviewApproveBtn')?.addEventListener('click', async () => {
         const btn = document.getElementById('reviewApproveBtn');
+        const guard = createReviewActionGuard(btn, '<span class="spinner-border spinner-border-sm me-2"></span>Approving...');
         try {
-            btn.disabled = true;
-            await postReviewAction(`/api/order/${reviewPoId}/approval/approve`, {});
+            await postReviewAction(`/api/order/${reviewPoId}/approval/approve`, {}, guard);
         } catch (error) {
             alert(error.message || 'Failed to approve purchase order.');
-            btn.disabled = false;
         }
     });
 
@@ -1038,15 +1055,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         errorEl.style.display = 'none';
         const btn = document.getElementById('reviewConfirmRevisionsBtn');
+        const guard = createReviewActionGuard(btn, '<span class="spinner-border spinner-border-sm me-2"></span>Sending...');
         try {
-            btn.disabled = true;
             await postReviewAction(`/api/order/${reviewPoId}/approval/revisions`, {
                 notes,
                 revision_items: revisionItems,
-            });
+            }, guard);
         } catch (error) {
             alert(error.message || 'Failed to request revisions.');
-            btn.disabled = false;
         }
     });
 
@@ -1061,12 +1077,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         errorEl.style.display = 'none';
         const btn = document.getElementById('reviewConfirmCancelBtn');
+        const guard = createReviewActionGuard(btn, '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...');
         try {
-            btn.disabled = true;
-            await postReviewAction(`/api/order/${reviewPoId}/cancel`, { notes });
+            await postReviewAction(`/api/order/${reviewPoId}/cancel`, { notes }, guard);
         } catch (error) {
             alert(error.message || 'Failed to cancel purchase order.');
-            btn.disabled = false;
         }
     });
 });

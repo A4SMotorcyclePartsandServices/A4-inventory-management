@@ -1982,6 +1982,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{{ url_for('static', filename='utils/a4_submission.js') }}"></script>
+<script src="{{ url_for('static', filename='utils/a4_submission_forms.js') }}"></script>
 
 <script>
 const appBody = document.body;
@@ -2013,6 +2015,25 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
         setSidebarOpen(false);
     }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const stocktakeAccessRequestForm = document.getElementById('stocktakeAccessRequestForm');
+    if (!stocktakeAccessRequestForm || !window.A4Submit?.createFormGuard) {
+        return;
+    }
+
+    const submitButton = document.querySelector('button[form="stocktakeAccessRequestForm"]');
+    const guard = window.A4Submit.createFormGuard(stocktakeAccessRequestForm, {
+        submitButton,
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Sending...',
+    });
+
+    stocktakeAccessRequestForm.addEventListener('submit', (event) => {
+        if (!guard.begin()) {
+            event.preventDefault();
+        }
+    });
 });
 
 document.querySelectorAll('.sidebar .nav-group').forEach((group, index) => {

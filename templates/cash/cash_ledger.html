@@ -1143,6 +1143,12 @@ if (LEDGER_VIEW === 'active') {
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 if (LEDGER_VIEW === 'active') {
 document.getElementById('submit-entry-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('submit-entry-btn');
+    const submitGuard = window.A4Submit?.createButtonGuard(btn, {
+        idleHtml: '<i class="bi bi-plus-lg me-1"></i> Add Entry',
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Saving...',
+    });
+
     const entry_type  = document.querySelector('input[name="entry_type"]:checked').value;
     const amount      = parseFloat(document.getElementById('entry-amount').value);
     const category    = document.getElementById('entry-category').value;
@@ -1183,14 +1189,19 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 
     }
 
-    const btn = document.getElementById('submit-entry-btn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
+
+    let submissionSucceeded = false;
 
     try {
         const res = await fetch('/api/cash/add', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: submitGuard.buildHeaders({
+                'Content-Type': 'application/json',
+                'X-CSRFToken': APP_CSRF_TOKEN,
+            }),
             body: JSON.stringify({
                 entry_type,
                 amount,
@@ -1206,6 +1217,8 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         const data = await res.json();
 
         if (data.status === 'success') {
+            submissionSucceeded = true;
+            submitGuard.succeed();
             savePendingFlashForReload('Entry recorded successfully.', 'success');
             // Reload to get fresh summary + table from server
             // No stale state risk this way
@@ -1217,8 +1230,9 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     } catch (err) {
         showFlash('Network error. Please try again.', 'danger');
     } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-plus-lg me-1"></i> Add Entry';
+        if (!submissionSucceeded) {
+            submitGuard.reset();
+        }
     }
 });
 }

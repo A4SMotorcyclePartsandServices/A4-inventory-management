@@ -88,7 +88,7 @@
             </div>
         </div>
 
-        <form action="/inventory/in" method="POST">
+        <form action="/inventory/in" method="POST" id="manualStockInForm">
             <input type="hidden" name="item_id" id="selectedItemId">
 
             <div id="itemPreviewCard" class="item-preview" style="display: none;">
@@ -251,5 +251,25 @@ document.addEventListener('click', (e) => {
 });
 
 searchInput.addEventListener('input', debounce(handleSearch, 400));
+
+const manualStockInForm = document.getElementById('manualStockInForm');
+if (manualStockInForm && window.A4Submit?.createFormGuard) {
+    const stockInGuard = window.A4Submit.createFormGuard(manualStockInForm, {
+        submitButton: confirmBtn,
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+    });
+
+    manualStockInForm.addEventListener('submit', (event) => {
+        if (!selectedIdInput.value) {
+            event.preventDefault();
+            confirmBtn.disabled = true;
+            return;
+        }
+
+        if (!stockInGuard.begin()) {
+            event.preventDefault();
+        }
+    });
+}
 </script>
 {% endblock %}

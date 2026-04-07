@@ -18,6 +18,13 @@ from services.cash_service import (
     CASH_IN_CATEGORIES,
     CASH_OUT_CATEGORIES,
 )
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 from services.reports_service import get_mechanic_payouts_for_dates
 from utils.timezone import now_local, today_local
 
@@ -415,31 +422,82 @@ def cash_pending_non_cash_panel_api():
 @cash_bp.route("/api/cash/add", methods=["POST"])
 @login_required
 def cash_add_api():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+
+    try:
+        request_state = begin_idempotent_request(
+            scope="cash.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=data,
+        )
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+
+    if request_state["state"] == "processing":
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+
+    if request_state["state"] == "mismatch":
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+
     reference_id = data.get("reference_id")
     if reference_id in ("", None):
         reference_id = None
     payout_for_date = data.get("payout_for_date")
 
     try:
-        add_cash_entry(
+        entry_id = add_cash_entry(
             entry_type=data.get("entry_type"),
             amount=data.get("amount"),
             category=data.get("category"),
             description=data.get("description", ""),
             reference_id=reference_id,
             payout_for_date=payout_for_date,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             branch_id=_get_branch_id(),
             claim_sale_ids=data.get("claim_sale_ids") or [],
             claim_debt_payment_ids=data.get("claim_debt_payment_ids") or [],
         )
-        return jsonify({"status": "success"}), 200
+        response_body = {"status": "success"}
+        finalize_idempotent_request(
+            scope="cash.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="cash_entry",
+            resource_id=entry_id,
+        )
+        return jsonify(response_body), 200
 
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="cash.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": "Server error: " + str(e)}), 500
+        response_body = {"status": "error", "message": "Server error: " + str(e)}
+        finalize_idempotent_request(
+            scope="cash.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @cash_bp.route("/api/cash/delete/<int:entry_id>", methods=["DELETE"])

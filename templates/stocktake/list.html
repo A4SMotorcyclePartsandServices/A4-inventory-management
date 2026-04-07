@@ -222,7 +222,7 @@
     <div class="stocktake-grid">
         <div class="stocktake-form-card">
             <h5 class="mb-3">New Stocktake Session</h5>
-            <form method="POST" action="{{ url_for('stocktake.create_stocktake') }}">
+            <form method="POST" action="{{ url_for('stocktake.create_stocktake') }}" id="stocktakeCreateForm">
                 <div class="mb-3">
                     <label class="form-label">Count Scope</label>
                     <select class="form-select" name="count_scope">
@@ -395,6 +395,25 @@
 
 {% block scripts %}
 <script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('stocktakeCreateForm');
+    if (!form || !window.A4Submit?.createFormGuard) {
+        return;
+    }
+
+    const submitButton = form.querySelector('button[type="submit"]');
+    const guard = window.A4Submit.createFormGuard(form, {
+        submitButton,
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Creating...',
+    });
+
+    form.addEventListener('submit', (event) => {
+        if (!guard.begin()) {
+            event.preventDefault();
+        }
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof flatpickr !== 'function') {
         return;

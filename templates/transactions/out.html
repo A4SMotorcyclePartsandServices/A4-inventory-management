@@ -3188,7 +3188,16 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         modal.show();
     }
 
-    document.getElementById('save-new-customer-btn').addEventListener('click', async () => {
+    const saveNewCustomerButton = document.getElementById('save-new-customer-btn');
+    const saveVehicleButton = document.getElementById('save-vehicle-btn');
+    const newCustomerGuard = window.A4Submit?.createButtonGuard(saveNewCustomerButton, {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
+    const addVehicleGuard = window.A4Submit?.createButtonGuard(saveVehicleButton, {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
+
+    saveNewCustomerButton.addEventListener('click', async () => {
         const name    = document.getElementById('new-cust-name').value.trim();
         const no      = document.getElementById('new-cust-no').value.trim();
         const vehicle = document.getElementById('new-cust-vehicle').value.trim();
@@ -3200,15 +3209,24 @@ CUSTOMER SEARCH / AUTOCOMPLETE
             return;
         }
 
+        if (newCustomerGuard && !newCustomerGuard.begin()) {
+            return;
+        }
+
         try {
             const res  = await fetch('/api/customers/add', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: newCustomerGuard
+                    ? newCustomerGuard.buildHeaders({ 'Content-Type': 'application/json' })
+                    : { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ customer_name: name, customer_no: no, vehicle_name: vehicle })
             });
             const data = await res.json();
 
             if (data.status === 'success') {
+                if (newCustomerGuard) {
+                    newCustomerGuard.succeed();
+                }
                 bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
                 await setCustomer(
                     data.customer.id,
@@ -3217,16 +3235,22 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                     data.vehicle?.id
                 );
             } else {
+                if (newCustomerGuard) {
+                    newCustomerGuard.reset();
+                }
                 errEl.textContent = data.message || 'Could not save customer.';
             }
         } catch (err) {
+            if (newCustomerGuard) {
+                newCustomerGuard.reset();
+            }
             errEl.textContent = 'Network error. Try again.';
         }
     });
 
     document.getElementById('vehicle-add-btn').addEventListener('click', openAddVehicleModal);
 
-    document.getElementById('save-vehicle-btn').addEventListener('click', async () => {
+    saveVehicleButton.addEventListener('click', async () => {
         const customerId  = idField.value;
         const vehicleName = document.getElementById('add-vehicle-name').value.trim();
         const errEl       = document.getElementById('add-vehicle-error');
@@ -3235,22 +3259,37 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         if (!customerId) { errEl.textContent = 'No customer selected.'; return; }
         if (!vehicleName) { errEl.textContent = 'Vehicle name is required.'; return; }
 
+        if (addVehicleGuard && !addVehicleGuard.begin()) {
+            return;
+        }
+
         try {
             const res = await fetch(`/api/customers/${customerId}/vehicles/add`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: addVehicleGuard
+                    ? addVehicleGuard.buildHeaders({ 'Content-Type': 'application/json' })
+                    : { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ vehicle_name: vehicleName })
             });
             const data = await res.json();
 
             if (data.status === 'success') {
+                if (addVehicleGuard) {
+                    addVehicleGuard.succeed();
+                }
                 bootstrap.Modal.getInstance(document.getElementById('addVehicleModal')).hide();
                 await loadCustomerVehicles(customerId, data.vehicle.id);
                 return;
             }
 
+            if (addVehicleGuard) {
+                addVehicleGuard.reset();
+            }
             errEl.textContent = data.message || 'Could not save vehicle.';
         } catch (err) {
+            if (addVehicleGuard) {
+                addVehicleGuard.reset();
+            }
             errEl.textContent = 'Network error. Try again.';
         }
     });
@@ -3687,6 +3726,11 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
 ========================================================= */
 document.getElementById('submit-btn').addEventListener('click', async (e) => {
     e.preventDefault();
+    const currentButtonHtml = e.target.innerHTML;
+    const submitGuard = window.A4Submit?.createButtonGuard(e.target, {
+        idleHtml: currentButtonHtml,
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...',
+    });
 
     clearFieldErrors();
     syncQuickCustomerName();
@@ -3959,21 +4003,16 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         }
     }
 
-    const btn = e.target;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...';
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
 
-    await saveTransaction(validItems, validServices, hasBundleSelected ? [selectedBundlePayload] : []);
+    await saveTransaction(validItems, validServices, hasBundleSelected ? [selectedBundlePayload] : [], submitGuard);
 });
 
-async function saveTransaction(items, services, bundles) {
-    const submitBtn = document.getElementById('submit-btn');
+async function saveTransaction(items, services, bundles, submitGuard) {
     const requestTimeoutMs = 15000;
-
-    function resetSubmitButton() {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'SUBMIT TRANSACTION';
-    }
+    let salePersisted = false;
 
     const quickSaleMode = isQuickSaleMode();
     const fullSaleMode = isFullSaleMode();
@@ -4021,7 +4060,9 @@ async function saveTransaction(items, services, bundles) {
         const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
         const res = await fetch('/transaction/out/save', {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: submitGuard.buildHeaders({
+                'Content-Type': 'application/json',
+            }),
             body:    JSON.stringify(payload),
             signal:  controller.signal,
         });
@@ -4039,18 +4080,23 @@ async function saveTransaction(items, services, bundles) {
 
         if (!res.ok) {
             showAlert(result.message);
-            resetSubmitButton();
+            submitGuard.reset();
             return;
         }
 
         const saleId     = result.sale_id;
         const customerId = payload.customer_id;
+        salePersisted = true;
 
         if (saleId && customerId && loyaltyPendingRedemptions.size > 0) {
             for (const programId of loyaltyPendingRedemptions.keys()) {
+                const loyaltyKey = `${submitGuard.getIdempotencyKey()}-loyalty-${programId}`;
                 const redeemRes = await fetch('/api/loyalty/redeem', {
                     method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Idempotency-Key': loyaltyKey,
+                    },
                     body:    JSON.stringify({
                         customer_id: parseInt(customerId),
                         program_id:  programId,
@@ -4060,8 +4106,7 @@ async function saveTransaction(items, services, bundles) {
                 const redeemResult = await redeemRes.json();
 
                 if (!redeemRes.ok || redeemResult.status !== 'success') {
-                    showAlert(redeemResult.message || 'Sale saved, but loyalty redemption failed. Please retry before leaving this page.', 'warning');
-                    resetSubmitButton();
+                    showAlert(redeemResult.message || 'Sale saved, but loyalty redemption failed. Please verify the customer reward before making another sale.', 'warning');
                     return;
                 }
             }
@@ -4076,7 +4121,9 @@ async function saveTransaction(items, services, bundles) {
         } else {
             showAlert(err.message || 'Submission failed. Please try again.', 'danger');
         }
-        resetSubmitButton();
+        if (!salePersisted) {
+            submitGuard.reset();
+        }
     }
 }
 </script>

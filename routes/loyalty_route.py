@@ -11,6 +11,13 @@ from services.loyalty_service import (
     redeem_reward,
     get_customer_loyalty_summary,
 )
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 
 loyalty_bp = Blueprint("loyalty", __name__)
 
@@ -136,18 +143,63 @@ def redeem():
     if not all([customer_id, program_id, sale_id]):
         return jsonify({"status": "error", "message": "customer_id, program_id, and sale_id are required."}), 400
 
+    scope = f"loyalty.redeem:{sale_id}:{program_id}:{customer_id}"
+    try:
+        user_id = session.get("user_id")
+        idempotency_key = extract_idempotency_key(request)
+        request_state = begin_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=data,
+        )
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+    if request_state["state"] in {"processing", "mismatch"}:
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+
     try:
         result = redeem_reward(
             customer_id=int(customer_id),
             program_id=int(program_id),
             sale_id=int(sale_id),
-            user_id=session.get("user_id"),
+            user_id=user_id,
         )
-        return jsonify({"status": "success", "redemption": result})
+        response_body = {"status": "success", "redemption": result}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 409
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=409,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 409
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 # ─────────────────────────────────────────────────────────────

@@ -732,6 +732,8 @@ let lastMainSearchItems = [];
 let lastBatchSearchItems = [];
 const canViewCurrentStock = {{ (current_user and current_user.role == 'admin') | tojson }};
 const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
+let confirmSessionGuard = null;
+let cancelSessionGuard = null;
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -1322,12 +1324,23 @@ async function confirmSession() {
     });
     if (!confirmed) return;
 
+    if (confirmSessionGuard && !confirmSessionGuard.begin()) {
+        return;
+    }
+
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/confirm`, {
         method: 'POST',
+        headers: confirmSessionGuard ? confirmSessionGuard.buildHeaders() : {},
     });
     const data = await response.json();
     if (!response.ok) {
+        if (confirmSessionGuard) {
+            confirmSessionGuard.reset();
+        }
         throw new Error(data.message || 'Failed to confirm stocktake session.');
+    }
+    if (confirmSessionGuard) {
+        confirmSessionGuard.succeed();
     }
     stocktakeSession = data.session;
     renderSessionMeta();
@@ -1345,12 +1358,23 @@ async function cancelSession() {
     });
     if (!confirmed) return;
 
+    if (cancelSessionGuard && !cancelSessionGuard.begin()) {
+        return;
+    }
+
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/cancel`, {
         method: 'POST',
+        headers: cancelSessionGuard ? cancelSessionGuard.buildHeaders() : {},
     });
     const data = await response.json();
     if (!response.ok) {
+        if (cancelSessionGuard) {
+            cancelSessionGuard.reset();
+        }
         throw new Error(data.message || 'Failed to cancel stocktake session.');
+    }
+    if (cancelSessionGuard) {
+        cancelSessionGuard.succeed();
     }
     stocktakeSession = data.session;
     renderSessionMeta();
@@ -1359,6 +1383,13 @@ async function cancelSession() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    confirmSessionGuard = window.A4Submit?.createButtonGuard(document.getElementById('confirmSessionBtn'), {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Confirming...',
+    });
+    cancelSessionGuard = window.A4Submit?.createButtonGuard(document.getElementById('cancelSessionBtn'), {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...',
+    });
+
     renderSessionMeta();
     renderItemsTable();
 

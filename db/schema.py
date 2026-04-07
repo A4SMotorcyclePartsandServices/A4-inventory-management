@@ -931,6 +931,37 @@ def init_db():
     )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_debt_payment_claims_entry ON cash_debt_payment_claims(cash_entry_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS idempotency_requests (
+        id                  SERIAL PRIMARY KEY,
+        scope               TEXT NOT NULL,
+        actor_user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        idempotency_key     TEXT NOT NULL,
+        request_hash        TEXT NOT NULL,
+        status              TEXT NOT NULL DEFAULT 'PROCESSING'
+                            CHECK(status IN ('PROCESSING', 'COMPLETED', 'FAILED')),
+        response_code       INTEGER,
+        response_body       JSONB,
+        resource_type       TEXT,
+        resource_id         INTEGER,
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        completed_at        TIMESTAMP,
+        last_seen_at        TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("ALTER TABLE idempotency_requests ADD COLUMN IF NOT EXISTS response_body JSONB")
+    cur.execute("ALTER TABLE idempotency_requests ADD COLUMN IF NOT EXISTS resource_type TEXT")
+    cur.execute("ALTER TABLE idempotency_requests ADD COLUMN IF NOT EXISTS resource_id INTEGER")
+    cur.execute("ALTER TABLE idempotency_requests ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP")
+    cur.execute("ALTER TABLE idempotency_requests ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_idempotency_requests_scope_actor_key
+    ON idempotency_requests (scope, actor_user_id, idempotency_key)
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_idempotency_requests_created_at
+    ON idempotency_requests (created_at DESC)
+    """)
 
     # 22. PAYABLES TABLES
     cur.execute("""

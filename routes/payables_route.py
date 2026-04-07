@@ -11,9 +11,21 @@ from services.payables_service import (
     issue_payable_cheque,
     update_payable_cheque_status,
 )
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 
 
 payables_bp = Blueprint("payables", __name__)
+
+
+def _redirect_from_idempotency_replay(payload):
+    flash(payload.get("flash_message", "Request already processed."), payload.get("flash_category", "info"))
+    return redirect(payload.get("redirect_to") or url_for("payables.payables_page"))
 
 
 @payables_bp.route("/transaction/payables")
@@ -67,42 +79,167 @@ def payables_history_month_api():
 @payables_bp.route("/transaction/payables/manual", methods=["POST"])
 @login_required
 def create_manual_payable_action():
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_payload = request.form.to_dict(flat=False)
+    redirect_to = url_for("payables.payables_page")
     try:
-        create_manual_payable(
+        request_state = begin_idempotent_request(
+            scope="payable.manual.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=request_payload,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(redirect_to)
+
+    if request_state["state"] == "replay":
+        return _redirect_from_idempotency_replay(request_state["response_body"])
+    if request_state["state"] in {"processing", "mismatch"}:
+        flash(request_state["message"], "warning")
+        return redirect(redirect_to)
+
+    try:
+        payable_id = create_manual_payable(
             payee_name=request.form.get("payee_name"),
             description=request.form.get("description"),
             amount_due=request.form.get("amount_due"),
             reference_no=request.form.get("reference_no"),
-            created_by=session.get("user_id"),
+            created_by=user_id,
             created_by_username=session.get("username"),
         )
-        flash("Manual payable created successfully.", "success")
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": "Manual payable created successfully.",
+            "flash_category": "success",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="payable.manual.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=302,
+            response_body=response_body,
+            resource_type="payable",
+            resource_id=payable_id,
+        )
     except ValueError as exc:
-        flash(str(exc), "danger")
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": str(exc),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="payable.manual.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
     except Exception as exc:
-        flash(f"Failed to create manual payable: {exc}", "danger")
-    return redirect(url_for("payables.payables_page"))
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": f"Failed to create manual payable: {exc}",
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="payable.manual.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+    return redirect(redirect_to)
 
 
 @payables_bp.route("/transaction/payables/<int:payable_id>/cheques", methods=["POST"])
 @login_required
 def issue_payable_cheque_action(payable_id):
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_payload = request.form.to_dict(flat=False)
+    redirect_to = url_for("payables.payables_page")
+    scope = f"payable.cheque.issue:{payable_id}"
     try:
-        issue_payable_cheque(
+        request_state = begin_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=request_payload,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(redirect_to)
+
+    if request_state["state"] == "replay":
+        return _redirect_from_idempotency_replay(request_state["response_body"])
+    if request_state["state"] in {"processing", "mismatch"}:
+        flash(request_state["message"], "warning")
+        return redirect(redirect_to)
+
+    try:
+        cheque_id = issue_payable_cheque(
             payable_id,
             cheque_no=request.form.get("cheque_no"),
             cheque_date=request.form.get("cheque_date"),
             cheque_amount=request.form.get("cheque_amount"),
             notes=request.form.get("notes"),
-            created_by=session.get("user_id"),
+            created_by=user_id,
             created_by_username=session.get("username"),
         )
-        flash("Cheque issued successfully.", "success")
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": "Cheque issued successfully.",
+            "flash_category": "success",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=302,
+            response_body=response_body,
+            resource_type="payable_cheque",
+            resource_id=cheque_id,
+        )
     except ValueError as exc:
-        flash(str(exc), "danger")
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": str(exc),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
     except Exception as exc:
-        flash(f"Failed to issue cheque: {exc}", "danger")
-    return redirect(url_for("payables.payables_page"))
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": f"Failed to issue cheque: {exc}",
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+    return redirect(redirect_to)
 
 
 @payables_bp.route("/transaction/payables/cheques/<int:cheque_id>/status", methods=["POST"])

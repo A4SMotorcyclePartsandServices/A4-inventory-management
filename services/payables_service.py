@@ -551,6 +551,7 @@ def issue_payable_cheque(
 
         sync_payable_status(payable_id, external_conn=conn)
         conn.commit()
+        return cheque_id
     except Exception:
         conn.rollback()
         raise

@@ -1475,6 +1475,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const amountInput = form.querySelector('.cheque-amount-input');
         const warningEl = form.querySelector('.cheque-amount-warning');
         const submitBtn = form.querySelector('button[type="submit"]');
+        const formGuard = window.A4Submit?.createFormGuard(form, {
+            submitButton: submitBtn,
+            idleHtml: submitBtn?.innerHTML || 'Issue Cheque',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Issuing...',
+        });
 
         if (!amountInput || !warningEl) {
             return;
@@ -1515,11 +1520,33 @@ document.addEventListener('DOMContentLoaded', function () {
                 amountInput.value = remainingBalance.toFixed(2);
                 warningEl.classList.add('is-visible');
                 amountInput.focus();
+                formGuard?.reset();
+                return;
+            }
+
+            if (!formGuard || !formGuard.begin()) {
+                event.preventDefault();
             }
         });
 
         syncAmountState();
     });
+
+    const manualPayableForm = document.querySelector('#manualPayableModal form');
+    if (manualPayableForm) {
+        const manualPayableSubmitBtn = manualPayableForm.querySelector('button[type="submit"]');
+        const manualPayableGuard = window.A4Submit?.createFormGuard(manualPayableForm, {
+            submitButton: manualPayableSubmitBtn,
+            idleHtml: manualPayableSubmitBtn?.innerHTML || 'Create Payable',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Creating...',
+        });
+
+        manualPayableForm.addEventListener('submit', (event) => {
+            if (!manualPayableGuard || !manualPayableGuard.begin()) {
+                event.preventDefault();
+            }
+        });
+    }
 
     document.addEventListener('click', async function (event) {
         const button = event.target.closest('[data-history-toggle]');

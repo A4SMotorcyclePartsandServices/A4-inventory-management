@@ -36,9 +36,41 @@ from services.transactions_service import (
     update_purchase_order,
     get_purchase_order_review_context,
 )
+from services.idempotency_service import (
+    COMPLETED_STATUS,
+    FAILED_STATUS,
+    begin_idempotent_request,
+    extract_idempotency_key,
+    finalize_idempotent_request,
+)
 from utils.timezone import now_local
 
 transaction_bp = Blueprint('transaction', __name__)
+
+
+def _begin_json_idempotent_request(scope, data):
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_state = begin_idempotent_request(
+        scope=scope,
+        actor_user_id=user_id,
+        idempotency_key=idempotency_key,
+        request_payload=data,
+    )
+    return user_id, idempotency_key, request_state
+
+
+def _idempotency_error_response(request_state):
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+    if request_state["state"] in {"processing", "mismatch"}:
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+    return None
+
+
+def _redirect_from_idempotency_replay(payload, default_endpoint):
+    flash(payload.get("flash_message", "Request already processed."), payload.get("flash_category", "info"))
+    return redirect(payload.get("redirect_to") or url_for(default_endpoint))
 
 
 def _get_active_vendors():
@@ -206,6 +238,14 @@ def process_transaction_in():
     quantity = request.form.get("quantity")
     unit_price_raw = request.form.get("unit_price")
     notes = (request.form.get("notes") or "").strip()
+    payload = {
+        "item_id": item_id,
+        "quantity": quantity,
+        "unit_price": unit_price_raw,
+        "notes": notes,
+    }
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
 
     if not notes:
         flash("Notes are required for manual stock inserts (audit trail).", "danger")
@@ -216,19 +256,79 @@ def process_transaction_in():
         return redirect(url_for('transaction.list_orders'))
 
     try:
+        request_state = begin_idempotent_request(
+            scope="inventory.manual_in",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=payload,
+        )
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("transaction.transaction_in"))
+
+    if request_state["state"] == "replay":
+        return _redirect_from_idempotency_replay(request_state["response_body"], "transaction.list_orders")
+    if request_state["state"] in {"processing", "mismatch"}:
+        flash(request_state["message"], "warning")
+        return redirect(url_for("transaction.transaction_in"))
+
+    try:
         process_manual_stock_in(
             item_id=item_id,
             qty_int=int(quantity),
             unit_price=float(unit_price_raw),
             notes=notes,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             username=session.get("username")
         )
-        flash(f"Stock updated! Received {quantity} unit(s).", "success")
+        response_body = {
+            "redirect_to": url_for("transaction.list_orders"),
+            "flash_message": f"Stock updated! Received {quantity} unit(s).",
+            "flash_category": "success",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="inventory.manual_in",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=302,
+            response_body=response_body,
+            resource_type="inventory_manual_in",
+            resource_id=int(item_id),
+        )
     except ValueError as e:
-        flash(str(e), "danger")
+        response_body = {
+            "redirect_to": url_for("transaction.transaction_in"),
+            "flash_message": str(e),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="inventory.manual_in",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+        return redirect(url_for('transaction.transaction_in'))
     except Exception as e:
-        flash(f"System Error: {str(e)}", "danger")
+        response_body = {
+            "redirect_to": url_for("transaction.transaction_in"),
+            "flash_message": f"System Error: {str(e)}",
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope="inventory.manual_in",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+        return redirect(url_for('transaction.transaction_in'))
 
     return redirect(url_for('transaction.list_orders'))
 
@@ -236,11 +336,20 @@ def process_transaction_in():
 @transaction_bp.route("/transaction/out/save", methods=["POST"])
 @login_required
 def save_transaction_out():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request("sale.create", data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         sales_number, sale_id = record_sale(          # <── unpack tuple
             data=data,
-            user_id=session.get('user_id'),
+            user_id=user_id,
             username=session.get('username')
         )
         transaction_class = str((data or {}).get("transaction_class") or "").strip().upper()
@@ -250,12 +359,41 @@ def save_transaction_out():
             flash(f"Sale #{sales_number} recorded successfully!", "success")
         else:
             flash("Sale recorded successfully!", "success")
-        return jsonify({"status": "success", "sale_id": sale_id}), 200   # <── add sale_id
+        response_body = {"status": "success", "sale_id": sale_id}
+        finalize_idempotent_request(
+            scope="sale.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="sale",
+            resource_id=sale_id,
+        )
+        return jsonify(response_body), 200   # <── add sale_id
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="sale.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
         print(f"DATABASE ERROR: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="sale.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/api/sales/<int:sale_id>/refund-context")
@@ -273,18 +411,57 @@ def sale_refund_context_api(sale_id):
 @login_required
 def refund_sale_api(sale_id):
     data = request.get_json(silent=True) or {}
+    scope = f"sale.refund:{sale_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         result = record_sale_refund(
             sale_id=sale_id,
             data=data,
-            user_id=session.get('user_id'),
+            user_id=user_id,
             username=session.get('username'),
         )
-        return jsonify({"status": "success", **result}), 200
+        response_body = {"status": "success", **result}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="sale_refund",
+            resource_id=result.get("refund_id"),
+        )
+        return jsonify(response_body), 200
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/api/sales/refund-search")
@@ -330,20 +507,58 @@ def vendor_recommended_items_api(vendor_id):
 @transaction_bp.route("/transaction/order/save", methods=["POST"])
 @login_required
 def save_purchase_order():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request("purchase_order.create", data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         po_number, po_id = create_purchase_order(
             data=data,
-            user_id=session.get('user_id'),
+            user_id=user_id,
             username=session.get('username'),
             user_role=session.get('role'),
         )
         flash(f"Purchase Order {po_number} saved and logged!", "success")
-        return jsonify({"status": "success", "po_id": po_id}), 200
+        response_body = {"status": "success", "po_id": po_id}
+        finalize_idempotent_request(
+            scope="purchase_order.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body), 200
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="purchase_order.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="purchase_order.create",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/transaction/orders/list")
@@ -423,77 +638,233 @@ def get_archive_month_orders():
 @transaction_bp.route("/api/order/<int:po_id>/update", methods=["POST"])
 @login_required
 def update_order(po_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    scope = f"purchase_order.update:{po_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         details = update_purchase_order(
             po_id=po_id,
             data=data,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             username=session.get("username"),
             user_role=session.get("role"),
         )
         flash("Purchase order updated and resubmitted.", "success")
-        return jsonify({"status": "success", "details": details})
+        response_body = {"status": "success", "details": details}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/api/order/<int:po_id>/cancel", methods=["POST"])
 @login_required
 def cancel_order(po_id):
     data = request.get_json(silent=True) or {}
+    scope = f"purchase_order.cancel:{po_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         details = cancel_purchase_order(
             po_id=po_id,
-            user_id=session.get("user_id"),
+            user_id=user_id,
             user_role=session.get("role"),
             notes=(data.get("notes") or "").strip() or None,
         )
         flash("Purchase order cancelled.", "success")
-        return jsonify({"status": "success", "details": details})
+        response_body = {"status": "success", "details": details}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/api/order/<int:po_id>/approval/approve", methods=["POST"])
 @admin_required
 def approve_order(po_id):
     data = request.get_json(silent=True) or {}
+    scope = f"purchase_order.approve:{po_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         details = approve_purchase_order(
             po_id=po_id,
-            admin_user_id=session.get("user_id"),
+            admin_user_id=user_id,
             notes=(data.get("notes") or "").strip() or None,
         )
         flash("Purchase order approved.", "success")
-        return jsonify({"status": "success", "details": details})
+        response_body = {"status": "success", "details": details}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/api/order/<int:po_id>/approval/revisions", methods=["POST"])
 @admin_required
 def revise_order(po_id):
     data = request.get_json(silent=True) or {}
+    scope = f"purchase_order.revisions:{po_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         details = request_po_revisions(
             po_id=po_id,
-            admin_user_id=session.get("user_id"),
+            admin_user_id=user_id,
             notes=(data.get("notes") or "").strip(),
             revision_items=data.get("revision_items") or [],
         )
         flash("Purchase order returned for revisions.", "success")
-        return jsonify({"status": "success", "details": details})
+        response_body = {"status": "success", "details": details}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/export/purchase-order/<int:po_id>/csv")
@@ -588,20 +959,60 @@ def receive_order_page(po_id):
 @transaction_bp.route("/transaction/receive/confirm", methods=["POST"])
 @login_required
 def confirm_reception():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    po_id = data.get('po_id')
+    scope = f"purchase_order.receive:{po_id}"
+    try:
+        user_id, idempotency_key, request_state = _begin_json_idempotent_request(scope, data)
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    early_response = _idempotency_error_response(request_state)
+    if early_response:
+        return early_response
+
     try:
         receive_purchase_order(
-            po_id=data.get('po_id'),
+            po_id=po_id,
             received_items=data.get('items'),
-            user_id=session.get('user_id'),
+            user_id=user_id,
             username=session.get('username')
         )
         flash("Stock received and added successfully!", "success")
-        return jsonify({"status": "success"})
+        response_body = {"status": "success"}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="purchase_order",
+            resource_id=po_id,
+        )
+        return jsonify(response_body)
     except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
 
 
 @transaction_bp.route("/purchase-order/details/<int:po_id>")

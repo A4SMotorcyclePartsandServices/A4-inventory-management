@@ -3513,6 +3513,53 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.A4Submit?.createFormGuard) {
+        return;
+    }
+
+    const guardedForms = [
+        {
+            formId: 'passwordResetCompleteForm',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+        },
+        {
+            formId: 'passwordResetRejectForm',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+        },
+        {
+            formId: 'stocktakeAccessApproveForm',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+        },
+        {
+            formId: 'stocktakeAccessRejectForm',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+        },
+        {
+            formId: 'stocktakeAccessRevokeForm',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...',
+        },
+    ];
+
+    guardedForms.forEach(({ formId, loadingHtml }) => {
+        const form = document.getElementById(formId);
+        if (!form) {
+            return;
+        }
+
+        const guard = window.A4Submit.createFormGuard(form, {
+            submitButton: form.querySelector('button[type="submit"]'),
+            loadingHtml,
+        });
+
+        form.addEventListener('submit', (event) => {
+            if (!guard.begin()) {
+                event.preventDefault();
+            }
+        });
+    });
+});
+
 function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '') {
     const params = new URLSearchParams();
     if (snapshotAt) params.set('snapshot_at', snapshotAt);

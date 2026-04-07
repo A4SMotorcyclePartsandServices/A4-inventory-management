@@ -640,6 +640,11 @@ document.getElementById('pay-category').addEventListener('change', function () {
 async function submitPayment() {
     const errorDiv = document.getElementById('pay-amount-error');
     const amount   = parseFloat(document.getElementById('pay-amount').value);
+    const btn = document.getElementById('confirm-pay-btn');
+    const submitGuard = window.A4Submit?.createButtonGuard(btn, {
+        idleHtml: 'CONFIRM PAYMENT',
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Saving...',
+    });
     errorDiv.style.display = 'none';
 
     if (!amount || amount <= 0) {
@@ -669,9 +674,9 @@ async function submitPayment() {
         ? document.getElementById('pay-method').value
         : categoryEl.value;
 
-    const btn = document.getElementById('confirm-pay-btn');
-    btn.disabled  = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
 
     const payload = {
         amount_paid:       amount,
@@ -683,7 +688,7 @@ async function submitPayment() {
     try {
         const res  = await fetch(`/api/debt/${activeSaleId}/pay`, {
             method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: submitGuard.buildHeaders({ 'Content-Type': 'application/json' }),
             body:    JSON.stringify(payload),
         });
         const data = await res.json();
@@ -694,14 +699,12 @@ async function submitPayment() {
         } else {
             errorDiv.innerText = data.message || 'Something went wrong.';
             errorDiv.style.display = 'block';
-            btn.disabled  = false;
-            btn.innerHTML = 'CONFIRM PAYMENT';
+            submitGuard.reset();
         }
     } catch (err) {
         errorDiv.innerText = 'Network error. Please try again.';
         errorDiv.style.display = 'block';
-        btn.disabled  = false;
-        btn.innerHTML = 'CONFIRM PAYMENT';
+        submitGuard.reset();
     }
 }
 </script>
