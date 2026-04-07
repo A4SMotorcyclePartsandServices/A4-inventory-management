@@ -45,6 +45,7 @@ Core pages and inventory:
 - `/api/search/vendors`
 - `/api/vendors/<vendor_id>`
 - `/api/vendors/add`
+- `/api/vendors/<vendor_id>/update`
 - `/api/bundles/sale-options`
 - `/api/bundles/<bundle_id>/sale-config`
 - `/api/vendors/<vendor_id>/recommended-items`
@@ -159,6 +160,8 @@ Account/session:
 - `/api/bundles/<bundle_id>`
 - `/payment-methods/add`
 - `/payment-methods/toggle/<pm_id>`
+- `/vendors/add`
+- `/vendors/toggle/<vendor_id>`
 
 ### Stocktake-Approved Routes
 

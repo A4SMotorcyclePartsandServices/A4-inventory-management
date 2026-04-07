@@ -5,6 +5,7 @@ from psycopg2 import errors as pg_errors
 from werkzeug.security import generate_password_hash
 
 from db.database import get_db
+from services.vendor_service import get_vendors_panel_records
 from services.transactions_service import get_sale_refund_context
 from utils.formatters import format_date, norm_text
 from utils.timezone import now_local_str
@@ -102,6 +103,7 @@ def get_users_page_context(active_tab="mechanics-tab", include_audit_data=False)
         {**dict(bundle), "created_at": format_date(bundle["created_at"], show_time=True)}
         for bundle in bundles
     ]
+    vendors = get_vendors_panel_records()
 
     context = {
         "mechanics": mechanics,
@@ -110,6 +112,7 @@ def get_users_page_context(active_tab="mechanics-tab", include_audit_data=False)
         "categories": categories,
         "payment_methods": payment_methods,
         "bundles": formatted_bundles,
+        "vendors": vendors,
         "active_tab": active_tab,
     }
 

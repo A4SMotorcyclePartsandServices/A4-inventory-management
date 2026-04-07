@@ -18,6 +18,7 @@ from services.users_panel_service import (
     toggle_service_active_status,
     update_bundle_record,
 )
+from services.vendor_service import add_vendor_record, toggle_vendor_active_status
 
 users_panel_bp = Blueprint("users_panel", __name__)
 
@@ -27,6 +28,7 @@ USERS_PANEL_TABS = {
     "manage-services-tab",
     "bundles-tab",
     "payment-methods-tab",
+    "vendors-tab",
     "loyalty-tab",
 }
 
@@ -316,3 +318,41 @@ def toggle_payment_method(pm_id):
         flash(f"Payment method '{result['name']}' activated.", "success")
 
     return redirect(url_for("users_panel.users_panel", tab="payment-methods-tab"))
+
+
+@users_panel_bp.route("/vendors/add", methods=["POST"])
+@login_required
+def add_vendor():
+    result = add_vendor_record(
+        vendor_name=request.form.get("vendor_name"),
+        address=request.form.get("address"),
+        contact_person=request.form.get("contact_person"),
+        contact_no=request.form.get("contact_no"),
+        email=request.form.get("email"),
+    )
+    if result["status"] == "missing_fields":
+        flash(result["message"], "danger")
+    elif result["status"] == "duplicate":
+        flash(f"Vendor '{result['name']}' already exists.", "warning")
+    elif result["status"] == "ok":
+        flash(f"Vendor '{result['vendor']['vendor_name']}' added successfully.", "success")
+    else:
+        flash("Error adding vendor.", "danger")
+
+    return redirect(url_for("users_panel.users_panel", tab="vendors-tab"))
+
+
+@users_panel_bp.route("/vendors/toggle/<int:vendor_id>", methods=["POST"])
+@login_required
+def toggle_vendor(vendor_id):
+    result = toggle_vendor_active_status(vendor_id)
+    if result["status"] == "missing":
+        flash("Vendor not found.", "danger")
+        return redirect(url_for("users_panel.users_panel", tab="vendors-tab"))
+
+    if result["new_status"] == 0:
+        flash(f"Vendor '{result['name']}' disabled.", "warning")
+    else:
+        flash(f"Vendor '{result['name']}' activated.", "success")
+
+    return redirect(url_for("users_panel.users_panel", tab="vendors-tab"))
