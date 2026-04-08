@@ -231,6 +231,57 @@
             color: #6b7280;
         }
 
+        .page-break {
+            page-break-before: always;
+            break-before: page;
+        }
+
+        .section-block {
+            margin-top: 26px;
+        }
+
+        .section-header {
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #111827;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+
+        .section-subtitle {
+            margin-top: 6px;
+            color: #4b5563;
+            font-size: 12px;
+        }
+
+        .expense-summary {
+            margin-bottom: 18px;
+            padding: 14px 16px;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            background: #fef2f2;
+        }
+
+        .expense-summary-label {
+            font-size: 10.5px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: #991b1b;
+        }
+
+        .expense-summary-value {
+            margin-top: 6px;
+            font-size: 28px;
+            font-weight: 800;
+            color: #b91c1c;
+        }
+
         @media print {
             .no-print { display: none; }
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -325,5 +376,48 @@
         No cash ledger entries found for this report range.
     </div>
     {% endif %}
+
+    <div class="page-break section-block">
+        <div class="section-header">
+            <h2 class="section-title">Expense Report</h2>
+            <div class="section-subtitle">
+                All cash out entries from the ledger, summarized by category for {{ report.date_label }}.
+            </div>
+        </div>
+
+        <div class="expense-summary">
+            <div class="expense-summary-label">Total Expenses</div>
+            <div class="expense-summary-value">P{{ "{:,.2f}".format(report.expense_total) }}</div>
+        </div>
+
+        {% if report.expense_groups %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th class="cell-center" style="width: 110px;">Entries</th>
+                    <th class="cell-right" style="width: 140px;">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in report.expense_groups %}
+                <tr>
+                    <td>{{ group.category }}</td>
+                    <td class="cell-center">{{ group.entry_count }}</td>
+                    <td class="cell-right">P{{ "{:,.2f}".format(group.total_amount) }}</td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td colspan="2" style="font-weight: 800; background: #f9fafb;">Grand Total</td>
+                    <td class="cell-right" style="font-weight: 800; background: #f9fafb;">P{{ "{:,.2f}".format(report.expense_total) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            No cash out entries found for this report range.
+        </div>
+        {% endif %}
+    </div>
 </body>
 </html>

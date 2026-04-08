@@ -89,6 +89,31 @@ def _resolve_report_date_range():
     return start_date.isoformat(), end_date.isoformat(), start_date, end_date
 
 
+def _build_expense_report_groups(entries):
+    grouped = {}
+
+    for entry in entries:
+        if entry.get("entry_type") != "CASH_OUT":
+            continue
+
+        category = (entry.get("category") or "Uncategorized").strip() or "Uncategorized"
+        group = grouped.setdefault(
+            category,
+            {
+                "category": category,
+                "entry_count": 0,
+                "total_amount": 0.0,
+            },
+        )
+        group["entry_count"] += 1
+        group["total_amount"] = round(group["total_amount"] + float(entry.get("amount") or 0), 2)
+
+    expense_groups = sorted(grouped.values(), key=lambda group: group["category"].lower())
+    expense_total = round(sum(group["total_amount"] for group in expense_groups), 2)
+
+    return expense_groups, expense_total
+
+
 def _build_cash_report_context(branch_id):
     ledger_view = _get_ledger_view()
     entry_type = request.args.get("type") or None
@@ -104,6 +129,7 @@ def _build_cash_report_context(branch_id):
         entry_type=entry_type,
         ledger_view=ledger_view,
     )
+    expense_groups, expense_total = _build_expense_report_groups(report_data["entries"])
 
     if start_date == end_date:
         date_label = format_date(start_date)
@@ -140,6 +166,8 @@ def _build_cash_report_context(branch_id):
         "filter_label": filter_label,
         "filter_tone": filter_tone,
         "entries": report_data["entries"],
+        "expense_groups": expense_groups,
+        "expense_total": expense_total,
         "total_in": report_data["total_in"],
         "total_out": report_data["total_out"],
         "net_movement": report_data["cash_on_hand"],
