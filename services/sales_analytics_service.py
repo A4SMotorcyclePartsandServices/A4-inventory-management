@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta
 
 from db.database import get_db
+from services.reports_service import (
+    _calculate_range_mechanic_rollups,
+    _get_debt_payout_allocations,
+    _load_bundles_by_sale,
+    _load_services_by_sale,
+)
 
 
 def _num(value):
@@ -113,6 +119,65 @@ def _normalize_top_items_limit(value, default=10, max_value=50):
     except (TypeError, ValueError):
         limit = default
     return max(1, min(limit, max_value))
+
+
+def _get_total_shop_topup(conn, start_date, end_date):
+    sales_rows = conn.execute(
+        """
+        SELECT
+            s.id,
+            s.transaction_date,
+            s.status,
+            m.id AS mechanic_id,
+            m.name AS mechanic_name,
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
+        FROM sales s
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+          ON mqto.mechanic_id = s.mechanic_id
+         AND mqto.quota_date = DATE(s.transaction_date)
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        ORDER BY s.transaction_date ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    debt_collected_rows = conn.execute(
+        """
+        SELECT
+            dp.sale_id,
+            dp.paid_at,
+            s.mechanic_id,
+            m.name AS mechanic_name,
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
+        FROM debt_payments dp
+        JOIN sales s ON s.id = dp.sale_id
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+          ON mqto.mechanic_id = s.mechanic_id
+         AND mqto.quota_date = DATE(dp.paid_at)
+        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        ORDER BY dp.paid_at ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
+    services_by_sale = _load_services_by_sale(conn, paid_sale_ids)
+    bundles_by_sale = _load_bundles_by_sale(conn, paid_sale_ids)
+    debt_payout_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
+
+    _, totals, _ = _calculate_range_mechanic_rollups(
+        sales_rows,
+        debt_payout_rows,
+        services_by_sale,
+        bundles_by_sale,
+    )
+    return round(_num(totals["total_shop_topup"]), 2)
 
 
 def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_items_category=None):
@@ -233,6 +298,40 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         (start_date, end_date),
     ).fetchone()
 
+    item_quantity_row = conn.execute(
+        """
+        SELECT
+            COALESCE(SUM(quantity_sold), 0) AS total_items_sold
+        FROM (
+            SELECT
+                COALESCE(SUM(si.quantity), 0) AS quantity_sold
+            FROM sales_items si
+            JOIN sales s ON s.id = si.sale_id
+            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+              AND s.status = 'Paid'
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+
+            UNION ALL
+
+            SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(sbi.is_included, 0) = 1
+                        THEN COALESCE(sbi.quantity, 0)
+                        ELSE 0
+                    END
+                ), 0) AS quantity_sold
+            FROM sales_bundle_items sbi
+            JOIN sales_bundles sb ON sb.id = sbi.sales_bundle_id
+            JOIN sales s ON s.id = sb.sale_id
+            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+              AND s.status = 'Paid'
+              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        ) scoped_item_totals
+        """,
+        (start_date, end_date, start_date, end_date),
+    ).fetchone()
+
     debt_service_shop_row = conn.execute(
         """
         WITH sale_service_totals AS (
@@ -323,6 +422,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     ).fetchone()
 
     total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
+    total_shop_topup = _get_total_shop_topup(conn, start_date, end_date)
 
     status_rows = conn.execute(
         """
@@ -607,6 +707,11 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     net_sales = round(gross_sales + total_debt_collected - total_refunds, 2)
     paid_transactions = int(summary_row["paid_transactions"] or 0)
     average_sale_value = round(gross_sales / paid_transactions, 2) if paid_transactions else 0.0
+    total_items_sold = int(round(_num(item_quantity_row["total_items_sold"])))
+    average_item_cost_sold = round(
+        _num(product_service_row["product_cost"]) / total_items_sold,
+        2,
+    ) if total_items_sold else 0.0
 
     trend_map = {
         str(row["day"]): {
@@ -661,7 +766,10 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         _num(product_service_row["shop_share_profit"]) + _num(debt_service_shop_row["debt_shop_share"]),
         2,
     )
-    profit_with_shop_share = round(_num(product_service_row["product_profit"]) + shop_share_profit, 2)
+    profit_with_shop_share = round(
+        _num(product_service_row["product_profit"]) + shop_share_profit - total_shop_topup,
+        2,
+    )
 
     return {
         "summary": {
@@ -670,8 +778,10 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "total_refunds": total_refunds,
             "total_debt_collected": total_debt_collected,
             "average_sale_value": average_sale_value,
+            "average_item_cost_sold": average_item_cost_sold,
             "total_transactions": int(summary_row["total_transactions"] or 0),
             "paid_transactions": paid_transactions,
+            "total_items_sold": total_items_sold,
             "partial_transactions": int(summary_row["partial_transactions"] or 0),
             "unresolved_transactions": int(summary_row["unresolved_transactions"] or 0),
             "partial_sales_amount": round(_num(summary_row["partial_sales_amount"]), 2),
@@ -680,6 +790,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "product_cost": round(_num(product_service_row["product_cost"]), 2),
             "product_profit": round(_num(product_service_row["product_profit"]), 2),
             "shop_share_profit": shop_share_profit,
+            "total_shop_topup": total_shop_topup,
             "profit_with_shop_share": profit_with_shop_share,
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
             "total_non_cash_floating": total_non_cash_floating,

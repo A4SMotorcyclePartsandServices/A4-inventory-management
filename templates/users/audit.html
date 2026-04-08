@@ -148,6 +148,61 @@
         color: #6c757d !important;
     }
 
+    #cash-categories-tab .table td,
+    #cash-categories-tab .table th {
+        vertical-align: middle;
+    }
+
+    #cash-categories-tab .table tbody td {
+        padding-top: 0.7rem;
+        padding-bottom: 0.7rem;
+    }
+
+    .cash-rule-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 78px;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .cash-rule-badge-optional {
+        background: #6c757d;
+        color: #fff;
+    }
+
+    .cash-meta-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 74px;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .cash-meta-badge-system,
+    .cash-meta-badge-locked {
+        background: #6c757d;
+        color: #fff;
+    }
+
+    .cash-meta-badge-admin {
+        background: transparent;
+        color: #4cc9f0;
+        border: 1px solid #6c757d;
+    }
+
+    .cash-category-status-form {
+        margin: 0;
+    }
+
     #newCategoryInput:disabled {
     background-color: #121212 !important; /* Very dark/black background */
     color: #555 !important;              /* Dimmed text color */
@@ -1636,23 +1691,23 @@
                         <td class="fw-bold">{{ category.label }}</td>
                         <td>
                             {% if category.requires_description %}
-                            <span class="badge bg-warning text-dark">Required</span>
+                            <span class="badge bg-warning text-dark cash-rule-badge">Required</span>
                             {% else %}
-                            <span class="text-muted">Optional</span>
+                            <span class="cash-rule-badge cash-rule-badge-optional">Optional</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if category.is_system %}
-                            <span class="badge bg-secondary">System</span>
+                            <span class="cash-meta-badge cash-meta-badge-system">System</span>
                             {% else %}
-                            <span class="badge bg-dark border border-secondary text-info">Admin</span>
+                            <span class="cash-meta-badge cash-meta-badge-admin">Admin</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
                             {% if category.is_system %}
-                            <span class="badge bg-secondary">Locked</span>
+                            <span class="cash-meta-badge cash-meta-badge-locked">Locked</span>
                             {% else %}
-                            <form action="{{ url_for('admin_audit.toggle_cash_category', category_id=category.id) }}" method="POST">
+                            <form action="{{ url_for('admin_audit.toggle_cash_category', category_id=category.id) }}" method="POST" class="cash-category-status-form">
                                 {% if category.is_active %}
                                     <button type="submit" class="toggle-btn text-success">
                                         <i class="bi bi-toggle-on fs-3"></i>

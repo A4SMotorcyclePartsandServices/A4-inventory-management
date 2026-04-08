@@ -58,7 +58,7 @@
 - [ ] possible refactor on adding new vendor. staff my be blocked from adding vendors.
 - [ ] out page search on services. do not search by category anymore
 - [ ] ok special case in one of the services. when service hangin is selcted and is recorded in the sale, the value of that fully goes to shop share. none of it goes to mechanic share
-- [ ] report page in profit card. extend the formula. subtract quota top up if applicable
+- [X] ~~*report page in profit card. extend the formula. subtract quota top up if applicable*~~ [2026-04-08]
 - [X] ~~*cash ledger page double entry problem. check other submits for this problem*~~ [2026-04-08]
 - [ ] out page loyalty redemption is still a follow-up step after sale save. move it into the main backend transaction so sale save + loyalty redeem succeed or fail together
 

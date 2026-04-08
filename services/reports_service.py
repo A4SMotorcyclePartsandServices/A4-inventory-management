@@ -1344,7 +1344,10 @@ def get_sales_report_by_date(report_date):
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
     mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
-    total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
+    total_profit_with_shop_share = round(
+        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"],
+        2,
+    )
 
     return {
         "sales": paid_sales,
@@ -1649,7 +1652,10 @@ def get_sales_report_by_range(start_date, end_date):
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
     mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
-    total_profit_with_shop_share = round(total_product_profit + totals["total_shop_commission"], 2)
+    total_profit_with_shop_share = round(
+        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"],
+        2,
+    )
 
     return {
         "sales": paid_sales,

@@ -85,6 +85,46 @@
         padding: 1.15rem 1.2rem 1rem;
         height: 100%;
         box-shadow: none;
+        transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+    }
+
+    .kpi-card:hover {
+        transform: translateY(-3px);
+        background-color: #22252b;
+        border-color: rgba(255,255,255,0.12);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+    }
+
+    .kpi-card--revenue-soft {
+        border-left-color: #5dade2;
+    }
+
+    .kpi-card--revenue-primary {
+        border-left-color: #1ea7ff;
+    }
+
+    .kpi-card--revenue-light {
+        border-left-color: #7dd3fc;
+    }
+
+    .kpi-card--negative {
+        border-left-color: #e63946;
+    }
+
+    .kpi-card--average {
+        border-left-color: #ffca3a;
+    }
+
+    .kpi-card--average-secondary {
+        border-left-color: #f4b942;
+    }
+
+    .kpi-card--count {
+        border-left-color: #6c757d;
+    }
+
+    .kpi-card--count-soft {
+        border-left-color: #8b949e;
     }
 
     .kpi-label {
@@ -684,55 +724,89 @@
     </form>
 </div>
 
+<div class="section-title">
+    <h3>Sales Health</h3>
+    <div class="insight-pill">
+        <i class="bi bi-speedometer2"></i>
+        Fast read on realized sales and transaction quality
+    </div>
+</div>
+
 <div class="row g-3 mb-3">
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #e63946;">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--revenue-soft">
             <div class="kpi-label">Gross Sales</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.gross_sales) }}</div>
             <div class="kpi-note">{{ analytics.summary.paid_transactions }} paid sale{{ '' if analytics.summary.paid_transactions == 1 else 's' }} contributed to realized sales.</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #4cc9f0;">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--revenue-primary">
             <div class="kpi-label">Net Sales</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.net_sales) }}</div>
             <div class="kpi-note">Paid sales + debt collected - refunds</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #ffca3a;">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--negative">
             <div class="kpi-label">Refunds</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.total_refunds) }}</div>
             <div class="kpi-note">Recorded refund amount in range</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #4cc9f0;">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--revenue-light">
             <div class="kpi-label">Debt Collected</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.total_debt_collected) }}</div>
             <div class="kpi-note">Payments collected from prior utang</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #e63946;">
+ </div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--count">
             <div class="kpi-label">Transactions</div>
             <div class="kpi-value">{{ analytics.summary.total_transactions }}</div>
             <div class="kpi-note">All sales created in range</div>
         </div>
     </div>
-    <div class="col-md-6 col-xl-2">
-        <div class="kpi-card" style="border-left-color: #ffca3a;">
-            <div class="kpi-label">Average Sale</div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--average">
+            <div class="kpi-label">Average Paid Sale</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.average_sale_value) }}</div>
             <div class="kpi-note">Based on paid sales only</div>
         </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--average-secondary">
+            <div class="kpi-label">Average Cost of Items Sold</div>
+            <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.average_item_cost_sold or 0) }}</div>
+            <div class="kpi-note">Product cost divided by {{ analytics.summary.total_items_sold or 0 }} sold item unit{{ '' if (analytics.summary.total_items_sold or 0) == 1 else 's' }}</div>
+        </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <div class="kpi-card kpi-card--count-soft">
+            <div class="kpi-label">Paid Sales</div>
+            <div class="kpi-value">{{ analytics.summary.paid_transactions }}</div>
+            <div class="kpi-note">Completed transactions counted in realized sales.</div>
+        </div>
+    </div>
+</div>
+
+<div class="section-title">
+    <h3>Profit Analysis</h3>
+    <div class="insight-pill">
+        <i class="bi bi-cash-stack"></i>
+        Product margin, shop share, and quota top-up impact
     </div>
 </div>
 
 <div class="row g-3 mb-3">
     {% set product_profit = analytics.summary.product_profit or 0 %}
     {% set shop_share_profit = analytics.summary.shop_share_profit or 0 %}
-    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit) %}
+    {% set shop_topup_expense = analytics.summary.total_shop_topup or 0 %}
+    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
@@ -740,10 +814,10 @@
         <div class="profit-spotlight">
             <div class="profit-spotlight-head">
                 <div>
-                    <div class="profit-spotlight-title">Profit Result</div>
+                    <div class="profit-spotlight-title">Profit Analysis</div>
                     <div class="profit-main-meta">
                         <span class="dot"></span>
-                        Product profit plus shop share
+                        Product profit plus shop share, less quota top-up
                     </div>
                     <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ product_result_label }}</div>
                     <div class="profit-spotlight-value">PHP {{ "{:,.2f}".format(product_result_display) }}</div>
@@ -751,6 +825,7 @@
                         Revenue (PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }})
                         - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
                         + Shop Share (PHP {{ "{:,.2f}".format(shop_share_profit) }})
+                        - Quota Top-up (PHP {{ "{:,.2f}".format(shop_topup_expense) }})
                         = {{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
                     </div>
                 </div>
@@ -771,6 +846,10 @@
                         <span class="profit-breakdown-label">Shop Share</span>
                         <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</span>
                     </div>
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Quota Top-up</span>
+                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</span>
+                    </div>
                 </div>
             </div>
             <div class="profit-spotlight-body">
@@ -788,6 +867,11 @@
                     <div class="profit-metric-label">Shop Share</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</div>
                     <div class="profit-metric-sub">Includes shop earnings from services, bundles, and collected service debt portions.</div>
+                </div>
+                <div class="profit-metric cost">
+                    <div class="profit-metric-label">Quota Top-up</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</div>
+                    <div class="profit-metric-sub">Mechanic quota shortfall covered by the shop for the selected report period.</div>
                 </div>
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Floating Non-Cash</div>
