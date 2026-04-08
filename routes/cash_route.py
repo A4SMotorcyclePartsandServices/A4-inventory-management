@@ -8,6 +8,7 @@ from services.cash_service import (
     get_cash_entries,
     get_cash_entry_count,
     get_cash_entries_for_report,
+    get_cash_category_choices,
     get_pending_non_cash_collections,
     get_pending_non_cash_collection_count,
     get_already_paid_mechanic_identifiers_for_dates,
@@ -15,8 +16,6 @@ from services.cash_service import (
     delete_cash_entry,
     restore_cash_entry,
     purge_deleted_cash_entries,
-    CASH_IN_CATEGORIES,
-    CASH_OUT_CATEGORIES,
 )
 from services.idempotency_service import (
     COMPLETED_STATUS,
@@ -132,6 +131,7 @@ def _build_cash_report_context(branch_id):
         "report_title": report_title,
         "report_badge": report_badge,
         "date_label": date_label,
+        "ending_balance_label": format_date(end_date),
         "generated_at": now_local().strftime("%b %d, %Y %I:%M %p"),
         "start_date": start_date,
         "end_date": end_date,
@@ -143,6 +143,7 @@ def _build_cash_report_context(branch_id):
         "total_in": report_data["total_in"],
         "total_out": report_data["total_out"],
         "net_movement": report_data["cash_on_hand"],
+        "ending_cash_on_hand": report_data["ending_cash_on_hand"],
     }
 
 
@@ -241,6 +242,7 @@ def cash_ledger():
     offset = (page - 1) * LEDGER_PAGE_SIZE
 
     summary = get_cash_summary(branch_id=branch_id)
+    category_choices = get_cash_category_choices()
     entries = get_cash_entries(
         branch_id=branch_id,
         limit=LEDGER_PAGE_SIZE,
@@ -286,8 +288,7 @@ def cash_ledger():
         selected_type=entry_type,
         selected_start_date=start_date,
         selected_end_date=end_date,
-        cash_in_categories=CASH_IN_CATEGORIES,
-        cash_out_categories=CASH_OUT_CATEGORIES,
+        cash_category_choices=category_choices,
         pending_payout_count=pending_payout_count,
         pending_non_cash_count=pending_non_cash_count,
         today_display=format_date(today),
@@ -454,7 +455,7 @@ def cash_add_api():
         entry_id = add_cash_entry(
             entry_type=data.get("entry_type"),
             amount=data.get("amount"),
-            category=data.get("category"),
+            category_id=data.get("category_id"),
             description=data.get("description", ""),
             reference_id=reference_id,
             payout_for_date=payout_for_date,

@@ -1048,8 +1048,8 @@
                 <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
             </div>
             <div class="cash-on-hand-bar">
-                <span>CASH ON HAND — {{ report_date }}</span>
-                <span>₱ {{ "%.2f"|format(cash_data.cash_on_hand) }}</span>
+                <span>CASH ON HAND AS OF {{ cash_balance_label }}</span>
+                <span>₱ {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>
             </div>
         </div>
 

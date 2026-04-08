@@ -1,12 +1,16 @@
 from db.database import get_db
+from psycopg2 import errors as pg_errors
 from utils.formatters import format_date
 from datetime import timedelta
 import re
+from utils.cash_categories import normalize_cash_category_label
 from utils.timezone import today_local
 
-# --- CATEGORIES ---
-CASH_IN_CATEGORIES  = ['For Payables', 'From Bank Account', 'From Gcash/E-Wallet Account', 'Others', 'Petty Cash']
-CASH_OUT_CATEGORIES = ['To Gcash/E-Wallet Account', 'Mechanic Payout', 'Other Expenses', 'PagIbig Payment', 'Parts Purchase', 'Philhealth Payment', 'SSS Payment', 'Staff Expense/Allowance', 'Staff Salary', 'Stationery/Office Supplies', 'Transportation', 'Utilities']
+SYSTEM_KEY_CASH_IN_BANK_TRANSFER = "cash_in_bank_transfer"
+SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = "cash_in_ewallet_transfer"
+SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = "cash_out_mechanic_payout"
+SYSTEM_KEY_CASH_OUT_UTILITIES = "cash_out_utilities"
+DEFAULT_FLOATING_CASH_IN_SYSTEM_KEY = SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
 
 # --- PHYSICAL CASH FILTER ---
 # Only payment methods in this category count as physical cash in the drawer.
@@ -41,8 +45,215 @@ def _refund_parenthetical_label(refund_number, exchange_refund=False):
     return label
 
 
-def _suggest_cash_in_category(payment_category):
-    return 'From Bank Account' if payment_category == 'Bank' else 'From Gcash/E-Wallet Account'
+def get_cash_category_choices(include_inactive=False):
+    conn = get_db()
+    try:
+        params = []
+        query = """
+            SELECT
+                id,
+                entry_type,
+                label,
+                system_key,
+                requires_description,
+                sort_order,
+                is_active,
+                is_system
+            FROM cash_entry_categories
+        """
+        if not include_inactive:
+            query += " WHERE is_active = TRUE"
+        query += " ORDER BY entry_type ASC, sort_order ASC, label ASC"
+        rows = conn.execute(query, params).fetchall()
+    finally:
+        conn.close()
+
+    grouped = {"CASH_IN": [], "CASH_OUT": []}
+    for row in rows:
+        grouped[row["entry_type"]].append({
+            "id": int(row["id"]),
+            "entry_type": row["entry_type"],
+            "label": row["label"],
+            "system_key": row["system_key"],
+            "requires_description": bool(row["requires_description"]),
+            "sort_order": int(row["sort_order"] or 0),
+            "is_active": bool(row["is_active"]),
+            "is_system": bool(row["is_system"]),
+        })
+    return grouped
+
+
+def get_cash_category_admin_records():
+    grouped = get_cash_category_choices(include_inactive=True)
+    return grouped["CASH_IN"] + grouped["CASH_OUT"]
+
+
+def _get_active_cash_category_by_id(conn, category_id, entry_type):
+    try:
+        normalized_id = int(category_id)
+    except (TypeError, ValueError):
+        return None
+
+    return conn.execute(
+        """
+        SELECT
+            id,
+            entry_type,
+            label,
+            system_key,
+            requires_description,
+            is_active,
+            is_system
+        FROM cash_entry_categories
+        WHERE id = %s
+          AND entry_type = %s
+          AND is_active = TRUE
+        """,
+        (normalized_id, entry_type),
+    ).fetchone()
+
+
+def _get_cash_category_by_system_key(conn, system_key):
+    if not system_key:
+        return None
+    return conn.execute(
+        """
+        SELECT
+            id,
+            entry_type,
+            label,
+            system_key,
+            requires_description,
+            is_active,
+            is_system
+        FROM cash_entry_categories
+        WHERE system_key = %s
+        """,
+        (system_key,),
+    ).fetchone()
+
+
+def _get_cash_category_label_by_system_key(conn, system_key, fallback_label):
+    row = _get_cash_category_by_system_key(conn, system_key)
+    if not row:
+        return fallback_label
+    return row["label"] or fallback_label
+
+
+def _get_cash_category_id_by_system_key(conn, system_key):
+    row = _get_cash_category_by_system_key(conn, system_key)
+    if not row:
+        return None
+    return int(row["id"])
+
+
+def _suggest_cash_in_category_system_key(payment_category):
+    return SYSTEM_KEY_CASH_IN_BANK_TRANSFER if payment_category == "Bank" else SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
+
+
+def add_cash_category_record(entry_type, label, requires_description=False, created_by=None):
+    normalized_entry_type = str(entry_type or "").strip().upper()
+    normalized_label = " ".join(str(label or "").strip().split())
+
+    if normalized_entry_type not in {"CASH_IN", "CASH_OUT"}:
+        return {"status": "invalid_entry_type"}
+    if not normalized_label:
+        return {"status": "missing_label"}
+
+    conn = get_db()
+    try:
+        existing = conn.execute(
+            """
+            SELECT id
+            FROM cash_entry_categories
+            WHERE entry_type = %s
+              AND LOWER(TRIM(label)) = %s
+            """,
+            (normalized_entry_type, normalize_cash_category_label(normalized_label)),
+        ).fetchone()
+        if existing:
+            return {"status": "duplicate", "label": normalized_label}
+
+        sort_row = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) AS max_sort_order FROM cash_entry_categories WHERE entry_type = %s",
+            (normalized_entry_type,),
+        ).fetchone()
+        next_sort = int(sort_row["max_sort_order"] or 0) + 10
+
+        try:
+            row = conn.execute(
+                """
+                INSERT INTO cash_entry_categories (
+                    entry_type,
+                    label,
+                    requires_description,
+                    sort_order,
+                    is_active,
+                    is_system,
+                    created_by,
+                    updated_by
+                )
+                VALUES (%s, %s, %s, %s, TRUE, FALSE, %s, %s)
+                RETURNING id
+                """,
+                (
+                    normalized_entry_type,
+                    normalized_label,
+                    bool(requires_description),
+                    next_sort,
+                    created_by,
+                    created_by,
+                ),
+            ).fetchone()
+        except pg_errors.UniqueViolation:
+            conn.rollback()
+            return {"status": "duplicate", "label": normalized_label}
+        conn.commit()
+        return {
+            "status": "ok",
+            "id": int(row["id"]),
+            "label": normalized_label,
+            "entry_type": normalized_entry_type,
+        }
+    finally:
+        conn.close()
+
+
+def toggle_cash_category_active_status(category_id, updated_by=None):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT id, label, is_active, is_system
+            FROM cash_entry_categories
+            WHERE id = %s
+            """,
+            (category_id,),
+        ).fetchone()
+        if not row:
+            return {"status": "missing"}
+        if row["is_system"]:
+            return {"status": "system_locked", "label": row["label"]}
+
+        new_status = not bool(row["is_active"])
+        conn.execute(
+            """
+            UPDATE cash_entry_categories
+            SET is_active = %s,
+                updated_at = NOW(),
+                updated_by = %s
+            WHERE id = %s
+            """,
+            (new_status, updated_by, category_id),
+        )
+        conn.commit()
+        return {
+            "status": "ok",
+            "label": row["label"],
+            "new_status": new_status,
+        }
+    finally:
+        conn.close()
 
 
 def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
@@ -461,6 +672,44 @@ def get_cash_summary(branch_id=1):
     }
 
 
+def get_cash_balance_as_of(date_to, branch_id=1):
+    """
+    True cumulative cash on hand as of the given date.
+    This ignores any report-range start date and totals all active cash movement
+    through the selected end date so balancing matches the real drawer state.
+    """
+    conn = get_db()
+    try:
+        sales_rows = _get_sales_cash(conn, branch_id, date_to=date_to)
+        debt_rows = _get_debt_cash_payments(conn, branch_id, date_to=date_to)
+        refund_rows = _get_sale_refunds_cash(conn, branch_id, date_to=date_to)
+        manual_rows = _get_manual_entries(
+            conn,
+            branch_id,
+            date_to=date_to,
+            deleted_state='active',
+        )
+    finally:
+        conn.close()
+
+    total_in = 0.0
+    total_out = 0.0
+
+    for row in sales_rows:
+        total_in += _money(row['amount'])
+    for row in debt_rows:
+        total_in += _money(row['amount'])
+    for row in refund_rows:
+        total_out += _money(row['amount'])
+    for row in manual_rows:
+        if row['entry_type'] == 'CASH_IN':
+            total_in += _money(row['amount'])
+        else:
+            total_out += _money(row['amount'])
+
+    return round(total_in - total_out, 2)
+
+
 def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date=None, ledger_view='active'):
     """
     Total number of unified ledger rows matching the given filters.
@@ -645,81 +894,84 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
             conn,
             [row['debt_payment_id'] for row in debt_payment_rows],
         )
+        groups = []
+        total_amount = 0.0
+        total_sales = 0
+
+        for row in sale_rows:
+            sale_id = int(row['sale_id'])
+            if sale_id in claimed_sale_ids:
+                continue
+
+            sales_number = (row['sales_number'] or '').strip()
+            customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
+            transaction_date = str(row['transaction_date'])[:10]
+            payment_method_name = row['payment_method_name'] or 'Non-cash'
+            payment_category = row['payment_method_category'] or 'Online'
+            amount = _money(row['amount'])
+
+            suggested_key = _suggest_cash_in_category_system_key(payment_category)
+            groups.append({
+                'transaction_date': transaction_date,
+                'date_display': format_date(transaction_date),
+                'payment_method_name': payment_method_name,
+                'payment_method_category': payment_category,
+                'cash_in_category_key': suggested_key,
+                'cash_in_category': _get_cash_category_label_by_system_key(conn, suggested_key, 'From Gcash/E-Wallet Account'),
+                'sale_ids': [sale_id],
+                'debt_payment_ids': [],
+                'sales_count': 1,
+                'total_amount': amount,
+                'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
+                'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
+            })
+
+            total_amount = round(total_amount + amount, 2)
+            total_sales += 1
+
+        for row in debt_payment_rows:
+            debt_payment_id = int(row['debt_payment_id'])
+            if debt_payment_id in claimed_debt_payment_ids:
+                continue
+
+            sales_number = (row['sales_number'] or '').strip()
+            customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
+            transaction_date = str(row['transaction_date'])[:10]
+            payment_method_name = row['payment_method_name'] or 'Non-cash'
+            payment_category = row['payment_method_category'] or 'Online'
+            amount = _money(row['amount'])
+
+            suggested_key = _suggest_cash_in_category_system_key(payment_category)
+            groups.append({
+                'transaction_date': transaction_date,
+                'date_display': format_date(transaction_date),
+                'payment_method_name': payment_method_name,
+                'payment_method_category': payment_category,
+                'cash_in_category_key': suggested_key,
+                'cash_in_category': _get_cash_category_label_by_system_key(conn, suggested_key, 'From Gcash/E-Wallet Account'),
+                'sale_ids': [],
+                'debt_payment_ids': [debt_payment_id],
+                'sales_count': 1,
+                'total_amount': amount,
+                'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
+                'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
+            })
+
+            total_amount = round(total_amount + amount, 2)
+            total_sales += 1
+
+        groups.sort(key=lambda row: (row['transaction_date'], row['payment_method_name'].lower(), row['display_source_label'].lower()))
+
+        if limit_groups is not None:
+            groups = groups[:max(0, int(limit_groups))]
+
+        return {
+            'groups': groups,
+            'total_amount': round(total_amount, 2),
+            'total_sales': total_sales,
+        }
     finally:
         conn.close()
-
-    groups = []
-    total_amount = 0.0
-    total_sales = 0
-
-    for row in sale_rows:
-        sale_id = int(row['sale_id'])
-        if sale_id in claimed_sale_ids:
-            continue
-
-        sales_number = (row['sales_number'] or '').strip()
-        customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
-        transaction_date = str(row['transaction_date'])[:10]
-        payment_method_name = row['payment_method_name'] or 'Non-cash'
-        payment_category = row['payment_method_category'] or 'Online'
-        amount = _money(row['amount'])
-
-        groups.append({
-            'transaction_date': transaction_date,
-            'date_display': format_date(transaction_date),
-            'payment_method_name': payment_method_name,
-            'payment_method_category': payment_category,
-            'cash_in_category': _suggest_cash_in_category(payment_category),
-            'sale_ids': [sale_id],
-            'debt_payment_ids': [],
-            'sales_count': 1,
-            'total_amount': amount,
-            'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
-            'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
-        })
-
-        total_amount = round(total_amount + amount, 2)
-        total_sales += 1
-
-    for row in debt_payment_rows:
-        debt_payment_id = int(row['debt_payment_id'])
-        if debt_payment_id in claimed_debt_payment_ids:
-            continue
-
-        sales_number = (row['sales_number'] or '').strip()
-        customer_name = (row['customer_name'] or '').strip() or 'Walk-in'
-        transaction_date = str(row['transaction_date'])[:10]
-        payment_method_name = row['payment_method_name'] or 'Non-cash'
-        payment_category = row['payment_method_category'] or 'Online'
-        amount = _money(row['amount'])
-
-        groups.append({
-            'transaction_date': transaction_date,
-            'date_display': format_date(transaction_date),
-            'payment_method_name': payment_method_name,
-            'payment_method_category': payment_category,
-            'cash_in_category': _suggest_cash_in_category(payment_category),
-            'sale_ids': [],
-            'debt_payment_ids': [debt_payment_id],
-            'sales_count': 1,
-            'total_amount': amount,
-            'auto_description': f"{sales_number} — {customer_name}" if sales_number else customer_name,
-            'display_source_label': f"From {sales_number}" if sales_number else f"From {payment_method_name}",
-        })
-
-        total_amount = round(total_amount + amount, 2)
-        total_sales += 1
-
-    groups.sort(key=lambda row: (row['transaction_date'], row['payment_method_name'].lower(), row['display_source_label'].lower()))
-
-    if limit_groups is not None:
-        groups = groups[:max(0, int(limit_groups))]
-
-    return {
-        'groups': groups,
-        'total_amount': round(total_amount, 2),
-        'total_sales': total_sales,
-    }
 
 
 def get_pending_non_cash_collection_count(branch_id=1):
@@ -749,7 +1001,7 @@ def get_pending_non_cash_collection_count(branch_id=1):
 def add_cash_entry(
     entry_type,
     amount,
-    category,
+    category_id,
     description,
     reference_id,
     payout_for_date,
@@ -775,19 +1027,6 @@ def add_cash_entry(
 
     normalized_description = (description or "").strip()
 
-    valid_categories = CASH_IN_CATEGORIES if entry_type == 'CASH_IN' else CASH_OUT_CATEGORIES
-    if category not in valid_categories:
-        raise ValueError(f"Invalid category for {entry_type}.")
-
-    if entry_type == 'CASH_IN' and category == 'Others' and not normalized_description:
-        raise ValueError("Description is required when category is Others.")
-
-    if entry_type == 'CASH_OUT' and category == 'Other Expenses' and not normalized_description:
-        raise ValueError("Description is required when category is Other Expenses.")
-
-    if entry_type == 'CASH_OUT' and category == 'Utilities' and not normalized_description:
-        raise ValueError("Please indicate which utility this is for.")
-
     normalized_reference_id = None
     if reference_id not in (None, ""):
         try:
@@ -811,25 +1050,38 @@ def add_cash_entry(
             raise ValueError("Invalid debt floating collection reference.")
     normalized_claim_debt_payment_ids = sorted(set(normalized_claim_debt_payment_ids))
 
-    reference_type = 'MANUAL'
-    if category == 'Mechanic Payout' and normalized_reference_id is not None:
-        reference_type = 'MECHANIC_PAYOUT'
-        if payout_for_date in ("", None):
-            payout_for_date = today_local().isoformat()
-    else:
-        payout_for_date = None
-
-    if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
-        if entry_type != 'CASH_IN':
-            raise ValueError("Floating collections must be recorded as cash in.")
-        if category not in {'From Bank Account', 'From Gcash/E-Wallet Account'}:
-            raise ValueError("Floating collections must use a bank or e-wallet cash-in category.")
-        if normalized_reference_id is not None:
-            raise ValueError("Floating collections cannot use a mechanic reference.")
-        reference_type = 'FLOAT_COLLECTION'
-
     conn = get_db()
     try:
+        category_row = _get_active_cash_category_by_id(conn, category_id, entry_type)
+        if not category_row:
+            raise ValueError(f"Invalid category for {entry_type}.")
+
+        selected_category_id = int(category_row["id"])
+        category_label = category_row["label"]
+        category_system_key = category_row["system_key"]
+
+        if bool(category_row["requires_description"]) and not normalized_description:
+            if category_system_key == SYSTEM_KEY_CASH_OUT_UTILITIES:
+                raise ValueError("Please indicate which utility this is for.")
+            raise ValueError(f"Description is required when category is {category_label}.")
+
+        reference_type = 'MANUAL'
+        if category_system_key == SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT and normalized_reference_id is not None:
+            reference_type = 'MECHANIC_PAYOUT'
+            if payout_for_date in ("", None):
+                payout_for_date = today_local().isoformat()
+        else:
+            payout_for_date = None
+
+        if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+            if entry_type != 'CASH_IN':
+                raise ValueError("Floating collections must be recorded as cash in.")
+            if category_system_key not in {SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER}:
+                raise ValueError("Floating collections must use a bank or e-wallet cash-in category.")
+            if normalized_reference_id is not None:
+                raise ValueError("Floating collections cannot use a mechanic reference.")
+            reference_type = 'FLOAT_COLLECTION'
+
         claimable_total = 0.0
 
         if normalized_claim_sale_ids:
@@ -901,15 +1153,16 @@ def add_cash_entry(
 
         insert_row = conn.execute("""
             INSERT INTO cash_entries
-                (branch_id, entry_type, amount, category, description,
+                (branch_id, entry_type, amount, cash_category_id, category, description,
                 reference_type, reference_id, payout_for_date, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             branch_id,
             entry_type,
             amount,
-            category,
+            selected_category_id,
+            category_label,
             normalized_description or None,
             reference_type,
             normalized_reference_id,
@@ -1079,12 +1332,16 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
 
     total_in  = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_IN')
     total_out = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_OUT')
+    ending_cash_on_hand = None
+    if ledger_view == 'active':
+        ending_cash_on_hand = get_cash_balance_as_of(date_to, branch_id=branch_id)
 
     return {
         'entries':      unified,
         'total_in':     round(total_in,  2),
         'total_out':    round(total_out, 2),
         'cash_on_hand': round(total_in - total_out, 2),
+        'ending_cash_on_hand': ending_cash_on_hand,
     }
 
 

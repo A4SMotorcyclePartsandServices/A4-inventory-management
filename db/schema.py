@@ -1,5 +1,104 @@
 ﻿from db.database import get_db, get_cursor
 
+from utils.cash_categories import (
+    CASH_CATEGORY_BACKFILL_ALIASES,
+    SYSTEM_CASH_CATEGORY_DEFINITIONS,
+    normalize_cash_category_label,
+)
+
+
+def _seed_cash_entry_categories(cur):
+    for category in SYSTEM_CASH_CATEGORY_DEFINITIONS:
+        cur.execute(
+            """
+            INSERT INTO cash_entry_categories (
+                entry_type,
+                label,
+                system_key,
+                requires_description,
+                sort_order,
+                is_active,
+                is_system
+            )
+            VALUES (%s, %s, %s, %s, %s, TRUE, TRUE)
+            ON CONFLICT (system_key) DO UPDATE
+            SET
+                entry_type = EXCLUDED.entry_type,
+                label = EXCLUDED.label,
+                requires_description = EXCLUDED.requires_description,
+                sort_order = EXCLUDED.sort_order,
+                is_system = TRUE
+            """,
+            (
+                category["entry_type"],
+                category["label"],
+                category["system_key"],
+                category["requires_description"],
+                category["sort_order"],
+            ),
+        )
+
+
+def _backfill_cash_entry_category_ids(cur):
+    cur.execute(
+        """
+        SELECT id, entry_type, label, system_key
+        FROM cash_entry_categories
+        """
+    )
+    category_rows = cur.fetchall()
+
+    key_to_id = {}
+    label_to_id = {}
+    for row in category_rows:
+        key_to_id[row["system_key"]] = row["id"]
+        label_to_id[(row["entry_type"], normalize_cash_category_label(row["label"]))] = row["id"]
+
+    cur.execute(
+        """
+        SELECT id, entry_type, category
+        FROM cash_entries
+        WHERE cash_category_id IS NULL
+        """
+    )
+    cash_rows = cur.fetchall()
+
+    for row in cash_rows:
+        normalized_label = normalize_cash_category_label(row["category"])
+        category_id = label_to_id.get((row["entry_type"], normalized_label))
+        if category_id is None:
+            system_key = CASH_CATEGORY_BACKFILL_ALIASES.get((row["entry_type"], normalized_label))
+            category_id = key_to_id.get(system_key)
+        if category_id is None:
+            continue
+        cur.execute(
+            "UPDATE cash_entries SET cash_category_id = %s WHERE id = %s",
+            (category_id, row["id"]),
+        )
+
+
+def _sync_cash_entry_category_labels(cur):
+    cur.execute(
+        """
+        UPDATE cash_entries ce
+        SET category = c.label
+        FROM cash_entry_categories c
+        WHERE ce.cash_category_id = c.id
+          AND c.is_system = TRUE
+          AND ce.category IS DISTINCT FROM c.label
+          AND (
+              ce.category IS NULL
+              OR LOWER(TRIM(ce.category)) = LOWER(TRIM(c.label))
+              OR (
+                  c.system_key = %s
+                  AND LOWER(TRIM(ce.category)) = %s
+              )
+          )
+        """,
+        ("cash_out_other_expenses", "other expenses"),
+    )
+
+
 def init_db():
     conn = get_db()
     cur = get_cursor(conn)
@@ -891,11 +990,36 @@ def init_db():
     # reference_type: 'MANUAL' for staff entries, 'MECHANIC_PAYOUT' for auto-generated payouts
     # payout_for_date: the date the payout is for (used for mechanic payout reconciliation)
     cur.execute("""
+    CREATE TABLE IF NOT EXISTS cash_entry_categories (
+        id                      SERIAL PRIMARY KEY,
+        entry_type              TEXT CHECK(entry_type IN ('CASH_IN', 'CASH_OUT')) NOT NULL,
+        label                   TEXT NOT NULL,
+        system_key              TEXT UNIQUE,
+        requires_description    BOOLEAN NOT NULL DEFAULT FALSE,
+        sort_order              INTEGER NOT NULL DEFAULT 100,
+        is_active               BOOLEAN NOT NULL DEFAULT TRUE,
+        is_system               BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW(),
+        created_by              INTEGER REFERENCES users(id),
+        updated_at              TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_by              INTEGER REFERENCES users(id)
+    )
+    """)
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_entry_categories_type_label_unique
+    ON cash_entry_categories (entry_type, (LOWER(TRIM(label))))
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_cash_entry_categories_entry_type_active_sort
+    ON cash_entry_categories (entry_type, is_active, sort_order, label)
+    """)
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS cash_entries (
         id              SERIAL PRIMARY KEY,
         branch_id       INTEGER NOT NULL DEFAULT 1,
         entry_type      TEXT CHECK(entry_type IN ('CASH_IN', 'CASH_OUT')) NOT NULL,
         amount          NUMERIC(12,2) NOT NULL,
+        cash_category_id INTEGER REFERENCES cash_entry_categories(id),
         category        TEXT NOT NULL,
         description     TEXT,
         payout_for_date DATE,
@@ -908,11 +1032,13 @@ def init_db():
         deleted_by      INTEGER REFERENCES users(id)
     )
     """)
+    cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS cash_category_id INTEGER REFERENCES cash_entry_categories(id)")
     cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE")
     cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP")
     cur.execute("ALTER TABLE cash_entries ADD COLUMN IF NOT EXISTS deleted_by INTEGER REFERENCES users(id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_created ON cash_entries(branch_id, created_at DESC)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_branch_deleted ON cash_entries(branch_id, is_deleted, deleted_at DESC)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_entries_cash_category_id ON cash_entries(cash_category_id)")
     cur.execute("""
     CREATE TABLE IF NOT EXISTS cash_float_claims (
         id              SERIAL PRIMARY KEY,
@@ -1650,6 +1776,10 @@ def init_db():
         # If they already exist, keep categories in sync without burning IDs
         for name, cat in payment_data:
             cur.execute("UPDATE payment_methods SET category = %s WHERE name = %s", (cat, name))
+
+    _seed_cash_entry_categories(cur)
+    _backfill_cash_entry_category_ids(cur)
+    _sync_cash_entry_category_labels(cur)
 
     conn.commit()
     cur.close()

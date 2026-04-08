@@ -219,6 +219,7 @@ def _build_sales_report_context():
         date_label = format_date(report_date_iso)
         is_range = False
         cash_data = get_cash_entries_for_report(report_date_iso, report_date_iso)
+        cash_balance_label = format_date(report_date_iso)
     elif start_date and end_date:
         if end_date < start_date:
             flash("End date cannot be before start date.", "warning")
@@ -229,6 +230,7 @@ def _build_sales_report_context():
         date_label = f"{format_date(start_date_iso)} to {format_date(end_date_iso)}"
         is_range = True
         cash_data = get_cash_entries_for_report(start_date_iso, end_date_iso)
+        cash_balance_label = format_date(end_date_iso)
     else:
         flash("Please select a date.", "warning")
         return None
@@ -264,6 +266,7 @@ def _build_sales_report_context():
 
     return {
         "report_date": date_label,
+        "cash_balance_label": cash_balance_label,
         "data": data,
         "is_range": is_range,
         "cash_data": cash_data,

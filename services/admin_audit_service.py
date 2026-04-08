@@ -2,6 +2,7 @@ import json
 
 from db.database import get_db
 from services.audit_service import get_audit_trail
+from services.cash_service import get_cash_category_admin_records
 from services.password_reset_service import list_password_reset_requests
 from services.payables_service import get_payables_audit_log
 from services.sales_admin_service import get_sales_paginated
@@ -37,6 +38,7 @@ def get_audit_dashboard_context(active_tab="users-tab"):
         "users": formatted_users,
         "password_reset_requests": list_password_reset_requests(),
         "stocktake_access_requests": list_stocktake_access_requests(),
+        "cash_category_records": get_cash_category_admin_records(),
         "active_tab": active_tab,
     }
 

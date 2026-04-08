@@ -10,6 +10,7 @@ from services.admin_audit_service import (
     get_payables_audit_page,
     toggle_user_active_status,
 )
+from services.cash_service import add_cash_category_record, toggle_cash_category_active_status
 from services.password_reset_service import (
     complete_password_reset_request,
     reject_password_reset_request,
@@ -37,6 +38,7 @@ AUDIT_TABS = {
     "users-tab",
     "password-resets-tab",
     "stocktake-access-tab",
+    "cash-categories-tab",
     "sales-tab",
     "debt-audit-tab",
     "audit-tab",
@@ -209,6 +211,46 @@ def revoke_stocktake_access_route(approval_request_id):
         flash(f"Error revoking stocktake access: {str(exc)}", "danger")
 
     return redirect(url_for("admin_audit.audit_dashboard", tab="stocktake-access-tab"))
+
+
+@admin_audit_bp.route("/cash-categories/add", methods=["POST"])
+@admin_required
+def add_cash_category():
+    result = add_cash_category_record(
+        entry_type=request.form.get("entry_type"),
+        label=request.form.get("label"),
+        requires_description=_to_bool(request.form.get("requires_description")),
+        created_by=session.get("user_id"),
+    )
+    if result["status"] == "invalid_entry_type":
+        flash("Invalid cash category type.", "danger")
+    elif result["status"] == "missing_label":
+        flash("Cash category label is required.", "danger")
+    elif result["status"] == "duplicate":
+        flash(f"Cash category '{result['label']}' already exists.", "warning")
+    elif result["status"] == "ok":
+        flash(f"Cash category '{result['label']}' added successfully.", "success")
+    else:
+        flash("Error adding cash category.", "danger")
+    return redirect(url_for("admin_audit.audit_dashboard", tab="cash-categories-tab"))
+
+
+@admin_audit_bp.route("/cash-categories/toggle/<int:category_id>", methods=["POST"])
+@admin_required
+def toggle_cash_category(category_id):
+    result = toggle_cash_category_active_status(
+        category_id=category_id,
+        updated_by=session.get("user_id"),
+    )
+    if result["status"] == "missing":
+        flash("Cash category not found.", "danger")
+    elif result["status"] == "system_locked":
+        flash(f"Cash category '{result['label']}' is system-managed and cannot be disabled.", "warning")
+    elif result["new_status"]:
+        flash(f"Cash category '{result['label']}' activated.", "success")
+    else:
+        flash(f"Cash category '{result['label']}' disabled.", "warning")
+    return redirect(url_for("admin_audit.audit_dashboard", tab="cash-categories-tab"))
 
 
 @admin_audit_bp.route("/api/audit/trail")

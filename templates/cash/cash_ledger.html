@@ -1000,10 +1000,33 @@ let floatingCollectionAmountLocked = false;
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-const CATEGORIES = {
-    CASH_IN:  {{ cash_in_categories  | tojson }},
-    CASH_OUT: {{ cash_out_categories | tojson }},
-};
+const CASH_CATEGORY_CHOICES = {{ cash_category_choices | tojson }};
+const SYSTEM_KEY_CASH_IN_BANK_TRANSFER = 'cash_in_bank_transfer';
+const SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = 'cash_in_ewallet_transfer';
+const SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = 'cash_out_mechanic_payout';
+const SYSTEM_KEY_CASH_OUT_UTILITIES = 'cash_out_utilities';
+
+function getSelectedCategoryOption() {
+    return document.getElementById('entry-category').selectedOptions[0] || null;
+}
+
+function getSelectedCategoryMeta() {
+    const option = getSelectedCategoryOption();
+    if (!option) {
+        return {
+            id: null,
+            label: '',
+            systemKey: '',
+            requiresDescription: false,
+        };
+    }
+    return {
+        id: option.value ? Number.parseInt(option.value, 10) : null,
+        label: option.textContent || '',
+        systemKey: option.dataset.systemKey || '',
+        requiresDescription: option.dataset.requiresDescription === 'true',
+    };
+}
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Populate category dropdown on type change
@@ -1011,10 +1034,12 @@ const CATEGORIES = {
 function populateCategories(type) {
     const select = document.getElementById('entry-category');
     select.innerHTML = '';
-    CATEGORIES[type].forEach(cat => {
+    (CASH_CATEGORY_CHOICES[type] || []).forEach((category) => {
         const opt = document.createElement('option');
-        opt.value = cat;
-        opt.textContent = cat;
+        opt.value = String(category.id);
+        opt.textContent = category.label;
+        opt.dataset.systemKey = category.system_key || '';
+        opt.dataset.requiresDescription = category.requires_description ? 'true' : 'false';
         select.appendChild(opt);
     });
     updateDescriptionFieldState();
@@ -1022,20 +1047,18 @@ function populateCategories(type) {
 
 function updateDescriptionFieldState() {
     const entryType = document.querySelector('input[name="entry_type"]:checked')?.value || 'CASH_IN';
-    const category = document.getElementById('entry-category').value;
+    const categoryMeta = getSelectedCategoryMeta();
     const descriptionInput = document.getElementById('entry-description');
     const descriptionHint = document.getElementById('entry-description-hint');
 
-    const requiresDescription =
-        (entryType === 'CASH_IN' && category === 'Others')
-        || (entryType === 'CASH_OUT' && ['Other Expenses', 'Utilities'].includes(category));
+    const requiresDescription = Boolean(categoryMeta.requiresDescription);
     descriptionInput.required = requiresDescription;
     descriptionHint.textContent = requiresDescription ? '(required)' : '(optional)';
     descriptionHint.classList.toggle('required-hint', requiresDescription);
 
-    if (category === 'Mechanic Payout') {
+    if (categoryMeta.systemKey === SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT) {
         descriptionInput.placeholder = 'Mechanic payout description will be filled automatically';
-    } else if (entryType === 'CASH_OUT' && category === 'Utilities') {
+    } else if (entryType === 'CASH_OUT' && categoryMeta.systemKey === SYSTEM_KEY_CASH_OUT_UTILITIES) {
         descriptionInput.placeholder = 'Please indicate which utility this is for.';
     } else if (requiresDescription) {
         descriptionInput.placeholder = 'Please describe this entry';
@@ -1059,8 +1082,8 @@ function setFloatingCollectionAmountLock(locked) {
 
 if (LEDGER_VIEW === 'active') {
 document.getElementById('entry-category').addEventListener('change', () => {
-    const category = document.getElementById('entry-category').value;
-    if (category !== 'Mechanic Payout') {
+    const categoryMeta = getSelectedCategoryMeta();
+    if (categoryMeta.systemKey !== SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT) {
         document.getElementById('entry-reference-id').value = '';
         document.getElementById('entry-payout-date').value = '';
         document.getElementById('payout-date-wrapper').style.display = 'none';
@@ -1073,7 +1096,7 @@ document.getElementById('entry-category').addEventListener('change', () => {
     }
     if (
         document.querySelector('input[name="entry_type"]:checked')?.value === 'CASH_IN'
-        && !['From Bank Account', 'From Gcash/E-Wallet Account'].includes(category)
+        && ![SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER].includes(categoryMeta.systemKey)
     ) {
         document.getElementById('entry-claim-sale-ids').value = '';
         document.getElementById('entry-claim-debt-payment-ids').value = '';
@@ -1096,8 +1119,8 @@ function clearPayoutDate() {
 }
 
 function showPayoutDateIfNeeded() {
-    const category = document.getElementById('entry-category').value;
-    if (category === 'Mechanic Payout') {
+    const categoryMeta = getSelectedCategoryMeta();
+    if (categoryMeta.systemKey === SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT) {
         setPayoutDate(document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT);
         document.getElementById('payout-date-wrapper').style.display = 'block';
     } else {
@@ -1151,7 +1174,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 
     const entry_type  = document.querySelector('input[name="entry_type"]:checked').value;
     const amount      = parseFloat(document.getElementById('entry-amount').value);
-    const category    = document.getElementById('entry-category').value;
+    const categoryMeta = getSelectedCategoryMeta();
     const description = document.getElementById('entry-description').value.trim();
     const referenceId = document.getElementById('entry-reference-id').value || null;
     const claimSaleIds = (document.getElementById('entry-claim-sale-ids').value || '')
@@ -1162,7 +1185,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         .split(',')
         .map(value => Number.parseInt(value, 10))
         .filter(Number.isFinite);
-    const payoutDate  = category === 'Mechanic Payout'
+    const payoutDate  = categoryMeta.systemKey === SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT
         ? (document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT)
         : null;
 
@@ -1171,22 +1194,18 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         return;
     }
 
-    if (!description) {
-        if (entry_type === 'CASH_IN' && category === 'Others') {
-            showFlash('Description is required when category is Others.', 'danger');
-            return;
-        }
+    if (!categoryMeta.id) {
+        showFlash('Please choose a category.', 'danger');
+        return;
+    }
 
-        if (entry_type === 'CASH_OUT' && category === 'Other Expenses') {
-            showFlash('Description is required when category is Other Expenses.', 'danger');
-            return;
-        }
-
-        if (entry_type === 'CASH_OUT' && category === 'Utilities') {
+    if (!description && categoryMeta.requiresDescription) {
+        if (categoryMeta.systemKey === SYSTEM_KEY_CASH_OUT_UTILITIES) {
             showFlash('Please indicate which utility this is for.', 'danger');
             return;
         }
-
+        showFlash(`Description is required when category is ${categoryMeta.label}.`, 'danger');
+        return;
     }
 
     if (!submitGuard || !submitGuard.begin()) {
@@ -1205,7 +1224,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
             body: JSON.stringify({
                 entry_type,
                 amount,
-                category,
+                category_id: categoryMeta.id,
                 description,
                 reference_id: referenceId,
                 payout_for_date: payoutDate,
@@ -1340,7 +1359,7 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     // Set category to Mechanic Payout
     const select = document.getElementById('entry-category');
     for (let opt of select.options) {
-        if (opt.value === 'Mechanic Payout') {
+        if ((opt.dataset.systemKey || '') === SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT) {
             opt.selected = true;
             break;
         }
@@ -1365,7 +1384,7 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
     setTimeout(() => { form.style.borderColor = ''; }, 1500);
 }
 
-function prefillFloatingCollection(saleIds, debtPaymentIds, amount, category, autoDescription) {
+function prefillFloatingCollection(saleIds, debtPaymentIds, amount, categorySystemKey, autoDescription) {
     document.getElementById('type_in').checked = true;
     populateCategories('CASH_IN');
 
@@ -1373,7 +1392,7 @@ function prefillFloatingCollection(saleIds, debtPaymentIds, amount, category, au
 
     const select = document.getElementById('entry-category');
     for (let opt of select.options) {
-        if (opt.value === category) {
+        if ((opt.dataset.systemKey || '') === categorySystemKey) {
             opt.selected = true;
             break;
         }
@@ -1466,7 +1485,7 @@ function renderPendingNonCashRows(data) {
              data-float-sale-ids="${escapeHtml((group.sale_ids || []).join(','))}"
              data-float-debt-payment-ids="${escapeHtml((group.debt_payment_ids || []).join(','))}"
              data-float-amount="${escapeHtml(group.total_amount != null ? group.total_amount : 0)}"
-             data-float-category="${escapeHtml(group.cash_in_category || 'From Gcash/E-Wallet Account')}"
+             data-float-category-key="${escapeHtml(group.cash_in_category_key || SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER)}"
              data-float-description="${escapeHtml(group.auto_description || '')}"
              data-float-payment-method="${escapeHtml(group.payment_method_name || '')}"
              data-float-date="${escapeHtml(group.transaction_date || '')}">
@@ -1564,14 +1583,14 @@ function initializeCashPanelRowActions() {
             .map(value => Number.parseInt(value, 10))
             .filter(Number.isFinite);
         const amount = parseFloat(floatRow.getAttribute('data-float-amount') || '0');
-        const category = floatRow.getAttribute('data-float-category') || 'From Gcash/E-Wallet Account';
+        const categorySystemKey = floatRow.getAttribute('data-float-category-key') || SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER;
         const autoDescription = floatRow.getAttribute('data-float-description') || '';
 
         prefillFloatingCollection(
             saleIds,
             debtPaymentIds,
             Number.isFinite(amount) ? amount : 0,
-            category,
+            categorySystemKey,
             autoDescription
         );
     });

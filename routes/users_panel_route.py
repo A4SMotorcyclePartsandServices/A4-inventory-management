@@ -36,6 +36,7 @@ ADMIN_AUDIT_TABS = {
     "users-tab",
     "password-resets-tab",
     "stocktake-access-tab",
+    "cash-categories-tab",
     "sales-tab",
     "debt-audit-tab",
     "audit-tab",
