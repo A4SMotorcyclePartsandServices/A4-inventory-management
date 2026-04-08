@@ -381,6 +381,9 @@
                             {% if mech.debt_service_portion > 0 %}
                             <div class="muted">Includes collected debt service portion.</div>
                             {% endif %}
+                            {% if mech.shop_only_services_total > 0 %}
+                            <div class="muted">Includes P {{ "%.2f"|format(mech.shop_only_services_total) }} shop-only services.</div>
+                            {% endif %}
                         </td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.paid_services_total) }}</span></td>
                         <td class="text-right">{{ (mech.commission_rate * 100) | int }}%</td>

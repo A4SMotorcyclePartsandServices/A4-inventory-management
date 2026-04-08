@@ -690,6 +690,12 @@
                             <span>Services rendered</span>
                             <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
                         </div>
+                        {% if mech.shop_only_services_total > 0 %}
+                        <div class="mechanic-block-row" style="color: #2d6a4f;">
+                            <span>Shop-only services</span>
+                            <span>₱ {{ "%.2f"|format(mech.shop_only_services_total) }}</span>
+                        </div>
+                        {% endif %}
                         {% if mech.bundle_mech_share > 0 %}
                         <div class="mechanic-block-row">
                             <span>Bundle service side</span>

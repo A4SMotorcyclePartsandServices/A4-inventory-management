@@ -1,6 +1,6 @@
 ## Access Control Audit
 
-Current model as of 2026-03-30.
+Current model as of 2026-04-08.
 
 Status:
 
@@ -211,6 +211,7 @@ Admin user management and audit:
 - `/api/vendors/<vendor_id>`
 - `/api/vendors/<vendor_id>/update`
 - `/vendors/toggle/<vendor_id>`
+- `/services/toggle-payout/<service_id>`
 
 Approval admin APIs:
 
@@ -246,6 +247,10 @@ Stocktake export admin route:
 - `@admin_required` and `@login_required` are defined in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
 - Stocktake routes use a separate gate, `@stocktake_access_required`, also in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
 - The shared `users.html` page lives under the `users_panel` blueprint in [routes/users_panel_route.py](/C:/Dev/a4_inventory_system/routes/users_panel_route.py) and is available to all logged-in users.
+- The shared Services tab under `users.html` now has mixed permissions:
+  - all logged-in users can add services and toggle service active/inactive status
+  - only admins can see or change service payout mode (`Shop share only` vs normal payout)
+  - server-side enforcement for payout mode changes is handled by `@admin_required` on `/services/toggle-payout/<service_id>`
 - The separate admin audit surface lives under the `admin_audit` blueprint in [routes/admin_audit_route.py](/C:/Dev/a4_inventory_system/routes/admin_audit_route.py) and remains admin-only.
 - Loyalty program management endpoints are currently open to all logged-in users.
 - `Flask-WTF` CSRF protection applies globally to unsafe methods.

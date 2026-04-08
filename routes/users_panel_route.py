@@ -16,6 +16,7 @@ from services.users_panel_service import (
     toggle_mechanic_active_status,
     toggle_payment_method_active_status,
     toggle_service_active_status,
+    toggle_service_payout_mode,
     update_bundle_record,
 )
 from services.vendor_service import add_vendor_record, toggle_vendor_active_status
@@ -143,10 +144,15 @@ def delete_mechanic_quota_topup(override_id):
 @users_panel_bp.route("/services/add", methods=["POST"])
 @login_required
 def add_service():
+    user = ensure_authenticated_user()
     result = add_service_record(
         name=request.form.get("name", ""),
         existing_category=request.form.get("existing_category"),
         new_category=request.form.get("new_category", ""),
+        mechanic_payout_exempt=(
+            bool(user and user.get("role") == "admin")
+            and str(request.form.get("mechanic_payout_exempt", "")).strip().lower() in {"1", "true", "yes", "on"}
+        ),
     )
     if result["status"] == "missing_fields":
         flash("Service name is required.", "danger")
@@ -170,6 +176,16 @@ def toggle_service(service_id):
     result = toggle_service_active_status(service_id)
     if result["status"] == "ok":
         flash(f"Service '{result['name']}' status updated.", "info")
+    return redirect(url_for("users_panel.users_panel", tab="manage-services-tab"))
+
+
+@users_panel_bp.route("/services/toggle-payout/<int:service_id>", methods=["POST"])
+@admin_required
+def toggle_service_payout(service_id):
+    result = toggle_service_payout_mode(service_id)
+    if result["status"] == "ok":
+        mode_label = "Shop share only" if result["mechanic_payout_exempt"] == 1 else "Normal mechanic payout"
+        flash(f"Service '{result['name']}' payout mode set to {mode_label}.", "info")
     return redirect(url_for("users_panel.users_panel", tab="manage-services-tab"))
 
 

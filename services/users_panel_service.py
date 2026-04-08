@@ -347,7 +347,7 @@ def get_manual_in_details(audit_group_id):
     }, 200
 
 
-def add_service_record(name, existing_category, new_category):
+def add_service_record(name, existing_category, new_category, mechanic_payout_exempt=False):
     normalized_name = (name or "").strip()
     normalized_new_category = (new_category or "").strip()
 
@@ -377,11 +377,19 @@ def add_service_record(name, existing_category, new_category):
             return {"status": "duplicate", "name": normalized_name}
 
         conn.execute(
-            "INSERT INTO services (name, category, is_active) VALUES (%s, %s, 1)",
-            (normalized_name, category),
+            """
+            INSERT INTO services (name, category, mechanic_payout_exempt, is_active)
+            VALUES (%s, %s, %s, 1)
+            """,
+            (normalized_name, category, 1 if mechanic_payout_exempt else 0),
         )
         conn.commit()
-        return {"status": "ok", "name": normalized_name, "category": category}
+        return {
+            "status": "ok",
+            "name": normalized_name,
+            "category": category,
+            "mechanic_payout_exempt": 1 if mechanic_payout_exempt else 0,
+        }
     except pg_errors.UniqueViolation:
         conn.rollback()
         return {"status": "duplicate", "name": normalized_name}
@@ -406,6 +414,31 @@ def toggle_service_active_status(service_id):
         )
         conn.commit()
         return {"status": "ok", "name": service["name"], "new_status": new_status}
+    finally:
+        conn.close()
+
+
+def toggle_service_payout_mode(service_id):
+    conn = get_db()
+    try:
+        service = conn.execute(
+            "SELECT mechanic_payout_exempt, name FROM services WHERE id = %s",
+            (service_id,),
+        ).fetchone()
+        if not service:
+            return {"status": "missing"}
+
+        new_mode = 0 if int(service["mechanic_payout_exempt"] or 0) == 1 else 1
+        conn.execute(
+            "UPDATE services SET mechanic_payout_exempt = %s WHERE id = %s",
+            (new_mode, service_id),
+        )
+        conn.commit()
+        return {
+            "status": "ok",
+            "name": service["name"],
+            "mechanic_payout_exempt": new_mode,
+        }
     finally:
         conn.close()
 

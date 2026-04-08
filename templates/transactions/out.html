@@ -801,9 +801,216 @@
         font-family: 'Courier New', monospace;
     }
 
+    .dual-payment-toggle-shell {
+        padding: 14px 16px;
+        border: 1px solid rgba(103,194,228,0.16);
+        border-radius: 14px;
+        background:
+            linear-gradient(180deg, rgba(103,194,228,0.06) 0%, rgba(103,194,228,0.02) 100%),
+            #151922;
+    }
+
+    .dual-payment-toggle-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .dual-payment-toggle-copy {
+        min-width: 0;
+    }
+
+    .dual-payment-toggle-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-primary);
+        font-size: 0.98rem;
+        font-weight: 700;
+    }
+
+    .dual-payment-toggle-title i {
+        color: #67c2e4;
+        font-size: 1rem;
+    }
+
+    .dual-payment-toggle-note {
+        margin-top: 4px;
+        color: #a7b6cb;
+        font-size: 0.8rem;
+        line-height: 1.45;
+    }
+
+    .dual-payment-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border-soft);
+        background: rgba(255,255,255,0.03);
+        flex-shrink: 0;
+    }
+
+    .dual-payment-switch.form-switch {
+        padding-left: 14px;
+        margin-bottom: 0;
+    }
+
+    .dual-payment-switch .form-check-input {
+        float: none;
+        flex-shrink: 0;
+        width: 2.5em;
+        height: 1.35em;
+        margin: 0;
+        margin-top: 0;
+    }
+
+    .dual-payment-switch .form-check-label {
+        margin-bottom: 0;
+        font-weight: 600;
+        color: var(--text-primary);
+        line-height: 1;
+    }
+
+    .dual-payment-helper {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        color: #8ea4bf;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+
+    .dual-payment-card {
+        height: 100%;
+        padding: 18px;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%),
+            #141720;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .dual-payment-card.method-1 {
+        border-color: rgba(244,196,48,0.16);
+        background:
+            linear-gradient(180deg, rgba(244,196,48,0.05) 0%, rgba(244,196,48,0.015) 100%),
+            #141720;
+    }
+
+    .dual-payment-card.method-2 {
+        border-color: rgba(103,194,228,0.18);
+        background:
+            linear-gradient(180deg, rgba(103,194,228,0.05) 0%, rgba(103,194,228,0.015) 100%),
+            #141720;
+    }
+
+    .dual-payment-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .dual-payment-card-title {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .dual-payment-card-title strong {
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        letter-spacing: 0.4px;
+    }
+
+    .dual-payment-card-title span {
+        color: #95a5bb;
+        font-size: 0.77rem;
+    }
+
+    .dual-payment-card-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 88px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+    }
+
+    .dual-payment-card.method-1 .dual-payment-card-badge {
+        color: #11151d;
+        background: #f4c430;
+    }
+
+    .dual-payment-card.method-2 .dual-payment-card-badge {
+        color: #0f1720;
+        background: #67c2e4;
+    }
+
+    .dual-payment-card .dual-payment-row {
+        --bs-gutter-x: 14px;
+        --bs-gutter-y: 14px;
+    }
+
+    .dual-payment-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .dual-payment-summary-chip {
+        flex: 1 1 220px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: #151922;
+    }
+
+    .dual-payment-summary-chip .label {
+        display: block;
+        margin-bottom: 6px;
+        color: #8ea4bf;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .dual-payment-summary-chip .value {
+        color: var(--text-primary);
+        font-size: 1.08rem;
+        font-weight: 700;
+        font-family: 'Courier New', monospace;
+    }
+
+    .dual-payment-summary-chip.remaining .value {
+        color: #67c2e4;
+    }
+
     @media (max-width: 991px) {
         .bundle-sale-grid {
             grid-template-columns: 1fr;
+        }
+
+        .dual-payment-toggle-head {
+            align-items: stretch;
+        }
+
+        .dual-payment-switch {
+            width: 100%;
+            justify-content: center;
         }
     }
 </style>
@@ -1144,21 +1351,41 @@
                 </div>
 
                 <div class="col-12">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="dual-payment-toggle">
-                        <label class="form-check-label text-light" for="dual-payment-toggle">Enable Dual Payment</label>
-                    </div>
-                    <div id="dual-payment-helper" class="text-muted small mt-1" style="display:none;">
-                        Split the total due across exactly two payment methods. Debt cannot be combined with another method.
+                    <div class="dual-payment-toggle-shell">
+                        <div class="dual-payment-toggle-head">
+                            <div class="dual-payment-toggle-copy">
+                                <div class="dual-payment-toggle-title">
+                                    <i class="bi bi-diagram-3"></i>
+                                    <span>Split Payment</span>
+                                </div>
+                                <div class="dual-payment-toggle-note">
+                                    Use two payment methods in one sale when the customer pays through a mix of cash, bank, online, or others.
+                                </div>
+                            </div>
+                            <div class="form-check form-switch dual-payment-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="dual-payment-toggle">
+                                <label class="form-check-label" for="dual-payment-toggle">Enable Dual Payment</label>
+                            </div>
+                        </div>
+                        <div id="dual-payment-helper" class="dual-payment-helper" style="display:none;">
+                            Split the total due across exactly two payment methods. Debt cannot be combined with another method.
+                        </div>
                     </div>
                 </div>
 
                 <div class="col-12" id="dual-payment-panel" style="display:none;">
                     <div class="row g-3">
-                        <div class="col-12">
-                            <div class="border rounded-3 p-3" style="border-color: var(--border-soft) !important; background:#141720;">
+                        <div class="col-12 col-xl-6">
+                            <div class="dual-payment-card method-1">
+                                <div class="dual-payment-card-header">
+                                    <div class="dual-payment-card-title">
+                                        <strong>Method 1</strong>
+                                        <span>Primary payment entry</span>
+                                    </div>
+                                    <span class="dual-payment-card-badge">Primary</span>
+                                </div>
                                 <div class="row g-2 align-items-end dual-payment-row" data-payment-row="1">
-                                    <div class="col-md-3">
+                                    <div class="col-lg-6 col-md-6">
                                         <label class="form-label">Method 1</label>
                                         <select class="form-select dual-payment-category">
                                             <option value="{{ cash_pm_id }}">Cash</option>
@@ -1167,7 +1394,7 @@
                                             <option value="{{ others_pm_id }}">Others</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3 dual-payment-provider-wrap" style="display:none;">
+                                    <div class="col-lg-6 col-md-6 dual-payment-provider-wrap" style="display:none;">
                                         <label class="form-label info">Provider</label>
                                         <select class="form-select border-info-soft dual-payment-provider">
                                             <option value="">-- Select Provider --</option>
@@ -1178,21 +1405,28 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-3 dual-payment-ref-wrap" style="display:none;">
+                                    <div class="col-lg-6 col-md-6 dual-payment-ref-wrap" style="display:none;">
                                         <label class="form-label info">Reference No.</label>
                                         <input type="text" class="form-control border-info-soft dual-payment-reference" placeholder="Ref No. / Trace ID">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-lg-6 col-md-6">
                                         <label class="form-label accent">Amount</label>
                                         <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <div class="border rounded-3 p-3" style="border-color: var(--border-soft) !important; background:#141720;">
+                        <div class="col-12 col-xl-6">
+                            <div class="dual-payment-card method-2">
+                                <div class="dual-payment-card-header">
+                                    <div class="dual-payment-card-title">
+                                        <strong>Method 2</strong>
+                                        <span>Secondary payment entry</span>
+                                    </div>
+                                    <span class="dual-payment-card-badge">Secondary</span>
+                                </div>
                                 <div class="row g-2 align-items-end dual-payment-row" data-payment-row="2">
-                                    <div class="col-md-3">
+                                    <div class="col-lg-6 col-md-6">
                                         <label class="form-label">Method 2</label>
                                         <select class="form-select dual-payment-category">
                                             <option value="{{ cash_pm_id }}">Cash</option>
@@ -1201,7 +1435,7 @@
                                             <option value="{{ others_pm_id }}">Others</option>
                                         </select>
                                     </div>
-                                    <div class="col-md-3 dual-payment-provider-wrap" style="display:none;">
+                                    <div class="col-lg-6 col-md-6 dual-payment-provider-wrap" style="display:none;">
                                         <label class="form-label info">Provider</label>
                                         <select class="form-select border-info-soft dual-payment-provider">
                                             <option value="">-- Select Provider --</option>
@@ -1212,11 +1446,11 @@
                                             {% endfor %}
                                         </select>
                                     </div>
-                                    <div class="col-md-3 dual-payment-ref-wrap" style="display:none;">
+                                    <div class="col-lg-6 col-md-6 dual-payment-ref-wrap" style="display:none;">
                                         <label class="form-label info">Reference No.</label>
                                         <input type="text" class="form-control border-info-soft dual-payment-reference" placeholder="Ref No. / Trace ID">
                                     </div>
-                                    <div class="col-md-3">
+                                    <div class="col-lg-6 col-md-6">
                                         <label class="form-label accent">Amount</label>
                                         <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
                                     </div>
@@ -1224,9 +1458,15 @@
                             </div>
                         </div>
                         <div class="col-12">
-                            <div class="text-muted small">
-                                Split Total: <span id="dual-payment-total">₱0.00</span>
-                                <span class="ms-2">Remaining: <span id="dual-payment-remaining">₱0.00</span></span>
+                            <div class="dual-payment-summary">
+                                <div class="dual-payment-summary-chip">
+                                    <span class="label">Split Total</span>
+                                    <span class="value" id="dual-payment-total">₱0.00</span>
+                                </div>
+                                <div class="dual-payment-summary-chip remaining">
+                                    <span class="label">Remaining</span>
+                                    <span class="value" id="dual-payment-remaining">₱0.00</span>
+                                </div>
                             </div>
                         </div>
                     </div>

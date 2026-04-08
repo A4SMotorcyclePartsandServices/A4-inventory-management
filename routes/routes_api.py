@@ -100,7 +100,7 @@ def search_services():
 
     query_parts = [
         """
-        SELECT id, name, category, is_active
+        SELECT id, name, category, is_active, COALESCE(mechanic_payout_exempt, 0) AS mechanic_payout_exempt
         FROM services
         WHERE 1=1
         """
@@ -112,10 +112,10 @@ def search_services():
 
     if not show_all:
         words = query.split()
-        where_clause = " AND ".join(["(name ILIKE %s OR category ILIKE %s)" for _ in words])
+        where_clause = " AND ".join(["name ILIKE %s" for _ in words])
         query_parts.append("AND " + where_clause)
         for word in words:
-            params.extend([f'%{word}%', f'%{word}%'])
+            params.append(f'%{word}%')
 
     query_parts.append("ORDER BY category ASC, name ASC LIMIT 50")
     query_sql = "\n".join(query_parts)

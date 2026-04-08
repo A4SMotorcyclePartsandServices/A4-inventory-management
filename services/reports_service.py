@@ -417,6 +417,7 @@ def _load_services_by_sale(conn, sale_ids):
             ss.price,
             ss.mechanic_id,
             sv.name AS service_name,
+            COALESCE(sv.mechanic_payout_exempt, 0) AS mechanic_payout_exempt,
             m.name AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
@@ -437,42 +438,48 @@ def _load_services_by_sale(conn, sale_ids):
     for row in service_rows:
         payload = dict(row)
         payload["mechanic_id"] = int(payload["mechanic_id"]) if payload.get("mechanic_id") is not None else None
+        payload["mechanic_payout_exempt"] = _bool_flag(payload.get("mechanic_payout_exempt"), default=False)
         services_by_sale.setdefault(row["sale_id"], []).append(payload)
     return services_by_sale
 
 
 def _get_debt_payout_allocations(conn, *, report_date=None, start_date=None, end_date=None, report_dates=None):
     normalized_dates = sorted({str(value) for value in (report_dates or []) if value})
-    params = []
-    date_condition = ""
-
     if normalized_dates:
-        date_condition = "DATE(dp.paid_at) = ANY(%s::date[])"
-        params.append(normalized_dates)
+        target_dates = set(normalized_dates)
+        upper_bound_date = normalized_dates[-1]
+        def _is_target_payout_date(value):
+            return str(value) in target_dates
     elif report_date:
-        date_condition = "DATE(dp.paid_at) = %s"
-        params.append(report_date)
+        upper_bound_date = report_date
+        def _is_target_payout_date(value):
+            return str(value) == str(report_date)
     elif start_date and end_date:
-        date_condition = "DATE(dp.paid_at) BETWEEN %s AND %s"
-        params.extend([start_date, end_date])
+        upper_bound_date = end_date
+        def _is_target_payout_date(value):
+            day = str(value)
+            return str(start_date) <= day <= str(end_date)
     else:
         return []
 
-    rows = conn.execute(
+    payment_rows = conn.execute(
         f"""
         WITH sale_service_totals AS (
             SELECT
                 ss.sale_id,
                 ss.mechanic_id,
-                SUM(ss.price) AS mechanic_service_total
+                SUM(CASE WHEN COALESCE(sv.mechanic_payout_exempt, 0) = 1 THEN ss.price ELSE 0 END) AS exempt_service_total,
+                SUM(CASE WHEN COALESCE(sv.mechanic_payout_exempt, 0) = 1 THEN 0 ELSE ss.price END) AS eligible_service_total
             FROM sales_services ss
+            JOIN services sv ON sv.id = ss.service_id
             WHERE ss.mechanic_id IS NOT NULL
             GROUP BY ss.sale_id, ss.mechanic_id
         ),
         sale_service_totals_by_sale AS (
             SELECT
                 sale_id,
-                SUM(mechanic_service_total) AS total_service_total
+                SUM(exempt_service_total) AS total_exempt_service_total,
+                SUM(eligible_service_total) AS total_eligible_service_total
             FROM sale_service_totals
             GROUP BY sale_id
         )
@@ -487,13 +494,10 @@ def _get_debt_payout_allocations(conn, *, report_date=None, start_date=None, end
             m.name AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
-            ROUND(
-                CASE
-                    WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
-                    ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
-                END,
-                2
-            ) AS allocated_service_portion
+            COALESCE(sst.exempt_service_total, 0) AS exempt_service_total,
+            COALESCE(sst.eligible_service_total, 0) AS eligible_service_total,
+            COALESCE(st.total_exempt_service_total, 0) AS total_exempt_service_total,
+            COALESCE(st.total_eligible_service_total, 0) AS total_eligible_service_total
         FROM debt_payments dp
         JOIN sale_service_totals sst
           ON sst.sale_id = dp.sale_id
@@ -504,31 +508,89 @@ def _get_debt_payout_allocations(conn, *, report_date=None, start_date=None, end
         LEFT JOIN mechanic_quota_topup_overrides mqto
           ON mqto.mechanic_id = sst.mechanic_id
          AND mqto.quota_date = DATE(dp.paid_at)
-        WHERE {date_condition}
+        WHERE DATE(dp.paid_at) <= %s
         ORDER BY dp.paid_at ASC, dp.id ASC, sst.mechanic_id ASC
         """,
-        tuple(params),
+        (upper_bound_date,),
     ).fetchall()
 
     allocations = []
     grouped_by_payment = {}
-    for row in rows:
-        payment_key = (
-            int(row["debt_payment_id"] or 0),
-            int(row["sale_id"] or 0),
-        )
-        grouped_by_payment.setdefault(payment_key, []).append(dict(row))
+    sale_exempt_remaining = {}
 
-    for group_rows in grouped_by_payment.values():
-        running_total = 0.0
-        for index, row in enumerate(group_rows):
-            allocated = round(_num(row.get("allocated_service_portion")), 2)
-            if index == len(group_rows) - 1:
-                allocated = round(_num(row.get("service_portion")) - running_total, 2)
+    for row in payment_rows:
+        payment_key = (int(row["debt_payment_id"] or 0), int(row["sale_id"] or 0))
+        grouped_by_payment.setdefault(payment_key, []).append(dict(row))
+        sale_id = int(row["sale_id"] or 0)
+        if sale_id not in sale_exempt_remaining:
+            sale_exempt_remaining[sale_id] = round(_num(row.get("total_exempt_service_total")), 2)
+
+    for payment_key in sorted(
+        grouped_by_payment.keys(),
+        key=lambda key: (
+            grouped_by_payment[key][0].get("paid_at"),
+            grouped_by_payment[key][0].get("debt_payment_id"),
+            grouped_by_payment[key][0].get("sale_id"),
+        ),
+    ):
+        group_rows = grouped_by_payment[payment_key]
+        sale_id = int(group_rows[0]["sale_id"] or 0)
+        payment_service_portion = round(_num(group_rows[0].get("service_portion")), 2)
+        exempt_remaining = round(sale_exempt_remaining.get(sale_id, 0.0), 2)
+        exempt_applied = min(payment_service_portion, exempt_remaining)
+        eligible_portion = round(max(0.0, payment_service_portion - exempt_applied), 2)
+        sale_exempt_remaining[sale_id] = round(max(0.0, exempt_remaining - exempt_applied), 2)
+
+        eligible_total = round(_num(group_rows[0].get("total_eligible_service_total")), 2)
+        running_allocated = 0.0
+        eligible_rows = [row for row in group_rows if _num(row.get("eligible_service_total")) > 0]
+
+        is_target_payment = _is_target_payout_date(group_rows[0].get("payout_date"))
+
+        for index, row in enumerate(eligible_rows):
+            if eligible_portion <= 0:
+                allocated = 0.0
+            elif index == len(eligible_rows) - 1:
+                allocated = round(eligible_portion - running_allocated, 2)
+            elif eligible_total <= 0:
+                allocated = 0.0
             else:
-                running_total = round(running_total + allocated, 2)
+                allocated = round(
+                    eligible_portion * _num(row.get("eligible_service_total")) / eligible_total,
+                    2,
+                )
+                running_allocated = round(running_allocated + allocated, 2)
+
             row["service_portion"] = max(0.0, allocated)
-            allocations.append(row)
+            row["shop_only_service_portion"] = 0.0
+            if is_target_payment:
+                allocations.append(row)
+
+        exempt_total = round(_num(group_rows[0].get("total_exempt_service_total")), 2)
+        exempt_rows = [row for row in group_rows if _num(row.get("exempt_service_total")) > 0]
+        running_exempt_allocated = 0.0
+        for index, row in enumerate(exempt_rows):
+            if exempt_applied <= 0:
+                allocated_exempt = 0.0
+            elif index == len(exempt_rows) - 1:
+                allocated_exempt = round(exempt_applied - running_exempt_allocated, 2)
+            elif exempt_total <= 0:
+                allocated_exempt = 0.0
+            else:
+                allocated_exempt = round(
+                    exempt_applied * _num(row.get("exempt_service_total")) / exempt_total,
+                    2,
+                )
+                running_exempt_allocated = round(running_exempt_allocated + allocated_exempt, 2)
+
+            if allocated_exempt <= 0:
+                continue
+
+            shop_row = dict(row)
+            shop_row["service_portion"] = 0.0
+            shop_row["shop_only_service_portion"] = max(0.0, allocated_exempt)
+            if is_target_payment:
+                allocations.append(shop_row)
 
     return allocations
 
@@ -588,9 +650,13 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                     svc.get("applies_quota_topup"),
                     default=_bool_flag(sale.get("applies_quota_topup"), default=True),
                 ),
-                "services_total": 0.0,
+                "eligible_services_total": 0.0,
+                "shop_only_services_total": 0.0,
             })
-            entry["services_total"] += _num(svc["price"])
+            if _bool_flag(svc.get("mechanic_payout_exempt"), default=False):
+                entry["shop_only_services_total"] += _num(svc["price"])
+            else:
+                entry["eligible_services_total"] += _num(svc["price"])
 
         bundle_owner_mechanic_id = int(sale["mechanic_id"]) if sale.get("mechanic_id") is not None else None
         bundle_shop_share = round(
@@ -610,10 +676,12 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                         "commission_rate": mechanic_data["commission_rate"],
                         "applies_quota_topup": mechanic_data["applies_quota_topup"],
                         "paid_services_total": 0.0,
+                        "shop_only_services_total": 0.0,
                         "bundle_shop_share_total": 0.0,
                         "bundle_mech_share_total": 0.0,
                     }
-                mechanic_map[mechanic_id]["paid_services_total"] += round(_num(mechanic_data["services_total"]), 2)
+                mechanic_map[mechanic_id]["paid_services_total"] += round(_num(mechanic_data["eligible_services_total"]), 2)
+                mechanic_map[mechanic_id]["shop_only_services_total"] += round(_num(mechanic_data["shop_only_services_total"]), 2)
 
             if bundle_owner_mechanic_id and (bundle_mech_share > 0 or bundle_shop_share > 0):
                 if bundle_owner_mechanic_id not in mechanic_map:
@@ -622,6 +690,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                         "commission_rate": _num(sale["commission_rate"]),
                         "applies_quota_topup": _bool_flag(sale.get("applies_quota_topup"), default=True),
                         "paid_services_total": 0.0,
+                        "shop_only_services_total": 0.0,
                         "bundle_shop_share_total": 0.0,
                         "bundle_mech_share_total": 0.0,
                     }
@@ -638,8 +707,21 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
                     "commission_rate":    _num(row["commission_rate"]),
                     "applies_quota_topup": _bool_flag(row.get("applies_quota_topup"), default=True),
                     "debt_service_total": 0.0,
+                    "shop_only_debt_service_total": 0.0,
                 }
             debt_mechanic_map[mech_id]["debt_service_total"] += service_portion
+
+        shop_only_service_portion = round(_num(row.get("shop_only_service_portion")), 2)
+        if mech_id and shop_only_service_portion > 0:
+            if mech_id not in debt_mechanic_map:
+                debt_mechanic_map[mech_id] = {
+                    "mechanic_name":      row["mechanic_name"] or "-",
+                    "commission_rate":    _num(row["commission_rate"]),
+                    "applies_quota_topup": _bool_flag(row.get("applies_quota_topup"), default=True),
+                    "debt_service_total": 0.0,
+                    "shop_only_debt_service_total": 0.0,
+                }
+            debt_mechanic_map[mech_id]["shop_only_debt_service_total"] += shop_only_service_portion
 
     return mechanic_map, debt_mechanic_map
 
@@ -677,9 +759,11 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
         )
 
         paid_services        = round(_num(regular.get("paid_services_total", 0.0)), 2)
+        shop_only_paid_services = round(_num(regular.get("shop_only_services_total", 0.0)), 2)
         bundle_shop_share    = round(_num(regular.get("bundle_shop_share_total", 0.0)), 2)
         bundle_mech_share    = round(_num(regular.get("bundle_mech_share_total", 0.0)), 2)
         debt_service_portion = round(_num(debt.get("debt_service_total", 0.0)), 2)
+        shop_only_debt_services = round(_num(debt.get("shop_only_debt_service_total", 0.0)), 2)
 
         payout_base_total = round(paid_services + bundle_mech_share, 2)
         regular_mech_cut   = round(payout_base_total * commission_rate, 2)
@@ -700,7 +784,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             shop_topup = 0.0
 
         payout_shop_share = round(
-            (payout_base_total - regular_mech_cut) + debt_shop_share,
+            (payout_base_total - regular_mech_cut) + debt_shop_share + shop_only_paid_services + shop_only_debt_services,
             2,
         )
         total_shop_share = round(payout_shop_share + bundle_shop_share, 2)
@@ -710,7 +794,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
         total_shop_topup      += shop_topup
         total_shop_commission += total_shop_share
         total_mech_cut_from_paid  += regular_mech_cut
-        total_shop_comm_from_paid += regular_shop_share + bundle_shop_share
+        total_shop_comm_from_paid += regular_shop_share + bundle_shop_share + shop_only_paid_services
         total_mech_cut_from_debt  += debt_mech_cut
 
         mechanic_summary.append({
@@ -719,6 +803,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             "commission_rate":       commission_rate,
             "applies_quota_topup":   1 if applies_quota_topup else 0,
             "paid_services_total":   paid_services,
+            "shop_only_services_total": round(shop_only_paid_services + shop_only_debt_services, 2),
             "bundle_shop_share":     bundle_shop_share,
             "bundle_mech_share":     bundle_mech_share,
             "payout_base_total":     payout_base_total,
@@ -726,6 +811,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             "payout_shop_share":     payout_shop_share,
             "shop_topup":            shop_topup,
             "debt_service_portion":  debt_service_portion,
+            "shop_only_debt_service_portion": shop_only_debt_services,
             "debt_mech_cut":         debt_mech_cut,
             "services_total":        combined_services,
             "mechanic_cut":          total_mech_cut_this,
@@ -753,6 +839,7 @@ def _aggregate_mechanic_summary_rows(summary_rows):
     grouped = {}
     numeric_fields = [
         "paid_services_total",
+        "shop_only_services_total",
         "bundle_shop_share",
         "bundle_mech_share",
         "payout_base_total",
@@ -760,6 +847,7 @@ def _aggregate_mechanic_summary_rows(summary_rows):
         "payout_shop_share",
         "shop_topup",
         "debt_service_portion",
+        "shop_only_debt_service_portion",
         "debt_mech_cut",
         "services_total",
         "mechanic_cut",

@@ -369,8 +369,18 @@ def init_db():
         id          SERIAL PRIMARY KEY,
         name        TEXT NOT NULL UNIQUE,
         category    TEXT DEFAULT 'Labor',
+        mechanic_payout_exempt INTEGER NOT NULL DEFAULT 0,
         is_active   INTEGER DEFAULT 1
     )
+    """)
+    cur.execute("""
+    ALTER TABLE services
+    ADD COLUMN IF NOT EXISTS mechanic_payout_exempt INTEGER NOT NULL DEFAULT 0
+    """)
+    cur.execute("""
+    UPDATE services
+    SET mechanic_payout_exempt = 1
+    WHERE LOWER(TRIM(name)) = 'hangin'
     """)
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_services_name_unique_normalized ON services ((LOWER(TRIM(name))))")
 
@@ -1722,36 +1732,36 @@ def init_db():
     cur.execute("SELECT COUNT(*) FROM services")
     if cur.fetchone()['count'] == 0:
         initial_services = [
-            ('FI Cleaning', 'Labor'),
-            ('Change Oil', 'Maintenance'),
-            ('Tune-up', 'Maintenance'),
-            ('Clean CVT', 'Maintenance'),
-            ('Clean Carb', 'Maintenance'),
-            ('Welding', 'Fabrication'),
-            ('Top Overhaul', 'Major Repair'),
-            ('Engine Overhaul', 'Major Repair'),
-            ('Change Brake Pad', 'Maintenance'),
-            ('Change Brake Shoe', 'Maintenance'),
-            ('Change Tire', 'Labor'),
-            ('Minor Electrical', 'Electrical'),
-            ('Battery Charging', 'Maintenance'),
-            ('Change Oil Seal', 'Labor'),
-            ('Change Sprocket', 'Labor'),
-            ('Change Stator', 'Major Repair'),
-            ('Change Clutch Lining', 'Major Repair'),
-            ('Change Bulb', 'Labor'),
-            ('Change Cable', 'Labor'),
-            ('Change Bearing', 'Labor'),
-            ('Change Carbon Brush', 'Labor'),
-            ('Change Filter', 'Maintenance'),
-            ('Change Handle Grip', 'Labor'),
-            ('Change Horn', 'Labor'),
-            ('Hangin', 'Maintenance'),
-            ('Maintenance', 'Maintenance'),
-            ('Labor', 'Labor')
+            ('FI Cleaning', 'Labor', 0),
+            ('Change Oil', 'Maintenance', 0),
+            ('Tune-up', 'Maintenance', 0),
+            ('Clean CVT', 'Maintenance', 0),
+            ('Clean Carb', 'Maintenance', 0),
+            ('Welding', 'Fabrication', 0),
+            ('Top Overhaul', 'Major Repair', 0),
+            ('Engine Overhaul', 'Major Repair', 0),
+            ('Change Brake Pad', 'Maintenance', 0),
+            ('Change Brake Shoe', 'Maintenance', 0),
+            ('Change Tire', 'Labor', 0),
+            ('Minor Electrical', 'Electrical', 0),
+            ('Battery Charging', 'Maintenance', 0),
+            ('Change Oil Seal', 'Labor', 0),
+            ('Change Sprocket', 'Labor', 0),
+            ('Change Stator', 'Major Repair', 0),
+            ('Change Clutch Lining', 'Major Repair', 0),
+            ('Change Bulb', 'Labor', 0),
+            ('Change Cable', 'Labor', 0),
+            ('Change Bearing', 'Labor', 0),
+            ('Change Carbon Brush', 'Labor', 0),
+            ('Change Filter', 'Maintenance', 0),
+            ('Change Handle Grip', 'Labor', 0),
+            ('Change Horn', 'Labor', 0),
+            ('Hangin', 'Maintenance', 1),
+            ('Maintenance', 'Maintenance', 0),
+            ('Labor', 'Labor', 0)
         ]
         cur.executemany(
-            "INSERT INTO services (name, category) VALUES (%s, %s)",
+            "INSERT INTO services (name, category, mechanic_payout_exempt) VALUES (%s, %s, %s)",
             initial_services
         )
         print("Services seeded successfully.")

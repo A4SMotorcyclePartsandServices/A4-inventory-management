@@ -56,8 +56,8 @@
 - [X] ~~*bug in refund page. for some reason it works on my laptop but does not work on client pc. i narrowed the problem down to account blocking. something must be blocking users from accessing the details of a sale after searching*~~ [2026-04-06]
 - [X] ~~*change mechanic payout calculation. the threshold is not 500, it is 625 for both 50 and 80 percent cut mechanic*~~ [2026-04-06]
 - [ ] possible refactor on adding new vendor. staff my be blocked from adding vendors.
-- [ ] out page search on services. do not search by category anymore
-- [ ] ok special case in one of the services. when service hangin is selcted and is recorded in the sale, the value of that fully goes to shop share. none of it goes to mechanic share
+- [X] ~~*out page search on services. do not search by category anymore*~~ [2026-04-08]
+- [X] ~~*ok special case in one of the services. when service hangin is selcted and is recorded in the sale, the value of that fully goes to shop share. none of it goes to mechanic share*~~ [2026-04-08]
 - [X] ~~*report page in profit card. extend the formula. subtract quota top up if applicable*~~ [2026-04-08]
 - [X] ~~*cash ledger page double entry problem. check other submits for this problem*~~ [2026-04-08]
 - [ ] out page loyalty redemption is still a follow-up step after sale save. move it into the main backend transaction so sale save + loyalty redeem succeed or fail together

@@ -1365,7 +1365,7 @@
         <div class="admin-card shadow-sm">
             <h5 class="mb-3 text-white-50">Add New Labor/Service Type</h5>
             <form action="{{ url_for('users_panel.add_service') }}" method="POST" class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <input id="add-service-name-input" name="name" class="form-control" placeholder="Service Name (e.g. Brake Clean)" required>
                 </div>
                 <div class="col-md-3">
@@ -1382,7 +1382,17 @@
                 <div class="col-md-3">
                     <input name="new_category" id="newCategoryInput" class="form-control" placeholder="Select '-- New Category --' to type" disabled>
                 </div>
-                <div class="col-md-2">
+                {% if session.get('role') == 'admin' %}
+                <div class="col-md-2 d-flex align-items-center">
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" value="1" id="servicePayoutExemptInput" name="mechanic_payout_exempt">
+                        <label class="form-check-label text-white-50" for="servicePayoutExemptInput">
+                            Shop share only
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col-md-{% if session.get('role') == 'admin' %}1{% else %}3{% endif %}">
                     <button type="submit" class="btn btn-danger w-100">
                         <i class="bi bi-plus-lg"></i> Add
                     </button>
@@ -1409,6 +1419,9 @@
                     <tr>
                         <th>Service Name</th>
                         <th>Category</th>
+                        {% if session.get('role') == 'admin' %}
+                        <th>Payout Mode</th>
+                        {% endif %}
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
@@ -1417,6 +1430,19 @@
                     <tr>
                         <td class="fw-bold">{{ svc.name }}</td>
                         <td><span class="badge bg-dark border border-secondary text-info">{{ svc.category }}</span></td>
+                        {% if session.get('role') == 'admin' %}
+                        <td>
+                            {% if svc.mechanic_payout_exempt == 1 %}
+                                <form action="{{ url_for('users_panel.toggle_service_payout', service_id=svc.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Shop Share Only</button>
+                                </form>
+                            {% else %}
+                                <form action="{{ url_for('users_panel.toggle_service_payout', service_id=svc.id) }}" method="POST" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Normal Payout</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="text-center">
                             <form action="{{ url_for('users_panel.toggle_service', service_id=svc.id) }}" method="POST">
                                 {% if svc.is_active == 1 %}
@@ -1435,7 +1461,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="3" class="text-center text-muted">No services configured yet.</td>
+                        <td colspan="{% if session.get('role') == 'admin' %}4{% else %}3{% endif %}" class="text-center text-muted">No services configured yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -2228,6 +2254,7 @@ function escapeHtml(value) {
 let initialServicesHTML = "";
 let initialVendorsHTML = "";
 let originalVendorEditorState = null;
+const isAdminUser = {{ 'true' if session.get('role') == 'admin' else 'false' }};
 const vendorTableColumnCount = {{ 5 if session.get('role') == 'admin' else 3 }};
 document.addEventListener('DOMContentLoaded', () => {
     const servicesBody = document.getElementById('servicesBody');
@@ -2291,8 +2318,10 @@ function filterServices() {
             .then(data => {
                 tbody.innerHTML = ''; 
 
+                const serviceColumnCount = isAdminUser ? 4 : 3;
+
                 if (data.services.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No services found.</td></tr>';
+                    tbody.innerHTML = `<tr><td colspan="${serviceColumnCount}" class="text-center text-muted">No services found.</td></tr>`;
                     return;
                 }
 
@@ -2310,6 +2339,25 @@ function filterServices() {
                     categoryBadge.textContent = svc.category || '';
                     categoryCell.appendChild(categoryBadge);
 
+                    let payoutModeCell = null;
+                    if (isAdminUser) {
+                        payoutModeCell = document.createElement('td');
+                        const payoutForm = document.createElement('form');
+                        payoutForm.action = `/services/toggle-payout/${svc.id}`;
+                        payoutForm.method = 'POST';
+                        payoutForm.className = 'd-inline';
+                        const payoutButton = document.createElement('button');
+                        payoutButton.type = 'submit';
+                        payoutButton.className = svc.mechanic_payout_exempt === 1
+                            ? 'btn btn-sm btn-outline-success'
+                            : 'btn btn-sm btn-outline-secondary';
+                        payoutButton.textContent = svc.mechanic_payout_exempt === 1
+                            ? 'Shop Share Only'
+                            : 'Normal Payout';
+                        payoutForm.appendChild(payoutButton);
+                        payoutModeCell.appendChild(payoutForm);
+                    }
+
                     const toggleCell = document.createElement('td');
                     toggleCell.className = 'text-center';
                     const form = document.createElement('form');
@@ -2326,6 +2374,7 @@ function filterServices() {
 
                     row.appendChild(nameCell);
                     row.appendChild(categoryCell);
+                    if (payoutModeCell) row.appendChild(payoutModeCell);
                     row.appendChild(toggleCell);
                     tbody.appendChild(row);
                 });
