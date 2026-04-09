@@ -36,7 +36,7 @@
         .header {
             display: flex;
             align-items: center;
-            border-bottom: 3px solid #111;
+            border-bottom: 2px solid #cbd5e1;
             padding-bottom: 14px;
             margin-bottom: 22px;
         }
@@ -48,10 +48,10 @@
         /* ── Main transaction table ── */
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
         th {
-            background: #e8e8e8;
+            background: #f6f8fa;
             text-align: left;
             padding: 10px;
-            border: 1px solid #999;
+            border: 1px solid #d7dde5;
             font-size: 12px;
             font-weight: 700;
             text-transform: uppercase;
@@ -59,7 +59,7 @@
         }
         td {
             padding: 11px 10px;
-            border: 1px solid #bbb;
+            border: 1px solid #e3e7ec;
             font-size: 13px;
             vertical-align: top;
             line-height: 1.5;
@@ -144,7 +144,7 @@
             align-items: stretch;
         }
         .summary-box {
-            border: 1px solid #bbb;
+            border: 1px solid #d7dde5;
             border-radius: 6px;
             overflow: hidden;
             display: flex;
@@ -152,13 +152,13 @@
             min-height: 260px;
         }
         .summary-box-title {
-            background: #e8e8e8;
+            background: #f6f8fa;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             padding: 8px 12px;
-            border-bottom: 1px solid #bbb;
+            border-bottom: 1px solid #d7dde5;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -204,10 +204,10 @@
         /* Full-width bottom bar, snapped to bottom */
         .items-total {
         margin-top: auto;              /* pushes to bottom of items-body */
-        background: #111;
+        background: #eef2f6;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
-        color: #fff;
+        color: #23364a;
 
         font-size: 15px;
         font-weight: 800;
@@ -218,8 +218,8 @@
         display: flex;
         justify-content: space-between;
         }
-        .items-total .label { color: #eee; }
-        .items-total .value { color: #fff; }
+        .items-total .label { color: #425466; }
+        .items-total .value { color: #23364a; }
 
         /* Services / mechanic box */
         .mechanic-block { margin-bottom: 12px; }
@@ -250,10 +250,10 @@
         }
         .mechanic-total {
             margin-top: auto;
-            background: #111;
+            background: #eef2f6;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
-            color: #fff;
+            color: #23364a;
             font-size: 15px;
             font-weight: 800;
             padding: 10px 12px;
@@ -261,8 +261,8 @@
             display: flex;
             justify-content: space-between;
         }
-        .mechanic-total .label { color: #eee; }
-        .mechanic-total .value { color: #fff; }
+        .mechanic-total .label { color: #425466; }
+        .mechanic-total .value { color: #23364a; }
 
         /* Financials box */
         .fin-rows {
@@ -288,10 +288,10 @@
         .fin-row.topup .label { color: #b45309; }
         .fin-row.topup .value { color: #b45309; font-weight: 700; }
         .fin-row.net {
-            background: #111;
+            background: #eef2f6;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
-            color: #fff;
+            color: #23364a;
             font-size: 15px;
             font-weight: 800;
             padding: 10px 12px;
@@ -299,8 +299,8 @@
             border-radius: 0 0 6px 6px;
             margin-top: auto; /* always snaps to bottom regardless of row count */
         }
-        .fin-row.net .label { color: #eee; }
-        .fin-row.net .value { color: #fff; }
+        .fin-row.net .label { color: #425466; }
+        .fin-row.net .value { color: #23364a; }
         .summary-item-row span:last-child,
         .mechanic-block-row span:last-child,
         .mechanic-block-cut span:last-child,
@@ -387,8 +387,8 @@
             border-top: 1px solid #b8d4e8;
         }
         .cash-on-hand-bar {
-            background: #0a3d5e;
-            color: #fff;
+            background: #e6f0f6;
+            color: #18354b;
             display: flex;
             justify-content: space-between;
             font-size: 18px;
@@ -425,10 +425,10 @@
             break-inside: avoid-page;
         }
         .profit-spotlight {
-            border: 2px solid #14532d;
+            border: 1px solid #cfe3d4;
             border-radius: 14px;
             overflow: hidden;
-            background: linear-gradient(135deg, #f7fff8 0%, #eefaf1 55%, #fdf7e3 100%);
+            background: #fbfdfb;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -438,8 +438,8 @@
             align-items: flex-start;
             gap: 16px;
             padding: 16px 18px 12px;
-            background: linear-gradient(90deg, #14532d 0%, #1f7a45 100%);
-            color: #fff;
+            background: #edf7ef;
+            color: #1f3b2a;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -474,7 +474,7 @@
         .profit-spotlight-formula {
             margin-top: 9px;
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.88);
+            color: #45604f;
             line-height: 1.45;
         }
         .profit-spotlight-note {
@@ -791,7 +791,7 @@
                     {% endfor %}
                 </div>
 
-                <div class="items-total" style="background: #0f3d4a;">
+                <div class="items-total" style="background: #e4f0f6;">
                     <span class="label">TOTAL</span>
                     <span class="value">₱ {{ "%.2f"|format(data.mechanic_supply_items_summary | sum(attribute='total')) }}</span>
                 </div>
@@ -973,7 +973,7 @@
                 <span style="color: #155724; font-weight: 700;">₱ {{ "%.2f"|format(p.amount_paid) }}</span>
             </div>
             {% endfor %}
-            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #155724; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #edf7ef; color: #1f5132; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span>TOTAL COLLECTED</span>
                 <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
             </div>
@@ -1011,7 +1011,7 @@
                 <span style="color: #721c24; font-weight: 700;">₱ {{ "%.2f"|format(refund.refund_amount) }}</span>
             </div>
             {% endfor %}
-            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #721c24; color: #fff; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #fdf0f1; color: #8b2635; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span>TOTAL REFUNDS</span>
                 <span>₱ {{ "%.2f"|format(data.total_refunds) }}</span>
             </div>

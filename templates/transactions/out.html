@@ -2600,6 +2600,15 @@ const handleTableSearch = async (input) => {
             items = items.filter(item => Number(item.a4s_selling_price || 0) <= QUICK_SALE_MAX_PRICE);
         }
 
+        items = items.sort((a, b) => {
+            const aHasStock = Number(a.current_stock || 0) > 0 ? 1 : 0;
+            const bHasStock = Number(b.current_stock || 0) > 0 ? 1 : 0;
+            if (aHasStock !== bHasStock) {
+                return bHasStock - aHasStock;
+            }
+            return Number(b.current_stock || 0) - Number(a.current_stock || 0);
+        });
+
         if (!items.length) {
             if (isQuickSaleMode()) {
                 const emptyState = document.createElement('div');
@@ -2615,7 +2624,7 @@ const handleTableSearch = async (input) => {
             return;
         }
 
-        items.slice(0, 5).forEach(item => {
+        items.slice(0, 10).forEach(item => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action';

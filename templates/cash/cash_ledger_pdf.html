@@ -259,27 +259,36 @@
             font-size: 12px;
         }
 
+        .expense-summary-grid {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
         .expense-summary {
-            margin-bottom: 18px;
-            padding: 14px 16px;
+            flex: 1;
+            min-height: 72px;
+            padding: 8px 10px;
             border: 1px solid #fecaca;
-            border-radius: 10px;
+            border-radius: 7px;
             background: #fef2f2;
+            box-sizing: border-box;
         }
 
         .expense-summary-label {
-            font-size: 10.5px;
+            font-size: 8.5px;
             font-weight: 800;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
             text-transform: uppercase;
             color: #991b1b;
         }
 
         .expense-summary-value {
             margin-top: 6px;
-            font-size: 28px;
+            font-size: 16px;
             font-weight: 800;
             color: #b91c1c;
+            line-height: 1.2;
         }
 
         @media print {
@@ -379,18 +388,41 @@
 
     <div class="page-break section-block">
         <div class="section-header">
-            <h2 class="section-title">Cash Out / Expense Report</h2>
+            <h2 class="section-title">Expense Report</h2>
             <div class="section-subtitle">
                 All cash out entries from the ledger, with mechanic supply expenses included for {{ report.date_label }}.
             </div>
         </div>
 
-        <div class="expense-summary">
-            <div class="expense-summary-label">Total Expenses</div>
-            <div class="expense-summary-value">P{{ "{:,.2f}".format(report.expense_total) }}</div>
+        {% set cash_out_only_categories = ['Bank Deposit', 'Others (Non-related to shop)'] %}
+        {% set expense_ns = namespace(groups=[], total=0) %}
+        {% set cash_out_ns = namespace(groups=[], total=0) %}
+        {% for group in report.expense_groups %}
+            {% if group.category in cash_out_only_categories %}
+                {% set cash_out_ns.groups = cash_out_ns.groups + [group] %}
+                {% set cash_out_ns.total = cash_out_ns.total + group.total_amount %}
+            {% else %}
+                {% set expense_ns.groups = expense_ns.groups + [group] %}
+                {% set expense_ns.total = expense_ns.total + group.total_amount %}
+            {% endif %}
+        {% endfor %}
+
+        <div class="expense-summary-grid">
+            <div class="expense-summary">
+                <div class="expense-summary-label">Overall Total</div>
+                <div class="expense-summary-value">P{{ "{:,.2f}".format(expense_ns.total + cash_out_ns.total) }}</div>
+            </div>
+            <div class="expense-summary">
+                <div class="expense-summary-label">Total Expenses</div>
+                <div class="expense-summary-value">P{{ "{:,.2f}".format(expense_ns.total) }}</div>
+            </div>
+            <div class="expense-summary">
+                <div class="expense-summary-label">Total Cash Out</div>
+                <div class="expense-summary-value">P{{ "{:,.2f}".format(cash_out_ns.total) }}</div>
+            </div>
         </div>
 
-        {% if report.expense_groups %}
+        {% if expense_ns.groups %}
         <table>
             <thead>
                 <tr>
@@ -400,7 +432,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for group in report.expense_groups %}
+                {% for group in expense_ns.groups %}
                 <tr>
                     <td>{{ group.category }}</td>
                     <td class="cell-center">{{ group.entry_count }}</td>
@@ -409,7 +441,43 @@
                 {% endfor %}
                 <tr>
                     <td colspan="2" style="font-weight: 800; background: #f9fafb;">Grand Total</td>
-                    <td class="cell-right" style="font-weight: 800; background: #f9fafb;">P{{ "{:,.2f}".format(report.expense_total) }}</td>
+                    <td class="cell-right" style="font-weight: 800; background: #f9fafb;">P{{ "{:,.2f}".format(expense_ns.total) }}</td>
+                </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            No expense entries found for this report range.
+        </div>
+        {% endif %}
+
+        <div class="section-header" style="margin-top: 24px;">
+            <h2 class="section-title">Cash Out</h2>
+            <div class="section-subtitle">
+                Bank deposits and non-related cash out entries for {{ report.date_label }}.
+            </div>
+        </div>
+
+        {% if cash_out_ns.groups %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th class="cell-center" style="width: 110px;">Entries</th>
+                    <th class="cell-right" style="width: 140px;">Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in cash_out_ns.groups %}
+                <tr>
+                    <td>{{ group.category }}</td>
+                    <td class="cell-center">{{ group.entry_count }}</td>
+                    <td class="cell-right">P{{ "{:,.2f}".format(group.total_amount) }}</td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td colspan="2" style="font-weight: 800; background: #f9fafb;">Grand Total</td>
+                    <td class="cell-right" style="font-weight: 800; background: #f9fafb;">P{{ "{:,.2f}".format(cash_out_ns.total) }}</td>
                 </tr>
             </tbody>
         </table>
