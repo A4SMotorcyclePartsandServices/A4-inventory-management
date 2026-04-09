@@ -68,7 +68,6 @@
 
         .section {
             margin-top: 18px;
-            page-break-inside: avoid;
         }
 
         .section-title {
@@ -291,12 +290,18 @@
             .no-print { display: none; }
             body { margin: 0; padding: 0; }
             .section {
-                page-break-inside: avoid;
-                break-inside: avoid-page;
+                page-break-inside: auto;
+                break-inside: auto;
             }
             table {
                 page-break-inside: auto;
                 break-inside: auto;
+            }
+            .cash-summary,
+            .profit-spotlight,
+            .empty-state {
+                page-break-inside: avoid;
+                break-inside: avoid-page;
             }
             .section-title + table,
             .section-title + .cash-summary {
