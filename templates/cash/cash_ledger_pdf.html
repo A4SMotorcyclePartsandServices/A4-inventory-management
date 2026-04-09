@@ -409,16 +409,16 @@
 
         <div class="expense-summary-grid">
             <div class="expense-summary">
-                <div class="expense-summary-label">Overall Total</div>
-                <div class="expense-summary-value">P{{ "{:,.2f}".format(expense_ns.total + cash_out_ns.total) }}</div>
-            </div>
-            <div class="expense-summary">
                 <div class="expense-summary-label">Total Expenses</div>
                 <div class="expense-summary-value">P{{ "{:,.2f}".format(expense_ns.total) }}</div>
             </div>
             <div class="expense-summary">
                 <div class="expense-summary-label">Total Cash Out</div>
                 <div class="expense-summary-value">P{{ "{:,.2f}".format(cash_out_ns.total) }}</div>
+            </div>
+            <div class="expense-summary">
+                <div class="expense-summary-label">Grand Total</div>
+                <div class="expense-summary-value">P{{ "{:,.2f}".format(expense_ns.total + cash_out_ns.total) }}</div>
             </div>
         </div>
 
