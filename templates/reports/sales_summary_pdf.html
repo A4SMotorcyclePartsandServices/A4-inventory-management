@@ -422,6 +422,46 @@
         </table>
     </div>
 
+    {% if data.mechanic_supply_sales %}
+    <div class="section">
+        <div class="section-title">Mechanic Supply Transactions</div>
+        <table>
+            <thead>
+                <tr>
+                    <th width="14%">Reference</th>
+                    <th width="16%">Mechanic</th>
+                    <th width="50%">Items</th>
+                    <th width="20%" class="text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in data.mechanic_supply_sales %}
+                <tr>
+                    <td>
+                        {{ sale.report_label or 'Mechanic Supply' }}
+                        <div class="muted">Included in transaction details as an expense.</div>
+                    </td>
+                    <td>{{ sale.mechanic_name }}</td>
+                    <td>
+                        {% for item in sale.products %}
+                        <div>
+                            {{ item.quantity }}x {{ item.item_name }}
+                            <span class="muted">at <span class="currency">P {{ "%.2f"|format(item.final_unit_price) }}</span></span>
+                        </div>
+                        {% endfor %}
+                    </td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(sale.total_amount or 0) }}</span></td>
+                </tr>
+                {% endfor %}
+                <tr class="totals-row">
+                    <td colspan="3"><strong>Total Mechanic Supply</strong></td>
+                    <td class="text-right"><strong><span class="currency">P {{ "%.2f"|format(data.mechanic_supply_sales | sum(attribute='total_amount')) }}</span></strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
     <div class="section">
         <div class="section-title">Transaction Details</div>
         <table>
@@ -462,8 +502,14 @@
                 {% endif %}
                 {% if data.total_shop_topup %}
                 <tr>
-                    <td>Quota Top-up</td>
+                    <td>Quota Top-up (Expense)</td>
                     <td class="text-right"><span class="currency">- P {{ "%.2f"|format(data.total_shop_topup) }}</span></td>
+                </tr>
+                {% endif %}
+                {% if data.total_mechanic_supply_expense %}
+                <tr>
+                    <td>Mechanic Supply (Expense)</td>
+                    <td class="text-right"><span class="currency">- P {{ "%.2f"|format(data.total_mechanic_supply_expense) }}</span></td>
                 </tr>
                 {% endif %}
                 {% if data.total_non_cash_floating %}
@@ -480,51 +526,12 @@
         </table>
     </div>
 
-    {% if data.mechanic_supply_sales %}
-    <div class="section">
-        <div class="section-title">Mechanic Supply Transactions</div>
-        <table>
-            <thead>
-                <tr>
-                    <th width="14%">Reference</th>
-                    <th width="16%">Mechanic</th>
-                    <th width="50%">Items</th>
-                    <th width="20%" class="text-right">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sale in data.mechanic_supply_sales %}
-                <tr>
-                    <td>
-                        {{ sale.report_label or 'Mechanic Supply' }}
-                        <div class="muted">Excluded from sales calculations</div>
-                    </td>
-                    <td>{{ sale.mechanic_name }}</td>
-                    <td>
-                        {% for item in sale.products %}
-                        <div>
-                            {{ item.quantity }}x {{ item.item_name }}
-                            <span class="muted">at <span class="currency">P {{ "%.2f"|format(item.final_unit_price) }}</span></span>
-                        </div>
-                        {% endfor %}
-                    </td>
-                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(sale.total_amount or 0) }}</span></td>
-                </tr>
-                {% endfor %}
-                <tr class="totals-row">
-                    <td colspan="3"><strong>Total Mechanic Supply</strong></td>
-                    <td class="text-right"><strong><span class="currency">P {{ "%.2f"|format(data.mechanic_supply_sales | sum(attribute='total_amount')) }}</span></strong></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-
     {% if session.get('role') == 'admin' %}
     {% set product_profit = data.total_product_profit or 0 %}
     {% set shop_share_profit = data.total_shop_commission or 0 %}
     {% set shop_topup_expense = data.total_shop_topup or 0 %}
-    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense) %}
+    {% set mechanic_supply_expense = data.total_mechanic_supply_expense or 0 %}
+    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
@@ -538,6 +545,9 @@
                     - Cost <span class="currency">P {{ "%.2f"|format(data.total_product_cost or 0) }}</span>
                     + Shop Share <span class="currency">P {{ "%.2f"|format(shop_share_profit) }}</span>
                     - Quota Top-up <span class="currency">P {{ "%.2f"|format(shop_topup_expense) }}</span>
+                    {% if mechanic_supply_expense > 0 %}
+                    - Mechanic Supply <span class="currency">P {{ "%.2f"|format(mechanic_supply_expense) }}</span>
+                    {% endif %}
                     = {{ product_result_label }} <span class="currency">P {{ "%.2f"|format(product_result_display) }}</span>
                 </div>
             </div>
@@ -563,6 +573,13 @@
                 <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(shop_topup_expense) }}</span></div>
                 <div class="profit-metric-sub">Mechanic quota shortfall covered by the shop for the selected report period.</div>
             </div>
+            {% if mechanic_supply_expense > 0 %}
+            <div class="profit-metric cost">
+                <div class="profit-metric-label">Mechanic Supply</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(mechanic_supply_expense) }}</span></div>
+                <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
+            </div>
+            {% endif %}
             <div class="profit-metric revenue">
                 <div class="profit-metric-label">Floating Non-Cash</div>
                 <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</span></div>

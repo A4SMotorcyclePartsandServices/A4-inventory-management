@@ -809,6 +809,9 @@ def init_db():
         reward_basis        TEXT NOT NULL DEFAULT 'STAMPS' CHECK(reward_basis IN (
                                 'STAMPS', 'POINTS', 'STAMPS_OR_POINTS'
                             )),
+        point_rule_mode     TEXT NOT NULL DEFAULT 'ADVANCED' CHECK(point_rule_mode IN (
+                                'FIRST_MATCH', 'STACK_ALL', 'ADVANCED'
+                            )),
         program_mode        TEXT NOT NULL DEFAULT 'REDEEMABLE' CHECK(program_mode IN ('REDEEMABLE', 'EARN_ONLY')),
         reward_type         TEXT NOT NULL CHECK(reward_type IN (
                                 'NONE',
@@ -834,6 +837,7 @@ def init_db():
     cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS points_threshold INTEGER NOT NULL DEFAULT 0")
     cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS reward_basis TEXT NOT NULL DEFAULT 'STAMPS'")
     cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS program_mode TEXT NOT NULL DEFAULT 'REDEEMABLE'")
+    cur.execute("ALTER TABLE loyalty_programs ADD COLUMN IF NOT EXISTS point_rule_mode TEXT NOT NULL DEFAULT 'ADVANCED'")
     # Ensure reward_type constraint includes RAFFLE_ENTRY for existing DBs.
     cur.execute("""
     DO $$
@@ -853,6 +857,24 @@ def init_db():
                 'DISCOUNT_PERCENT', 'DISCOUNT_AMOUNT',
                 'RAFFLE_ENTRY'
             ));
+        EXCEPTION WHEN duplicate_object THEN
+            NULL;
+        END;
+    END $$;
+    """)
+    cur.execute("""
+    DO $$
+    BEGIN
+        BEGIN
+            ALTER TABLE loyalty_programs DROP CONSTRAINT IF EXISTS loyalty_programs_point_rule_mode_check;
+        EXCEPTION WHEN undefined_table THEN
+            NULL;
+        END;
+
+        BEGIN
+            ALTER TABLE loyalty_programs
+            ADD CONSTRAINT loyalty_programs_point_rule_mode_check
+            CHECK (point_rule_mode IN ('FIRST_MATCH', 'STACK_ALL', 'ADVANCED'));
         EXCEPTION WHEN duplicate_object THEN
             NULL;
         END;

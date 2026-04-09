@@ -24,7 +24,10 @@ from services.idempotency_service import (
     extract_idempotency_key,
     finalize_idempotent_request,
 )
-from services.reports_service import get_mechanic_payouts_for_dates
+from services.reports_service import (
+    get_mechanic_payouts_for_dates,
+    get_mechanic_supply_expense_summary,
+)
 from utils.timezone import now_local, today_local
 
 cash_bp = Blueprint('cash', __name__)
@@ -130,6 +133,17 @@ def _build_cash_report_context(branch_id):
         ledger_view=ledger_view,
     )
     expense_groups, expense_total = _build_expense_report_groups(report_data["entries"])
+    mechanic_supply_summary = {"transaction_count": 0, "total_amount": 0.0}
+    if ledger_view != "deleted":
+        mechanic_supply_summary = get_mechanic_supply_expense_summary(start_date, end_date)
+        if mechanic_supply_summary["total_amount"] > 0:
+            expense_groups.append({
+                "category": "Mechanic Supply",
+                "entry_count": mechanic_supply_summary["transaction_count"],
+                "total_amount": mechanic_supply_summary["total_amount"],
+            })
+            expense_groups = sorted(expense_groups, key=lambda group: group["category"].lower())
+            expense_total = round(expense_total + mechanic_supply_summary["total_amount"], 2)
 
     if start_date == end_date:
         date_label = format_date(start_date)
@@ -168,6 +182,7 @@ def _build_cash_report_context(branch_id):
         "entries": report_data["entries"],
         "expense_groups": expense_groups,
         "expense_total": expense_total,
+        "mechanic_supply_expense_total": mechanic_supply_summary["total_amount"],
         "total_in": report_data["total_in"],
         "total_out": report_data["total_out"],
         "net_movement": report_data["cash_on_hand"],

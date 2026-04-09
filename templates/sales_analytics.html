@@ -806,7 +806,8 @@
     {% set product_profit = analytics.summary.product_profit or 0 %}
     {% set shop_share_profit = analytics.summary.shop_share_profit or 0 %}
     {% set shop_topup_expense = analytics.summary.total_shop_topup or 0 %}
-    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense) %}
+    {% set mechanic_supply_expense = analytics.summary.total_mechanic_supply_expense or 0 %}
+    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
@@ -817,7 +818,7 @@
                     <div class="profit-spotlight-title">Profit Analysis</div>
                     <div class="profit-main-meta">
                         <span class="dot"></span>
-                        Product profit plus shop share, less quota top-up
+                        Product profit plus shop share, less quota top-up and mechanic supply expense
                     </div>
                     <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ product_result_label }}</div>
                     <div class="profit-spotlight-value">PHP {{ "{:,.2f}".format(product_result_display) }}</div>
@@ -826,6 +827,9 @@
                         - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
                         + Shop Share (PHP {{ "{:,.2f}".format(shop_share_profit) }})
                         - Quota Top-up (PHP {{ "{:,.2f}".format(shop_topup_expense) }})
+                        {% if mechanic_supply_expense > 0 %}
+                        - Mechanic Supply (PHP {{ "{:,.2f}".format(mechanic_supply_expense) }})
+                        {% endif %}
                         = {{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
                     </div>
                 </div>
@@ -850,6 +854,12 @@
                         <span class="profit-breakdown-label">Quota Top-up</span>
                         <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</span>
                     </div>
+                    {% if mechanic_supply_expense > 0 %}
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Mechanic Supply</span>
+                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="profit-spotlight-body">
@@ -873,6 +883,13 @@
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</div>
                     <div class="profit-metric-sub">Mechanic quota shortfall covered by the shop for the selected report period.</div>
                 </div>
+                {% if mechanic_supply_expense > 0 %}
+                <div class="profit-metric cost">
+                    <div class="profit-metric-label">Mechanic Supply</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</div>
+                    <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
+                </div>
+                {% endif %}
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Floating Non-Cash</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.total_non_cash_floating or 0) }}</div>

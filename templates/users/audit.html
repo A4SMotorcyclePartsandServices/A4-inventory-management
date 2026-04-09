@@ -5168,6 +5168,28 @@ function getLoyaltyRewardLabel(program) {
     }[program.reward_type] || program.reward_type;
 }
 
+function getLoyaltyPointRuleModeLabel(program) {
+    return {
+        FIRST_MATCH: 'First Match',
+        STACK_ALL: 'Stack Rules',
+        ADVANCED: 'Advanced Flow',
+    }[String(program.point_rule_mode || 'ADVANCED').toUpperCase()] || 'Advanced Flow';
+}
+
+function getLoyaltyPointRuleModeBadge(program, withMargin = false) {
+    if (Number(program.points_enabled ?? 0) !== 1) {
+        return '';
+    }
+    const classes = {
+        FIRST_MATCH: 'badge bg-dark border border-warning text-warning',
+        STACK_ALL: 'badge bg-dark border border-info text-info',
+        ADVANCED: 'badge bg-dark border border-secondary text-secondary',
+    };
+    const mode = String(program.point_rule_mode || 'ADVANCED').toUpperCase();
+    const badgeClass = classes[mode] || classes.ADVANCED;
+    return `<span class="${badgeClass}${withMargin ? ' me-1' : ''}">${getLoyaltyPointRuleModeLabel(program)}</span>`;
+}
+
 function getLoyaltyEarningBadges(program) {
     const stampEnabled = Number(program.stamp_enabled ?? 1) === 1;
     const pointsEnabled = Number(program.points_enabled ?? 0) === 1;
@@ -5177,6 +5199,7 @@ function getLoyaltyEarningBadges(program) {
     return [
         stampEnabled ? `<span class="badge bg-dark border border-success text-success">Stamps ${program.threshold || 0}</span>` : '',
         pointsEnabled ? `<span class="badge bg-dark border border-info text-info">Points ${ruleCount} rule${ruleCount === 1 ? '' : 's'}</span>` : '',
+        getLoyaltyPointRuleModeBadge(program),
         pointsEnabled && Number(program.points_threshold || 0) > 0
             ? `<span class="badge bg-dark border border-primary text-primary">Pts Target ${program.points_threshold}</span>`
             : '',
@@ -5254,6 +5277,7 @@ async function loadLoyaltyPrograms() {
             const earningBadges = [
                 stampEnabled ? `<span class="badge bg-dark border border-success text-success me-1">Stamps ${p.threshold || 0}</span>` : '',
                 pointsEnabled ? `<span class="badge bg-dark border border-info text-info me-1">Points ${ruleCount} rule${ruleCount === 1 ? '' : 's'}</span>` : '',
+                getLoyaltyPointRuleModeBadge(p, true),
                 pointsEnabled && Number(p.points_threshold || 0) > 0
                     ? `<span class="badge bg-dark border border-primary text-primary me-1">Pts Target ${p.points_threshold}</span>`
                     : '',
@@ -5378,6 +5402,12 @@ function openLoyaltyProgramDetails(programId) {
             `;
         }).join('')
         : '<div class="text-muted">No point rules configured for this program.</div>';
+    if (Number(program.points_enabled ?? 0) === 1) {
+        document.getElementById('loyaltyDetailRules').innerHTML = `
+            <div class="text-white-50 mb-2">Evaluation mode: <span class="text-info">${getLoyaltyPointRuleModeLabel(program)}</span></div>
+            ${document.getElementById('loyaltyDetailRules').innerHTML}
+        `;
+    }
 
     new bootstrap.Modal(document.getElementById('loyaltyProgramDetailsModal')).show();
 }

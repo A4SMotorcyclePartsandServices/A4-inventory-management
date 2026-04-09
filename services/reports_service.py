@@ -301,6 +301,28 @@ def _build_mechanic_supply_report_context(start_date, end_date):
     }
 
 
+def get_mechanic_supply_expense_summary(start_date, end_date):
+    conn = get_db()
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS transaction_count,
+            COALESCE(SUM(s.total_amount), 0) AS total_amount
+        FROM sales s
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+          AND COALESCE(s.status, 'Paid') = 'Paid'
+        """,
+        (start_date, end_date),
+    ).fetchone()
+    conn.close()
+
+    return {
+        "transaction_count": int((row["transaction_count"] if row else 0) or 0),
+        "total_amount": round(_num(row["total_amount"] if row else 0), 2),
+    }
+
+
 def _load_bundles_by_sale(conn, sale_ids):
     if not sale_ids:
         return {}
@@ -617,6 +639,40 @@ def _compose_sale_mechanic_label(sale, services=None, bundles=None):
 
     fallback_name = str((sale or {}).get("mechanic_name") or "").strip()
     return fallback_name or "-"
+
+
+def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
+    breakdown = []
+    index_by_name = {}
+
+    def _get_or_add(name):
+        normalized_name = str(name or "").strip() or "-"
+        existing_index = index_by_name.get(normalized_name)
+        if existing_index is not None:
+            return breakdown[existing_index]
+
+        entry = {
+            "mechanic_name": normalized_name,
+            "service_total": 0.0,
+        }
+        index_by_name[normalized_name] = len(breakdown)
+        breakdown.append(entry)
+        return entry
+
+    for service in services or []:
+        entry = _get_or_add(service.get("mechanic_name") or (sale or {}).get("mechanic_name"))
+        entry["service_total"] = round(entry["service_total"] + _num(service.get("price")), 2)
+
+    bundle_owner_name = str((sale or {}).get("mechanic_name") or "").strip()
+    bundle_service_total = round(
+        sum(_num(bundle.get("service_component_total")) for bundle in (bundles or [])),
+        2,
+    )
+    if bundle_service_total > 0:
+        entry = _get_or_add(bundle_owner_name or "-")
+        entry["service_total"] = round(entry["service_total"] + bundle_service_total, 2)
+
+    return [entry for entry in breakdown if round(_num(entry.get("service_total")), 2) > 0]
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────
@@ -1361,6 +1417,8 @@ def get_sales_report_by_date(report_date):
         if sale["status"] == "Paid":
             total_amount = _num(sale["total_amount"])
             sale_products = items_by_sale.get(sale_id, [])
+            sale_services = services_by_sale.get(sale_id, [])
+            sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
             bundle_product_cost = round(
                 sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
@@ -1378,7 +1436,8 @@ def get_sales_report_by_date(report_date):
             sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
                 "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
-                "mechanic_name": _compose_sale_mechanic_label(sale, services_by_sale.get(sale_id, []), sale_bundles),
+                "mechanic_name": _compose_sale_mechanic_label(sale, sale_services, sale_bundles),
+                "mechanic_breakdown": sale_mechanic_breakdown,
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
                 "bundle_service_total": bundle_service_total,
@@ -1392,7 +1451,7 @@ def get_sales_report_by_date(report_date):
                 "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,
-                "services": services_by_sale.get(sale_id, []),
+                "services": sale_services,
                 "bundles": sale_bundles,
                 "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
                 "exchange_number": sale["exchange_number"] or "",
@@ -1432,8 +1491,12 @@ def get_sales_report_by_date(report_date):
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
     mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
+    total_mechanic_supply_expense = round(
+        sum(_num(sale.get("total_amount")) for sale in mechanic_supply_sales),
+        2,
+    )
     total_profit_with_shop_share = round(
-        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"],
+        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"] - total_mechanic_supply_expense,
         2,
     )
 
@@ -1445,9 +1508,18 @@ def get_sales_report_by_date(report_date):
         "mechanic_summary": mechanic_summary,
         "items_summary": items_summary,
         "total_gross": round(total_gross, 2),
+        "total_mechanic_supply_expense": total_mechanic_supply_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
-        "net_revenue": round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "net_revenue": round(
+            total_gross
+            - total_refunds
+            - total_mechanic_supply_expense
+            - totals["total_mech_cut"]
+            - totals["total_shop_topup"]
+            + total_debt_collected,
+            2,
+        ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
         "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
@@ -1670,6 +1742,8 @@ def get_sales_report_by_range(start_date, end_date):
         if sale["status"] == "Paid":
             total_amount = _num(sale["total_amount"])
             sale_products = items_by_sale.get(sale_id, [])
+            sale_services = services_by_sale.get(sale_id, [])
+            sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
             bundle_product_cost = round(
                 sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
@@ -1687,7 +1761,8 @@ def get_sales_report_by_range(start_date, end_date):
             sale_payload = {
                 "sales_number": sale["sales_number"] or f"#{sale_id}",
                 "customer_name": sale["customer_name"] or ("-" if is_mechanic_supply else "Walk-in"),
-                "mechanic_name": _compose_sale_mechanic_label(sale, services_by_sale.get(sale_id, []), sale_bundles),
+                "mechanic_name": _compose_sale_mechanic_label(sale, sale_services, sale_bundles),
+                "mechanic_breakdown": sale_mechanic_breakdown,
                 "services_total": services_total,
                 "standalone_services_total": round(standalone_services_total, 2),
                 "bundle_service_total": bundle_service_total,
@@ -1701,7 +1776,7 @@ def get_sales_report_by_range(start_date, end_date):
                 "notes": sale["notes"] or "",
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,
-                "services": services_by_sale.get(sale_id, []),
+                "services": sale_services,
                 "bundles": sale_bundles,
                 "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
                 "exchange_number": sale["exchange_number"] or "",
@@ -1740,8 +1815,12 @@ def get_sales_report_by_range(start_date, end_date):
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
     mechanic_supply_items_summary = _summarize_mechanic_supply_items(mechanic_supply_sales)
+    total_mechanic_supply_expense = round(
+        sum(_num(sale.get("total_amount")) for sale in mechanic_supply_sales),
+        2,
+    )
     total_profit_with_shop_share = round(
-        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"],
+        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"] - total_mechanic_supply_expense,
         2,
     )
 
@@ -1753,9 +1832,18 @@ def get_sales_report_by_range(start_date, end_date):
         "mechanic_summary": mechanic_summary,
         "items_summary": items_summary,
         "total_gross": round(total_gross, 2),
+        "total_mechanic_supply_expense": total_mechanic_supply_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
-        "net_revenue": round(total_gross - total_refunds - totals["total_mech_cut"] - totals["total_shop_topup"] + total_debt_collected, 2),
+        "net_revenue": round(
+            total_gross
+            - total_refunds
+            - total_mechanic_supply_expense
+            - totals["total_mech_cut"]
+            - totals["total_shop_topup"]
+            + total_debt_collected,
+            2,
+        ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
         "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),

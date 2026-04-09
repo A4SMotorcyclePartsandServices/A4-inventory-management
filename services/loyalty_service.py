@@ -5,6 +5,8 @@ from db.database import get_db
 from utils.formatters import format_date
 from utils.timezone import today_local
 
+POINT_RULE_MODES = {"FIRST_MATCH", "STACK_ALL", "ADVANCED"}
+
 
 def _expire_elapsed_programs(conn):
     conn.execute(
@@ -30,6 +32,13 @@ def _to_bool_int(value, default=False):
 
 def _json_safe_reward_value(value):
     return float(value or 0)
+
+
+def _normalize_point_rule_mode(value):
+    mode = str(value or "ADVANCED").strip().upper()
+    if mode not in POINT_RULE_MODES:
+        raise ValueError("point_rule_mode must be FIRST_MATCH, STACK_ALL, or ADVANCED.")
+    return mode
 
 
 def _normalize_point_rules(raw_rules):
@@ -191,6 +200,7 @@ def create_program(data, user_id):
 
     reward_basis = (data.get("reward_basis") or "STAMPS").strip().upper()
     program_mode = (data.get("program_mode") or "REDEEMABLE").strip().upper()
+    point_rule_mode = _normalize_point_rule_mode(data.get("point_rule_mode"))
     reward_type = (data.get("reward_type") or "DISCOUNT_AMOUNT").strip().upper()
     try:
         reward_value = float(data.get("reward_value") or 0)
@@ -238,6 +248,8 @@ def create_program(data, user_id):
         raise ValueError("Enable at least one earning mode: stamps or points.")
     if points_enabled and not point_rules:
         raise ValueError("At least one valid point rule is required when points are enabled.")
+    if not points_enabled:
+        point_rule_mode = "ADVANCED"
     if points_threshold < 0:
         raise ValueError("points_threshold cannot be negative.")
     if program_mode == "REDEEMABLE":
@@ -301,12 +313,13 @@ def create_program(data, user_id):
             """
             INSERT INTO loyalty_programs (
                 name, program_type, qualifying_id, threshold, points_threshold, reward_basis,
+                point_rule_mode,
                 program_mode,
                 reward_type, reward_value, reward_description,
                 period_start, period_end, branch_id,
                 stamp_enabled, points_enabled,
                 is_active, created_by
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
             RETURNING id
             """,
             (
@@ -316,6 +329,7 @@ def create_program(data, user_id):
                 threshold_to_save,
                 points_threshold if points_enabled else 0,
                 reward_basis,
+                point_rule_mode,
                 program_mode,
                 reward_type,
                 reward_value,
@@ -537,6 +551,7 @@ def log_stamps_for_sale(sale_id, customer_id, service_ids, item_ids, sale_date, 
             id,
             program_type,
             qualifying_id,
+            COALESCE(point_rule_mode, 'ADVANCED') AS point_rule_mode,
             COALESCE(stamp_enabled, 1) AS stamp_enabled,
             COALESCE(points_enabled, 0) AS points_enabled
         FROM loyalty_programs
@@ -581,6 +596,7 @@ def log_stamps_for_sale(sale_id, customer_id, service_ids, item_ids, sale_date, 
 
     for program in programs:
         program_id = int(program["id"])
+        point_rule_mode = str(program["point_rule_mode"] or "ADVANCED").upper()
         qualifies_on_stamp = False
 
         if int(program["stamp_enabled"] or 0) == 1:
@@ -623,7 +639,7 @@ def log_stamps_for_sale(sale_id, customer_id, service_ids, item_ids, sale_date, 
                 ),
             )
 
-            if int(rule.get("stop_on_match") or 0) == 1:
+            if point_rule_mode == "FIRST_MATCH" or (point_rule_mode == "ADVANCED" and int(rule.get("stop_on_match") or 0) == 1):
                 break
 
 

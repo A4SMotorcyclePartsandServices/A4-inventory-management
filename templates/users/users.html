@@ -1930,14 +1930,32 @@
 
                 <div class="col-12" id="lf-points-rules-card" style="display:none;">
                     <div class="p-2 rounded border border-secondary" style="background:#171717;">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
                             <strong class="text-white-50" style="font-size:0.8rem;">Point Rules</strong>
-                            <button type="button" class="btn btn-sm btn-outline-info" onclick="loyaltyAddRuleRow()">
-                                <i class="bi bi-plus-lg me-1"></i>Add Rule
-                            </button>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <select id="lf-point-ui-mode" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 170px;" onchange="loyaltyPointConfigChanged()">
+                                    <option value="SIMPLE">Simple Mode</option>
+                                    <option value="ADVANCED">Advanced Mode</option>
+                                </select>
+                                <select id="lf-point-rule-mode" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 220px;" onchange="loyaltyPointConfigChanged()">
+                                    <option value="FIRST_MATCH">First matching rule only</option>
+                                    <option value="STACK_ALL">Stack matching rules</option>
+                                    <option value="ADVANCED">Advanced per-rule flow</option>
+                                </select>
+                                <button type="button" class="btn btn-sm btn-outline-info" onclick="loyaltyAddRuleRow()">
+                                    <i class="bi bi-plus-lg me-1"></i>Add Rule
+                                </button>
+                            </div>
                         </div>
+                        <div class="small text-white-50 mb-2" id="lf-point-mode-help">
+                            Simple mode uses business-style conditions. Advanced mode exposes priority and stop-on-match for edge cases.
+                        </div>
+                        <div class="small text-secondary mb-2" id="lf-point-mode-tooltip">
+                            First matching rule only: use this for setups like "20 else 10". Stack matching rules: use this when multiple bonuses should combine on the same sale.
+                        </div>
+                        <div id="lf-point-rules-warning" class="small text-warning mb-2" style="display:none;"></div>
                         <div id="lf-point-rules"></div>
-                        <small class="text-warning">Rules are checked by priority. Enable "Stop on match" for first-match wins.</small>
+                        <div class="small text-info" id="lf-point-rules-preview">Add point rules to see a plain-language preview.</div>
                     </div>
                 </div>
 
@@ -5548,6 +5566,28 @@ function getLoyaltyRewardLabel(program) {
     }[program.reward_type] || program.reward_type;
 }
 
+function getLoyaltyPointRuleModeLabel(program) {
+    return {
+        FIRST_MATCH: 'First Match',
+        STACK_ALL: 'Stack All',
+        ADVANCED: 'Advanced Flow',
+    }[String(program.point_rule_mode || 'ADVANCED').toUpperCase()] || 'Advanced Flow';
+}
+
+function getLoyaltyPointRuleModeBadge(program, withMargin = false) {
+    if (Number(program.points_enabled ?? 0) !== 1) {
+        return '';
+    }
+    const classes = {
+        FIRST_MATCH: 'badge bg-dark border border-warning text-warning',
+        STACK_ALL: 'badge bg-dark border border-info text-info',
+        ADVANCED: 'badge bg-dark border border-secondary text-secondary',
+    };
+    const mode = String(program.point_rule_mode || 'ADVANCED').toUpperCase();
+    const badgeClass = classes[mode] || classes.ADVANCED;
+    return `<span class="${badgeClass}${withMargin ? ' me-1' : ''}">${getLoyaltyPointRuleModeLabel(program)}</span>`;
+}
+
 function getLoyaltyEarningBadges(program) {
     const stampEnabled = Number(program.stamp_enabled ?? 1) === 1;
     const pointsEnabled = Number(program.points_enabled ?? 0) === 1;
@@ -5557,6 +5597,7 @@ function getLoyaltyEarningBadges(program) {
     return [
         stampEnabled ? `<span class="badge bg-dark border border-success text-success">Stamps ${program.threshold || 0}</span>` : '',
         pointsEnabled ? `<span class="badge bg-dark border border-info text-info">Points ${ruleCount} rule${ruleCount === 1 ? '' : 's'}</span>` : '',
+        getLoyaltyPointRuleModeBadge(program),
         pointsEnabled && Number(program.points_threshold || 0) > 0
             ? `<span class="badge bg-dark border border-primary text-primary">Pts Target ${program.points_threshold}</span>`
             : '',
@@ -5637,6 +5678,7 @@ async function loadLoyaltyPrograms() {
             const earningBadges = [
                 stampEnabled ? `<span class="badge bg-dark border border-success text-success me-1">Stamps ${p.threshold || 0}</span>` : '',
                 pointsEnabled ? `<span class="badge bg-dark border border-info text-info me-1">Points ${ruleCount} rule${ruleCount === 1 ? '' : 's'}</span>` : '',
+                getLoyaltyPointRuleModeBadge(p, true),
                 pointsEnabled && Number(p.points_threshold || 0) > 0
                     ? `<span class="badge bg-dark border border-primary text-primary me-1">Pts Target ${p.points_threshold}</span>`
                     : '',
@@ -5776,6 +5818,12 @@ function openLoyaltyProgramDetails(programId) {
             `;
         }).join('')
         : '<div class="text-muted">No point rules configured for this program.</div>';
+    if (Number(program.points_enabled ?? 0) === 1) {
+        document.getElementById('loyaltyDetailRules').innerHTML = `
+            <div class="text-white-50 mb-2">Evaluation mode: <span class="text-info">${getLoyaltyPointRuleModeLabel(program)}</span></div>
+            ${document.getElementById('loyaltyDetailRules').innerHTML}
+        `;
+    }
 
     new bootstrap.Modal(document.getElementById('loyaltyProgramDetailsModal')).show();
 }
@@ -5928,6 +5976,14 @@ function loyaltyTypeChanged() {
     input.value = '';
     document.getElementById('lf-qualifying-id').value = '';
     document.getElementById('lf-qualifying-suggestions').style.display = 'none';
+    document.querySelectorAll('.lf-rule-simple-condition').forEach((select) => {
+        const currentValue = select.value;
+        select.innerHTML = loyaltyBuildSimpleConditionOptions(currentValue);
+        if (!select.value) {
+            select.value = loyaltyGetSimpleConditionOptions()[0]?.value || 'QUALIFYING_PURCHASE';
+        }
+    });
+    loyaltyRenderPointRulesPreview();
 }
 
 function loyaltyModesChanged() {
@@ -6003,6 +6059,198 @@ function loyaltyModesChanged() {
     if (pointsEnabled && !document.querySelector('.lf-point-rule-row')) {
         loyaltyAddRuleRow();
     }
+    loyaltyPointConfigChanged();
+}
+
+function loyaltyGetPointUiMode() {
+    return document.getElementById('lf-point-ui-mode')?.value || 'SIMPLE';
+}
+
+function loyaltyGetPointRuleMode() {
+    return document.getElementById('lf-point-rule-mode')?.value || 'FIRST_MATCH';
+}
+
+function loyaltyGetSimpleConditionOptions() {
+    const programType = document.getElementById('lf-type')?.value || 'SERVICE';
+    if (programType === 'ITEM') {
+        return [
+            { value: 'QUALIFYING_PURCHASE', label: 'Any qualifying item sale' },
+            { value: 'QUALIFYING_WITH_ANY_SERVICE', label: 'Qualifying item + any service' },
+            { value: 'ANY_ITEM', label: 'Any item sale' },
+        ];
+    }
+    return [
+        { value: 'QUALIFYING_PURCHASE', label: 'Any qualifying service sale' },
+        { value: 'QUALIFYING_WITH_ANY_ITEM', label: 'Qualifying service + any item' },
+        { value: 'ANY_SERVICE', label: 'Any service sale' },
+    ];
+}
+
+function loyaltyBuildSimpleConditionOptions(selectedValue) {
+    return loyaltyGetSimpleConditionOptions().map((option) => (
+        `<option value="${option.value}" ${option.value === selectedValue ? 'selected' : ''}>${option.label}</option>`
+    )).join('');
+}
+
+function loyaltyDescribeSimpleRule(conditionKind, qualifyingName, programType) {
+    const safeName = qualifyingName || (programType === 'ITEM' ? 'the qualifying item' : 'the qualifying service');
+    const mode = String(conditionKind || 'QUALIFYING_PURCHASE').toUpperCase();
+    if (programType === 'ITEM') {
+        return {
+            QUALIFYING_PURCHASE: `sale includes ${safeName}`,
+            QUALIFYING_WITH_ANY_SERVICE: `sale includes ${safeName} and any service`,
+            ANY_ITEM: 'sale includes any item',
+        }[mode] || `sale matches ${safeName}`;
+    }
+    return {
+        QUALIFYING_PURCHASE: `sale includes ${safeName}`,
+        QUALIFYING_WITH_ANY_ITEM: `sale includes ${safeName} and any item`,
+        ANY_SERVICE: 'sale includes any service',
+    }[mode] || `sale matches ${safeName}`;
+}
+
+function loyaltyTranslateSimpleRule(row, idx) {
+    const qualifyingId = parseInt(document.getElementById('lf-qualifying-id')?.value || '0', 10) || null;
+    const programType = document.getElementById('lf-type')?.value || 'SERVICE';
+    const conditionKind = row.querySelector('.lf-rule-simple-condition')?.value || 'QUALIFYING_PURCHASE';
+    const points = parseInt(row.querySelector('.lf-rule-points').value || '0', 10) || 0;
+    const baseRule = {
+        rule_name: row.querySelector('.lf-rule-name').value.trim(),
+        service_id: null,
+        item_id: null,
+        points,
+        priority: (idx + 1) * 10,
+        requires_any_item: false,
+        requires_any_service: false,
+        stop_on_match: false,
+        simple_condition_kind: conditionKind,
+    };
+
+    if (programType === 'ITEM') {
+        if (conditionKind === 'QUALIFYING_PURCHASE' || conditionKind === 'QUALIFYING_WITH_ANY_SERVICE') {
+            baseRule.item_id = qualifyingId;
+        }
+        if (conditionKind === 'QUALIFYING_WITH_ANY_SERVICE') {
+            baseRule.requires_any_service = true;
+        }
+        if (conditionKind === 'ANY_ITEM') {
+            baseRule.requires_any_item = true;
+        }
+    } else {
+        if (conditionKind === 'QUALIFYING_PURCHASE' || conditionKind === 'QUALIFYING_WITH_ANY_ITEM') {
+            baseRule.service_id = qualifyingId;
+        }
+        if (conditionKind === 'QUALIFYING_WITH_ANY_ITEM') {
+            baseRule.requires_any_item = true;
+        }
+        if (conditionKind === 'ANY_SERVICE') {
+            baseRule.requires_any_service = true;
+        }
+    }
+
+    if (!baseRule.rule_name) {
+        baseRule.rule_name = loyaltyDescribeSimpleRule(conditionKind, document.getElementById('lf-qualifying-search')?.value.trim(), programType);
+    }
+
+    return baseRule;
+}
+
+function loyaltyDescribeRule(rule) {
+    const qualifyingName = document.getElementById('lf-qualifying-search')?.value.trim();
+    const programType = document.getElementById('lf-type')?.value || 'SERVICE';
+    if (rule.simple_condition_kind) {
+        return loyaltyDescribeSimpleRule(rule.simple_condition_kind, qualifyingName, programType);
+    }
+
+    const conditions = [];
+    if (rule.service_label) {
+        conditions.push(`sale includes ${rule.service_label}`);
+    } else if (rule.service_id) {
+        conditions.push(`sale includes service #${rule.service_id}`);
+    }
+    if (rule.item_label) {
+        conditions.push(`sale includes ${rule.item_label}`);
+    } else if (rule.item_id) {
+        conditions.push(`sale includes item #${rule.item_id}`);
+    }
+    if (rule.requires_any_service) conditions.push('sale includes any service');
+    if (rule.requires_any_item) conditions.push('sale includes any item');
+    return conditions.length ? conditions.join(' and ') : 'sale matches this rule';
+}
+
+function loyaltyRenderPointRulesPreview() {
+    const previewEl = document.getElementById('lf-point-rules-preview');
+    const warningEl = document.getElementById('lf-point-rules-warning');
+    if (!previewEl || !warningEl) return;
+
+    const pointRules = loyaltyCollectRuleRows().filter(r => r.points > 0);
+    const ruleMode = loyaltyGetPointRuleMode();
+    warningEl.style.display = 'none';
+    warningEl.textContent = '';
+
+    if (!pointRules.length) {
+        previewEl.innerHTML = 'Add point rules to see a plain-language preview.';
+        return;
+    }
+
+    const previewLines = pointRules.map((rule, idx) => {
+        const prefix = ruleMode === 'FIRST_MATCH' && idx > 0 ? 'Otherwise, if' : 'If';
+        return `${idx + 1}. ${prefix} ${loyaltyDescribeRule(rule)}, award ${rule.points} point${rule.points === 1 ? '' : 's'}.`;
+    });
+
+    if (ruleMode === 'STACK_ALL' && pointRules.length > 1) {
+        warningEl.textContent = 'Matching rules will stack together in this program. Use First matching rule only if the rows should behave like "20 else 10" instead of "20 + 10".';
+        warningEl.style.display = '';
+    }
+
+    if (ruleMode === 'FIRST_MATCH') {
+        const broadRuleIndex = pointRules.findIndex(rule => String(rule.simple_condition_kind || '') === 'QUALIFYING_PURCHASE');
+        const narrowRuleLater = pointRules.findIndex((rule, idx) => idx > broadRuleIndex && ['QUALIFYING_WITH_ANY_ITEM', 'QUALIFYING_WITH_ANY_SERVICE'].includes(String(rule.simple_condition_kind || '')));
+        if (broadRuleIndex >= 0 && narrowRuleLater >= 0) {
+            warningEl.textContent = 'A broader qualifying-sale rule appears before a more specific rule. In First matching rule only mode, the later specific rule will never run.';
+            warningEl.style.display = '';
+        }
+    }
+
+    previewEl.innerHTML = previewLines.join('<br>');
+}
+
+function loyaltyPointConfigChanged() {
+    const uiMode = loyaltyGetPointUiMode();
+    const ruleModeSelect = document.getElementById('lf-point-rule-mode');
+    const helpEl = document.getElementById('lf-point-mode-help');
+    const tooltipEl = document.getElementById('lf-point-mode-tooltip');
+    document.querySelectorAll('.lf-point-rule-row').forEach((row) => {
+        row.querySelectorAll('[data-simple-rule]').forEach((el) => {
+            el.style.display = uiMode === 'SIMPLE' ? '' : 'none';
+        });
+        row.querySelectorAll('[data-advanced-rule]').forEach((el) => {
+            el.style.display = uiMode === 'ADVANCED' ? '' : 'none';
+        });
+    });
+
+    if (uiMode === 'SIMPLE') {
+        if (ruleModeSelect && ruleModeSelect.value === 'ADVANCED') {
+            ruleModeSelect.value = 'FIRST_MATCH';
+        }
+        if (helpEl) {
+            helpEl.textContent = 'Simple mode uses business-style conditions in top-to-bottom order. Choose whether only the first match counts or whether all matching rules stack together.';
+        }
+    } else if (helpEl) {
+        helpEl.textContent = 'Advanced mode exposes raw rule logic. Priority is checked first, and stop-on-match can halt later rules.';
+    }
+
+    if (tooltipEl) {
+        const mode = ruleModeSelect?.value || 'FIRST_MATCH';
+        const tooltipText = {
+            FIRST_MATCH: 'First matching rule only: use this for setups like "20 else 10".',
+            STACK_ALL: 'Stack matching rules: use this when multiple bonuses should combine on the same sale.',
+            ADVANCED: 'Advanced per-rule flow: use this only when you need manual control of priority and stop-on-match per rule.',
+        };
+        tooltipEl.textContent = tooltipText[mode] || tooltipText.FIRST_MATCH;
+    }
+
+    loyaltyRenderPointRulesPreview();
 }
 
 function openServicesTabWithPrefill(serviceName) {
@@ -6031,9 +6279,15 @@ function loyaltyBuildRuleRow(id) {
         <div class="row g-2 align-items-end mb-2 lf-point-rule-row" data-rule-id="${id}" style="border-bottom:1px dashed #333; padding-bottom:10px;">
             <div class="col-md-2">
                 <label class="form-label text-white-50" style="font-size:0.7rem;">Rule Name</label>
-                <input type="text" class="form-control bg-dark text-white border-secondary lf-rule-name" placeholder="Optional">
+                <input type="text" class="form-control bg-dark text-white border-secondary lf-rule-name" placeholder="Optional" oninput="loyaltyRenderPointRulesPreview()">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3" data-simple-rule>
+                <label class="form-label text-white-50" style="font-size:0.7rem;">Condition</label>
+                <select class="form-select bg-dark text-white border-secondary lf-rule-simple-condition" onchange="loyaltyRenderPointRulesPreview()">
+                    ${loyaltyBuildSimpleConditionOptions('QUALIFYING_PURCHASE')}
+                </select>
+            </div>
+            <div class="col-md-2" data-advanced-rule style="display:none;">
                 <label class="form-label text-white-50" style="font-size:0.7rem;">Service Condition</label>
                 <div class="position-relative">
                     <input type="text" class="form-control bg-dark text-white border-secondary lf-rule-service-search"
@@ -6045,25 +6299,25 @@ function loyaltyBuildRuleRow(id) {
             </div>
             <div class="col-md-1">
                 <label class="form-label text-white-50" style="font-size:0.7rem;">Points</label>
-                <input type="number" min="1" value="10" class="form-control bg-dark text-white border-secondary lf-rule-points">
+                <input type="number" min="1" value="10" class="form-control bg-dark text-white border-secondary lf-rule-points" oninput="loyaltyRenderPointRulesPreview()">
             </div>
-            <div class="col-md-1">
+            <div class="col-md-1" data-advanced-rule style="display:none;">
                 <label class="form-label text-white-50" style="font-size:0.7rem;">Priority</label>
-                <input type="number" min="1" value="${id * 10}" class="form-control bg-dark text-white border-secondary lf-rule-priority">
+                <input type="number" min="1" value="${id * 10}" class="form-control bg-dark text-white border-secondary lf-rule-priority" oninput="loyaltyRenderPointRulesPreview()">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4" data-advanced-rule style="display:none;">
                 <label class="form-label text-white-50 d-block" style="font-size:0.7rem;">Extra Conditions</label>
                 <div class="d-flex gap-3 flex-wrap">
                     <label class="form-check-label text-white-50" style="font-size:0.73rem;">
-                        <input class="form-check-input me-1 lf-rule-any-item" type="checkbox"> requires any item
+                        <input class="form-check-input me-1 lf-rule-any-item" type="checkbox" onchange="loyaltyRenderPointRulesPreview()"> requires any item
                     </label>
                     <label class="form-check-label text-white-50" style="font-size:0.73rem;">
-                        <input class="form-check-input me-1 lf-rule-stop-on-match" type="checkbox"> stop on match
+                        <input class="form-check-input me-1 lf-rule-stop-on-match" type="checkbox" onchange="loyaltyRenderPointRulesPreview()"> stop on match
                     </label>
                 </div>
             </div>
             <div class="col-md-2 text-end">
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.lf-point-rule-row').remove()">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.lf-point-rule-row').remove(); loyaltyRenderPointRulesPreview();">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
@@ -6075,10 +6329,16 @@ function loyaltyAddRuleRow() {
     lfRuleCounter += 1;
     const container = document.getElementById('lf-point-rules');
     container.insertAdjacentHTML('beforeend', loyaltyBuildRuleRow(lfRuleCounter));
+    loyaltyPointConfigChanged();
 }
 
 function loyaltyCollectRuleRows() {
+    const uiMode = loyaltyGetPointUiMode();
     return Array.from(document.querySelectorAll('.lf-point-rule-row')).map((row, idx) => {
+        if (uiMode === 'SIMPLE') {
+            return loyaltyTranslateSimpleRule(row, idx);
+        }
+
         const serviceId = row.querySelector('.lf-rule-service-id').value;
         return {
             rule_name: row.querySelector('.lf-rule-name').value.trim(),
@@ -6087,6 +6347,7 @@ function loyaltyCollectRuleRows() {
             priority: parseInt(row.querySelector('.lf-rule-priority').value || String((idx + 1) * 10), 10),
             requires_any_item: row.querySelector('.lf-rule-any-item').checked,
             stop_on_match: row.querySelector('.lf-rule-stop-on-match').checked,
+            service_label: row.querySelector('.lf-rule-service-search').value.trim(),
         };
     });
 }
@@ -6125,6 +6386,7 @@ async function loyaltyRuleServiceSearch(inputEl) {
                 inputEl.value = item.name;
                 hiddenId.value = item.id;
                 suggestions.style.display = 'none';
+                loyaltyRenderPointRulesPreview();
             };
             suggestions.appendChild(btn);
         });
@@ -6176,6 +6438,7 @@ function loyaltyQualifyingSearch() {
                     document.getElementById('lf-qualifying-search').value = item.name;
                     document.getElementById('lf-qualifying-id').value     = item.id;
                     suggestions.style.display = 'none';
+                    loyaltyRenderPointRulesPreview();
                 };
                 suggestions.appendChild(btn);
             });
@@ -6284,6 +6547,8 @@ async function loyaltySubmitProgram() {
     const rewardDesc = document.getElementById('lf-reward-desc').value.trim();
     const periodStart = document.getElementById('lf-period-start').value;
     const periodEnd = document.getElementById('lf-period-end').value;
+    const pointRuleMode = loyaltyGetPointRuleMode();
+    const pointUiMode = loyaltyGetPointUiMode();
     const pointRules = loyaltyCollectRuleRows().filter(r => r.points > 0);
 
     if (!name) { errEl.textContent = 'Program name is required.'; return; }
@@ -6315,14 +6580,23 @@ async function loyaltySubmitProgram() {
     }
     if (pointsEnabled && pointRules.length < 1) { errEl.textContent = 'Add at least one valid point rule.'; return; }
     if (pointsEnabled) {
-        const invalidRule = pointRules.find(r => !r.service_id && !r.requires_any_item);
+        const invalidRule = pointRules.find(r => !r.service_id && !r.item_id && !r.requires_any_item && !r.requires_any_service);
         if (invalidRule) {
-            errEl.textContent = 'Each point rule needs a service condition or "requires any item".';
+            errEl.textContent = 'Each point rule needs at least one condition.';
             return;
         }
         const invalidRuleService = pointRules.find(r => r.service_id !== null && !Number.isInteger(r.service_id));
         if (invalidRuleService) {
             errEl.textContent = 'Each point rule service must be selected from existing services.';
+            return;
+        }
+        const invalidRuleItem = pointRules.find(r => r.item_id !== null && !Number.isInteger(r.item_id));
+        if (invalidRuleItem) {
+            errEl.textContent = 'Each point rule item must be selected from existing items.';
+            return;
+        }
+        if (pointUiMode === 'SIMPLE' && pointRuleMode === 'ADVANCED') {
+            errEl.textContent = 'Simple mode supports First matching rule only or Sum all matching rules. Switch to Advanced mode to manage stop-on-match manually.';
             return;
         }
     }
@@ -6348,6 +6622,7 @@ async function loyaltySubmitProgram() {
                 threshold,
                 points_threshold: pointsThreshold,
                 reward_basis: rewardBasis,
+                point_rule_mode: pointsEnabled ? pointRuleMode : 'ADVANCED',
                 stamp_enabled: stampEnabled,
                 points_enabled: pointsEnabled,
                 point_rules: pointRules,
@@ -6384,6 +6659,8 @@ async function loyaltySubmitProgram() {
         document.getElementById('lf-reward-basis').value = 'STAMPS';
         document.getElementById('lf-stamp-enabled').checked = true;
         document.getElementById('lf-points-enabled').checked = false;
+        document.getElementById('lf-point-ui-mode').value = 'SIMPLE';
+        document.getElementById('lf-point-rule-mode').value = 'FIRST_MATCH';
         document.getElementById('lf-point-rules').innerHTML = '';
         lfRuleCounter = 0;
         loyaltyModesChanged();

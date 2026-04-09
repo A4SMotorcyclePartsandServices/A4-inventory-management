@@ -180,6 +180,20 @@ def _get_total_shop_topup(conn, start_date, end_date):
     return round(_num(totals["total_shop_topup"]), 2)
 
 
+def _get_total_mechanic_supply_expense(conn, start_date, end_date):
+    row = conn.execute(
+        """
+        SELECT COALESCE(SUM(s.total_amount), 0) AS total_mechanic_supply_expense
+        FROM sales s
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+        """,
+        (start_date, end_date),
+    ).fetchone()
+    return round(_num(row["total_mechanic_supply_expense"] if row else 0), 2)
+
+
 def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_items_category=None):
     conn = get_db()
     top_items_limit = _normalize_top_items_limit(top_items_limit)
@@ -423,6 +437,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
 
     total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
     total_shop_topup = _get_total_shop_topup(conn, start_date, end_date)
+    total_mechanic_supply_expense = _get_total_mechanic_supply_expense(conn, start_date, end_date)
 
     status_rows = conn.execute(
         """
@@ -767,7 +782,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         2,
     )
     profit_with_shop_share = round(
-        _num(product_service_row["product_profit"]) + shop_share_profit - total_shop_topup,
+        _num(product_service_row["product_profit"]) + shop_share_profit - total_shop_topup - total_mechanic_supply_expense,
         2,
     )
 
@@ -791,6 +806,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "product_profit": round(_num(product_service_row["product_profit"]), 2),
             "shop_share_profit": shop_share_profit,
             "total_shop_topup": total_shop_topup,
+            "total_mechanic_supply_expense": total_mechanic_supply_expense,
             "profit_with_shop_share": profit_with_shop_share,
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
             "total_non_cash_floating": total_non_cash_floating,

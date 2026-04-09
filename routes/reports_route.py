@@ -172,6 +172,7 @@ def _build_loyalty_program_report(program):
     is_active = int(program.get("is_active") or 0) == 1
     program_mode = str(program.get("program_mode") or "REDEEMABLE").upper()
     reward_basis = str(program.get("reward_basis") or "STAMPS").replace("_", " ").title()
+    point_rule_mode = str(program.get("point_rule_mode") or "ADVANCED").replace("_", " ").title()
 
     reward_description = (program.get("reward_description") or "").strip()
     reward_label = _loyalty_reward_label(program)
@@ -188,6 +189,7 @@ def _build_loyalty_program_report(program):
         "qualifying_display": program.get("qualifying_name") or f"ID: {program.get('qualifying_id')}",
         "period_display": f"{format_date(program.get('period_start'))} to {format_date(program.get('period_end'))}",
         "reward_basis_display": reward_basis,
+        "point_rule_mode_display": point_rule_mode,
         "program_mode_display": "Earn Only" if program_mode == "EARN_ONLY" else "Redeemable",
         "reward_display": reward_display,
         "reward_subtext": reward_subtext,
@@ -243,6 +245,7 @@ def _build_sales_report_context():
             "quota_failures": [],
             "items_summary": [],
             "total_gross": 0.0,
+            "total_mechanic_supply_expense": 0.0,
             "total_mech_cut": 0.0,
             "total_shop_topup": 0.0,
             "net_revenue": 0.0,
