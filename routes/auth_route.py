@@ -1,4 +1,4 @@
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
 
 from auth.utils import (
     clear_failed_login_attempts,
@@ -54,6 +54,28 @@ def login():
         session["username"] = user["username"]
         session["role"] = user["role"]
         session["must_change_password"] = int(user.get("must_change_password") or 0)
+
+        login_target = (
+            url_for("password_reset.change_password")
+            if int(user.get("must_change_password") or 0) == 1
+            else (url_for("users_panel.users_panel") if user["role"] == "admin" else url_for("index"))
+        )
+        current_app.logger.warning(
+            "AUTH_TRACE %s",
+            {
+                "event": "login_success",
+                "endpoint": request.endpoint,
+                "method": request.method,
+                "path": request.path,
+                "user_id": user["id"],
+                "username": user["username"],
+                "role": user["role"],
+                "must_change_password": int(user.get("must_change_password") or 0),
+                "redirect_target": login_target,
+                "remote_addr": request.remote_addr,
+                "referer": request.headers.get("Referer"),
+            },
+        )
 
         if int(user.get("must_change_password") or 0) == 1:
             return redirect(url_for("password_reset.change_password"))

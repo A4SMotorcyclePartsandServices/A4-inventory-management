@@ -1,13 +1,31 @@
 import time
 from functools import wraps
 
-from flask import abort, flash, g, request, session, redirect, url_for, jsonify
+from flask import abort, current_app, flash, g, request, session, redirect, url_for, jsonify
 
 from db.database import get_db
 
 _LOGIN_WINDOW_SECONDS = 15 * 60
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_RETENTION_SECONDS = 5 * 24 * 60 * 60
+
+
+def _auth_log(event, **details):
+    app = current_app._get_current_object() if current_app else None
+    if not app:
+        return
+
+    payload = {
+        "event": event,
+        "endpoint": request.endpoint,
+        "method": request.method,
+        "path": request.path,
+        "user_id": session.get("user_id"),
+        "session_role": session.get("role"),
+        "remote_addr": request.remote_addr,
+    }
+    payload.update(details)
+    app.logger.warning("AUTH_TRACE %s", payload)
 
 
 def _client_ip():
@@ -125,24 +143,38 @@ def get_current_user():
 def ensure_authenticated_user():
     user = get_current_user()
     if not user or user["is_active"] == 0:
+        _auth_log(
+            "ensure_authenticated_user_failed",
+            db_user_found=bool(user),
+            db_user_active=bool(user and user["is_active"] != 0),
+        )
         session.clear()
         flash("Your account has been deactivated.", "danger")
         return None
 
+    previous_role = session.get("role")
     session["username"] = user["username"]
     session["role"] = user["role"]
     session["must_change_password"] = int(user.get("must_change_password") or 0)
     g.current_user = user
+    if previous_role and previous_role != user["role"]:
+        _auth_log(
+            "session_role_refreshed",
+            previous_role=previous_role,
+            db_role=user["role"],
+        )
     return user
 
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if "user_id" not in session:
+            _auth_log("login_required_missing_session")
             return redirect(url_for("auth.login"))
 
         user = getattr(g, "current_user", None) or ensure_authenticated_user()
         if not user:
+            _auth_log("login_required_user_resolution_failed")
             return redirect(url_for("auth.login"))
 
         return f(*args, **kwargs)
@@ -153,13 +185,20 @@ def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if "user_id" not in session:
+            _auth_log("admin_required_missing_session")
             return redirect(url_for("auth.login"))
 
         user = getattr(g, "current_user", None) or ensure_authenticated_user()
         if not user:
+            _auth_log("admin_required_user_resolution_failed")
             return redirect(url_for("auth.login"))
 
         if user["role"] != "admin":
+            _auth_log(
+                "admin_required_forbidden",
+                resolved_user_id=user.get("id"),
+                resolved_role=user.get("role"),
+            )
             abort(403)
 
         return f(*args, **kwargs)

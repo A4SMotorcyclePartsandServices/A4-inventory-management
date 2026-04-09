@@ -116,6 +116,25 @@ def _is_production_environment():
     )
 
 
+def _log_access_denied_event(event_name, error=None):
+    app.logger.warning(
+        "AUTH_TRACE %s",
+        {
+            "event": event_name,
+            "endpoint": request.endpoint,
+            "method": request.method,
+            "path": request.path,
+            "query_string": request.query_string.decode("utf-8", errors="ignore"),
+            "user_id": session.get("user_id"),
+            "session_role": session.get("role"),
+            "remote_addr": request.remote_addr,
+            "referer": request.headers.get("Referer"),
+            "error_type": type(error).__name__ if error else None,
+            "error_message": str(error) if error else None,
+        },
+    )
+
+
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(
     app.wsgi_app,
@@ -709,6 +728,7 @@ def debug_integrity():
 
 @app.errorhandler(403)
 def forbidden(e):
+    _log_access_denied_event("http_403", e)
     return render_template('errors/403.html'), 403
 
 @app.errorhandler(404)
@@ -717,10 +737,12 @@ def page_not_found(e):
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
+    _log_access_denied_event("csrf_error", e)
     return render_template('errors/403.html'), 400
 
 @app.errorhandler(400)
 def bad_request(e):
+    _log_access_denied_event("http_400", e)
     return render_template('errors/403.html'), 400
 
 @app.errorhandler(409)

@@ -2082,6 +2082,7 @@ const notificationState = {
     hasLoaded: false,
     isLoading: false,
     hasInitializedCount: false,
+    lastLoadedAt: 0,
 };
 
 const stockAlertState = {
@@ -2192,6 +2193,7 @@ async function loadNotifications(options = {}) {
 
         notificationState.items = Array.isArray(data.notifications) ? data.notifications : [];
         notificationState.hasLoaded = true;
+        notificationState.lastLoadedAt = Date.now();
         updateNotificationBadge(data.unread_count || 0);
         renderNotificationList(notificationState.items);
     } catch (error) {
@@ -2324,6 +2326,94 @@ function renderStockAlertList(items) {
             </button>
         `;
     }).join('');
+}
+
+const adaptivePollingState = {
+    timerId: null,
+    lastActivityAt: Date.now(),
+    cycleRunning: false,
+};
+
+const POLLING_INTERVALS = {
+    activeMs: 2 * 60 * 1000,
+    idleMs: 6 * 60 * 1000,
+    hiddenMs: null,
+    idleThresholdMs: 5 * 60 * 1000,
+    focusRefreshDebounceMs: 15 * 1000,
+    notificationDelayMs: 1200,
+};
+
+function markPollingActivity() {
+    adaptivePollingState.lastActivityAt = Date.now();
+}
+
+function isPollingTabHidden() {
+    return document.visibilityState !== 'visible';
+}
+
+function isPollingUserIdle() {
+    return (Date.now() - adaptivePollingState.lastActivityAt) >= POLLING_INTERVALS.idleThresholdMs;
+}
+
+function getNextPollingDelay() {
+    if (isPollingTabHidden()) {
+        return POLLING_INTERVALS.hiddenMs;
+    }
+    if (isPollingUserIdle()) {
+        return POLLING_INTERVALS.idleMs;
+    }
+    return POLLING_INTERVALS.activeMs;
+}
+
+function clearAdaptivePollingTimer() {
+    if (adaptivePollingState.timerId) {
+        window.clearTimeout(adaptivePollingState.timerId);
+        adaptivePollingState.timerId = null;
+    }
+}
+
+function scheduleAdaptivePolling() {
+    clearAdaptivePollingTimer();
+    const nextDelay = getNextPollingDelay();
+    if (!Number.isFinite(nextDelay) || nextDelay <= 0) {
+        return;
+    }
+
+    adaptivePollingState.timerId = window.setTimeout(() => {
+        runAdaptivePollingCycle();
+    }, nextDelay);
+}
+
+async function runAdaptivePollingCycle(options = {}) {
+    const { force = false } = options;
+
+    if (adaptivePollingState.cycleRunning) {
+        return;
+    }
+
+    if (isPollingTabHidden() && !force) {
+        scheduleAdaptivePolling();
+        return;
+    }
+
+    adaptivePollingState.cycleRunning = true;
+    clearAdaptivePollingTimer();
+
+    try {
+        const hasStockAlertUi = Boolean(document.getElementById('stockAlertDropdownButton') && document.getElementById('stockAlertList'));
+        const hasNotificationUi = Boolean(document.getElementById('notificationDropdownButton') && document.getElementById('notificationList'));
+
+        if (hasStockAlertUi) {
+            await loadStockAlerts({ force: true });
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, POLLING_INTERVALS.notificationDelayMs));
+        if (hasNotificationUi) {
+            await loadNotifications({ force: true });
+        }
+    } finally {
+        adaptivePollingState.cycleRunning = false;
+        scheduleAdaptivePolling();
+    }
 }
 
 async function loadStockAlerts(options = {}) {
@@ -2720,8 +2810,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const dropdownRoot = dropdownButton?.closest('.notification-dropdown');
     const notificationList = document.getElementById('notificationList');
     const markAllBtn = document.getElementById('notificationMarkAllBtn');
+    const hasStockAlertUi = Boolean(stockAlertDropdownButton && stockAlertList);
+    const hasNotificationUi = Boolean(dropdownButton && notificationList);
 
-    if (stockAlertDropdownButton && stockAlertList) {
+    if (hasStockAlertUi) {
         loadStockAlerts({ force: true });
 
         stockAlertDropdownRoot?.addEventListener('show.bs.dropdown', () => {
@@ -2739,67 +2831,94 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    if (!dropdownButton || !notificationList) {
+    if (hasNotificationUi) {
+        loadNotifications({ force: true });
+
+        dropdownRoot?.addEventListener('show.bs.dropdown', () => {
+            loadNotifications({ force: true });
+        });
+
+        notificationList.addEventListener('click', async (event) => {
+            const target = event.target.closest('.notification-item');
+            if (!target) {
+                return;
+            }
+
+            const notificationId = target.getAttribute('data-notification-id');
+            const targetUrl = target.getAttribute('data-notification-url') || '#';
+
+            try {
+                if (target.classList.contains('is-unread')) {
+                    await markNotificationRead(notificationId);
+                    target.classList.remove('is-unread');
+                    refreshNotificationStateAfterRead(notificationId);
+                }
+            } catch (error) {
+                console.error('Notification read failed:', error);
+            }
+
+            if (targetUrl && targetUrl !== '#') {
+                window.location.href = targetUrl;
+            }
+        });
+
+        markAllBtn?.addEventListener('click', async () => {
+            if (markAllBtn.disabled) {
+                return;
+            }
+
+            try {
+                markAllBtn.disabled = true;
+                await markAllNotificationsRead();
+                setAllNotificationsReadLocally();
+            } catch (error) {
+                console.error('Mark-all read failed:', error);
+            } finally {
+                markAllBtn.disabled = notificationState.unreadCount <= 0;
+            }
+        });
+    }
+
+    if (!hasStockAlertUi && !hasNotificationUi) {
         return;
     }
 
-    loadNotifications({ force: true });
-
-    dropdownRoot?.addEventListener('show.bs.dropdown', () => {
-        loadNotifications({ force: true });
+    ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((eventName) => {
+        window.addEventListener(eventName, markPollingActivity, { passive: true });
     });
-
-    notificationList.addEventListener('click', async (event) => {
-        const target = event.target.closest('.notification-item');
-        if (!target) {
-            return;
-        }
-
-        const notificationId = target.getAttribute('data-notification-id');
-        const targetUrl = target.getAttribute('data-notification-url') || '#';
-
-        try {
-            if (target.classList.contains('is-unread')) {
-                await markNotificationRead(notificationId);
-                target.classList.remove('is-unread');
-                refreshNotificationStateAfterRead(notificationId);
-            }
-        } catch (error) {
-            console.error('Notification read failed:', error);
-        }
-
-        if (targetUrl && targetUrl !== '#') {
-            window.location.href = targetUrl;
-        }
-    });
-
-    markAllBtn?.addEventListener('click', async () => {
-        if (markAllBtn.disabled) {
-            return;
-        }
-
-        try {
-            markAllBtn.disabled = true;
-            await markAllNotificationsRead();
-            setAllNotificationsReadLocally();
-        } catch (error) {
-            console.error('Mark-all read failed:', error);
-        } finally {
-            markAllBtn.disabled = notificationState.unreadCount <= 0;
-        }
-    });
-
-    window.setInterval(() => {
-        loadStockAlerts({ force: true });
-        loadNotifications({ force: true });
-    }, 45000);
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-            loadStockAlerts({ force: true });
-            loadNotifications({ force: true });
+            const lastLoadedAt = Math.max(stockAlertState.lastLoadedAt || 0, notificationState.lastLoadedAt || 0);
+            const recentlyPolled = lastLoadedAt
+                && (Date.now() - lastLoadedAt) < POLLING_INTERVALS.focusRefreshDebounceMs;
+            markPollingActivity();
+            if (!recentlyPolled) {
+                runAdaptivePollingCycle({ force: true });
+                return;
+            }
         }
+        scheduleAdaptivePolling();
     });
+
+    window.addEventListener('focus', () => {
+        markPollingActivity();
+        const lastLoadedAt = Math.max(stockAlertState.lastLoadedAt || 0, notificationState.lastLoadedAt || 0);
+        const recentlyPolled = lastLoadedAt
+            && (Date.now() - lastLoadedAt) < POLLING_INTERVALS.focusRefreshDebounceMs;
+        if (!recentlyPolled) {
+            runAdaptivePollingCycle({ force: true });
+            return;
+        }
+        scheduleAdaptivePolling();
+    });
+
+    window.addEventListener('online', () => {
+        markPollingActivity();
+        runAdaptivePollingCycle({ force: true });
+    });
+
+    scheduleAdaptivePolling();
 });
 
 document.addEventListener('submit', function(event) {

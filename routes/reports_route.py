@@ -15,7 +15,7 @@ from services.reports_service import (
     _build_mechanic_supply_report_context,
 )
 from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
-from services.cash_service import get_cash_entries_for_report
+from services.cash_service import get_cash_entries_for_report, get_cash_summary
 from services.inventory_service import attach_restock_recommendation
 from utils.formatters import format_date
 from utils.timezone import now_local, today_local
@@ -236,6 +236,9 @@ def _build_sales_report_context():
     else:
         flash("Please select a date.", "warning")
         return None
+
+    cash_summary = get_cash_summary()
+    cash_data["floating_total"] = cash_summary.get("floating_total", 0.0)
 
     if not data:
         data = {

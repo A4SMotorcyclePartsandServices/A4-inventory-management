@@ -600,6 +600,10 @@
                 <span>Total Cash Out</span>
                 <span class="currency">- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
             </div>
+            <div class="cash-summary-row">
+                <span>Total Floating Money</span>
+                <span class="currency">P {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
+            </div>
             <div class="cash-summary-row total">
                 <span>Cash On Hand as of {{ cash_balance_label }}</span>
                 <span class="currency">P {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>

@@ -132,6 +132,7 @@ def _build_cash_report_context(branch_id):
         entry_type=entry_type,
         ledger_view=ledger_view,
     )
+    summary = get_cash_summary(branch_id=branch_id)
     expense_groups, expense_total = _build_expense_report_groups(report_data["entries"])
     mechanic_supply_summary = {"transaction_count": 0, "total_amount": 0.0}
     if ledger_view != "deleted":
@@ -185,6 +186,7 @@ def _build_cash_report_context(branch_id):
         "mechanic_supply_expense_total": mechanic_supply_summary["total_amount"],
         "total_in": report_data["total_in"],
         "total_out": report_data["total_out"],
+        "floating_total": summary.get("floating_total", 0.0),
         "net_movement": report_data["cash_on_hand"],
         "ending_cash_on_hand": report_data["ending_cash_on_hand"],
     }

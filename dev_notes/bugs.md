@@ -17,6 +17,27 @@ Use this section for things that are not necessarily broken right now, but could
 
 ## Possible Issues
 
+- Random admin login redirect to Access Denied on first load, then normal after refresh.
+
+Current theory:
+- Probably not a true failed login.
+- Possible one-request mismatch between session state and admin-only routing, or a `400` / `CSRFError` rendering the same `403` page.
+- Temporary tracing was added with `AUTH_TRACE` logs in `app.py`, `auth/utils.py`, and `routes/auth_route.py`.
+
+How to check logs in Railway:
+- Open Railway.
+- Open this project.
+- Open the deployed service for the app.
+- Go to `Logs`.
+- Search for `AUTH_TRACE`.
+- Check the lines around the timestamp when the issue happened.
+- Look specifically for:
+  `login_success`
+  `admin_required_forbidden`
+  `http_403`
+  `http_400`
+  `csrf_error`
+
 - Range report for mechanics may miscalculate quota when mechanic was absent
 
 Example:

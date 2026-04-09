@@ -326,6 +326,10 @@
             <div class="summary-card-value out">P{{ "{:,.2f}".format(report.total_out) }}</div>
         </div>
         <div class="summary-card">
+            <div class="summary-card-title">Total Floating Money</div>
+            <div class="summary-card-value net">P{{ "{:,.2f}".format(report.floating_total or 0) }}</div>
+        </div>
+        <div class="summary-card">
             {% if report.ledger_view == 'deleted' %}
             <div class="summary-card-title">Net Movement</div>
             <div class="summary-card-value net">P{{ "{:,.2f}".format(report.net_movement) }}</div>

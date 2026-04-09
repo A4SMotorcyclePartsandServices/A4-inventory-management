@@ -1105,6 +1105,10 @@
                 <span>Total Cash Out</span>
                 <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
             </div>
+            <div class="cash-summary-row" style="color: #0c5460;">
+                <span>Total Floating Money</span>
+                <span>&#8369; {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
+            </div>
             <div class="cash-on-hand-bar">
                 <span>CASH ON HAND AS OF {{ cash_balance_label }}</span>
                 <span>₱ {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>
