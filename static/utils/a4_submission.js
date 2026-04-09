@@ -50,6 +50,8 @@
                 if (!button) {
                     return;
                 }
+                delete button.dataset.submitting;
+                delete button.dataset.idempotencyKey;
                 button.disabled = true;
             },
 

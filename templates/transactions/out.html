@@ -3305,6 +3305,9 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         }
     }
 
+    const newCustomerModalEl = document.getElementById('newCustomerModal');
+    const addVehicleModalEl = document.getElementById('addVehicleModal');
+
     function openAddVehicleModal() {
         const customerId = idField.value;
         if (!customerId) return;
@@ -3314,7 +3317,11 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         document.getElementById('add-vehicle-name').value = '';
         document.getElementById('add-vehicle-error').textContent = '';
 
-        const modal = new bootstrap.Modal(document.getElementById('addVehicleModal'));
+        if (addVehicleGuard) {
+            addVehicleGuard.reset();
+        }
+
+        const modal = new bootstrap.Modal(addVehicleModalEl);
         modal.show();
     }
 
@@ -3350,6 +3357,10 @@ CUSTOMER SEARCH / AUTOCOMPLETE
 
         // ── Loyalty: hide banner and clear pending redemptions ────────
         fetchLoyaltyEligibility(null);
+
+        if (newCustomerGuard) {
+            newCustomerGuard.reset();
+        }
     }
 
     clearBtn.addEventListener('click', clearCustomer);
@@ -3413,6 +3424,9 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     // —— New Customer Modal Logic ————————————————————————————
     function openNewCustomerModal(prefill) {
         suggestions.style.display = 'none';
+        if (newCustomerGuard) {
+            newCustomerGuard.reset();
+        }
         document.getElementById('new-cust-name').value = '';
         document.getElementById('new-cust-no').value   = '';
         document.getElementById('new-cust-vehicle').value = '';
@@ -3424,7 +3438,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
             document.getElementById('new-cust-name').value = prefill;
         }
 
-        const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
+        const modal = new bootstrap.Modal(newCustomerModalEl);
         modal.show();
     }
 
@@ -3435,6 +3449,20 @@ CUSTOMER SEARCH / AUTOCOMPLETE
     });
     const addVehicleGuard = window.A4Submit?.createButtonGuard(saveVehicleButton, {
         loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
+
+    newCustomerModalEl?.addEventListener('hidden.bs.modal', () => {
+        if (newCustomerGuard) {
+            newCustomerGuard.reset();
+        }
+        document.getElementById('new-cust-error').textContent = '';
+    });
+
+    addVehicleModalEl?.addEventListener('hidden.bs.modal', () => {
+        if (addVehicleGuard) {
+            addVehicleGuard.reset();
+        }
+        document.getElementById('add-vehicle-error').textContent = '';
     });
 
     saveNewCustomerButton.addEventListener('click', async () => {
@@ -3467,7 +3495,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                 if (newCustomerGuard) {
                     newCustomerGuard.succeed();
                 }
-                bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
+                bootstrap.Modal.getInstance(newCustomerModalEl)?.hide();
                 await setCustomer(
                     data.customer.id,
                     data.customer.customer_no,
@@ -3517,7 +3545,7 @@ CUSTOMER SEARCH / AUTOCOMPLETE
                 if (addVehicleGuard) {
                     addVehicleGuard.succeed();
                 }
-                bootstrap.Modal.getInstance(document.getElementById('addVehicleModal')).hide();
+                bootstrap.Modal.getInstance(addVehicleModalEl)?.hide();
                 await loadCustomerVehicles(customerId, data.vehicle.id);
                 return;
             }

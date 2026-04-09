@@ -5793,6 +5793,10 @@ function openExtendLoyaltyProgramModal(programId) {
     }
 
     const currentEnd = loyaltyDateInputValue(program.period_end);
+    const extendBtn = document.getElementById('loyalty-extend-btn');
+    if (window.A4Submit?.createButtonGuard && extendBtn) {
+        window.A4Submit.createButtonGuard(extendBtn).reset();
+    }
     document.getElementById('extend-loyalty-program-id').value = program.id;
     document.getElementById('extend-loyalty-program-name').value = program.name || '';
     document.getElementById('extend-loyalty-period-start').value = loyaltyDateInputValue(program.period_start);
@@ -5803,6 +5807,14 @@ function openExtendLoyaltyProgramModal(programId) {
 
     new bootstrap.Modal(document.getElementById('extendLoyaltyProgramModal')).show();
 }
+
+document.getElementById('extendLoyaltyProgramModal')?.addEventListener('hidden.bs.modal', () => {
+    const extendBtn = document.getElementById('loyalty-extend-btn');
+    if (window.A4Submit?.createButtonGuard && extendBtn) {
+        window.A4Submit.createButtonGuard(extendBtn).reset();
+    }
+    document.getElementById('extend-loyalty-error').textContent = '';
+});
 
 async function submitLoyaltyProgramExtension() {
     const programId = document.getElementById('extend-loyalty-program-id').value;
@@ -6378,6 +6390,9 @@ async function loyaltySubmitProgram() {
 
         loadLoyaltyPrograms();
         showLoyaltyFlash(data.message || `Program "${name}" created successfully.`, 'success');
+        if (guard) {
+            guard.reset();
+        }
 
     } catch (err) {
         if (guard) {
