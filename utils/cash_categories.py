@@ -50,7 +50,7 @@ SYSTEM_CASH_CATEGORY_DEFINITIONS = [
     },
     {
         "entry_type": "CASH_OUT",
-        "label": "Others",
+        "label": "Others (Related to shop)",
         "system_key": "cash_out_other_expenses",
         "requires_description": True,
         "sort_order": 30,
@@ -132,6 +132,7 @@ CASH_CATEGORY_BACKFILL_ALIASES = {
     ("CASH_OUT", "to gcash/e-wallet account"): "cash_out_to_ewallet",
     ("CASH_OUT", "to gcash account"): "cash_out_to_ewallet",
     ("CASH_OUT", "mechanic payout"): "cash_out_mechanic_payout",
+    ("CASH_OUT", "others"): "cash_out_other_expenses",
     ("CASH_OUT", "other expenses"): "cash_out_other_expenses",
     ("CASH_OUT", "pagibig payment"): "cash_out_pagibig_payment",
     ("CASH_OUT", "parts purchase"): "cash_out_parts_purchase",
