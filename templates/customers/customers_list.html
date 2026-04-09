@@ -93,6 +93,100 @@
         30%  { box-shadow: 0 0 0 6px rgba(103,194,228,0.22); }
         100% { box-shadow: 0 0 0 0 rgba(103,194,228,0.00); }
     }
+    #customerEditModal .modal-dialog {
+        margin-top: 6rem;
+        max-width: 640px;
+    }
+    #customerEditModal .modal-content {
+        background: #1a1a1a;
+        border: 1px solid #4a4a4a;
+        border-radius: 14px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    }
+    #customerEditModal .modal-header,
+    #customerEditModal .modal-footer {
+        background: #1a1a1a;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    #customerEditModal .modal-body {
+        background: #1a1a1a;
+    }
+    #customerEditModal .form-control {
+        background: #23272e;
+        border-color: #5e6572;
+        color: #f3f4f6;
+        border-radius: 10px;
+    }
+    #customerEditModal .form-control:focus {
+        background: #2a2f36;
+        border-color: #67c2e4;
+        box-shadow: 0 0 0 0.2rem rgba(103, 194, 228, 0.18);
+        color: #fff;
+    }
+    #customerEditModal .form-label {
+        color: #e5e7eb;
+        font-weight: 600;
+        margin-bottom: 0.45rem;
+    }
+    .customer-modal-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+    .customer-modal-title i {
+        color: #67c2e4;
+        font-size: 1.05rem;
+    }
+    .customer-edit-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.26rem 0.72rem;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #67c2e4;
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all 0.18s ease;
+    }
+    .customer-edit-trigger:hover {
+        color: #dff6ff;
+        border-color: rgba(103, 194, 228, 0.55);
+        background: rgba(103, 194, 228, 0.16);
+    }
+    .customer-detail-header {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+        min-height: 38px;
+    }
+    .customer-detail-header .customer-detail-meta {
+        text-align: center;
+    }
+    .customer-detail-header .customer-edit-trigger {
+        position: absolute;
+        top: 0;
+        right: 0;
+    }
+    @media (max-width: 768px) {
+        .customer-detail-header {
+            justify-content: flex-start;
+            padding-right: 0;
+            min-height: 0;
+        }
+        .customer-detail-header .customer-detail-meta {
+            text-align: left;
+            padding-right: 0;
+        }
+        .customer-detail-header .customer-edit-trigger {
+            position: static;
+            margin-left: auto;
+        }
+    }
 </style>
 
 <div class="form-card">
@@ -157,8 +251,8 @@
                             <i class="bi bi-chevron-right expand-icon"></i>
                         </button>
                     </td>
-                    <td><strong>{{ c.customer_name }}</strong></td>
-                    <td style="color:#aaa;">{{ c.customer_no }}</td>
+                    <td class="customer-name-cell"><strong>{{ c.customer_name }}</strong></td>
+                    <td class="customer-no-cell" style="color:#aaa;">{{ c.customer_no }}</td>
                     <td>
                         <span class="badge" style="background:#1c2a40; color:#67c2e4;">
                             {{ c.total_visits }}
@@ -237,10 +331,71 @@
 
 </div>
 
+<div class="modal fade" id="customerEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title customer-modal-title">
+                    <i class="bi bi-pencil-square"></i>
+                    <span>Edit Customer</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-customer-id">
+                <div class="mb-3">
+                    <label for="edit-customer-name" class="form-label">Customer Name</label>
+                    <input type="text" id="edit-customer-name" class="form-control text-white border-secondary">
+                </div>
+                <div class="mb-2">
+                    <label for="edit-customer-no" class="form-label">Mobile No.</label>
+                    <input type="text" id="edit-customer-no" class="form-control text-white border-secondary">
+                </div>
+                <div id="edit-customer-error" class="text-danger small"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info text-dark fw-semibold" id="saveCustomerEditBtn" disabled>Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
+let customerEditorOriginal = null;
+let customerEditSubmitGuard = null;
+
+function showCustomerFlash(message, type = 'success') {
+    if (!message) return;
+
+    const alertClass = type === 'success' ? 'alert-success'
+        : type === 'danger' ? 'alert-danger'
+        : type === 'warning' ? 'alert-warning'
+        : 'alert-info';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `alert ${alertClass} alert-dismissible fade show`;
+    wrapper.setAttribute('role', 'alert');
+    wrapper.style.position = 'fixed';
+    wrapper.style.top = '18px';
+    wrapper.style.right = '18px';
+    wrapper.style.zIndex = '1080';
+    wrapper.style.minWidth = '280px';
+    wrapper.innerHTML = `
+        <span>${message}</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+
+    document.body.appendChild(wrapper);
+    window.setTimeout(() => {
+        wrapper.classList.remove('show');
+        wrapper.classList.add('hide');
+        window.setTimeout(() => wrapper.remove(), 200);
+    }, 2800);
+}
 
 /* ─── Filter ─────────────────────────────────────────── */
 document.getElementById('customer-filter').addEventListener('input', function () {
@@ -401,10 +556,20 @@ function buildCustomerLoyaltyHTML(data) {
     const redemptionHistory = (data.loyalty_summary && data.loyalty_summary.redemption_history) || [];
 
     let html = `
-        <div class="mb-2" style="font-size:0.85rem; color:#aaa;">
-            <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${c.customer_name}</strong>
-            &nbsp;&middot;&nbsp; ${c.customer_no}
-            &nbsp;&middot;&nbsp; Member since ${c.created_at_display || '&mdash;'}
+        <div class="customer-detail-header" style="font-size:0.85rem; color:#aaa;">
+            <div class="customer-detail-meta">
+                <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${c.customer_name}</strong>
+                &nbsp;&middot;&nbsp; ${c.customer_no}
+                &nbsp;&middot;&nbsp; Member since ${c.created_at_display || '&mdash;'}
+            </div>
+            <button
+                type="button"
+                class="customer-edit-trigger"
+                onclick="event.stopPropagation(); openCustomerEditModal(${Number(c.id || 0)})"
+            >
+                <i class="bi bi-pencil-square"></i>
+                <span>Edit</span>
+            </button>
         </div>
         <div class="mb-3">
             <span class="badge" style="background:#1f2d1f; color:#9be28f; font-size:0.78rem;">
@@ -551,6 +716,203 @@ function buildCustomerLoyaltyHTML(data) {
 
     html += `</tbody></table></div>`;
     return html;
+}
+
+function resetCustomerEditorState() {
+    customerEditorOriginal = null;
+    document.getElementById('edit-customer-id').value = '';
+    document.getElementById('edit-customer-name').value = '';
+    document.getElementById('edit-customer-no').value = '';
+    document.getElementById('edit-customer-error').textContent = '';
+    if (customerEditSubmitGuard) {
+        customerEditSubmitGuard.reset();
+    } else {
+        document.getElementById('saveCustomerEditBtn').disabled = true;
+    }
+    syncCustomerEditSaveState();
+}
+
+function getCustomerEditorPayload() {
+    return {
+        customer_name: document.getElementById('edit-customer-name').value.trim(),
+        customer_no: document.getElementById('edit-customer-no').value.trim(),
+    };
+}
+
+function hasCustomerEditorChanges() {
+    if (!customerEditorOriginal) return false;
+    const current = getCustomerEditorPayload();
+    return current.customer_name !== customerEditorOriginal.customer_name
+        || current.customer_no !== customerEditorOriginal.customer_no;
+}
+
+function syncCustomerEditSaveState() {
+    document.getElementById('saveCustomerEditBtn').disabled = !hasCustomerEditorChanges();
+}
+
+function formatCustomerCreatedAt(value) {
+    if (!value) return '&mdash;';
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+
+    return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+    });
+}
+
+function populateCustomerRow(customer) {
+    const row = document.querySelector(`.customer-row[data-id="${customer.id}"]`);
+    if (!row) return;
+
+    row.dataset.name = String(customer.customer_name || '').toLowerCase();
+    row.dataset.no = String(customer.customer_no || '');
+
+    const nameCell = row.querySelector('.customer-name-cell strong');
+    const noCell = row.querySelector('.customer-no-cell');
+
+    if (nameCell) nameCell.textContent = customer.customer_name || '---';
+    if (noCell) noCell.textContent = customer.customer_no || '---';
+
+    const detailRow = document.getElementById(`detail-${customer.id}`);
+    const content = detailRow ? detailRow.querySelector('.transaction-content') : null;
+    if (!content || content.dataset.loaded !== 'true') {
+        return;
+    }
+
+    const metaBlock = content.querySelector('.customer-detail-meta');
+    if (metaBlock) {
+        metaBlock.innerHTML = `
+            <i class="bi bi-person me-1"></i><strong style="color:#e0e6f0;">${customer.customer_name || '&mdash;'}</strong>
+            &nbsp;&middot;&nbsp; ${customer.customer_no || '&mdash;'}
+            &nbsp;&middot;&nbsp; Member since ${formatCustomerCreatedAt(customer.created_at)}
+        `;
+    }
+}
+
+async function openCustomerEditModal(customerId) {
+    resetCustomerEditorState();
+
+    try {
+        const response = await fetch(`/api/customers/${encodeURIComponent(customerId)}`);
+        const data = await response.json();
+
+        if (!response.ok || data.status !== 'success') {
+            showCustomerFlash(data.message || 'Could not load customer details.', 'danger');
+            return;
+        }
+
+        const customer = data.customer || {};
+        document.getElementById('edit-customer-id').value = customer.id || '';
+        document.getElementById('edit-customer-name').value = customer.customer_name || '';
+        document.getElementById('edit-customer-no').value = customer.customer_no || '';
+
+        customerEditorOriginal = {
+            customer_name: String(customer.customer_name || '').trim(),
+            customer_no: String(customer.customer_no || '').trim(),
+        };
+
+        syncCustomerEditSaveState();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('customerEditModal')).show();
+    } catch (err) {
+        const errorEl = document.getElementById('edit-customer-error');
+        errorEl.textContent = 'Network error while loading customer details.';
+        showCustomerFlash(errorEl.textContent, 'danger');
+    }
+}
+
+async function submitCustomerEdit() {
+    const customerId = document.getElementById('edit-customer-id').value;
+    const payload = getCustomerEditorPayload();
+    const errorEl = document.getElementById('edit-customer-error');
+    const saveBtn = document.getElementById('saveCustomerEditBtn');
+
+    errorEl.textContent = '';
+
+    if (!customerId) {
+        errorEl.textContent = 'Customer record is missing.';
+        return;
+    }
+    if (!payload.customer_name || !payload.customer_no) {
+        errorEl.textContent = 'Customer name and mobile no. are required.';
+        return;
+    }
+    if (!hasCustomerEditorChanges()) {
+        syncCustomerEditSaveState();
+        return;
+    }
+
+    if (customerEditSubmitGuard && !customerEditSubmitGuard.begin()) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/customers/${encodeURIComponent(customerId)}/update`, {
+            method: 'POST',
+            headers: customerEditSubmitGuard
+                ? customerEditSubmitGuard.buildHeaders({ 'Content-Type': 'application/json' })
+                : { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.status !== 'success') {
+            errorEl.textContent = data.message || 'Could not update customer.';
+            if (customerEditSubmitGuard) {
+                customerEditSubmitGuard.reset();
+            } else {
+                saveBtn.disabled = false;
+            }
+            syncCustomerEditSaveState();
+            return;
+        }
+
+        const customer = data.customer || {};
+        populateCustomerRow(customer);
+        customerEditorOriginal = {
+            customer_name: String(customer.customer_name || '').trim(),
+            customer_no: String(customer.customer_no || '').trim(),
+        };
+
+        if (customerEditSubmitGuard) {
+            customerEditSubmitGuard.succeed();
+        }
+        bootstrap.Modal.getInstance(document.getElementById('customerEditModal'))?.hide();
+        showCustomerFlash(`Customer "${customer.customer_name || 'record'}" updated successfully.`, 'success');
+    } catch (err) {
+        errorEl.textContent = 'Network error while updating customer.';
+        if (customerEditSubmitGuard) {
+            customerEditSubmitGuard.reset();
+        } else {
+            saveBtn.disabled = false;
+        }
+        syncCustomerEditSaveState();
+    }
+}
+
+const customerEditModalEl = document.getElementById('customerEditModal');
+if (customerEditModalEl) {
+    customerEditSubmitGuard = window.A4Submit?.createButtonGuard(document.getElementById('saveCustomerEditBtn'), {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    }) || null;
+
+    customerEditModalEl.addEventListener('hidden.bs.modal', resetCustomerEditorState);
+
+    [
+        document.getElementById('edit-customer-name'),
+        document.getElementById('edit-customer-no'),
+    ].forEach(input => {
+        input.addEventListener('input', () => {
+            document.getElementById('edit-customer-error').textContent = '';
+            syncCustomerEditSaveState();
+        });
+    });
+
+    document.getElementById('saveCustomerEditBtn').addEventListener('click', submitCustomerEdit);
 }
 
 </script>

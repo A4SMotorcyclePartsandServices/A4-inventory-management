@@ -6,7 +6,7 @@ from psycopg2 import errors as pg_errors
 from werkzeug.exceptions import HTTPException
 from auth.utils import login_required
 from db.database import get_db
-from utils.formatters import format_date
+from utils.formatters import format_date, norm_text
 from services.loyalty_service import (
     get_customer_loyalty_summary,
     get_customer_eligibility_bulk,
@@ -22,6 +22,93 @@ POINT_TIERS = {
     "51-99": {"label": "51-99 Points", "min": 51, "max": 99},
     "100+": {"label": "100+ Points", "min": 100, "max": None},
 }
+
+
+def _get_customer_payload(customer_id, active_only=False):
+    conn = get_db()
+    try:
+        query = """
+            SELECT
+                id,
+                customer_no,
+                customer_name,
+                is_active,
+                created_at
+            FROM customers
+            WHERE id = %s
+        """
+        params = [customer_id]
+        if active_only:
+            query += " AND is_active = 1"
+
+        row = conn.execute(query, tuple(params)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _update_customer_record(customer_id, customer_name, customer_no):
+    normalized_customer_name = norm_text(customer_name)
+    normalized_customer_no = str(customer_no or "").strip()
+
+    if not normalized_customer_name or not normalized_customer_no:
+        return {
+            "status": "missing_fields",
+            "message": "Customer name and mobile no. are required.",
+        }
+
+    conn = get_db()
+    try:
+        customer = conn.execute(
+            """
+            SELECT id
+            FROM customers
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (customer_id,),
+        ).fetchone()
+        if not customer:
+            return {"status": "missing"}
+
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM customers
+            WHERE LOWER(TRIM(customer_no)) = LOWER(TRIM(%s))
+              AND id <> %s
+            LIMIT 1
+            """,
+            (normalized_customer_no, customer_id),
+        ).fetchone()
+        if duplicate:
+            return {"status": "duplicate"}
+
+        row = conn.execute(
+            """
+            UPDATE customers
+            SET customer_name = %s,
+                customer_no = %s
+            WHERE id = %s
+            RETURNING
+                id,
+                customer_name,
+                customer_no,
+                is_active,
+                created_at
+            """,
+            (normalized_customer_name, normalized_customer_no, customer_id),
+        ).fetchone()
+        conn.commit()
+        return {"status": "ok", "customer": dict(row)}
+    except pg_errors.UniqueViolation as e:
+        conn.rollback()
+        constraint_name = getattr(getattr(e, "diag", None), "constraint_name", "") or ""
+        if constraint_name == "idx_customers_customer_no_unique_normalized":
+            return {"status": "duplicate"}
+        raise
+    finally:
+        conn.close()
 
 
 def _format_export_date(value):
@@ -256,6 +343,42 @@ def add_customer_vehicle(customer_id):
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
         conn.close()
+
+
+@customer_bp.route("/api/customers/<int:customer_id>")
+@login_required
+def get_customer(customer_id):
+    customer = _get_customer_payload(customer_id, active_only=False)
+    if not customer:
+        return jsonify({"status": "error", "message": "Customer not found."}), 404
+
+    return jsonify({"status": "success", "customer": customer})
+
+
+@customer_bp.route("/api/customers/<int:customer_id>/update", methods=["POST"])
+@login_required
+def update_customer(customer_id):
+    data = request.get_json(silent=True) or {}
+
+    try:
+        result = _update_customer_record(
+            customer_id=customer_id,
+            customer_name=data.get("customer_name"),
+            customer_no=data.get("customer_no"),
+        )
+        if result["status"] == "missing":
+            return jsonify({"status": "error", "message": "Customer not found."}), 404
+        if result["status"] == "missing_fields":
+            return jsonify({"status": "error", "message": result["message"]}), 400
+        if result["status"] == "duplicate":
+            abort(409, description="A customer with that mobile no. already exists.")
+        if result["status"] == "ok":
+            return jsonify({"status": "success", "customer": result["customer"]})
+        return jsonify({"status": "error", "message": "Could not update customer."}), 500
+    except HTTPException:
+        raise
+    except Exception:
+        return jsonify({"status": "error", "message": "Unexpected server error."}), 500
 
 
 # ─────────────────────────────────────────────
