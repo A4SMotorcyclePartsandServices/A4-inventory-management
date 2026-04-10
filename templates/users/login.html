@@ -67,7 +67,7 @@
     <div class="login-card">
         <h2><i class="bi bi-lock-fill"></i> Login</h2>
         
-        <form method="post">
+        <form method="post" id="loginForm">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <label class="form-label">Username</label>
@@ -90,4 +90,27 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const loginForm = document.getElementById('loginForm');
+    if (!loginForm || !window.A4Submit?.createFormGuard) {
+        return;
+    }
+
+    const submitButton = loginForm.querySelector('button[type="submit"]');
+    const guard = window.A4Submit.createFormGuard(loginForm, {
+        submitButton,
+        loadingHtml: 'Signing In...',
+    });
+
+    loginForm.addEventListener('submit', function (event) {
+        if (!guard.begin()) {
+            event.preventDefault();
+        }
+    });
+});
+</script>
 {% endblock %}

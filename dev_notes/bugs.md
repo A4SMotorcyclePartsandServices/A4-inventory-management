@@ -21,8 +21,24 @@ Use this section for things that are not necessarily broken right now, but could
 
 Current theory:
 - Probably not a true failed login.
-- Possible one-request mismatch between session state and admin-only routing, or a `400` / `CSRFError` rendering the same `403` page.
+- New strongest theory from repeated logs:
+  first `/login` POST succeeds, then a second in-flight or duplicate `/login` POST hits after `session.clear()` removed the session CSRF token.
+- That second POST fails in Flask-WTF with:
+  `400 Bad Request: The CSRF session token is missing.`
+- This can look like a random Access Denied page even though the first login actually worked.
 - Temporary tracing was added with `AUTH_TRACE` logs in `app.py`, `auth/utils.py`, and `routes/auth_route.py`.
+
+Latest observed log pattern:
+- `login_success` for admin
+- immediately followed by `csrf_error`
+- same `/login` endpoint and same login referer
+- `user_id: None` and `session_role: None` on the CSRF line, which fits a second POST arriving after session reset
+
+Mitigation added:
+- Preserve the current session `csrf_token` during successful login session rotation.
+- Disable duplicate login submits on the login page after the first click.
+- Login form now sends an `idempotency_key` through the shared submit guard.
+- `/login` now uses the server-side idempotency table so repeated submits with the same key replay the first successful redirect instead of reprocessing the login.
 
 How to check logs in Railway:
 - Open Railway.
