@@ -14,6 +14,7 @@ Use this section for things that are not necessarily broken right now, but could
 - PO performance: add lightweight timing logs around `/transaction/orders/list`, `/api/orders/search`, and `/api/orders/archive-month` if users start reporting slowness.
 - PO modal: if approval history or delivery history grows large for long-lived purchase orders, modal payload size may need trimming or paged history loading.
 - Admin no password reset yet
+- Inventory list: row click redirect to item edit is temporarily disabled for non-admin users; restore only if the client wants edit-page access reopened outside admin.
 
 ## Possible Issues
 

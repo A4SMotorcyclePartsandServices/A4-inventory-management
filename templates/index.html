@@ -55,7 +55,7 @@
     }
 
     .inventory-row {
-        cursor: pointer;
+        cursor: {% if session.get('role') == 'admin' %}pointer{% else %}default{% endif %};
     }
 
     /* =====================
@@ -785,6 +785,7 @@
 {% block scripts %}
 <script>
 let lastSuccessfulSearch = "";
+const isAdmin = "{{ session.get('role') }}" === "admin";
 const inventorySearchInput = document.getElementById('inventorySearch');
 const inventoryTableBody = document.querySelector('table tbody');
 const itemCountBadge = document.getElementById('itemCountBadge');
@@ -810,7 +811,6 @@ function formatMarkupPercent(markup) {
 
 /* ---- Row Builder ---- */
 function createRowHtml(item) {
-    const isAdmin = "{{ session.get('role') }}" === "admin";
     const isLow = Boolean(item.should_restock);
     return `
         <tr class="inventory-row" data-item-id="${item.id}">
@@ -843,6 +843,7 @@ function highlightText(element, tokens) {
 }
 
 function bindInventoryRowLinks(scope = document) {
+    if (!isAdmin) return;
     scope.querySelectorAll('.inventory-row[data-item-id]').forEach(row => {
         if (row.dataset.linkBound === '1') return;
         row.dataset.linkBound = '1';

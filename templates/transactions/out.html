@@ -748,6 +748,315 @@
         font-size: 0.84rem;
     }
 
+    .sale-review-modal-content {
+        background:
+            radial-gradient(circle at top right, rgba(230, 57, 70, 0.14), transparent 26%),
+            linear-gradient(180deg, #1e1e1e, #161616) !important;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .sale-review-modal-content .modal-header,
+    .sale-review-modal-content .modal-footer {
+        background: rgba(255, 255, 255, 0.015);
+    }
+
+    .sale-receipt-shell {
+        padding: 0.35rem;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .sale-receipt {
+        position: relative;
+        border-radius: 16px;
+        padding: 1.25rem;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247, 242, 234, 0.98)),
+            repeating-linear-gradient(
+                to bottom,
+                rgba(0, 0, 0, 0.02) 0,
+                rgba(0, 0, 0, 0.02) 1px,
+                transparent 1px,
+                transparent 28px
+            );
+        color: #1f2937;
+        box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.05);
+    }
+
+    .sale-receipt::before,
+    .sale-receipt::after {
+        content: "";
+        position: absolute;
+        top: 18px;
+        bottom: 18px;
+        width: 10px;
+        background: radial-gradient(circle, rgba(17, 24, 39, 0.12) 0 4px, transparent 4px 100%);
+        background-size: 10px 28px;
+        opacity: 0.7;
+    }
+
+    .sale-receipt::before { left: -5px; }
+    .sale-receipt::after { right: -5px; }
+
+    .sale-receipt-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        padding-bottom: 0.9rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px dashed rgba(31, 41, 55, 0.2);
+    }
+
+    .sale-receipt-kicker {
+        color: #b91c1c;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+    }
+
+    .sale-receipt-no {
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #111827;
+    }
+
+    .sale-payment-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        border: 1px solid rgba(17, 24, 39, 0.1);
+        background: #111827;
+        color: #fff;
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .sale-payment-pill.sale-payment-cash {
+        background: rgba(22, 101, 52, 0.12);
+        border-color: rgba(22, 101, 52, 0.28);
+        color: #166534;
+    }
+
+    .sale-payment-pill.sale-payment-credit {
+        background: rgba(180, 83, 9, 0.14);
+        border-color: rgba(180, 83, 9, 0.28);
+        color: #b45309;
+    }
+
+    .sale-payment-pill.sale-payment-other {
+        background: rgba(30, 64, 175, 0.1);
+        border-color: rgba(30, 64, 175, 0.22);
+        color: #1d4ed8;
+    }
+
+    .sale-receipt-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-receipt-meta-card {
+        padding: 0.75rem 0.85rem;
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 12px;
+        background: rgba(255,255,255,0.52);
+    }
+
+    .sale-receipt-meta-label {
+        font-size: 0.68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #6b7280;
+        margin-bottom: 0.35rem;
+    }
+
+    .sale-receipt-meta-value {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #111827;
+        overflow-wrap: anywhere;
+    }
+
+    .sale-receipt-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+    }
+
+    .sale-summary-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.45rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid transparent;
+    }
+
+    .sale-summary-chip.total {
+        background: rgba(30, 64, 175, 0.08);
+        color: #1d4ed8;
+        border-color: rgba(30, 64, 175, 0.16);
+    }
+
+    .sale-summary-chip.refund {
+        background: rgba(185, 28, 28, 0.08);
+        color: #b91c1c;
+        border-color: rgba(185, 28, 28, 0.16);
+    }
+
+    .sale-summary-chip.net {
+        background: rgba(146, 64, 14, 0.08);
+        color: #b45309;
+        border-color: rgba(146, 64, 14, 0.18);
+    }
+
+    .sale-receipt-table-wrap {
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.62);
+    }
+
+    .sale-receipt-table {
+        width: 100%;
+        margin-bottom: 0;
+        table-layout: auto !important;
+    }
+
+    .sale-receipt-table th,
+    .sale-receipt-table td {
+        padding: 0.8rem 0.85rem;
+        border-bottom: 1px dashed rgba(17, 24, 39, 0.12);
+        vertical-align: top;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        background: transparent !important;
+    }
+
+    .sale-receipt-table thead th {
+        background: rgba(17, 24, 39, 0.04) !important;
+        color: #6b7280;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        border-bottom-style: solid;
+    }
+
+    .sale-receipt-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .sale-receipt-table td:first-child {
+        white-space: normal !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .sale-line-name {
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .sale-line-note {
+        margin-top: 0.22rem;
+        font-size: 0.78rem;
+        color: #6b7280;
+    }
+
+    .sale-line-description {
+        color: #94a3b8;
+    }
+
+    .sale-line-note.discount {
+        color: #166534;
+        font-weight: 700;
+    }
+
+    .sale-line-note.refund {
+        color: #b91c1c;
+        font-weight: 700;
+    }
+
+    .sale-section-row td {
+        background: rgba(17, 24, 39, 0.05) !important;
+        color: #0f766e;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .sale-total-row td {
+        padding-top: 1rem;
+        border-top: 2px solid rgba(185, 28, 28, 0.18);
+        background: rgba(185, 28, 28, 0.04) !important;
+    }
+
+    .sale-total-label {
+        color: #b91c1c;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .sale-total-amount {
+        color: #b91c1c;
+        font-size: 1.18rem;
+        font-weight: 800;
+    }
+
+    .sale-review-note {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 2px dashed rgba(17, 24, 39, 0.2);
+    }
+
+    .sale-review-note-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.45rem;
+        color: #b91c1c;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+    }
+
+    .sale-review-note-copy {
+        font-size: 0.82rem;
+        color: #6b7280;
+        margin: 0;
+    }
+
+    @media (max-width: 767.98px) {
+        .sale-receipt-meta-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .sale-receipt-top {
+            flex-direction: column;
+        }
+    }
+
     .sale-batch-table td,
     .sale-batch-table th {
         vertical-align: middle;
@@ -997,6 +1306,11 @@
 
     .dual-payment-summary-chip.remaining .value {
         color: #67c2e4;
+    }
+
+    .dual-payment-summary-chip.remaining.over .label,
+    .dual-payment-summary-chip.remaining.over .value {
+        color: #f4c430;
     }
 
     @media (max-width: 991px) {
@@ -1623,6 +1937,62 @@
     </div>
 </div>
 
+<div class="modal fade" id="saleReviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content bg-dark border-secondary text-white sale-review-modal-content">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-receipt-cutoff me-2"></i>Review Transaction Before Submit
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="sale-receipt-shell">
+                    <div class="sale-receipt">
+                        <div class="sale-receipt-top">
+                            <div>
+                                <div class="sale-receipt-kicker">A4s Analytics System</div>
+                                <div class="sale-receipt-no">Receipt #<span id="saleReviewReceiptNumber">Pending</span></div>
+                            </div>
+                            <div id="saleReviewPaymentPill" class="sale-payment-pill sale-payment-other">Payment</div>
+                        </div>
+
+                        <div id="saleReviewMeta" class="sale-receipt-meta-grid"></div>
+                        <div id="saleReviewSummary" class="sale-receipt-summary"></div>
+
+                        <div class="sale-receipt-table-wrap">
+                            <table class="table table-sm sale-receipt-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item / Service</th>
+                                        <th class="text-center">Unit Price</th>
+                                        <th class="text-center">Qty</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="saleReviewItemsList"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="sale-review-note">
+                            <div class="sale-review-note-title">
+                                <i class="bi bi-shield-check"></i>
+                                <span>Final Check</span>
+                            </div>
+                            <p class="sale-review-note-copy mb-0">Review the receipt details below. Choose Back to Edit if anything needs to change, or Confirm Submit to save this transaction.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Back to Edit</button>
+                <button type="button" class="btn btn-danger btn-sm" id="confirm-sale-submit-btn">
+                    <i class="bi bi-check2-circle me-1"></i>Confirm Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -1691,6 +2061,8 @@ let saleBatchMode = 'batch';
 let saleBatchEntries = [];
 let saleBatchSearchDebounce = null;
 let lastSaleBatchSearchItems = [];
+let saleReviewModal = null;
+let pendingSaleDraft = null;
 const mechanicOptions = {{ mechanics|tojson }};
 
 function getPrimaryMechanicId() {
@@ -1857,6 +2229,268 @@ function getGrandTotalValue() {
 function formatPeso(value) {
     const numericValue = Number(value || 0);
     return `₱${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatReviewDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return value.replace('T', ' ');
+    }
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
+
+function getOptionLabel(selectId, value) {
+    const select = document.getElementById(selectId);
+    if (!select) return '';
+    const option = Array.from(select.options || []).find(opt => String(opt.value) === String(value));
+    return option?.textContent?.trim() || '';
+}
+
+function getPaymentToneClass(label) {
+    if (/cash/i.test(label)) return 'sale-payment-cash';
+    if (/(utang|debt)/i.test(label)) return 'sale-payment-credit';
+    return 'sale-payment-other';
+}
+
+function getPaymentPreviewSummary(payments, mechanicSupplyMode, grandTotal = 0) {
+    if (mechanicSupplyMode) {
+        return {
+            pillLabel: 'Cash',
+            pillClass: 'sale-payment-cash',
+            lines: [{ label: 'Cash', amount: grandTotal, reference_no: null }],
+        };
+    }
+
+    if (isDualPaymentEnabled()) {
+        const lines = getDualPaymentRows().map(row => {
+            const categoryValue = row.querySelector('.dual-payment-category')?.value || '';
+            const providerValue = row.querySelector('.dual-payment-provider')?.value || '';
+            const amount = parseFloat(row.querySelector('.dual-payment-amount')?.value || 0) || 0;
+            const referenceNo = row.querySelector('.dual-payment-reference')?.value.trim() || null;
+            const label = (categoryValue === 'Bank' || categoryValue === 'Online')
+                ? getOptionLabel('payment-method', providerValue)
+                : getDualPaymentCategoryLabel(categoryValue);
+            return {
+                label: label || 'Payment',
+                amount,
+                reference_no: referenceNo,
+            };
+        });
+
+        return {
+            pillLabel: 'Split Payment',
+            pillClass: 'sale-payment-other',
+            lines,
+        };
+    }
+
+    const primaryPayment = payments[0] || null;
+    const paymentCategory = document.getElementById('payment-category')?.value || '';
+    const pillLabel = (paymentCategory === 'Bank' || paymentCategory === 'Online')
+        ? getOptionLabel('payment-method', primaryPayment?.payment_method_id)
+        : getOptionLabel('payment-category', primaryPayment?.payment_method_id);
+
+    return {
+        pillLabel: pillLabel || 'Payment',
+        pillClass: getPaymentToneClass(pillLabel || 'Payment'),
+        lines: primaryPayment ? [{
+            label: pillLabel || 'Payment',
+            amount: Number(primaryPayment.amount || 0),
+            reference_no: primaryPayment.reference_no || null,
+        }] : [],
+    };
+}
+
+function collectSelectedBundlePreview(payload) {
+    if (!payload || !selectedBundleConfig) return [];
+    const variant = (selectedBundleConfig.variants || []).find(entry => String(entry.variant_id) === String(payload.bundle_variant_id));
+    const includedItemIds = new Set((payload.items || []).filter(item => item.is_included !== false).map(item => String(item.item_id)));
+    const primaryMechanicName = document.getElementById('mechanic-id')?.selectedOptions?.[0]?.textContent?.trim() || '';
+
+    return [{
+        bundle_name: selectedBundleConfig.bundle_name || selectedBundleConfig.name || 'Bundle',
+        subcategory_name: variant?.subcategory_name || 'Subcategory',
+        vehicle_category: selectedBundleConfig.vehicle_category || 'Vehicle',
+        version_no: Number(selectedBundleConfig.version_no || 0),
+        bundle_price: Number(variant?.sale_price || 0),
+        mechanic_name: primaryMechanicName,
+        services: (selectedBundleConfig.services || []).map(service => ({
+            name: service.name || 'Service',
+        })),
+        items: (selectedBundleConfig.items || []).map(item => ({
+            name: item.name || 'Item',
+            description: item.description || '',
+            quantity: Number(item.quantity || 0),
+            is_included: includedItemIds.has(String(item.item_id)),
+        })),
+    }];
+}
+
+function renderSaleReviewModal(draft) {
+    document.getElementById('saleReviewReceiptNumber').innerText = draft.preview.receiptNumber;
+
+    const paymentPill = document.getElementById('saleReviewPaymentPill');
+    paymentPill.className = `sale-payment-pill ${draft.preview.payment.pillClass}`;
+    paymentPill.textContent = draft.preview.payment.pillLabel;
+
+    const meta = document.getElementById('saleReviewMeta');
+    meta.innerHTML = `
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Customer</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(draft.preview.customerName)}</div>
+        </div>
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Date</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(draft.preview.transactionDateDisplay)}</div>
+        </div>
+        <div class="sale-receipt-meta-card">
+            <div class="sale-receipt-meta-label">Mode</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(draft.preview.modeLabel)}</div>
+        </div>
+    `;
+
+    const summary = document.getElementById('saleReviewSummary');
+    const paymentLineMarkup = draft.preview.payment.lines.map(line => `
+        <div class="sale-summary-chip net">
+            <i class="bi bi-wallet2"></i>
+            <span>${escapeHtml(line.label)} ${formatPeso(line.amount)}${line.reference_no ? ` • Ref ${escapeHtml(line.reference_no)}` : ''}</span>
+        </div>
+    `).join('');
+    summary.innerHTML = `
+        <div class="sale-summary-chip total">
+            <i class="bi bi-calculator"></i>
+            <span>Total ${formatPeso(draft.payload.total_amount)}</span>
+        </div>
+        ${draft.preview.vehicleName ? `
+        <div class="sale-summary-chip refund">
+            <i class="bi bi-truck-front"></i>
+            <span>${escapeHtml(draft.preview.vehicleName)}</span>
+        </div>` : ''}
+        ${paymentLineMarkup}
+    `;
+
+    const list = document.getElementById('saleReviewItemsList');
+    list.innerHTML = '';
+
+    (draft.preview.items || []).forEach(item => {
+        const hasDisc = Number(item.discount_amount || 0) > 0;
+        let itemLabel = `<div class="sale-line-name">${escapeHtml(item.name)}</div>`;
+        if (item.description) {
+            itemLabel += `<div class="sale-line-note sale-line-description">${escapeHtml(item.description)}</div>`;
+        }
+        if (hasDisc) {
+            itemLabel += `<div class="sale-line-note discount">Discount applied: -${formatPeso(item.discount_amount)}</div>`;
+        }
+
+        let priceDisplay = `<div class="sale-line-name">${formatPeso(item.original_price)}</div>`;
+        if (hasDisc) {
+            priceDisplay += `<div class="sale-line-note discount">Final: ${formatPeso(item.final_price)}</div>`;
+        }
+
+        list.innerHTML += `
+            <tr>
+                <td>${itemLabel}</td>
+                <td class="text-center align-middle">${priceDisplay}</td>
+                <td class="text-center align-middle fw-bold">${Number(item.quantity || 0)}</td>
+            </tr>
+        `;
+    });
+
+    if ((draft.preview.services || []).length > 0) {
+        list.innerHTML += `<tr class="sale-section-row"><td colspan="3">Labor & Services</td></tr>`;
+        draft.preview.services.forEach(service => {
+            const mechanicNote = service.mechanic_name
+                ? `<div class="sale-line-note" style="color:#0f766e; font-weight:700;">Mechanic: ${escapeHtml(service.mechanic_name)}</div>`
+                : '';
+            list.innerHTML += `
+                <tr>
+                    <td>
+                        <div class="sale-line-name">${escapeHtml(service.name)}</div>
+                        ${mechanicNote}
+                    </td>
+                    <td class="text-center"><div class="sale-line-name">${formatPeso(service.price)}</div></td>
+                    <td class="text-center">1</td>
+                </tr>
+            `;
+        });
+    }
+
+    (draft.preview.bundles || []).forEach(bundle => {
+        const bundleHeaderParts = [
+            bundle.bundle_name || 'Bundle',
+            bundle.subcategory_name || '',
+            bundle.mechanic_name || '',
+        ].filter(Boolean);
+        list.innerHTML += `
+            <tr class="sale-section-row">
+                <td colspan="3">${escapeHtml(bundleHeaderParts.join(' • '))}</td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="sale-line-name">${escapeHtml(bundle.subcategory_name)}</div>
+                    <div class="sale-line-note">${escapeHtml(bundle.vehicle_category)} • Version ${Number(bundle.version_no || 0)}${bundle.mechanic_name ? ` • Mechanic: ${escapeHtml(bundle.mechanic_name)}` : ''}</div>
+                </td>
+                <td class="text-center">
+                    <div class="sale-line-name">${formatPeso(bundle.bundle_price)}</div>
+                    <div class="sale-line-note">Fixed bundle price</div>
+                </td>
+                <td class="text-center">1</td>
+            </tr>
+        `;
+
+        if ((bundle.services || []).length > 0) {
+            list.innerHTML += `<tr><td colspan="3" class="sale-line-note" style="padding-top:0.85rem; color:#0f766e; font-weight:700;">Bundled Services</td></tr>`;
+            bundle.services.forEach(service => {
+                list.innerHTML += `
+                    <tr>
+                        <td><div class="sale-line-name">${escapeHtml(service.name)}</div></td>
+                        <td class="text-center"><div class="sale-line-note">Included in bundle</div></td>
+                        <td class="text-center">1</td>
+                    </tr>
+                `;
+            });
+        }
+
+        if ((bundle.items || []).length > 0) {
+            list.innerHTML += `<tr><td colspan="3" class="sale-line-note" style="padding-top:0.85rem; color:#0f766e; font-weight:700;">Bundled Items</td></tr>`;
+            bundle.items.forEach(item => {
+                list.innerHTML += `
+                    <tr>
+                        <td>
+                            <div class="sale-line-name">${escapeHtml(item.name)}</div>
+                            ${item.description ? `<div class="sale-line-note sale-line-description">${escapeHtml(item.description)}</div>` : ''}
+                            <div class="sale-line-note ${item.is_included ? '' : 'refund'}">
+                                ${item.is_included ? 'Included in stock deduction' : 'Excluded from stock deduction'}
+                            </div>
+                        </td>
+                        <td class="text-center"><div class="sale-line-note">Included in bundle</div></td>
+                        <td class="text-center fw-bold">${item.is_included ? Number(item.quantity || 0) : 0}</td>
+                    </tr>
+                `;
+            });
+        }
+    });
+
+    list.innerHTML += `
+        <tr class="sale-total-row">
+            <td class="sale-total-label">Grand Total</td>
+            <td class="sale-total-amount text-center">${formatPeso(draft.payload.total_amount)}</td>
+            <td></td>
+        </tr>
+    `;
+}
+
+function openSaleReviewModal(draft) {
+    pendingSaleDraft = draft;
+    renderSaleReviewModal(draft);
+    saleReviewModal?.show();
 }
 
 function roundMoney(value) {
@@ -2236,6 +2870,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
     });
     saleBatchModal = new bootstrap.Modal(document.getElementById('saleBatchModal'));
+    saleReviewModal = new bootstrap.Modal(document.getElementById('saleReviewModal'));
     updateSaleBatchModeUI();
     resetDualPaymentRows();
     document.getElementById('open-sale-batch-btn').addEventListener('click', () => {
@@ -2433,6 +3068,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('saleBatchModal').addEventListener('hidden.bs.modal', () => {
         document.getElementById('saleBatchSearchResults').style.display = 'none';
+    });
+    document.getElementById('saleReviewModal').addEventListener('hidden.bs.modal', () => {
+        const confirmBtn = document.getElementById('confirm-sale-submit-btn');
+        if (!confirmBtn?.disabled) {
+            pendingSaleDraft = null;
+        }
     });
     document.addEventListener('click', function (event) {
         if (!event.target.closest('.sale-batch-search')) {
@@ -3629,11 +4270,19 @@ function updateDualPaymentTotals() {
         return sum + (parseFloat(row.querySelector('.dual-payment-amount')?.value || 0) || 0);
     }, 0);
     const grandTotal = getGrandTotalValue();
-    const remaining = Math.max(0, grandTotal - total);
+    const difference = roundMoney(grandTotal - total);
     const totalEl = document.getElementById('dual-payment-total');
     const remainingEl = document.getElementById('dual-payment-remaining');
+    const remainingLabelEl = document.querySelector('.dual-payment-summary-chip.remaining .label');
+    const remainingChipEl = document.querySelector('.dual-payment-summary-chip.remaining');
     if (totalEl) totalEl.textContent = formatPeso(total);
-    if (remainingEl) remainingEl.textContent = formatPeso(remaining);
+    if (remainingEl) remainingEl.textContent = formatPeso(Math.abs(difference));
+    if (remainingLabelEl) {
+        remainingLabelEl.textContent = difference < 0 ? 'Over By' : 'Remaining';
+    }
+    if (remainingChipEl) {
+        remainingChipEl.classList.toggle('over', difference < 0);
+    }
 }
 
 function resetDualPaymentRows() {
@@ -3798,6 +4447,7 @@ function createBlankItemRow() {
     delete newRow.dataset.basePrice;
     delete newRow.dataset.sellingPrice;
     delete newRow.dataset.costPrice;
+    delete newRow.dataset.itemDescription;
 
     const originalPriceEl = newRow.querySelector('.original-price');
     if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
@@ -3838,6 +4488,7 @@ function assignItemToRow(row, item, { quantity = 1, discount = 0 } = {}) {
     row.dataset.sellingPrice = Number(item.a4s_selling_price || 0).toFixed(2);
     row.dataset.costPrice = Number(item.cost_per_piece || 0).toFixed(2);
     row.dataset.basePrice = isMechanicSupplyMode() ? row.dataset.costPrice : row.dataset.sellingPrice;
+    row.dataset.itemDescription = item.description || '';
     row.querySelector('.price-input').value = row.dataset.basePrice;
     row.querySelector('.stock-input').value = item.current_stock;
     row.querySelector('.qty-input').value = qtyValue;
@@ -3860,6 +4511,7 @@ function clearItemRow(row) {
     delete row.dataset.basePrice;
     delete row.dataset.sellingPrice;
     delete row.dataset.costPrice;
+    delete row.dataset.itemDescription;
 
     const originalPriceEl = row.querySelector('.original-price');
     if (originalPriceEl) { originalPriceEl.style.display = 'none'; originalPriceEl.innerText = '₱0.00'; }
@@ -4001,14 +4653,7 @@ document.getElementById('add-service-btn').addEventListener('click', (e) => {
 /* =========================================================
    SUBMISSION
 ========================================================= */
-document.getElementById('submit-btn').addEventListener('click', async (e) => {
-    e.preventDefault();
-    const currentButtonHtml = e.target.innerHTML;
-    const submitGuard = window.A4Submit?.createButtonGuard(e.target, {
-        idleHtml: currentButtonHtml,
-        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...',
-    });
-
+function buildSaleDraft() {
     clearFieldErrors();
     syncQuickCustomerName();
 
@@ -4086,24 +4731,33 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
     if (firstErrorEl) {
         firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         if (typeof firstErrorEl.focus === 'function') firstErrorEl.focus();
-        return;
+        return null;
     }
 
     const validItems = [];
     let hasUnconfirmedItem = false;
 
     document.querySelectorAll('.item-row').forEach(row => {
-        const id   = row.querySelector('.item-id-input').value;
-        const qty  = parseFloat(row.querySelector('.qty-input').value);
-        const name = row.querySelector('.item-input').value.trim();
+        const id = row.querySelector('.item-id-input').value;
+        const qty = parseFloat(row.querySelector('.qty-input').value);
+        const itemInput = row.querySelector('.item-input');
+        const name = itemInput.value.trim();
 
         if (name && !id) hasUnconfirmedItem = true;
 
         if (id && qty > 0) {
-            const discountAmount  = parseFloat(row.querySelector('.discount-input').value) || 0;
-            const originalPrice   = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
-            const finalPrice      = parseFloat(row.querySelector('.price-input').value);
-            validItems.push({ item_id: id, quantity: qty, original_price: originalPrice, discount_amount: discountAmount, final_price: finalPrice });
+            const discountAmount = parseFloat(row.querySelector('.discount-input').value) || 0;
+            const originalPrice = parseFloat(row.dataset.basePrice) || parseFloat(row.querySelector('.price-input').value);
+            const finalPrice = parseFloat(row.querySelector('.price-input').value);
+            validItems.push({
+                item_id: id,
+                quantity: qty,
+                original_price: originalPrice,
+                discount_amount: discountAmount,
+                final_price: finalPrice,
+                name: itemInput.dataset.confirmedName || name,
+                description: row.dataset.itemDescription || '',
+            });
         }
     });
 
@@ -4138,7 +4792,14 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
                 break;
             }
 
-            validServices.push({ service_id: sId, price: parsedPrice, mechanic_id: serviceMechanicEl.value });
+            const mechanicName = serviceMechanicEl.selectedOptions[0]?.textContent?.trim() || '';
+            validServices.push({
+                service_id: sId,
+                price: parsedPrice,
+                mechanic_id: serviceMechanicEl.value,
+                name: sName,
+                mechanic_name: mechanicName,
+            });
         }
     }
 
@@ -4160,38 +4821,38 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         });
         if (firstBadRow) firstBadRow.querySelector('.qty-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
         showAlert('One or more items have insufficient stock or invalid quantities. Please fix them before submitting.');
-        return;
+        return null;
     }
 
     if (hasUnconfirmedItem) {
         showAlert('One or more items were typed but not selected from the search. Please select an item from the dropdown.', 'warning');
-        return;
+        return null;
     }
 
     if (hasUnconfirmedService) {
         showAlert('One or more services were typed but not selected from the search. Please select a service from the dropdown.', 'warning');
-        return;
+        return null;
     }
 
     if (quickSaleMode && hasBundleSelected) {
         showAlert('Quick Sale does not support bundles. Switch to New Sale to add a bundle.', 'warning');
-        return;
+        return null;
     }
 
     if (mechanicSupplyMode && validServices.length > 0) {
         showAlert('Mechanic Supply only supports item stock-outs.', 'warning');
-        return;
+        return null;
     }
 
     if (mechanicSupplyMode && hasBundleSelected) {
         showAlert('Mechanic Supply does not support bundles.', 'warning');
-        return;
+        return null;
     }
 
     if (bundleChosenWithoutVariant) {
         showAlert('Please choose a subcategory for the selected bundle before submitting.', 'warning');
         document.getElementById('bundle-variant-select').focus();
-        return;
+        return null;
     }
 
     if (hasBundleSelected && !primaryMechanicId) {
@@ -4199,7 +4860,7 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         const mechanicSelect = document.getElementById('mechanic-id');
         mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
         mechanicSelect.focus();
-        return;
+        return null;
     }
 
     if (hasBundleSelected && secondaryMechanicId) {
@@ -4207,48 +4868,48 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         const secondarySelect = document.getElementById('mechanic-id-secondary');
         secondarySelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
         secondarySelect.focus();
-        return;
+        return null;
     }
 
     const bundleStockIssues = hasBundleSelected ? getIncludedBundleStockIssues() : [];
     if (bundleStockIssues.length > 0) {
         bundleStockIssues[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
         showAlert('An item in the selected bundle is currently out of stock or insufficient for the required quantity. Exclude it or restock before submitting.', 'warning');
-        return;
+        return null;
     }
 
     if (missingServicePriceInput) {
         showAlert('Please enter a price for every selected service before submitting.', 'warning');
         missingServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         missingServicePriceInput.focus();
-        return;
+        return null;
     }
 
     if (missingServiceMechanicInput) {
         showAlert('Please assign a mechanic for every selected service before submitting.', 'warning');
         missingServiceMechanicInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         missingServiceMechanicInput.focus();
-        return;
+        return null;
     }
 
     if (invalidServicePriceInput) {
         showAlert('Service price must be a valid non-negative amount.', 'warning');
         invalidServicePriceInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         invalidServicePriceInput.focus();
-        return;
+        return null;
     }
 
     if (!mechanicSupplyMode && selectedMechanicIds.length > 0 && validServices.length === 0 && bundleServicesCount === 0) {
         showAlert('Assigned mechanic requires at least one service entry.', 'warning');
         document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
+        return null;
     }
 
     if (!mechanicSupplyMode && validServices.length > 0 && selectedMechanicIds.length === 0) {
         showAlert('Select at least one mechanic before submitting services.', 'warning');
         document.getElementById('mechanic-id').scrollIntoView({ behavior: 'smooth', block: 'center' });
         document.getElementById('mechanic-id').focus();
-        return;
+        return null;
     }
 
     if (!mechanicSupplyMode && !hasBundleSelected && selectedMechanicIds.length > 0) {
@@ -4257,13 +4918,13 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         if (missingMechanicAssignment) {
             showAlert('Each selected mechanic needs at least one assigned service.', 'warning');
             document.getElementById('services-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return;
+            return null;
         }
     }
 
     if (validItems.length === 0 && validServices.length === 0 && !hasBundleSelected) {
         showAlert(fullSaleMode ? 'Please add at least one item, service, or bundle before submitting.' : 'Please add at least one item or service before submitting.', 'warning');
-        return;
+        return null;
     }
 
     if (quickSaleMode) {
@@ -4272,67 +4933,90 @@ document.getElementById('submit-btn').addEventListener('click', async (e) => {
         );
         if (invalidQuickSaleItems.length > 0) {
             showAlert('Quick Sale only allows items priced up to ₱500. Remove the higher-priced item(s) or switch to New Sale.', 'warning');
-            return;
+            return null;
         }
         if (getGrandTotalValue() > QUICK_SALE_MAX_PRICE) {
             showAlert('Quick Sale total due cannot exceed ₱500. Remove an item, reduce quantity, discount, or switch to New Sale.', 'warning');
-            return;
+            return null;
         }
     }
 
-    if (!submitGuard || !submitGuard.begin()) {
-        return;
+    let finalDate;
+    if (dateWasManuallyChanged) {
+        finalDate = document.getElementById('trans-date').value;
+    } else {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        finalDate = new Date(now - offset).toISOString().slice(0, 19);
     }
 
-    await saveTransaction(validItems, validServices, hasBundleSelected ? [selectedBundlePayload] : [], submitGuard);
+    const grandTotal = getGrandTotalValue();
+    const payments = buildPaymentPayload(grandTotal, mechanicSupplyMode);
+    const primaryPayment = payments[0] || null;
+    const bundlePreview = hasBundleSelected ? collectSelectedBundlePreview(selectedBundlePayload) : [];
+    const vehicleLabel = fullSaleMode
+        ? (document.getElementById('vehicle-id').selectedOptions[0]?.textContent?.trim() || '')
+        : '';
+    const payload = {
+        transaction_class: getTransactionClass(),
+        quick_sale: quickSaleMode,
+        sales_number: salesNum || null,
+        customer_name: quickSaleMode ? customerName : (fullSaleMode ? document.getElementById('customer-name').value.trim() : ''),
+        customer_id: fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
+        mechanic_id: getPrimaryMechanicId() || null,
+        secondary_mechanic_id: getSecondaryMechanicId() || null,
+        vehicle_id: fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
+        payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : (primaryPayment?.payment_method_id || paymentCat),
+        reference_no: primaryPayment?.reference_no || null,
+        payments,
+        total_amount: grandTotal,
+        notes: mechanicSupplyMode ? '' : document.getElementById('trans-notes').value,
+        transaction_date: finalDate,
+        items: validItems.map(({ item_id, quantity, original_price, discount_amount, final_price }) => ({
+            item_id,
+            quantity,
+            original_price,
+            discount_amount,
+            final_price,
+        })),
+        services: mechanicSupplyMode
+            ? []
+            : validServices.map(({ service_id, price, mechanic_id }) => ({ service_id, price, mechanic_id })),
+        bundles: fullSaleMode && hasBundleSelected ? [selectedBundlePayload] : [],
+    };
+    const paymentPreview = getPaymentPreviewSummary(payments, mechanicSupplyMode, grandTotal);
+
+    return {
+        payload,
+        preview: {
+            receiptNumber: payload.sales_number || 'Pending',
+            customerName: payload.customer_name || 'Walk-in',
+            transactionDateDisplay: formatReviewDate(finalDate),
+            modeLabel: mechanicSupplyMode ? 'Mechanic Supply' : (quickSaleMode ? 'Quick Sale' : 'New Sale'),
+            vehicleName: vehicleLabel,
+            payment: paymentPreview,
+            items: validItems,
+            services: mechanicSupplyMode ? [] : validServices,
+            bundles: bundlePreview,
+        },
+    };
+}
+
+document.getElementById('submit-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    const draft = buildSaleDraft();
+    if (!draft) {
+        return;
+    }
+    openSaleReviewModal(draft);
 });
 
-async function saveTransaction(items, services, bundles, submitGuard) {
+async function saveTransaction(draft, submitGuard) {
     const requestTimeoutMs = 15000;
     let salePersisted = false;
 
-    const quickSaleMode = isQuickSaleMode();
-    const fullSaleMode = isFullSaleMode();
-    const mechanicSupplyMode = isMechanicSupplyMode();
-
     try {
-        if (quickSaleMode) {
-            syncQuickCustomerName();
-        }
-
-        let finalDate;
-        if (dateWasManuallyChanged) {
-            finalDate = document.getElementById('trans-date').value;
-        } else {
-            const now = new Date();
-            const offset = now.getTimezoneOffset() * 60000;
-            finalDate = new Date(now - offset).toISOString().slice(0, 19);
-        }
-
-        const grandTotal = parseFloat(document.getElementById('grand-total').innerText.replace(/[₱,]/g, ''));
-        const payments = buildPaymentPayload(grandTotal, mechanicSupplyMode);
-        const primaryPayment = payments[0] || null;
-
-        const payload = {
-            transaction_class: getTransactionClass(),
-            quick_sale:        quickSaleMode,
-            sales_number:      document.getElementById('sales-number').value.trim() || null,
-            customer_name:     quickSaleMode ? document.getElementById('quick-customer-name').value.trim() : (fullSaleMode ? document.getElementById('customer-name').value : ''),
-            customer_id:       fullSaleMode ? (document.getElementById('customer-id').value || null) : null,
-            mechanic_id:       getPrimaryMechanicId() || null,
-            secondary_mechanic_id: getSecondaryMechanicId() || null,
-            vehicle_id:        fullSaleMode ? (document.getElementById('vehicle-id').value || null) : null,
-            payment_method_id: mechanicSupplyMode ? DEFAULT_CASH_PAYMENT_ID : (primaryPayment?.payment_method_id || document.getElementById('payment-category').value),
-            reference_no:      primaryPayment?.reference_no || null,
-            payments,
-            total_amount:      grandTotal,
-            notes:             mechanicSupplyMode ? '' : document.getElementById('trans-notes').value,
-            transaction_date:  finalDate,
-            items,
-            services:          mechanicSupplyMode ? [] : services,
-            bundles:           fullSaleMode ? bundles : []
-        };
-
+        const payload = draft.payload;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
         const res = await fetch('/transaction/out/save', {
@@ -4403,5 +5087,23 @@ async function saveTransaction(items, services, bundles, submitGuard) {
         }
     }
 }
+
+document.getElementById('confirm-sale-submit-btn').addEventListener('click', async function () {
+    if (!pendingSaleDraft) {
+        showAlert('Review details are missing. Please reopen the review modal.', 'warning');
+        return;
+    }
+
+    const submitGuard = window.A4Submit?.createButtonGuard(this, {
+        idleHtml: this.innerHTML,
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>SAVING...',
+    });
+
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
+
+    await saveTransaction(pendingSaleDraft, submitGuard);
+});
 </script>
 {% endblock %}
