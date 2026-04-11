@@ -101,6 +101,15 @@
             font-size: 12px;
             line-height: 1.4;
         }
+        .mechanic-breakdown-subrow {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 11px;
+            line-height: 1.35;
+            color: #666;
+            padding-left: 10px;
+        }
         .mechanic-breakdown-name { font-weight: 700; }
         .mechanic-breakdown-amount {
             color: #444;
@@ -634,6 +643,10 @@
                             <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
                             P {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
                         </div>
+                        <div class="line-meta" style="margin-top: 4px;">
+                            <span class="svc-label" style="display: inline; margin-right: 6px;">Mechanic Share</span>
+                            P {{ "%.2f"|format(bundle.mechanic_share_snapshot or 0) }}
+                        </div>
                     </div>
                     {% endfor %}
 
@@ -654,6 +667,26 @@
                             <span class="mechanic-breakdown-name">{{ mechanic.mechanic_name }}</span>
                             <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.service_total) }}</span>
                         </div>
+                        {% if mechanic.standalone_service_total > 0 and mechanic.bundle_service_total > 0 %}
+                        <div class="mechanic-breakdown-subrow">
+                            <span>Services</span>
+                            <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.standalone_service_total) }}</span>
+                        </div>
+                        <div class="mechanic-breakdown-subrow">
+                            <span>Bundle Share</span>
+                            <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.bundle_service_total) }}</span>
+                        </div>
+                        {% elif mechanic.bundle_service_total > 0 %}
+                        <div class="mechanic-breakdown-subrow">
+                            <span>Bundle Share</span>
+                            <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.bundle_service_total) }}</span>
+                        </div>
+                        {% elif mechanic.standalone_service_total > 0 and mechanic.mechanic_name != 'Shop Only' %}
+                        <div class="mechanic-breakdown-subrow">
+                            <span>Services</span>
+                            <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.standalone_service_total) }}</span>
+                        </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
                     {% else %}
@@ -1222,6 +1255,10 @@
                                 <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
                                 P {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
                             </div>
+                            <div class="line-meta" style="margin-top: 4px;">
+                                <span class="svc-label" style="display: inline; margin-right: 6px;">Mechanic Share</span>
+                                P {{ "%.2f"|format(bundle.mechanic_share_snapshot or 0) }}
+                            </div>
                         </div>
                         {% endfor %}
 
@@ -1246,6 +1283,26 @@
                                 <span class="mechanic-breakdown-name">{{ mechanic.mechanic_name }}</span>
                                 <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.service_total) }}</span>
                             </div>
+                            {% if mechanic.standalone_service_total > 0 and mechanic.bundle_service_total > 0 %}
+                            <div class="mechanic-breakdown-subrow">
+                                <span>Services</span>
+                                <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.standalone_service_total) }}</span>
+                            </div>
+                            <div class="mechanic-breakdown-subrow">
+                                <span>Bundle Share</span>
+                                <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.bundle_service_total) }}</span>
+                            </div>
+                            {% elif mechanic.bundle_service_total > 0 %}
+                            <div class="mechanic-breakdown-subrow">
+                                <span>Bundle Share</span>
+                                <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.bundle_service_total) }}</span>
+                            </div>
+                            {% elif mechanic.standalone_service_total > 0 and mechanic.mechanic_name != 'Shop Only' %}
+                            <div class="mechanic-breakdown-subrow">
+                                <span>Services</span>
+                                <span class="mechanic-breakdown-amount">PHP {{ "%.2f"|format(mechanic.standalone_service_total) }}</span>
+                            </div>
+                            {% endif %}
                             {% endfor %}
                         </div>
                         {% else %}

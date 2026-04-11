@@ -166,21 +166,24 @@ def _summarize_items_for_profit(paid_sales):
             items_summary[key]["cost_total"] += _num(item.get("cost_total"))
             items_summary[key]["profit_total"] += _num(item.get("profit_total"))
         for bundle in sale.get("bundles", []):
-            key = f"Bundle - {bundle['bundle_name_snapshot']} ({bundle['subcategory_name_snapshot']})"
-            if key not in items_summary:
-                items_summary[key] = {
-                    "item_name": key,
-                    "quantity": 0,
-                    "total": 0.0,
-                    "cost_total": 0.0,
-                    "profit_total": 0.0,
-                }
-            bundle_revenue = _num(bundle.get("item_value_reference_snapshot"))
-            bundle_cost_total = _num(bundle.get("included_items_cost_total"))
-            items_summary[key]["quantity"] += 1
-            items_summary[key]["total"] += bundle_revenue
-            items_summary[key]["cost_total"] += bundle_cost_total
-            items_summary[key]["profit_total"] += round(bundle_revenue - bundle_cost_total, 2)
+            for bundle_item in bundle.get("items", []):
+                if int(bundle_item.get("is_included") or 0) != 1:
+                    continue
+                key = bundle_item["item_name_snapshot"]
+                if key not in items_summary:
+                    items_summary[key] = {
+                        "item_name": key,
+                        "quantity": 0,
+                        "total": 0.0,
+                        "cost_total": 0.0,
+                        "profit_total": 0.0,
+                    }
+                bundle_item_total = _num(bundle_item.get("line_total_snapshot"))
+                bundle_item_cost_total = _num(bundle_item.get("estimated_cost_total"))
+                items_summary[key]["quantity"] += int(bundle_item.get("quantity") or 0)
+                items_summary[key]["total"] += bundle_item_total
+                items_summary[key]["cost_total"] += bundle_item_cost_total
+                items_summary[key]["profit_total"] += round(bundle_item_total - bundle_item_cost_total, 2)
     return sorted(items_summary.values(), key=lambda x: x["item_name"])
 
 
@@ -654,6 +657,8 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
         entry = {
             "mechanic_name": normalized_name,
             "service_total": 0.0,
+            "standalone_service_total": 0.0,
+            "bundle_service_total": 0.0,
         }
         index_by_name[normalized_name] = len(breakdown)
         breakdown.append(entry)
@@ -664,7 +669,9 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
             entry = _get_or_add("Shop Only")
         else:
             entry = _get_or_add(service.get("mechanic_name") or (sale or {}).get("mechanic_name"))
-        entry["service_total"] = round(entry["service_total"] + _num(service.get("price")), 2)
+        service_price = _num(service.get("price"))
+        entry["service_total"] = round(entry["service_total"] + service_price, 2)
+        entry["standalone_service_total"] = round(entry["standalone_service_total"] + service_price, 2)
 
     bundle_owner_name = str((sale or {}).get("mechanic_name") or "").strip()
     bundle_service_total = round(
@@ -674,6 +681,7 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
     if bundle_service_total > 0:
         entry = _get_or_add(bundle_owner_name or "-")
         entry["service_total"] = round(entry["service_total"] + bundle_service_total, 2)
+        entry["bundle_service_total"] = round(entry["bundle_service_total"] + bundle_service_total, 2)
 
     filtered_breakdown = [
         entry for entry in breakdown
