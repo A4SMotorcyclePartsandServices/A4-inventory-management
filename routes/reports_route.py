@@ -1,10 +1,11 @@
 ﻿# Add to imports at the top
 import csv
 import io
+import time
 from datetime import datetime, date
 from flask import Response
 from db.database import get_db
-from flask import Blueprint, request, render_template, redirect, url_for, flash, session
+from flask import Blueprint, request, render_template, redirect, url_for, flash, session, current_app
 from auth.utils import login_required, admin_required
 from services.loyalty_service import get_all_programs
 from services.reports_service import (
@@ -21,6 +22,23 @@ from utils.formatters import format_date
 from utils.timezone import now_local, today_local
 
 reports_bp = Blueprint("reports", __name__)
+
+
+def _log_report_trace(event, **fields):
+    payload = " ".join(
+        f"{key}={value}"
+        for key, value in fields.items()
+        if value is not None
+    )
+    current_app.logger.warning("REPORT_TRACE %s%s", event, f" {payload}" if payload else "")
+
+
+def _timed_report_step(step_name, func, *args, **kwargs):
+    started_at = time.perf_counter()
+    result = func(*args, **kwargs)
+    elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    _log_report_trace("step", step=step_name, duration_ms=elapsed_ms)
+    return result
 
 
 def _normalize_item_category(value):
@@ -217,29 +235,39 @@ def _build_sales_report_context():
 
     if report_date:
         report_date_iso = report_date.isoformat()
-        data = get_sales_report_by_date(report_date_iso)
+        data = _timed_report_step("sales_report_data", get_sales_report_by_date, report_date_iso)
         date_label = format_date(report_date_iso)
         is_range = False
-        cash_data = get_cash_entries_for_report(report_date_iso, report_date_iso)
+        cash_data = _timed_report_step("cash_entries", get_cash_entries_for_report, report_date_iso, report_date_iso)
         cash_balance_label = format_date(report_date_iso)
+        report_scope = "date"
+        report_start = report_date_iso
+        report_end = report_date_iso
     elif start_date and end_date:
         if end_date < start_date:
             flash("End date cannot be before start date.", "warning")
             return None
         start_date_iso = start_date.isoformat()
         end_date_iso = end_date.isoformat()
-        data = get_sales_report_by_range(start_date_iso, end_date_iso)
+        data = _timed_report_step("sales_report_data", get_sales_report_by_range, start_date_iso, end_date_iso)
         date_label = f"{format_date(start_date_iso)} to {format_date(end_date_iso)}"
         is_range = True
-        cash_data = get_cash_entries_for_report(start_date_iso, end_date_iso)
+        cash_data = _timed_report_step("cash_entries", get_cash_entries_for_report, start_date_iso, end_date_iso)
         cash_balance_label = format_date(end_date_iso)
+        report_scope = "range"
+        report_start = start_date_iso
+        report_end = end_date_iso
     else:
         flash("Please select a date.", "warning")
         return None
 
-    cash_summary = get_cash_summary()
+    cash_summary = _timed_report_step("cash_summary", get_cash_summary)
     cash_data["floating_total"] = cash_summary.get("floating_total", 0.0)
-    cash_data["cash_out_groups"] = _build_cash_out_report_groups(cash_data.get("entries") or [])
+    cash_data["cash_out_groups"] = _timed_report_step(
+        "cash_out_groups",
+        _build_cash_out_report_groups,
+        cash_data.get("entries") or [],
+    )
 
     if not data:
         data = {
@@ -277,6 +305,11 @@ def _build_sales_report_context():
         "data": data,
         "is_range": is_range,
         "cash_data": cash_data,
+        "_report_trace_meta": {
+            "scope": report_scope,
+            "start_date": report_start,
+            "end_date": report_end,
+        },
     }
 
 
@@ -426,19 +459,55 @@ def range_report():
 @reports_bp.route("/reports/sales-summary")
 @login_required
 def sales_summary_report():
+    started_at = time.perf_counter()
     context = _build_sales_report_context()
     if context is None:
         return redirect(url_for("index"))
-    return render_template("reports/sales_report_pdf.html", **context)
+    trace_meta = context.pop("_report_trace_meta", {})
+    render_started_at = time.perf_counter()
+    response = render_template("reports/sales_report_pdf.html", **context)
+    render_elapsed_ms = round((time.perf_counter() - render_started_at) * 1000, 2)
+    total_elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    _log_report_trace(
+        "route_complete",
+        route="sales_summary_report",
+        scope=trace_meta.get("scope"),
+        start_date=trace_meta.get("start_date"),
+        end_date=trace_meta.get("end_date"),
+        sales_count=len((context.get("data") or {}).get("sales") or []),
+        unresolved_count=len((context.get("data") or {}).get("unresolved") or []),
+        cash_entry_count=len((context.get("cash_data") or {}).get("entries") or []),
+        render_ms=render_elapsed_ms,
+        total_ms=total_elapsed_ms,
+    )
+    return response
 
 
 @reports_bp.route("/reports/sales-report-summary")
 @login_required
 def sales_report_summary_pdf():
+    started_at = time.perf_counter()
     context = _build_sales_report_context()
     if context is None:
         return redirect(url_for("index"))
-    return render_template("reports/sales_summary_pdf.html", **context)
+    trace_meta = context.pop("_report_trace_meta", {})
+    render_started_at = time.perf_counter()
+    response = render_template("reports/sales_summary_pdf.html", **context)
+    render_elapsed_ms = round((time.perf_counter() - render_started_at) * 1000, 2)
+    total_elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    _log_report_trace(
+        "route_complete",
+        route="sales_report_summary_pdf",
+        scope=trace_meta.get("scope"),
+        start_date=trace_meta.get("start_date"),
+        end_date=trace_meta.get("end_date"),
+        sales_count=len((context.get("data") or {}).get("sales") or []),
+        unresolved_count=len((context.get("data") or {}).get("unresolved") or []),
+        cash_entry_count=len((context.get("cash_data") or {}).get("entries") or []),
+        render_ms=render_elapsed_ms,
+        total_ms=total_elapsed_ms,
+    )
+    return response
 
 
 @reports_bp.route("/reports/mechanic-supply")

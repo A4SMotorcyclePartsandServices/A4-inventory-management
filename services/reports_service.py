@@ -660,7 +660,10 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
         return entry
 
     for service in services or []:
-        entry = _get_or_add(service.get("mechanic_name") or (sale or {}).get("mechanic_name"))
+        if _bool_flag(service.get("mechanic_payout_exempt"), default=False):
+            entry = _get_or_add("Shop Only")
+        else:
+            entry = _get_or_add(service.get("mechanic_name") or (sale or {}).get("mechanic_name"))
         entry["service_total"] = round(entry["service_total"] + _num(service.get("price")), 2)
 
     bundle_owner_name = str((sale or {}).get("mechanic_name") or "").strip()
@@ -672,7 +675,17 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
         entry = _get_or_add(bundle_owner_name or "-")
         entry["service_total"] = round(entry["service_total"] + bundle_service_total, 2)
 
-    return [entry for entry in breakdown if round(_num(entry.get("service_total")), 2) > 0]
+    filtered_breakdown = [
+        entry for entry in breakdown
+        if round(_num(entry.get("service_total")), 2) > 0
+    ]
+    filtered_breakdown.sort(
+        key=lambda entry: (
+            1 if str(entry.get("mechanic_name") or "").strip().lower() == "shop only" else 0,
+            str(entry.get("mechanic_name") or "").strip().lower(),
+        )
+    )
+    return filtered_breakdown
 # ─────────────────────────────────────────────
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────

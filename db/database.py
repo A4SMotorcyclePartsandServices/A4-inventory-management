@@ -69,10 +69,30 @@ class DbConnection:
     def rollback(self):
         return self._conn.rollback()
 
+    def _reset_before_close(self):
+        if getattr(self._conn, "closed", 1):
+            return
+        if getattr(self._conn, "autocommit", False):
+            return
+        try:
+            self._conn.rollback()
+        except Exception:
+            # If rollback itself fails, the caller still needs the connection
+            # removed from active use rather than returned dirty to the pool.
+            raise
+
     def close(self):
         if self._pool is not None:
+            try:
+                self._reset_before_close()
+            except Exception:
+                return self._pool.putconn(self._conn, close=True)
             return self._pool.putconn(self._conn)
-        return self._conn.close()
+
+        try:
+            self._reset_before_close()
+        finally:
+            return self._conn.close()
 
     def __enter__(self):
         self._conn.__enter__()

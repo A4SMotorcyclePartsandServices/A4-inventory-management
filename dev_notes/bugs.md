@@ -55,6 +55,31 @@ How to check logs in Railway:
   `http_400`
   `csrf_error`
 
+Report tracing added for intermittent report hangs:
+- Lightweight `REPORT_TRACE` logs were added to the shared sales report builder in `routes/reports_route.py`.
+- This covers both `/reports/sales-summary` and `/reports/sales-report-summary`.
+- Logged stages:
+  `sales_report_data`
+  `cash_entries`
+  `cash_summary`
+  `cash_out_groups`
+  plus final `route_complete`
+- `route_complete` also logs:
+  `sales_count`
+  `unresolved_count`
+  `cash_entry_count`
+  `render_ms`
+  `total_ms`
+
+How to check logs in Railway for the report issue:
+- Open Railway.
+- Open this project.
+- Open the deployed service for the app.
+- Go to `Logs`.
+- Search for `REPORT_TRACE`.
+- Compare the slow attempt vs the normal retry.
+- Look for which `step=` line has the largest `duration_ms`, or if `route_complete` is missing entirely for the stuck attempt.
+
 - Range report for mechanics may miscalculate quota when mechanic was absent
 
 Example:
