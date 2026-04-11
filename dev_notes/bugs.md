@@ -80,6 +80,32 @@ How to check logs in Railway for the report issue:
 - Compare the slow attempt vs the normal retry.
 - Look for which `step=` line has the largest `duration_ms`, or if `route_complete` is missing entirely for the stuck attempt.
 
+Confirmed follow-up finding from Railway logs:
+- In at least one "report hang" incident, the report itself finished normally:
+  `route_complete ... total_ms=249.35`
+- The app then started piling up requests in Waitress:
+  `Task queue depth is 1 ... 7`
+- The actual failure was repeated `/api/search` requests exhausting the PostgreSQL pool:
+  `psycopg2.pool.PoolError: connection pool exhausted`
+
+Current root cause theory:
+- This is not always a slow report query.
+- The system can look "hung" because the app becomes saturated right after or during normal usage.
+- Two likely contributors were identified:
+  `/api/search` used nested DB connections inside `search_items_with_stock()`
+  the sales `out.html` item/service search debounce was ineffective because a new debounced function was created on every keystroke
+- `order.html` search also had no debounce/abort protection, so overlapping searches could stack there too.
+
+Resolution applied:
+- Reuse the same DB connection inside `search_items_with_stock()` instead of opening an extra pooled connection through `get_items_with_stock()`.
+- Limit stock and pending-PO lookups to only the matched item IDs instead of scanning broader data for every `/api/search`.
+- Fix `out.html` to debounce item and service searches per input element.
+- Add debounce + request aborting to `order.html` item search.
+
+If the issue appears again:
+- Check Railway logs for both `REPORT_TRACE` and `PoolError`.
+- If `route_complete` is fast but `waitress.queue` depth climbs and `/api/search` errors appear, the incident is search/pool saturation rather than report generation itself.
+
 - Range report for mechanics may miscalculate quota when mechanic was absent
 
 Example:

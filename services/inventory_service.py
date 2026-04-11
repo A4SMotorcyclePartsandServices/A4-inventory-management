@@ -425,140 +425,153 @@ def attach_recent_stocktake_metadata(conn, items, item_id_key="id", exclude_sess
 
     return items
 
-def get_items_with_stock(snapshot_date=None):
-    conn = get_db()
+def get_items_with_stock(snapshot_date=None, external_conn=None, item_ids=None):
+    conn = external_conn or get_db()
+    try:
+        normalized_item_ids = []
+        for raw_id in item_ids or []:
+            try:
+                normalized_item_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
 
-    if snapshot_date:
-        query = """
-        SELECT 
-            items.id,
-            items.name,
-            items.a4s_selling_price,
-            COALESCE(SUM(
-                CASE 
-                    WHEN inventory_transactions.transaction_type = 'IN'
-                    THEN inventory_transactions.quantity
-                    WHEN inventory_transactions.transaction_type = 'OUT'
-                    AND inventory_transactions.transaction_date >= %s
-                    THEN -inventory_transactions.quantity
-                    ELSE 0
-                END
-            ), 0) AS current_stock
-        FROM items
-        LEFT JOIN inventory_transactions
-            ON items.id = inventory_transactions.item_id
-        GROUP BY items.id;
-        """
-        items = conn.execute(query, (snapshot_date,)).fetchall()
-    else:
-        query = """
-        SELECT 
-            items.id,
-            items.name,
-            items.a4s_selling_price,
-            COALESCE(SUM(
-                CASE 
-                    WHEN inventory_transactions.transaction_type = 'IN'
-                    THEN inventory_transactions.quantity
-                    WHEN inventory_transactions.transaction_type = 'OUT'
-                    THEN -inventory_transactions.quantity
-                    ELSE 0
-                END
-            ), 0) AS current_stock
-        FROM items
-        LEFT JOIN inventory_transactions
-            ON items.id = inventory_transactions.item_id
-        GROUP BY items.id;
-        """
-        items = conn.execute(query).fetchall()
+        params = []
+        where_clause = ""
+        if normalized_item_ids:
+            where_clause = "WHERE items.id = ANY(%s)"
+            params.append(normalized_item_ids)
 
-    conn.close()
-    return items
+        if snapshot_date:
+            query = f"""
+            SELECT 
+                items.id,
+                items.name,
+                items.a4s_selling_price,
+                COALESCE(SUM(
+                    CASE 
+                        WHEN inventory_transactions.transaction_type = 'IN'
+                        THEN inventory_transactions.quantity
+                        WHEN inventory_transactions.transaction_type = 'OUT'
+                        AND inventory_transactions.transaction_date >= %s
+                        THEN -inventory_transactions.quantity
+                        ELSE 0
+                    END
+                ), 0) AS current_stock
+            FROM items
+            LEFT JOIN inventory_transactions
+                ON items.id = inventory_transactions.item_id
+            {where_clause}
+            GROUP BY items.id
+            """
+            items = conn.execute(query, [snapshot_date, *params]).fetchall()
+        else:
+            query = f"""
+            SELECT 
+                items.id,
+                items.name,
+                items.a4s_selling_price,
+                COALESCE(SUM(
+                    CASE 
+                        WHEN inventory_transactions.transaction_type = 'IN'
+                        THEN inventory_transactions.quantity
+                        WHEN inventory_transactions.transaction_type = 'OUT'
+                        THEN -inventory_transactions.quantity
+                        ELSE 0
+                    END
+                ), 0) AS current_stock
+            FROM items
+            LEFT JOIN inventory_transactions
+                ON items.id = inventory_transactions.item_id
+            {where_clause}
+            GROUP BY items.id
+            """
+            items = conn.execute(query, params).fetchall() if params else conn.execute(query).fetchall()
+
+        return items
+    finally:
+        if external_conn is None:
+            conn.close()
 
 def search_items_with_stock(search_query=None, snapshot_date="2026-03-26", item_id=None):
-    from db.database import get_db
     conn = get_db()
-    
-    # 1. FETCH THE ROWS
-    # Case A: We are looking for ONE specific item by ID (Redirect from Add Item)
-    if item_id:
-        sql = "SELECT * FROM items WHERE id = %s"
-        rows = conn.execute(sql, (item_id,)).fetchall()
-        
-    # Case B: We are doing a general text search (Normal Search)
-    elif search_query:
-        words = search_query.split()
-        if not words:
-            rows = conn.execute("SELECT * FROM items ORDER BY id DESC LIMIT 75").fetchall()
+    try:
+        if item_id:
+            sql = "SELECT * FROM items WHERE id = %s"
+            rows = conn.execute(sql, (item_id,)).fetchall()
+        elif search_query:
+            words = search_query.split()
+            if not words:
+                rows = conn.execute("SELECT * FROM items ORDER BY id DESC LIMIT 75").fetchall()
+            else:
+                query_parts = []
+                params = []
+                for word in words:
+                    query_parts.append("(name ILIKE %s OR description ILIKE %s OR category ILIKE %s)")
+                    pattern = f"%{word}%"
+                    params.extend([pattern, pattern, pattern])
+
+                where_clause = " AND ".join(query_parts)
+                sql = f"""
+                    SELECT * FROM items 
+                    WHERE {where_clause}
+                    ORDER BY id DESC
+                    LIMIT 100
+                """
+                rows = conn.execute(sql, params).fetchall()
         else:
-            query_parts = []
-            params = []
-            for word in words:
-                query_parts.append("(name ILIKE %s OR description ILIKE %s OR category ILIKE %s)")
-                pattern = f"%{word}%"
-                params.extend([pattern, pattern, pattern])
-            
-            where_clause = " AND ".join(query_parts)
-            
-            # Note: Changed ORDER BY to id DESC so new items show at the top
-            sql = f"""
-                SELECT * FROM items 
-                WHERE {where_clause}
-                ORDER BY id DESC
-                LIMIT 100
-            """
-            rows = conn.execute(sql, params).fetchall()
-    else:
-        rows = []
+            rows = []
 
-    # 2. GET STOCK LEVELS
-    from services.inventory_service import get_items_with_stock
-    all_stock = get_items_with_stock(snapshot_date)
-    stock_map = {s["id"]: s["current_stock"] for s in all_stock}
+        result_item_ids = [int(row["id"]) for row in rows if row.get("id") is not None]
+        if not result_item_ids:
+            return []
 
-    # 3. GET PENDING STOCK
-    # Only counts units still outstanding on PENDING or PARTIAL POs.
-    # quantity_ordered - quantity_received = true remaining balance.
-    # NOTE (future branches): add branch_id filter here when ready.
-    pending_rows = conn.execute("""
-        SELECT
-            pi.item_id,
-            SUM(
-                CASE
-                    WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'PIECE'
-                    THEN pi.quantity_ordered - pi.quantity_received
-                    ELSE 0
-                END
-            ) AS pending_stock,
-            SUM(
-                CASE
-                    WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'BOX'
-                    THEN pi.quantity_ordered - pi.quantity_received
-                    ELSE 0
-                END
-            ) AS pending_box_quantity
-        FROM po_items pi
-        JOIN purchase_orders po ON po.id = pi.po_id
-        WHERE po.status IN ('PENDING', 'PARTIAL')
-        AND pi.quantity_ordered > pi.quantity_received
-        GROUP BY pi.item_id
-    """).fetchall()
-    pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
-    pending_box_map = {row["item_id"]: row["pending_box_quantity"] for row in pending_rows}
+        all_stock = get_items_with_stock(
+            snapshot_date,
+            external_conn=conn,
+            item_ids=result_item_ids,
+        )
+        stock_map = {s["id"]: s["current_stock"] for s in all_stock}
 
-    # 4. MERGE
-    results = []
-    for row in rows:
-        d = dict(row)
-        d["current_stock"] = stock_map.get(row["id"], 0)
-        d["pending_stock"] = pending_map.get(row["id"], 0)
-        d["pending_box_quantity"] = pending_box_map.get(row["id"], 0)
-        results.append(d)
+        pending_rows = conn.execute("""
+            SELECT
+                pi.item_id,
+                SUM(
+                    CASE
+                        WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'PIECE'
+                        THEN pi.quantity_ordered - pi.quantity_received
+                        ELSE 0
+                    END
+                ) AS pending_stock,
+                SUM(
+                    CASE
+                        WHEN COALESCE(pi.purchase_mode, 'PIECE') = 'BOX'
+                        THEN pi.quantity_ordered - pi.quantity_received
+                        ELSE 0
+                    END
+                ) AS pending_box_quantity
+            FROM po_items pi
+            JOIN purchase_orders po ON po.id = pi.po_id
+            WHERE po.status IN ('PENDING', 'PARTIAL')
+              AND pi.quantity_ordered > pi.quantity_received
+              AND pi.item_id = ANY(%s)
+            GROUP BY pi.item_id
+        """, (result_item_ids,)).fetchall()
+        pending_map = {row["item_id"]: row["pending_stock"] for row in pending_rows}
+        pending_box_map = {row["item_id"]: row["pending_box_quantity"] for row in pending_rows}
 
-    attach_restock_recommendation(conn, results, item_id_key="id", category_key="category", current_stock_key="current_stock", snapshot_date=snapshot_date)
-    attach_recent_stocktake_metadata(conn, results, item_id_key="id")
-    conn.close()
-    return results
+        results = []
+        for row in rows:
+            d = dict(row)
+            d["current_stock"] = stock_map.get(row["id"], 0)
+            d["pending_stock"] = pending_map.get(row["id"], 0)
+            d["pending_box_quantity"] = pending_box_map.get(row["id"], 0)
+            results.append(d)
+
+        attach_restock_recommendation(conn, results, item_id_key="id", category_key="category", current_stock_key="current_stock", snapshot_date=snapshot_date)
+        attach_recent_stocktake_metadata(conn, results, item_id_key="id")
+        return results
+    finally:
+        conn.close()
 
 def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-03-26"):
     conn = get_db()

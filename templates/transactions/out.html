@@ -2008,6 +2008,12 @@ function debounce(func, delay) {
     };
 }
 
+function debouncePerElement(element, func, delay) {
+    if (!element) return;
+    clearTimeout(element._debounceTimer);
+    element._debounceTimer = setTimeout(() => func(element), delay);
+}
+
 function showAlert(message, type = 'danger') {
     if (window.A4Flash?.show) {
         return window.A4Flash.show(message, type, { replace: true });
@@ -4559,10 +4565,10 @@ function clearServices() {
 
 document.addEventListener('input', (e) => {
     if (e.target.classList.contains('item-input')) {
-        debounce(() => handleTableSearch(e.target), 300)();
+        debouncePerElement(e.target, handleTableSearch, 300);
     }
     if (e.target.classList.contains('service-input')) {
-        debounce(() => handleServiceSearch(e.target), 300)();
+        debouncePerElement(e.target, handleServiceSearch, 300);
     }
     if (e.target.classList.contains('qty-input') || e.target.classList.contains('discount-input')) {
         calculateRow(e.target.closest('tr'));

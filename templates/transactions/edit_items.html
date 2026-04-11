@@ -289,7 +289,6 @@
                                     {{ entry.changed_at }}{% if session.get('role') == 'admin' %} by {{ entry.changed_by_username }}{% endif %}
                                 </div>
                             </div>
-                            <div class="text-white-50 small">Edit #{{ entry.id }}</div>
                         </div>
                         {% if entry.changed_fields %}
                             <div class="history-fields">

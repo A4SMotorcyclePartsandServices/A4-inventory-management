@@ -4,10 +4,10 @@
 <style>
     .order-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 20px; }
     .order-card.order-header-card {
-        padding: 18px;
+        padding: 16px;
     }
     .order-page-shell {
-        width: min(1560px, calc(100vw - 420px));
+        width: min(1620px, calc(100vw - 360px));
         max-width: 100%;
     }
     .revision-card { border-color: rgba(234, 88, 12, 0.45); box-shadow: 0 0 0 1px rgba(234, 88, 12, 0.12) inset; }
@@ -59,6 +59,18 @@
         color: #f3f4f6;
         background: transparent;
     }
+    .result-item-meta {
+        margin-top: 4px;
+        font-size: 0.83rem;
+        line-height: 1.35;
+    }
+    .result-item-stock {
+        color: #facc15;
+        font-weight: 700;
+    }
+    .result-item-description {
+        color: #cbd5e1;
+    }
     .result-item:hover { background: rgba(230, 57, 70, 0.16); color: white; }
     .result-item.no-results:hover {
         background: #2b2f36;
@@ -85,13 +97,13 @@
     .table-order thead th {
         white-space: normal;
         line-height: 1.2;
-        font-size: 0.84rem;
+        font-size: 0.8rem;
         letter-spacing: 0.04em;
-        padding: 14px 12px;
+        padding: 12px 10px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
     .table-order tbody td {
-        padding: 14px 12px;
+        padding: 12px 10px;
         border-color: rgba(255, 255, 255, 0.05);
         vertical-align: top;
     }
@@ -105,23 +117,23 @@
         background: rgba(230, 57, 70, 0.08);
     }
     .table-order .col-item-name {
-        width: 26%;
-        min-width: 180px;
+        width: 25%;
+        min-width: 170px;
     }
     .table-order .col-stock-status {
-        width: 14%;
+        width: 13%;
     }
     .table-order .col-purchase-mode {
-        width: 12%;
+        width: 13%;
     }
     .table-order .col-qty {
-        width: 10%;
+        width: 11%;
     }
     .table-order .col-unit-cost {
-        width: 17%;
+        width: 16%;
     }
     .table-order .col-line-total {
-        width: 13%;
+        width: 12%;
     }
     .table-order .col-actions {
         width: 64px;
@@ -136,7 +148,7 @@
         display: flex;
         flex-direction: column;
         gap: 6px;
-        min-height: 96px;
+        min-height: 88px;
     }
     .order-cell-main {
         min-height: 42px;
@@ -184,11 +196,11 @@
     }
     .order-cell-label {
         color: #facc15;
-        font-size: 0.68rem;
+        font-size: 0.64rem;
         font-weight: 800;
-        letter-spacing: 0.035em;
+        letter-spacing: 0.02em;
         text-transform: uppercase;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
         line-height: 1.15;
         white-space: normal;
         word-break: break-word;
@@ -196,14 +208,14 @@
     .order-cell-label.order-cell-label-single-line {
         white-space: nowrap;
         word-break: normal;
-        font-size: 0.63rem;
+        font-size: 0.6rem;
         letter-spacing: 0.02em;
     }
     .order-cell-hint {
         color: #fcd34d;
-        font-size: 0.72rem;
+        font-size: 0.68rem;
         line-height: 1.15;
-        margin-top: 6px;
+        margin-top: 4px;
         white-space: normal;
         word-break: break-word;
     }
@@ -216,15 +228,15 @@
     }
     .order-cost-warning {
         color: #f87171;
-        font-size: 0.76rem;
+        font-size: 0.7rem;
         line-height: 1.2;
-        margin-top: 6px;
+        margin-top: 4px;
         display: none;
         text-align: center;
     }
     .order-line-formula {
         color: #fcd34d;
-        font-size: 0.76rem;
+        font-size: 0.7rem;
         line-height: 1.2;
         margin-top: 4px;
         white-space: normal;
@@ -245,6 +257,9 @@
         padding-top: 16px;
         padding-bottom: 16px;
     }
+    .order-grand-total-row .grand-total-spacer {
+        display: none;
+    }
     .order-grand-total-label {
         color: #fca5a5;
         font-size: 0.8rem;
@@ -258,15 +273,17 @@
         font-weight: 900;
         font-family: 'Courier New', monospace;
         white-space: nowrap;
+        overflow: visible;
     }
     .table-order .form-control,
     .table-order .form-select {
-        min-height: 42px;
+        min-height: 38px;
         border-radius: 10px;
+        font-size: 0.95rem;
     }
     .table-order .btn-outline-danger {
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
         padding: 0;
         display: inline-flex;
         align-items: center;
@@ -398,32 +415,29 @@
     }
     @media (max-width: 1440px) {
         .order-page-shell {
-            width: min(1420px, calc(100vw - 360px));
+            width: min(1500px, calc(100vw - 320px));
         }
         .table-order thead th {
-            font-size: 0.78rem;
-            padding: 12px 10px;
+            font-size: 0.76rem;
+            padding: 11px 8px;
         }
         .table-order tbody td {
-            padding: 12px 10px;
+            padding: 11px 8px;
         }
         .table-order .col-item-name {
-            width: 23%;
+            width: 24%;
         }
         .table-order .col-stock-status {
-            width: 15%;
+            width: 13%;
         }
         .table-order .col-purchase-mode {
             width: 13%;
         }
         .table-order .col-qty {
-            width: 12%;
+            width: 11%;
         }
         .table-order .col-unit-cost {
-            width: 14%;
-        }
-        .table-order .col-line-total {
-            width: 14%;
+            width: 16%;
         }
     }
     @media (max-width: 1200px) {
@@ -503,10 +517,10 @@
                             <tr>
                                 <th class="col-item-name">Item Name</th>
                                 <th class="col-stock-status">Stock Status</th>
-                                <th class="col-purchase-mode">Purchase Mode</th>
-                                <th class="col-qty">Qty to Order</th>
-                                <th class="col-unit-cost">Unit Est. Cost</th>
-                                <th class="col-line-total">Line Total</th>
+                                <th class="col-purchase-mode">Mode</th>
+                                <th class="col-qty">Order Qty</th>
+                                <th class="col-unit-cost">Unit Cost</th>
+                                <th class="col-line-total">Total</th>
                                 <th class="col-actions"></th>
                             </tr>
                         </thead>
@@ -593,6 +607,8 @@ const vendorRecommendations = document.getElementById('vendorRecommendations');
 const vendorRecommendationsMeta = document.getElementById('vendorRecommendationsMeta');
 const vendorRecommendationChips = document.getElementById('vendorRecommendationChips');
 let vendorRecommendationItems = [];
+let itemSearchDebounceTimer = null;
+let itemSearchAbortController = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
@@ -957,43 +973,69 @@ document.getElementById('saveNewVendorBtn').addEventListener('click', async () =
     }
 });
 
-itemSearch.addEventListener('input', async (e) => {
+itemSearch.addEventListener('input', (e) => {
     const query = e.target.value.trim();
+    clearTimeout(itemSearchDebounceTimer);
+
+    if (itemSearchAbortController) {
+        itemSearchAbortController.abort();
+        itemSearchAbortController = null;
+    }
+
     if (query.length < 2) {
         searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
         return;
     }
 
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-    const data = await response.json();
-    const items = data.items;
+    itemSearchDebounceTimer = setTimeout(async () => {
+        itemSearchAbortController = new AbortController();
+        try {
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+                signal: itemSearchAbortController.signal,
+            });
+            const data = await response.json();
+            const items = data.items;
 
-    searchResults.innerHTML = '';
+            searchResults.innerHTML = '';
 
-    if (items && items.length > 0) {
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'result-item';
-            div.innerHTML = `<strong>${escapeHtml(item.name)}</strong>
-                            <small class="text-muted">(Stock: ${escapeHtml(String(item.current_stock ?? 0))})</small>`;
-            div.onclick = () => addItemToOrder(item);
-            searchResults.appendChild(div);
-        });
-    } else {
-        const div = document.createElement('div');
-        div.className = 'result-item no-results d-flex justify-content-between align-items-center';
-        div.innerHTML = `
-            <span class="text-muted">No results for "<strong>${escapeHtml(query)}</strong>"</span>
-            <a href="/transaction/items?return_to=po&prefill_name=${encodeURIComponent(query)}"
-            class="btn btn-sm btn-outline-success"
-            onclick="saveDraftBeforeLeaving()">
-                <i class="bi bi-plus-circle"></i> Add New Item
-            </a>
-        `;
-        searchResults.appendChild(div);
-    }
+            if (items && items.length > 0) {
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'result-item';
+                    div.innerHTML = `
+                        <strong>${escapeHtml(item.name)}</strong>
+                        <div class="result-item-meta">
+                            <span class="result-item-stock">Stock: ${escapeHtml(String(item.current_stock ?? 0))}</span>
+                            ${item.description ? `<span class="result-item-description"> · ${escapeHtml(item.description)}</span>` : ''}
+                        </div>
+                    `;
+                    div.onclick = () => addItemToOrder(item);
+                    searchResults.appendChild(div);
+                });
+            } else {
+                const div = document.createElement('div');
+                div.className = 'result-item no-results d-flex justify-content-between align-items-center';
+                div.innerHTML = `
+                    <span class="text-muted">No results for "<strong>${escapeHtml(query)}</strong>"</span>
+                    <a href="/transaction/items?return_to=po&prefill_name=${encodeURIComponent(query)}"
+                    class="btn btn-sm btn-outline-success"
+                    onclick="saveDraftBeforeLeaving()">
+                        <i class="bi bi-plus-circle"></i> Add New Item
+                    </a>
+                `;
+                searchResults.appendChild(div);
+            }
 
-    searchResults.style.display = 'block';
+            searchResults.style.display = 'block';
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                searchResults.style.display = 'none';
+            }
+        } finally {
+            itemSearchAbortController = null;
+        }
+    }, 220);
 });
 
 document.addEventListener('click', (e) => {
@@ -1057,11 +1099,11 @@ function renderTable() {
                 : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`);
         const lineTotal = getLineTotal(item);
         const modeHint = purchaseMode === 'BOX'
-            ? 'Order by box/plastic. Cost below is for 1 box/plastic.'
-            : 'Order by piece. Cost below is for 1 piece.';
+            ? 'By box/plastic. Cost below is for 1 box/plastic.'
+            : 'By piece. Cost below is for 1 piece.';
         const costHint = purchaseMode === 'BOX'
-            ? 'Enter 1-box/plastic cost only.'
-            : 'Enter 1-piece cost only.';
+            ? 'Use cost of 1 box/plastic only.'
+            : 'Use cost of 1 piece only.';
 
         return `
             <tr>
@@ -1087,8 +1129,8 @@ function renderTable() {
                         <div class="order-cell-main is-input">
                             <select class="form-select form-select-sm bg-dark text-white"
                                 onchange="updatePurchaseMode(${index}, this.value)">
-                                <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Per Piece</option>
-                                <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Per Box/Plastic</option>
+                                <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Piece</option>
+                                <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Box/Plastic</option>
                             </select>
                         </div>
                         <div class="order-cell-hint-placeholder">helper</div>
@@ -1096,7 +1138,7 @@ function renderTable() {
                 </td>
                 <td>
                     <div class="order-cell-stack">
-                        <div class="order-cell-label order-cell-label-single-line">${purchaseMode === 'BOX' ? 'Boxes to Order' : 'Pcs to Order'}</div>
+                        <div class="order-cell-label order-cell-label-single-line">${purchaseMode === 'BOX' ? 'Boxes' : 'Pieces'}</div>
                         <div class="order-cell-main is-input">
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
                                 value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
@@ -1106,7 +1148,7 @@ function renderTable() {
                 </td>
                 <td>
                     <div class="order-cell-stack">
-                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Cost Per Box/Plastic' : 'Cost Per Piece'}</div>
+                        <div class="order-cell-label">${purchaseMode === 'BOX' ? 'Cost / Box' : 'Cost / Piece'}</div>
                         <div class="order-cell-main is-input">
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
                                 value="${Number(item.cost || 0)}" step="0.01" min="0"
@@ -1144,10 +1186,9 @@ function renderTable() {
             <td colspan="5" class="text-end">
                 <div class="order-grand-total-label">Overall Total</div>
             </td>
-            <td class="align-middle">
+            <td colspan="2" class="align-middle">
                 <div class="order-grand-total-value">P${overallTotal.toFixed(2)}</div>
             </td>
-            <td></td>
         </tr>
     `);
     orderTableBody.innerHTML = rows.join('');
