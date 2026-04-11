@@ -241,8 +241,10 @@ function Remove-OldDumpFiles {
         return 0
     }
 
-    $dumpFiles = Get-ChildItem -LiteralPath $Directory -Filter "prod_refresh_*.dump" -File |
-        Sort-Object LastWriteTime -Descending
+    $dumpFiles = @(
+        Get-ChildItem -LiteralPath $Directory -Filter "prod_refresh_*.dump" -File |
+            Sort-Object LastWriteTime -Descending
+    )
 
     if ($dumpFiles.Count -le $KeepCount) {
         return 0

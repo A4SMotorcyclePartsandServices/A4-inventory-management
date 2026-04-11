@@ -174,6 +174,24 @@
             print-color-adjust: exact;
         }
 
+        .cash-summary-breakdown {
+            padding: 8px 14px 10px 32px;
+            background: #fffafa;
+            border-top: 1px dashed #e4b9bf;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .cash-summary-breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #7a2e38;
+            padding: 2px 0;
+        }
+
         .profit-spotlight {
             border: 1px solid #cfe3d4;
             border-radius: 14px;
@@ -600,8 +618,18 @@
                 <span>Total Cash Out</span>
                 <span class="currency">- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
             </div>
+            {% if cash_data.cash_out_groups %}
+            <div class="cash-summary-breakdown">
+                {% for group in cash_data.cash_out_groups %}
+                <div class="cash-summary-breakdown-row">
+                    <span>&#8627; {{ group.category }}</span>
+                    <span class="currency">P {{ "%.2f"|format(group.total_amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             <div class="cash-summary-row">
-                <span>Total Floating Money</span>
+                <span>Total Floating Money (Digital Payments)</span>
                 <span class="currency">P {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
             </div>
             <div class="cash-summary-row total">

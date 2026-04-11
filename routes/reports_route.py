@@ -239,6 +239,7 @@ def _build_sales_report_context():
 
     cash_summary = get_cash_summary()
     cash_data["floating_total"] = cash_summary.get("floating_total", 0.0)
+    cash_data["cash_out_groups"] = _build_cash_out_report_groups(cash_data.get("entries") or [])
 
     if not data:
         data = {
@@ -277,6 +278,28 @@ def _build_sales_report_context():
         "is_range": is_range,
         "cash_data": cash_data,
     }
+
+
+def _build_cash_out_report_groups(entries):
+    grouped = {}
+
+    for entry in entries:
+        if entry.get("entry_type") != "CASH_OUT":
+            continue
+
+        category = (entry.get("category") or "Uncategorized").strip() or "Uncategorized"
+        group = grouped.setdefault(
+            category,
+            {
+                "category": category,
+                "entry_count": 0,
+                "total_amount": 0.0,
+            },
+        )
+        group["entry_count"] += 1
+        group["total_amount"] = round(group["total_amount"] + float(entry.get("amount") or 0), 2)
+
+    return sorted(grouped.values(), key=lambda group: group["category"].lower())
 
 
 @reports_bp.route("/reports/sales-receipt/<int:sale_id>")

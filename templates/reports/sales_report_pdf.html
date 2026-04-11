@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -386,6 +386,22 @@
             padding: 8px 12px;
             border-top: 1px solid #b8d4e8;
         }
+        .cash-summary-breakdown {
+            padding: 8px 12px 10px 28px;
+            border-top: 1px dashed #e4b9bf;
+            background: #fffafa;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .cash-summary-breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 2px 0;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #7a2e38;
+        }
         .cash-on-hand-bar {
             background: #e6f0f6;
             color: #18354b;
@@ -576,15 +592,15 @@
                         <strong>{{ item.quantity }}x {{ item.item_name }}</strong>
                         <div class="line-meta">
                             {% if item.discount_percent and item.discount_percent > 0 %}
-                                <span class="strikethrough">₱ {{ "%.2f"|format(item.original_unit_price) }}</span>
-                                ₱ {{ "%.2f"|format(item.final_unit_price) }}
+                                <span class="strikethrough">P {{ "%.2f"|format(item.original_unit_price) }}</span>
+                                P {{ "%.2f"|format(item.final_unit_price) }}
                                 <span class="discount-tag">
-                                    -{{ (item.discount_percent * 100) | int }}% (−₱ {{ "%.2f"|format(item.discount_amount) }})
+                                    -{{ (item.discount_percent * 100) | int }}% (−P {{ "%.2f"|format(item.discount_amount) }})
                                 </span>
                             {% else %}
-                                ₱ {{ "%.2f"|format(item.final_unit_price) }} each
+                                P {{ "%.2f"|format(item.final_unit_price) }} each
                             {% endif %}
-                            &nbsp;|&nbsp; Line: <strong>₱ {{ "%.2f"|format(item.line_total) }}</strong>
+                            &nbsp;|&nbsp; Line: <strong>P {{ "%.2f"|format(item.line_total) }}</strong>
                         </div>
                     </div>
                     {% endfor %}
@@ -596,7 +612,7 @@
                             {{ bundle.subcategory_name_snapshot }}
                             {% if bundle.vehicle_category_snapshot %} · {{ bundle.vehicle_category_snapshot }}{% endif %}
                             {% if bundle.bundle_version_no_snapshot %} · Version {{ bundle.bundle_version_no_snapshot }}{% endif %}
-                            &nbsp;|&nbsp; Fixed: <strong>₱ {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
+                            &nbsp;|&nbsp; Fixed: <strong>P {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
                         </div>
                         {% if bundle.get('services', []) %}
                         <div class="line-meta" style="margin-top: 4px;">
@@ -616,7 +632,7 @@
                         {% endif %}
                         <div class="line-meta" style="margin-top: 4px;">
                             <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
-                            ₱ {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
+                            P {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
                         </div>
                     </div>
                     {% endfor %}
@@ -625,7 +641,7 @@
                     <div class="services-cell">
                         <div class="svc-label">Services</div>
                         {% for svc in sale.services %}
-                            {{ svc.service_name }} — ₱ {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
+                            {{ svc.service_name }} — P {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -644,12 +660,12 @@
                     {{ sale.mechanic_name }}
                     {% if sale.standalone_services_total > 0 %}
                     <div style="font-size: 11px; color: #666; margin-top: 3px;">
-                        Services: ₱ {{ "%.2f"|format(sale.standalone_services_total) }}
+                        Services: P {{ "%.2f"|format(sale.standalone_services_total) }}
                     </div>
                     {% endif %}
                     {% if sale.bundle_service_total > 0 %}
                     <div style="font-size: 11px; color: #666; margin-top: 3px;">
-                        Bundle Service Side: ₱ {{ "%.2f"|format(sale.bundle_service_total) }}
+                        Bundle Service Side: P {{ "%.2f"|format(sale.bundle_service_total) }}
                     </div>
                     {% endif %}
                     {% endif %}
@@ -668,7 +684,7 @@
                         {% endif %}
                 </td>
                 <td style="font-weight: 700; font-size: 14px;">
-                    ₱ {{ "%.2f"|format(sale.total_amount) }}
+                    P {{ "%.2f"|format(sale.total_amount) }}
                 </td>
             </tr>
             {% endfor %}
@@ -689,14 +705,14 @@
                     {% for item in data.items_summary %}
                     <div class="summary-item-row">
                     <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
-                    <span>₱ {{ "%.2f"|format(item.total) }}</span>
+                    <span>P {{ "%.2f"|format(item.total) }}</span>
                     </div>
                     {% endfor %}
                 </div>
 
                 <div class="items-total">
                     <span class="label">TOTAL</span>
-                    <span class="value">₱ {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
+                    <span class="value">P {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
                 </div>
 
                 {% else %}
@@ -716,44 +732,44 @@
                             <div class="mechanic-block-name">{{ mech.mechanic_name }}</div>
                         <div class="mechanic-block-row">
                             <span>Services rendered</span>
-                            <span>₱ {{ "%.2f"|format(mech.paid_services_total) }}</span>
+                            <span>P {{ "%.2f"|format(mech.paid_services_total) }}</span>
                         </div>
                         {% if mech.shop_only_services_total > 0 %}
                         <div class="mechanic-block-row" style="color: #2d6a4f;">
                             <span>Shop-only services</span>
-                            <span>₱ {{ "%.2f"|format(mech.shop_only_services_total) }}</span>
+                            <span>P {{ "%.2f"|format(mech.shop_only_services_total) }}</span>
                         </div>
                         {% endif %}
                         {% if mech.bundle_mech_share > 0 %}
                         <div class="mechanic-block-row">
                             <span>Bundle service side</span>
-                            <span>₱ {{ "%.2f"|format(mech.bundle_mech_share) }}</span>
+                            <span>P {{ "%.2f"|format(mech.bundle_mech_share) }}</span>
                         </div>
                         {% endif %}
                         {% if mech.debt_service_portion > 0 %}
                         <div class="mechanic-block-row" style="padding-left: 16px; font-size: 11px; color: #155724;">
-                            <span>↳ + ₱ {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
+                            <span>↳ + P {{ "%.2f"|format(mech.debt_service_portion) }} from debt collected (no quota)</span>
                             <span></span>
                         </div>
                         {% endif %}
                         {% if mech.bundle_mech_share > 0 or mech.debt_service_portion > 0 %}
                         <div class="mechanic-block-row" style="font-weight: 700;">
                             <span>Total for payout</span>
-                            <span>₱ {{ "%.2f"|format(mech.services_total) }}</span>
+                            <span>P {{ "%.2f"|format(mech.services_total) }}</span>
                         </div>
                         {% endif %}
                             <div class="mechanic-block-cut">
                                 <span>Payout ({{ (mech.commission_rate * 100) | int }}%)</span>
-                                <span>₱ {{ "%.2f"|format(mech.mechanic_cut) }}</span>
+                                <span>P {{ "%.2f"|format(mech.mechanic_cut) }}</span>
                             </div>
                             <div class="mechanic-block-row">
                                 <span style="color: #2d6a4f;">Shop's share</span>
-                                <span style="color: #2d6a4f;">₱ {{ "%.2f"|format(mech.payout_shop_share) }}</span>
+                                <span style="color: #2d6a4f;">P {{ "%.2f"|format(mech.payout_shop_share) }}</span>
                             </div>
                             {% if mech.shop_topup > 0 %}
                             <div class="mechanic-block-row">
                                 <span style="color: #b45309;">Quota top-up (shop expense)</span>
-                                <span style="color: #b45309;">+₱ {{ "%.2f"|format(mech.shop_topup) }}</span>
+                                <span style="color: #b45309;">+P {{ "%.2f"|format(mech.shop_topup) }}</span>
                             </div>
                             {% endif %}
                         </div>
@@ -761,13 +777,13 @@
                         </div>
                         <div class="mechanic-total">
                             <span class="label">TOTAL MECHANIC PAYOUT</span>
-                            <span class="value">₱ {{ "%.2f"|format(data.total_mech_cut or 0) }}</span>
+                            <span class="value">P {{ "%.2f"|format(data.total_mech_cut or 0) }}</span>
                         </div>
                     {% else %}
                         <div class="mechanics-rows" style="color: #aaa; font-size: 12px;">No services recorded.</div>
                         <div class="mechanic-total">
                             <span class="label">TOTAL MECHANIC PAYOUT</span>
-                            <span class="value">₱ 0.00</span>
+                            <span class="value">P 0.00</span>
                         </div>
                     {% endif %}
                 </div>
@@ -786,14 +802,14 @@
                     {% for item in data.mechanic_supply_items_summary %}
                     <div class="summary-item-row">
                     <span>{{ item.item_name }} <span class="qty">×{{ item.quantity }}</span></span>
-                    <span>₱ {{ "%.2f"|format(item.total) }}</span>
+                    <span>P {{ "%.2f"|format(item.total) }}</span>
                     </div>
                     {% endfor %}
                 </div>
 
                 <div class="items-total" style="background: #e4f0f6;">
                     <span class="label">TOTAL</span>
-                    <span class="value">₱ {{ "%.2f"|format(data.mechanic_supply_items_summary | sum(attribute='total')) }}</span>
+                    <span class="value">P {{ "%.2f"|format(data.mechanic_supply_items_summary | sum(attribute='total')) }}</span>
                 </div>
 
                 {% else %}
@@ -809,53 +825,53 @@
                     <div class="fin-rows">
                     <div class="fin-row">
                         <span class="label">Item Sales</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.total_product_revenue) }}</span>
                     </div>
                     {% if data.total_refunds > 0 %}
                     <div class="fin-row" style="color: #721c24;">
                         <span class="label" style="color: #721c24;">Sale Refunds</span>
-                        <span class="value" style="color: #721c24; font-weight: 700;">- ₱ {{ "%.2f"|format(data.total_refunds) }}</span>
+                        <span class="value" style="color: #721c24; font-weight: 700;">- P {{ "%.2f"|format(data.total_refunds) }}</span>
                     </div>
                     {% endif %}
                     <div class="fin-row">
                         <span class="label">Service Revenue</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_service_revenue) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.total_service_revenue) }}</span>
                     </div>
                     <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Shop's Share</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
                     {% if data.total_bundle_shop_share > 0 %}
                     <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Shop's Share (Bundle)</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.total_bundle_shop_share) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.total_bundle_shop_share) }}</span>
                     </div>
                     {% endif %}
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Mechanic Payout (from paid svc/bundles)</span>
-                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
+                        <span class="value">- P {{ "%.2f"|format(data.total_mech_cut_from_paid) }}</span>
                     </div>
                     {% if data.total_shop_topup > 0 %}
                     <div class="fin-row topup">
                         <span class="label">Quota Top-up (Expense)</span>
-                        <span class="value">− ₱ {{ "%.2f"|format(data.total_shop_topup) }}</span>
+                        <span class="value">− P {{ "%.2f"|format(data.total_shop_topup) }}</span>
                     </div>
                     {% endif %}
                     {% if data.total_mechanic_supply_expense > 0 %}
                     <div class="fin-row topup">
                         <span class="label">Mechanic Supply (Expense)</span>
-                        <span class="value">− ₱ {{ "%.2f"|format(data.total_mechanic_supply_expense) }}</span>
+                        <span class="value">− P {{ "%.2f"|format(data.total_mechanic_supply_expense) }}</span>
                     </div>
                     {% endif %}
                     {% if data.total_debt_collected > 0 %}
                     <div class="fin-row" style="color: #155724;">
                         <span class="label" style="color: #155724;">Debt Collected (Cash In)</span>
-                        <span class="value" style="color: #155724; font-weight: 700;">+ ₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+                        <span class="value" style="color: #155724; font-weight: 700;">+ P {{ "%.2f"|format(data.total_debt_collected) }}</span>
                     </div>
                     {% if data.total_mech_cut_from_debt > 0 %}
                     <div class="fin-row mech" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Mechanic Payout (from debt svc)</span>
-                        <span class="value">- ₱ {{ "%.2f"|format(data.total_mech_cut_from_debt) }}</span>
+                        <span class="value">- P {{ "%.2f"|format(data.total_mech_cut_from_debt) }}</span>
                     </div>
                     {% endif %}
                     {% endif %}
@@ -866,13 +882,13 @@
                             See Receivables.
                         </span>
                         <span style="color: #b45309; font-weight: 700;">
-                            ₱ {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}
+                            P {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}
                         </span>
                     </div>
                     {% endif %}
                     <div class="fin-row net">
                         <span class="label">TOTAL</span>
-                        <span class="value">₱ {{ "%.2f"|format(data.net_revenue) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.net_revenue) }}</span>
                     </div>
                 </div>
             </div>
@@ -893,16 +909,16 @@
         <div class="report-section-title profit-spotlight-head">
             <div>
                 <div class="profit-spotlight-status">{{ product_result_label }}</div>
-                <div class="profit-spotlight-value">₱ {{ "%.2f"|format(product_result_display) }}</div>
+                <div class="profit-spotlight-value">P {{ "%.2f"|format(product_result_display) }}</div>
                 <div class="profit-spotlight-formula">
-                    Revenue ₱ {{ "%.2f"|format(data.total_product_revenue) }}
-                    - Cost ₱ {{ "%.2f"|format(data.total_product_cost) }}
-                    + Shop Share ₱ {{ "%.2f"|format(shop_share_profit) }}
-                    - Quota Top-up ₱ {{ "%.2f"|format(shop_topup_expense) }}
+                    Revenue P {{ "%.2f"|format(data.total_product_revenue) }}
+                    - Cost P {{ "%.2f"|format(data.total_product_cost) }}
+                    + Shop Share P {{ "%.2f"|format(shop_share_profit) }}
+                    - Quota Top-up P {{ "%.2f"|format(shop_topup_expense) }}
                     {% if mechanic_supply_expense > 0 %}
-                    - Mechanic Supply ₱ {{ "%.2f"|format(mechanic_supply_expense) }}
+                    - Mechanic Supply P {{ "%.2f"|format(mechanic_supply_expense) }}
                     {% endif %}
-                    = {{ product_result_label }} ₱ {{ "%.2f"|format(product_result_display) }}
+                    = {{ product_result_label }} P {{ "%.2f"|format(product_result_display) }}
                 </div>
             </div>
         </div>
@@ -910,33 +926,33 @@
             {% if mechanic_supply_expense > 0 %}
             <div class="report-row profit-metric cost">
                 <div class="profit-metric-label">Mechanic Supply</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(mechanic_supply_expense) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(mechanic_supply_expense) }}</div>
                 <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
             </div>
             {% endif %}
             <div class="report-row profit-metric revenue">
                 <div class="profit-metric-label">Product Sales</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_revenue) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(data.total_product_revenue) }}</div>
                 <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
             </div>
             <div class="report-row profit-metric cost">
                 <div class="profit-metric-label">Product Cost</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_product_cost) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(data.total_product_cost) }}</div>
                 <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
             </div>
             <div class="report-row profit-metric revenue">
                 <div class="profit-metric-label">Shop Share</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(shop_share_profit) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(shop_share_profit) }}</div>
                 <div class="profit-metric-sub">Shop earnings from services, bundles, and collected service debt portions.</div>
             </div>
             <div class="report-row profit-metric cost">
                 <div class="profit-metric-label">Quota Top-up</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(shop_topup_expense) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(shop_topup_expense) }}</div>
                 <div class="profit-metric-sub">Mechanic quota shortfall covered by the shop for the selected report period.</div>
             </div>
             <div class="report-row profit-metric revenue">
                 <div class="profit-metric-label">Floating Non-Cash</div>
-                <div class="profit-metric-value">₱ {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</div>
+                <div class="profit-metric-value">P {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</div>
                 <div class="profit-metric-sub">Paid bank and e-wallet sales and debt payments not yet claimed into the cash ledger by the report end date.</div>
             </div>
         </div>
@@ -970,12 +986,12 @@
                     <span style="font-size: 11px; color: #aaa;"> · {{ p.paid_at }}</span>
                     {% endif %}
                 </span>
-                <span style="color: #155724; font-weight: 700;">₱ {{ "%.2f"|format(p.amount_paid) }}</span>
+                <span style="color: #155724; font-weight: 700;">P {{ "%.2f"|format(p.amount_paid) }}</span>
             </div>
             {% endfor %}
             <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #edf7ef; color: #1f5132; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span>TOTAL COLLECTED</span>
-                <span>₱ {{ "%.2f"|format(data.total_debt_collected) }}</span>
+                <span>P {{ "%.2f"|format(data.total_debt_collected) }}</span>
             </div>
         </div>
     </div>
@@ -1003,17 +1019,17 @@
                     {% if refund["items"] %}
                     <div style="font-size: 11px; color: #555; margin-top: 3px;">
                         {% for item in refund["items"] %}
-                            {{ item.quantity }}x {{ item.item_name }} (₱ {{ "%.2f"|format(item.line_total) }}){% if not loop.last %}<br>{% endif %}
+                            {{ item.quantity }}x {{ item.item_name }} (P {{ "%.2f"|format(item.line_total) }}){% if not loop.last %}<br>{% endif %}
                         {% endfor %}
                     </div>
                     {% endif %}
                 </span>
-                <span style="color: #721c24; font-weight: 700;">₱ {{ "%.2f"|format(refund.refund_amount) }}</span>
+                <span style="color: #721c24; font-weight: 700;">P {{ "%.2f"|format(refund.refund_amount) }}</span>
             </div>
             {% endfor %}
             <div class="report-row summary-item-row" style="font-weight: 800; font-size: 13px; background: #fdf0f1; color: #8b2635; padding: 6px 4px; margin-top: 6px; border-radius: 0 0 4px 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                 <span>TOTAL REFUNDS</span>
-                <span>₱ {{ "%.2f"|format(data.total_refunds) }}</span>
+                <span>P {{ "%.2f"|format(data.total_refunds) }}</span>
             </div>
         </div>
     </div>
@@ -1043,9 +1059,9 @@
                     <tr>
                         <td style="padding: 6px; border-bottom: 1px dashed #fee2e2;">{{ miss.date_display }}</td>
                         <td style="padding: 6px; border-bottom: 1px dashed #fee2e2;">{{ miss.mechanic_name }}</td>
-                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">₱ {{ "%.2f"|format(miss.services_total) }}</td>
-                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">₱ {{ "%.2f"|format(miss.mechanic_cut) }}</td>
-                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2; color: #7f1d1d; font-weight: 700;">₱ {{ "%.2f"|format(miss.shop_topup) }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">P {{ "%.2f"|format(miss.services_total) }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2;">P {{ "%.2f"|format(miss.mechanic_cut) }}</td>
+                        <td style="padding: 6px; text-align: right; border-bottom: 1px dashed #fee2e2; color: #7f1d1d; font-weight: 700;">P {{ "%.2f"|format(miss.shop_topup) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -1089,7 +1105,7 @@
                         {% if entry.entry_type == 'CASH_IN' %}color: #155724;
                         {% else %}color: #721c24;{% endif %}">
                         {% if entry.entry_type == 'CASH_OUT' %}−{% endif %}
-                        ₱ {{ "%.2f"|format(entry.amount) }}
+                        P {{ "%.2f"|format(entry.amount) }}
                     </td>
                 </tr>
                 {% endfor %}
@@ -1099,19 +1115,29 @@
         <div class="cash-totals">
             <div class="cash-summary-row" style="color: #155724;">
                 <span>Total Cash In</span>
-                <span>+ ₱ {{ "%.2f"|format(cash_data.total_in) }}</span>
+                <span>+ P {{ "%.2f"|format(cash_data.total_in) }}</span>
             </div>
             <div class="cash-summary-row" style="color: #721c24;">
                 <span>Total Cash Out</span>
-                <span>− ₱ {{ "%.2f"|format(cash_data.total_out) }}</span>
+                <span>− P {{ "%.2f"|format(cash_data.total_out) }}</span>
             </div>
+            {% if cash_data.cash_out_groups %}
+            <div class="cash-summary-breakdown">
+                {% for group in cash_data.cash_out_groups %}
+                <div class="cash-summary-breakdown-row">
+                    <span>&#8627; {{ group.category }}</span>
+                    <span>P {{ "%.2f"|format(group.total_amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             <div class="cash-summary-row" style="color: #0c5460;">
-                <span>Total Floating Money</span>
-                <span>&#8369; {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
+                <span>Total Floating Money (Digital Payments)</span>
+                <span>P {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
             </div>
             <div class="cash-on-hand-bar">
                 <span>CASH ON HAND AS OF {{ cash_balance_label }}</span>
-                <span>₱ {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>
+                <span>P {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>
             </div>
         </div>
 
@@ -1154,15 +1180,15 @@
                             <strong>{{ item.quantity }}x {{ item.item_name }}</strong>
                             <div class="line-meta">
                                 {% if item.discount_percent and item.discount_percent > 0 %}
-                                    <span class="strikethrough">₱ {{ "%.2f"|format(item.original_unit_price) }}</span>
-                                    ₱ {{ "%.2f"|format(item.final_unit_price) }}
+                                    <span class="strikethrough">P {{ "%.2f"|format(item.original_unit_price) }}</span>
+                                    P {{ "%.2f"|format(item.final_unit_price) }}
                                     <span class="discount-tag">
-                                        -{{ (item.discount_percent * 100) | int }}% (−₱ {{ "%.2f"|format(item.discount_amount) }})
+                                        -{{ (item.discount_percent * 100) | int }}% (−P {{ "%.2f"|format(item.discount_amount) }})
                                     </span>
                                 {% else %}
-                                    ₱ {{ "%.2f"|format(item.final_unit_price) }} each
+                                    P {{ "%.2f"|format(item.final_unit_price) }} each
                                 {% endif %}
-                                &nbsp;|&nbsp; Line: <strong>₱ {{ "%.2f"|format(item.line_total) }}</strong>
+                                &nbsp;|&nbsp; Line: <strong>P {{ "%.2f"|format(item.line_total) }}</strong>
                             </div>
                         </div>
                         {% endfor %}
@@ -1174,7 +1200,7 @@
                                 {{ bundle.subcategory_name_snapshot }}
                                 {% if bundle.vehicle_category_snapshot %} · {{ bundle.vehicle_category_snapshot }}{% endif %}
                                 {% if bundle.bundle_version_no_snapshot %} · Version {{ bundle.bundle_version_no_snapshot }}{% endif %}
-                                &nbsp;|&nbsp; Fixed: <strong>₱ {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
+                                &nbsp;|&nbsp; Fixed: <strong>P {{ "%.2f"|format(bundle.bundle_price_snapshot) }}</strong>
                             </div>
                             {% if bundle.get('services', []) %}
                             <div class="line-meta" style="margin-top: 4px;">
@@ -1194,7 +1220,7 @@
                             {% endif %}
                             <div class="line-meta" style="margin-top: 4px;">
                                 <span class="svc-label" style="display: inline; margin-right: 6px;">Shop Share</span>
-                                ₱ {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
+                                P {{ "%.2f"|format(bundle.shop_share_snapshot or 0) }}
                             </div>
                         </div>
                         {% endfor %}
@@ -1203,7 +1229,7 @@
                         <div class="services-cell">
                             <div class="svc-label">Services</div>
                             {% for svc in sale.services %}
-                                {{ svc.service_name }} — ₱ {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
+                                {{ svc.service_name }} — P {{ "%.2f"|format(svc.price) }}{% if not loop.last %}<br>{% endif %}
                             {% endfor %}
                         </div>
                         {% endif %}
@@ -1234,11 +1260,11 @@
                         {% endif %}
                     </td>
                     <td style="font-weight: 700; font-size: 13px;">
-                        <div style="color: #c1121f;">₱ {{ "%.2f"|format(sale.remaining) }}</div>
+                        <div style="color: #c1121f;">P {{ "%.2f"|format(sale.remaining) }}</div>
                         {% if sale.total_paid > 0 %}
                         <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                            of ₱ {{ "%.2f"|format(sale.total_amount) }}
-                            <span style="color: #2d6a4f;">(pd: ₱ {{ "%.2f"|format(sale.total_paid) }})</span>
+                            of P {{ "%.2f"|format(sale.total_amount) }}
+                            <span style="color: #2d6a4f;">(pd: P {{ "%.2f"|format(sale.total_paid) }})</span>
                         </div>
                         {% endif %}
                     </td>
@@ -1249,10 +1275,11 @@
 
         <div class="deliverables-total">
             Total Outstanding Balance:
-            <span>₱ {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}</span>
+            <span>P {{ "%.2f"|format(data.unresolved | sum(attribute='remaining')) }}</span>
         </div>
     </div>
     {% endif %}
 
 </body>
 </html>
+
