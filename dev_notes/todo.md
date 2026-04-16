@@ -74,3 +74,4 @@
 - [ ] Add shared frontend guard to stocktake draft micro-actions in [stocktake/detail.html] (add item, save row, delete row, save draft if still needed)
 - [ ] Add shared frontend guard to cheque status update actions if still present in payables flow
 - [ ] Add shared frontend guard to mechanic quota top-up save/delete actions in [users.html]
+- [ ] Bundle third-party frontend assets locally for startup reliability in desktop build (Bootstrap, Bootstrap Icons, Flatpickr, SweetAlert) and stop relying on CDN-first load behavior

@@ -55,7 +55,7 @@
     }
 
     .inventory-row {
-        cursor: {% if session.get('role') == 'admin' %}pointer{% else %}default{% endif %};
+        cursor: pointer;
     }
 
     /* =====================
@@ -786,6 +786,7 @@
 <script>
 let lastSuccessfulSearch = "";
 const isAdmin = "{{ session.get('role') }}" === "admin";
+const canAccessEditPage = Boolean("{{ session.get('user_id') }}");
 const inventorySearchInput = document.getElementById('inventorySearch');
 const inventoryTableBody = document.querySelector('table tbody');
 const itemCountBadge = document.getElementById('itemCountBadge');
@@ -843,7 +844,7 @@ function highlightText(element, tokens) {
 }
 
 function bindInventoryRowLinks(scope = document) {
-    if (!isAdmin) return;
+    if (!canAccessEditPage) return;
     scope.querySelectorAll('.inventory-row[data-item-id]').forEach(row => {
         if (row.dataset.linkBound === '1') return;
         row.dataset.linkBound = '1';

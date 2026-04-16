@@ -277,6 +277,7 @@
             </div>
         </form>
 
+        {% if session.get('role') == 'admin' %}
         <div class="section-title">Recent Edit History</div>
         {% if history %}
             <div class="d-grid gap-3">
@@ -286,7 +287,7 @@
                             <div>
                                 <div class="fw-bold text-white">{{ entry.change_reason }}</div>
                                 <div class="history-meta">
-                                    {{ entry.changed_at }}{% if session.get('role') == 'admin' %} by {{ entry.changed_by_username }}{% endif %}
+                                    {{ entry.changed_at }} by {{ entry.changed_by_username }}
                                 </div>
                             </div>
                         </div>
@@ -304,6 +305,7 @@
             <div class="history-card text-white-50">
                 No edit history yet for this item.
             </div>
+        {% endif %}
         {% endif %}
     </div>
 </div>
