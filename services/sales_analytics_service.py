@@ -1,12 +1,22 @@
 from datetime import datetime, timedelta
 
 from db.database import get_db
+from utils.cash_categories import normalize_cash_category_label
 from services.reports_service import (
     _calculate_range_mechanic_rollups,
     _get_debt_payout_allocations,
+    _get_profit_card_cash_ledger_expense,
     _load_bundles_by_sale,
     _load_services_by_sale,
 )
+
+
+EXPENSE_BREAKDOWN_EXCLUDED_LABELS = {
+    normalize_cash_category_label("Bank Deposit"),
+    normalize_cash_category_label("Others (Non-related to shop)"),
+    normalize_cash_category_label("To Gcash/E-Wallet Account (Non-related to shop)"),
+    normalize_cash_category_label("To Gcash/E-wallet Account (Non-related to shop)"),
+}
 
 
 def _num(value):
@@ -192,6 +202,35 @@ def _get_total_mechanic_supply_expense(conn, start_date, end_date):
         (start_date, end_date),
     ).fetchone()
     return round(_num(row["total_mechanic_supply_expense"] if row else 0), 2)
+
+
+def _get_expense_breakdown(conn, start_date, end_date):
+    rows = conn.execute(
+        """
+        SELECT
+            ce.category,
+            COALESCE(SUM(ce.amount), 0) AS total_amount
+        FROM cash_entries ce
+        WHERE ce.entry_type = 'CASH_OUT'
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+          AND DATE(ce.created_at) BETWEEN %s AND %s
+        GROUP BY ce.category
+        ORDER BY total_amount DESC, ce.category ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    breakdown = []
+    for row in rows:
+        category = str(row["category"] or "").strip() or "Uncategorized"
+        if normalize_cash_category_label(category) in EXPENSE_BREAKDOWN_EXCLUDED_LABELS:
+            continue
+        breakdown.append({
+            "category": category,
+            "total_amount": round(_num(row["total_amount"]), 2),
+        })
+
+    return breakdown
 
 
 def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_items_category=None):
@@ -438,6 +477,8 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
     total_shop_topup = _get_total_shop_topup(conn, start_date, end_date)
     total_mechanic_supply_expense = _get_total_mechanic_supply_expense(conn, start_date, end_date)
+    total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, start_date, end_date)
+    expense_breakdown = _get_expense_breakdown(conn, start_date, end_date)
 
     status_rows = conn.execute(
         """
@@ -782,7 +823,11 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         2,
     )
     profit_with_shop_share = round(
-        _num(product_service_row["product_profit"]) + shop_share_profit - total_shop_topup - total_mechanic_supply_expense,
+        _num(product_service_row["product_profit"])
+        + shop_share_profit
+        - total_shop_topup
+        - total_mechanic_supply_expense
+        - total_cash_ledger_expense,
         2,
     )
 
@@ -807,6 +852,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "shop_share_profit": shop_share_profit,
             "total_shop_topup": total_shop_topup,
             "total_mechanic_supply_expense": total_mechanic_supply_expense,
+            "total_cash_ledger_expense": total_cash_ledger_expense,
             "profit_with_shop_share": profit_with_shop_share,
             "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
             "total_non_cash_floating": total_non_cash_floating,
@@ -833,6 +879,10 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
                     round(_num(product_service_row["product_revenue"]), 2),
                     round(_num(product_service_row["service_revenue"]), 2),
                 ],
+            },
+            "expense_breakdown": {
+                "labels": [row["category"] for row in expense_breakdown],
+                "amounts": [row["total_amount"] for row in expense_breakdown],
             },
         },
         "tables": {
@@ -865,6 +915,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             ],
             "payment_methods": payment_method_breakdown,
             "status_breakdown": status_breakdown,
+            "expense_breakdown": expense_breakdown,
             "mechanic_supply_analytics": [
                 {
                     "mechanic_name": row["mechanic_name"],

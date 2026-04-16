@@ -607,6 +607,7 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
     unified.sort(key=lambda x: x['_raw_date'], reverse=True)
 
     for row in unified:
+        row['_sort_at'] = row['_raw_date']
         del row['_raw_date']
 
     return unified

@@ -592,6 +592,11 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
         ).fetchone()
         if not current:
             raise ValueError("Cheque record not found.")
+        current_status = str(current["status"] or "").strip().upper()
+        if current_status == CHEQUE_STATUS_CLEARED and normalized_status != CHEQUE_STATUS_CLEARED:
+            raise ValueError("Cleared cheques are locked and can no longer be changed to another status.")
+        if current_status == normalized_status:
+            return
 
         row = conn.execute(
             """
@@ -614,9 +619,9 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
             payee_name_snapshot=current["payee_name"],
             cheque_no_snapshot=current["cheque_no"],
             amount_snapshot=current["cheque_amount"],
-            old_status=current["status"],
+            old_status=current_status,
             new_status=normalized_status,
-            notes=f"Cheque status updated from {current['status']} to {normalized_status}.",
+            notes=f"Cheque status updated from {current_status} to {normalized_status}.",
             created_by=created_by,
             created_by_username=created_by_username,
             external_conn=conn,
@@ -1106,6 +1111,7 @@ def build_payables_report_context(start_date=None, end_date=None):
                 pc.due_date,
                 pc.cheque_amount,
                 pc.status,
+                pc.updated_at,
                 pc.notes,
                 p.source_type,
                 p.payee_name,
@@ -1114,10 +1120,23 @@ def build_payables_report_context(start_date=None, end_date=None):
                 p.delivery_received_at_snapshot
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
-            WHERE pc.cheque_date BETWEEN %s AND %s
+            WHERE (
+                pc.cheque_date BETWEEN %s AND %s
+                OR (
+                    pc.status = %s
+                    AND DATE(pc.updated_at) BETWEEN %s AND %s
+                )
+            )
             ORDER BY ABS(pc.cheque_date - %s) ASC, pc.cheque_date ASC, pc.id ASC
             """,
-            (start_value, end_value, today_value.isoformat()),
+            (
+                start_value,
+                end_value,
+                CHEQUE_STATUS_CLEARED,
+                start_value,
+                end_value,
+                today_value.isoformat(),
+            ),
         ).fetchall()
     finally:
         conn.close()
@@ -1131,6 +1150,11 @@ def build_payables_report_context(start_date=None, end_date=None):
             "id": int(row["id"]),
             "cheque_no": row["cheque_no"] or "-",
             "cheque_date": format_date(row["cheque_date"]),
+            "cleared_at": (
+                format_date(row["updated_at"], show_time=True)
+                if str(row["status"] or "").strip().upper() == CHEQUE_STATUS_CLEARED
+                else ""
+            ),
             "cheque_amount": amount,
             "status": row["status"] or CHEQUE_STATUS_ISSUED,
             "payee_name": row["payee_name"] or "-",
@@ -1150,6 +1174,65 @@ def build_payables_report_context(start_date=None, end_date=None):
         "start_date": start_value,
         "end_date": end_value,
     }
+
+
+def get_cleared_cheque_entries_for_report(start_date, end_date):
+    start_value = str(start_date or "").strip()
+    end_value = str(end_date or "").strip()
+    if not start_value or not end_value:
+        return []
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                pc.id,
+                pc.cheque_no,
+                pc.cheque_amount,
+                pc.updated_at AS cleared_at,
+                p.payee_name,
+                COALESCE(
+                    (
+                        SELECT pal.created_by_username
+                        FROM payables_audit_log pal
+                        WHERE pal.cheque_id = pc.id
+                          AND pal.event_type = 'CHEQUE_STATUS_UPDATED'
+                          AND pal.new_status = %s
+                        ORDER BY pal.created_at DESC, pal.id DESC
+                        LIMIT 1
+                    ),
+                    pc.created_by_username,
+                    'System'
+                ) AS cleared_by
+            FROM payable_cheques pc
+            JOIN payables p ON p.id = pc.payable_id
+            WHERE pc.status = %s
+              AND DATE(pc.updated_at) BETWEEN %s AND %s
+            ORDER BY pc.updated_at ASC, pc.id ASC
+            """,
+            (CHEQUE_STATUS_CLEARED, CHEQUE_STATUS_CLEARED, start_value, end_value),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    entries = []
+    for row in rows:
+        cheque_no = str(row["cheque_no"] or "").strip() or "-"
+        payee_name = str(row["payee_name"] or "").strip() or "Payee"
+        entries.append({
+            "id": f"cheque-cleared-{int(row['id'])}",
+            "entry_type": "CASH_OUT",
+            "amount": _normalize_money(row["cheque_amount"]),
+            "category": "Cheque cleared (via Bank)",
+            "description": f"Cheque #{cheque_no} — {payee_name}",
+            "created_at": format_date(row["cleared_at"], show_time=True),
+            "recorded_by": row["cleared_by"] or "System",
+            "source": "cheque_cleared",
+            "_sort_at": row["cleared_at"],
+        })
+
+    return entries
 
 
 def get_payables_audit_log(

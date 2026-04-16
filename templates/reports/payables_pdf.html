@@ -256,7 +256,12 @@
         <tbody>
             {% for item in report["items"] %}
             <tr>
-                <td class="cell-center">{{ item.cheque_date }}</td>
+                <td class="cell-center">
+                    <div>{{ item.cheque_date }}</div>
+                    {% if item.cleared_at %}
+                        <div class="cell-submeta">Cleared: {{ item.cleared_at }}</div>
+                    {% endif %}
+                </td>
                 <td>
                     <strong>{{ item.cheque_no }}</strong>
                     <div class="cell-submeta">
@@ -271,7 +276,7 @@
                 </td>
                 <td>
                     {% if item.source_type == 'MANUAL' and item.description %}
-                        <div class="notes-cell">Notes: {{ item.description }}</div>
+                        <div class="notes-cell">Payable Notes: {{ item.description }}</div>
                     {% else %}
                         {{ item.description or '-' }}
                     {% endif %}
@@ -286,7 +291,7 @@
                         {% endif %}
                     </div>
                     {% if item.notes %}
-                        <div class="notes-cell">Notes: {{ item.notes }}</div>
+                        <div class="notes-cell">Cheque Notes: {{ item.notes }}</div>
                     {% endif %}
                 </td>
                 <td class="cell-right">₱{{ "{:,.2f}".format(item.cheque_amount) }}</td>

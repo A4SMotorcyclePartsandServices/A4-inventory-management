@@ -193,6 +193,10 @@
         height: 280px;
     }
 
+    .expense-chart-wrap {
+        min-height: 320px;
+    }
+
     .table-responsive {
         -webkit-overflow-scrolling: touch;
     }
@@ -795,7 +799,7 @@
 </div>
 
 <div class="section-title">
-    <h3>Profit Analysis</h3>
+    <h3>Profit/Loss Analysis</h3>
     <div class="insight-pill">
         <i class="bi bi-cash-stack"></i>
         Product margin, shop share, and quota top-up impact
@@ -807,10 +811,12 @@
     {% set shop_share_profit = analytics.summary.shop_share_profit or 0 %}
     {% set shop_topup_expense = analytics.summary.total_shop_topup or 0 %}
     {% set mechanic_supply_expense = analytics.summary.total_mechanic_supply_expense or 0 %}
-    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense) %}
+    {% set cash_ledger_expense = analytics.summary.total_cash_ledger_expense or 0 %}
+    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense - cash_ledger_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
-    {% set product_result_label = 'Loss' if profit_is_loss else 'Profit' %}
+    {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
+    {% set product_result_prefix = '− ' if profit_is_loss else '' %}
     <div class="col-12">
         <div class="profit-spotlight">
             <div class="profit-spotlight-head">
@@ -818,10 +824,10 @@
                     <div class="profit-spotlight-title">Profit Analysis</div>
                     <div class="profit-main-meta">
                         <span class="dot"></span>
-                        Product profit plus shop share, less quota top-up and mechanic supply expense
+                        Product profit plus shop share, less quota top-up, mechanic supply, and expenses
                     </div>
-                    <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ product_result_label }}</div>
-                    <div class="profit-spotlight-value">PHP {{ "{:,.2f}".format(product_result_display) }}</div>
+                    <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ '− ' if profit_is_loss else '' }}{{ product_result_label }}</div>
+                    <div class="profit-spotlight-value">{{ product_result_prefix }}PHP {{ "{:,.2f}".format(product_result_display) }}</div>
                     <div class="profit-spotlight-formula">
                         Revenue (PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }})
                         - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
@@ -830,7 +836,10 @@
                         {% if mechanic_supply_expense > 0 %}
                         - Mechanic Supply (PHP {{ "{:,.2f}".format(mechanic_supply_expense) }})
                         {% endif %}
-                        = {{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
+                        {% if cash_ledger_expense > 0 %}
+                        - Expenses (PHP {{ "{:,.2f}".format(cash_ledger_expense) }})
+                        {% endif %}
+                        = {{ product_result_prefix }}{{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
                     </div>
                 </div>
                 <div class="profit-spotlight-breakdown">
@@ -839,7 +848,7 @@
                         <span class="profit-breakdown-value">{{ analytics.summary.paid_transactions }}</span>
                     </div>
                     <div class="profit-breakdown-row">
-                        <span class="profit-breakdown-label">Product Revenue</span>
+                        <span class="profit-breakdown-label">Product Sales</span>
                         <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</span>
                     </div>
                     <div class="profit-breakdown-row">
@@ -860,18 +869,24 @@
                         <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</span>
                     </div>
                     {% endif %}
+                    {% if cash_ledger_expense > 0 %}
+                    <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Expenses</span>
+                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(cash_ledger_expense) }}</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="profit-spotlight-body">
                 <div class="profit-metric revenue">
-                    <div class="profit-metric-label">Product Revenue</div>
+                    <div class="profit-metric-label">Product Sales</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</div>
-                    <div class="profit-metric-sub">Total revenue from paid item sales in the selected range.</div>
+                    <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
                 </div>
                 <div class="profit-metric cost">
                     <div class="profit-metric-label">Product Cost</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</div>
-                    <div class="profit-metric-sub">Based on frozen sale-time item cost snapshots, not the current catalog cost.</div>
+                    <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
                 </div>
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Shop Share</div>
@@ -888,6 +903,13 @@
                     <div class="profit-metric-label">Mechanic Supply</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</div>
                     <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
+                </div>
+                {% endif %}
+                {% if cash_ledger_expense > 0 %}
+                <div class="profit-metric cost">
+                    <div class="profit-metric-label">Expenses</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(cash_ledger_expense) }}</div>
+                    <div class="profit-metric-sub">Shop-related cash ledger expenses plus any cheques cleared during the selected report period.</div>
                 </div>
                 {% endif %}
                 <div class="profit-metric revenue">
@@ -937,6 +959,18 @@
             <div class="panel-meta">Realized paid sales grouped by payment method.</div>
             <div class="chart-wrap chart-wrap-sm">
                 <canvas id="paymentMethodChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-12">
+        <div class="panel-card">
+            <h3>Expenses metric</h3>
+            <div class="panel-meta">Expense breakdown by cash-out category for the selected range, excluding bank deposit, non-shop others, and non-shop e-wallet transfers.</div>
+            <div class="chart-wrap expense-chart-wrap" id="expenseBreakdownChartWrap">
+                <canvas id="expenseBreakdownChart"></canvas>
             </div>
         </div>
     </div>
@@ -1324,6 +1358,58 @@ new Chart(document.getElementById('paymentMethodChart'), {
         }],
     },
     options: sharedChartOptions,
+});
+
+const expenseBreakdownLabels = (salesCharts.expense_breakdown?.labels || []).map((label) => String(label || ''));
+const expenseBreakdownAmounts = (salesCharts.expense_breakdown?.amounts || []).map((amount) => Number(amount || 0));
+const expenseBreakdownChartWrap = document.getElementById('expenseBreakdownChartWrap');
+if (expenseBreakdownChartWrap) {
+    const dynamicHeight = Math.max(320, expenseBreakdownLabels.length * 52);
+    expenseBreakdownChartWrap.style.height = `${dynamicHeight}px`;
+}
+
+new Chart(document.getElementById('expenseBreakdownChart'), {
+    type: 'bar',
+    data: {
+        labels: expenseBreakdownLabels,
+        datasets: [{
+            label: 'Expense Amount',
+            data: expenseBreakdownAmounts,
+            backgroundColor: [
+                '#e63946',
+                '#ff7b00',
+                '#ffbe0b',
+                '#2a9d8f',
+                '#4cc9f0',
+                '#4361ee',
+                '#84a59d',
+                '#f28482',
+                '#90be6d',
+                '#c77dff',
+            ],
+            borderRadius: 10,
+        }],
+    },
+    options: {
+        ...sharedChartOptions,
+        indexAxis: 'y',
+        plugins: {
+            legend: {
+                display: false,
+            },
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                grid: { color: 'rgba(255,255,255,0.08)' },
+                ticks: { color: '#9ca3af' },
+            },
+            y: {
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                ticks: { color: '#9ca3af' },
+            },
+        },
+    },
 });
 
 document.addEventListener('DOMContentLoaded', function () {

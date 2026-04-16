@@ -255,6 +255,12 @@
         font-size: 0.8rem;
         margin-top: 8px;
     }
+    .cheque-row-warning {
+        color: #f4c430;
+        font-size: 0.8rem;
+        margin-top: 8px;
+        font-weight: 700;
+    }
     .inline-form {
         display: flex;
         flex-direction: column;
@@ -1029,13 +1035,21 @@ function renderChequeStatusOptions(currentStatus) {
     )).join('');
 }
 
+function isChequeStatusLocked(status) {
+    return String(status || '').trim().toUpperCase() === 'CLEARED';
+}
+
 function renderChequeHistoryRow(cheque) {
     const status = String(cheque.status || 'ISSUED').toUpperCase();
+    const isLocked = isChequeStatusLocked(status);
     const notesMarkup = cheque.notes ? `<div class="cheque-row-notes">${escapeHtml(cheque.notes)}</div>` : '';
     const dueFlags = [
         cheque.is_due_today ? '<span class="cheque-due-flag today">Due today</span>' : '',
         (!cheque.is_due_today && cheque.is_due_soon) ? '<span class="cheque-due-flag soon">Due within 7 days</span>' : '',
     ].filter(Boolean).join('');
+    const lockedMarkup = isLocked
+        ? '<div class="cheque-row-warning">Status locked: cleared cheques can no longer be changed.</div>'
+        : '';
 
     return `
         <div class="cheque-row" data-cheque-row data-cheque-id="${escapeHtml(String(cheque.id || ''))}">
@@ -1050,12 +1064,13 @@ function renderChequeHistoryRow(cheque) {
                 <span class="status-chip status-${escapeHtml(status.toLowerCase().replaceAll('_', '-'))}">${escapeHtml(status.replaceAll('_', ' '))}</span>
             </div>
             ${notesMarkup}
+            ${lockedMarkup}
             <form class="inline-form cheque-status-form" method="post" action="/transaction/payables/cheques/${encodeURIComponent(cheque.id)}/status" data-cheque-no="${escapeHtml(cheque.cheque_no_raw || cheque.cheque_no || '')}" data-current-status="${escapeHtml(status)}">
-                <select class="form-select form-select-sm" name="status">
+                <select class="form-select form-select-sm" name="status" ${isLocked ? 'disabled' : ''}>
                     ${renderChequeStatusOptions(status)}
                 </select>
                 <div class="inline-form-actions">
-                    <button type="submit" class="btn btn-warning btn-sm fw-bold">Update Cheque Status</button>
+                    <button type="submit" class="btn btn-warning btn-sm fw-bold" ${isLocked ? 'disabled' : ''}>Update Cheque Status</button>
                 </div>
             </form>
         </div>
@@ -1333,6 +1348,11 @@ function syncChequeStatusFormState(form) {
     const submitBtn = form?.querySelector('button[type="submit"]');
     const currentStatus = String(form?.getAttribute('data-current-status') || '').trim().toUpperCase();
     if (!statusSelect || !submitBtn) {
+        return;
+    }
+    if (isChequeStatusLocked(currentStatus)) {
+        statusSelect.disabled = true;
+        submitBtn.disabled = true;
         return;
     }
     const nextStatus = String(statusSelect.value || '').trim().toUpperCase();

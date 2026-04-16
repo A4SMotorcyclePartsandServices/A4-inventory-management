@@ -1,4 +1,5 @@
 from db.database import get_db
+from utils.cash_categories import normalize_cash_category_label
 from utils.formatters import format_date
 
 
@@ -8,6 +9,18 @@ from utils.formatters import format_date
 
 MECHANIC_QUOTA = 625.0
 MECHANIC_PAYOUT_CAP = 500.0
+EXCLUDED_PROFIT_CARD_CASH_OUT_SYSTEM_KEYS = {
+    "cash_out_mechanic_payout",
+    "cash_out_to_ewallet",
+}
+EXCLUDED_PROFIT_CARD_CASH_OUT_LABELS = {
+    normalize_cash_category_label("Mechanic Payout"),
+    normalize_cash_category_label("Mechanic Supply"),
+    normalize_cash_category_label("To Gcash/E-Wallet Account (Related to shop)"),
+    normalize_cash_category_label("To Gcash/E-wallet account (non-related to shop)"),
+    normalize_cash_category_label("Bank Deposit"),
+    normalize_cash_category_label("Others (non-related to shop)"),
+}
 
 
 def _num(value):
@@ -20,6 +33,48 @@ def _bool_flag(value, default=True):
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_profit_card_cash_ledger_expense(conn, start_date, end_date):
+    cash_rows = conn.execute(
+        """
+        SELECT
+            ce.amount,
+            ce.category,
+            cec.system_key
+        FROM cash_entries ce
+        LEFT JOIN cash_entry_categories cec ON cec.id = ce.cash_category_id
+        WHERE ce.entry_type = 'CASH_OUT'
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+          AND DATE(ce.created_at) BETWEEN %s AND %s
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    total = 0.0
+    for row in cash_rows:
+        system_key = (row["system_key"] or "").strip()
+        if system_key in EXCLUDED_PROFIT_CARD_CASH_OUT_SYSTEM_KEYS:
+            continue
+
+        normalized_label = normalize_cash_category_label(row["category"])
+        if normalized_label in EXCLUDED_PROFIT_CARD_CASH_OUT_LABELS:
+            continue
+
+        total += _num(row["amount"])
+
+    cleared_cheque_rows = conn.execute(
+        """
+        SELECT pc.cheque_amount
+        FROM payable_cheques pc
+        WHERE pc.status = 'CLEARED'
+          AND DATE(pc.updated_at) BETWEEN %s AND %s
+        """,
+        (start_date, end_date),
+    ).fetchall()
+    total += sum(_num(row["cheque_amount"]) for row in cleared_cheque_rows)
+
+    return round(total, 2)
 
 
 def _build_sale_payment_summary_map(conn, sale_ids):
@@ -1298,7 +1353,7 @@ def get_sales_report_by_date(report_date):
            AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) = %s
-        ORDER BY s.transaction_date ASC
+        ORDER BY s.transaction_date DESC, s.id DESC
     """, (report_date,)).fetchall()
 
     all_unresolved = get_all_unresolved_sales(conn)
@@ -1329,7 +1384,7 @@ def get_sales_report_by_date(report_date):
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) = %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-        ORDER BY dp.paid_at ASC
+        ORDER BY dp.paid_at DESC, dp.id DESC
     """, (report_date,)).fetchall()
     debt_payout_rows = _get_debt_payout_allocations(conn, report_date=report_date)
 
@@ -1351,7 +1406,7 @@ def get_sales_report_by_date(report_date):
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) = %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-        ORDER BY sr.refund_date ASC, sr.id ASC
+        ORDER BY sr.refund_date DESC, sr.id DESC
     """, (report_date,)).fetchall()
 
     if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
@@ -1414,7 +1469,6 @@ def get_sales_report_by_date(report_date):
             })
 
     non_cash_metrics = _get_non_cash_floating_metrics(conn, report_date, report_date)
-    conn.close()
 
     debt_collected = [
         {
@@ -1530,6 +1584,7 @@ def get_sales_report_by_date(report_date):
         sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
         2,
     )
+    total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, report_date, report_date)
     total_shop_comm_from_paid = round(
         total_service_revenue - totals["total_mech_cut_from_paid"] - total_bundle_shop_share,
         2,
@@ -1549,11 +1604,15 @@ def get_sales_report_by_date(report_date):
         2,
     )
     total_profit_with_shop_share = round(
-        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"] - total_mechanic_supply_expense,
+        total_product_profit
+        + totals["total_shop_commission"]
+        - totals["total_shop_topup"]
+        - total_mechanic_supply_expense
+        - total_cash_ledger_expense,
         2,
     )
 
-    return {
+    result = {
         "sales": paid_sales,
         "mechanic_supply_sales": mechanic_supply_sales,
         "mechanic_supply_items_summary": mechanic_supply_items_summary,
@@ -1564,6 +1623,7 @@ def get_sales_report_by_date(report_date):
         "total_mechanic_supply_expense": total_mechanic_supply_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
+        "total_cash_ledger_expense": total_cash_ledger_expense,
         "net_revenue": round(
             total_gross
             - total_refunds
@@ -1591,6 +1651,8 @@ def get_sales_report_by_date(report_date):
         "refunds": refunds,
         "total_refunds": total_refunds,
     }
+    conn.close()
+    return result
 
 
 def get_sales_report_by_range(start_date, end_date):
@@ -1623,7 +1685,7 @@ def get_sales_report_by_range(start_date, end_date):
            AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-        ORDER BY s.transaction_date ASC
+        ORDER BY s.transaction_date DESC, s.id DESC
     """, (start_date, end_date)).fetchall()
 
     all_unresolved = get_all_unresolved_sales(conn)
@@ -1654,7 +1716,7 @@ def get_sales_report_by_range(start_date, end_date):
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-        ORDER BY dp.paid_at ASC
+        ORDER BY dp.paid_at DESC, dp.id DESC
     """, (start_date, end_date)).fetchall()
     debt_payout_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
 
@@ -1676,7 +1738,7 @@ def get_sales_report_by_range(start_date, end_date):
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-        ORDER BY sr.refund_date ASC, sr.id ASC
+        ORDER BY sr.refund_date DESC, sr.id DESC
     """, (start_date, end_date)).fetchall()
 
     if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
@@ -1739,7 +1801,6 @@ def get_sales_report_by_range(start_date, end_date):
             })
 
     non_cash_metrics = _get_non_cash_floating_metrics(conn, start_date, end_date)
-    conn.close()
 
     debt_collected = [
         {
@@ -1854,6 +1915,7 @@ def get_sales_report_by_range(start_date, end_date):
         sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
         2,
     )
+    total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, start_date, end_date)
     total_shop_comm_from_paid = round(
         total_service_revenue - totals["total_mech_cut_from_paid"] - total_bundle_shop_share,
         2,
@@ -1873,11 +1935,15 @@ def get_sales_report_by_range(start_date, end_date):
         2,
     )
     total_profit_with_shop_share = round(
-        total_product_profit + totals["total_shop_commission"] - totals["total_shop_topup"] - total_mechanic_supply_expense,
+        total_product_profit
+        + totals["total_shop_commission"]
+        - totals["total_shop_topup"]
+        - total_mechanic_supply_expense
+        - total_cash_ledger_expense,
         2,
     )
 
-    return {
+    result = {
         "sales": paid_sales,
         "mechanic_supply_sales": mechanic_supply_sales,
         "mechanic_supply_items_summary": mechanic_supply_items_summary,
@@ -1888,6 +1954,7 @@ def get_sales_report_by_range(start_date, end_date):
         "total_mechanic_supply_expense": total_mechanic_supply_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
+        "total_cash_ledger_expense": total_cash_ledger_expense,
         "net_revenue": round(
             total_gross
             - total_refunds
@@ -1916,6 +1983,9 @@ def get_sales_report_by_range(start_date, end_date):
         "total_refunds": total_refunds,
         "quota_failures": sorted(
             quota_failures,
-            key=lambda row: (row["date"], row["mechanic_name"]),
+            key=lambda row: (row["date"], row["mechanic_name"].lower()),
+            reverse=True,
         ),
     }
+    conn.close()
+    return result

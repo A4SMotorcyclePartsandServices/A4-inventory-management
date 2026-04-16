@@ -563,15 +563,17 @@
     {% set shop_share_profit = data.total_shop_commission or 0 %}
     {% set shop_topup_expense = data.total_shop_topup or 0 %}
     {% set mechanic_supply_expense = data.total_mechanic_supply_expense or 0 %}
-    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense) %}
+    {% set cash_ledger_expense = data.total_cash_ledger_expense or 0 %}
+    {% set total_profit_result = data.total_profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense - cash_ledger_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
+    {% set product_result_prefix = '− ' if profit_is_loss else '' %}
     <div class="section profit-spotlight">
         <div class="profit-spotlight-head">
             <div>
-                <div class="profit-spotlight-status">{{ product_result_label }}</div>
-                <div class="profit-spotlight-value"><span class="currency">P {{ "%.2f"|format(product_result_display) }}</span></div>
+                <div class="profit-spotlight-status">{{ '− ' if profit_is_loss else '' }}{{ product_result_label }}</div>
+                <div class="profit-spotlight-value"><span class="currency">{{ product_result_prefix }}P {{ "%.2f"|format(product_result_display) }}</span></div>
                 <div class="profit-spotlight-formula">
                     Revenue <span class="currency">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</span>
                     - Cost <span class="currency">P {{ "%.2f"|format(data.total_product_cost or 0) }}</span>
@@ -580,7 +582,10 @@
                     {% if mechanic_supply_expense > 0 %}
                     - Mechanic Supply <span class="currency">P {{ "%.2f"|format(mechanic_supply_expense) }}</span>
                     {% endif %}
-                    = {{ product_result_label }} <span class="currency">P {{ "%.2f"|format(product_result_display) }}</span>
+                    {% if cash_ledger_expense > 0 %}
+                    - Expenses <span class="currency">P {{ "%.2f"|format(cash_ledger_expense) }}</span>
+                    {% endif %}
+                    = {{ product_result_prefix }}{{ product_result_label }} <span class="currency">P {{ "%.2f"|format(product_result_display) }}</span>
                 </div>
             </div>
         </div>
@@ -612,6 +617,13 @@
                 <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
             </div>
             {% endif %}
+            {% if cash_ledger_expense > 0 %}
+            <div class="profit-metric cost">
+                <div class="profit-metric-label">Expenses</div>
+                <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(cash_ledger_expense) }}</span></div>
+                <div class="profit-metric-sub">Shop-related cash ledger expenses plus any cheques cleared during the selected report period.</div>
+            </div>
+            {% endif %}
             <div class="profit-metric revenue">
                 <div class="profit-metric-label">Floating Non-Cash</div>
                 <div class="profit-metric-value"><span class="currency">P {{ "%.2f"|format(data.total_non_cash_floating or 0) }}</span></div>
@@ -629,7 +641,7 @@
                 <span class="currency">+ P {{ "%.2f"|format(cash_data.total_in or 0) }}</span>
             </div>
             <div class="cash-summary-row out">
-                <span>Total Cash Out</span>
+                <span>Total Cash Out &amp; Expenses</span>
                 <span class="currency">- P {{ "%.2f"|format(cash_data.total_out or 0) }}</span>
             </div>
             {% if cash_data.cash_out_groups %}

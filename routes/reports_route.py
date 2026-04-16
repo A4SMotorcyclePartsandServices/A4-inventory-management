@@ -17,6 +17,7 @@ from services.reports_service import (
 )
 from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
 from services.cash_service import get_cash_entries_for_report, get_cash_summary
+from services.payables_service import get_cleared_cheque_entries_for_report
 from services.inventory_service import attach_restock_recommendation
 from utils.formatters import format_date
 from utils.timezone import now_local, today_local
@@ -262,6 +263,26 @@ def _build_sales_report_context():
         return None
 
     cash_summary = _timed_report_step("cash_summary", get_cash_summary)
+    cleared_cheque_entries = _timed_report_step(
+        "cleared_cheques",
+        get_cleared_cheque_entries_for_report,
+        report_start,
+        report_end,
+    )
+    if cleared_cheque_entries:
+        merged_entries = list(cash_data.get("entries") or []) + cleared_cheque_entries
+        merged_entries.sort(key=lambda entry: entry.get("_sort_at") or "", reverse=True)
+        cash_data["entries"] = merged_entries
+        cash_data["total_out"] = round(
+            sum(float(entry.get("amount") or 0) for entry in merged_entries if entry.get("entry_type") == "CASH_OUT"),
+            2,
+        )
+    elif cash_data.get("entries"):
+        cash_data["entries"] = sorted(
+            cash_data["entries"],
+            key=lambda entry: entry.get("_sort_at") or "",
+            reverse=True,
+        )
     cash_data["floating_total"] = cash_summary.get("floating_total", 0.0)
     cash_data["cash_out_groups"] = _timed_report_step(
         "cash_out_groups",
@@ -280,6 +301,7 @@ def _build_sales_report_context():
             "total_mechanic_supply_expense": 0.0,
             "total_mech_cut": 0.0,
             "total_shop_topup": 0.0,
+            "total_cash_ledger_expense": 0.0,
             "net_revenue": 0.0,
             "total_product_revenue": 0.0,
             "total_product_cost": 0.0,
