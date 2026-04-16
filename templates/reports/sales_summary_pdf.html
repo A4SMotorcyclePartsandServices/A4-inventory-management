@@ -124,6 +124,15 @@
             display: inline-block;
             white-space: nowrap;
         }
+        .refund-row td {
+            color: #721c24;
+        }
+        .item-note {
+            display: block;
+            margin-top: 2px;
+            font-size: 10px;
+            color: #8a8f98;
+        }
 
         .totals-row td {
             font-weight: 800;
@@ -359,10 +368,15 @@
             <tbody>
                 {% if data.items_summary %}
                     {% for item in data.items_summary %}
-                    <tr>
-                        <td>{{ item.item_name }}</td>
-                        <td class="text-right">{{ item.quantity }}</td>
-                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(item.total) }}</span></td>
+                    <tr class="{% if item.row_type == 'refund' %}refund-row{% endif %}">
+                        <td>
+                            {{ item.item_name }}
+                            {% if item.row_note %}
+                            <span class="item-note">{{ item.row_note }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">{% if item.quantity < 0 %}-{{ item.quantity|abs }}{% else %}{{ item.quantity }}{% endif %}</td>
+                        <td class="text-right"><span class="currency">{% if item.total < 0 %}- P {{ "%.2f"|format(item.total|abs) }}{% else %}P {{ "%.2f"|format(item.total) }}{% endif %}</span></td>
                     </tr>
                     {% endfor %}
                     <tr class="totals-row">
@@ -386,7 +400,7 @@
                     <th width="24%">Mechanic</th>
                     <th width="17%" class="text-right">Services</th>
                     <th width="14%" class="text-right">Rate</th>
-                    <th width="16%" class="text-right">Payout (No Quota Top-up)</th>
+                    <th width="16%" class="text-right">Payout (Without Top-up)</th>
                     <th width="11%" class="text-right">Shop Share</th>
                     <th width="8%" class="text-right">Top-up</th>
                     <th width="10%" class="text-right">Total Payout</th>

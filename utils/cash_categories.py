@@ -36,7 +36,7 @@ SYSTEM_CASH_CATEGORY_DEFINITIONS = [
     },
     {
         "entry_type": "CASH_OUT",
-        "label": "To Gcash/E-Wallet Account",
+        "label": "To Gcash/E-Wallet Account (Related to shop)",
         "system_key": "cash_out_to_ewallet",
         "requires_description": False,
         "sort_order": 10,
@@ -130,6 +130,7 @@ CASH_CATEGORY_BACKFILL_ALIASES = {
     ("CASH_IN", "others"): "cash_in_others",
     ("CASH_IN", "petty cash"): "cash_in_petty_cash",
     ("CASH_OUT", "to gcash/e-wallet account"): "cash_out_to_ewallet",
+    ("CASH_OUT", "to gcash/e-wallet account (related to shop)"): "cash_out_to_ewallet",
     ("CASH_OUT", "to gcash account"): "cash_out_to_ewallet",
     ("CASH_OUT", "mechanic payout"): "cash_out_mechanic_payout",
     ("CASH_OUT", "others"): "cash_out_other_expenses",

@@ -148,7 +148,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
     }
 
 
-def _summarize_items_for_profit(paid_sales):
+def _summarize_items_for_profit(paid_sales, refunds=None):
     items_summary = {}
     for sale in paid_sales:
         for item in sale["products"]:
@@ -184,7 +184,39 @@ def _summarize_items_for_profit(paid_sales):
                 items_summary[key]["total"] += bundle_item_total
                 items_summary[key]["cost_total"] += bundle_item_cost_total
                 items_summary[key]["profit_total"] += round(bundle_item_total - bundle_item_cost_total, 2)
-    return sorted(items_summary.values(), key=lambda x: x["item_name"])
+
+    summary_rows = []
+    for item in sorted(items_summary.values(), key=lambda x: x["item_name"]):
+        item["row_type"] = "sale"
+        item["row_note"] = ""
+        summary_rows.append(item)
+
+    for refund in refunds or []:
+        refund_number = refund.get("refund_number") or "Refund"
+        refund_date = refund.get("refund_date") or ""
+        row_note = refund_number
+        if refund_date:
+            row_note = f"{refund_number} - {refund_date}"
+
+        for item in refund.get("items") or []:
+            summary_rows.append({
+                "item_name": item.get("item_name") or "Unknown Item",
+                "quantity": -int(item.get("quantity") or 0),
+                "total": -round(_num(item.get("line_total")), 2),
+                "cost_total": 0.0,
+                "profit_total": 0.0,
+                "row_type": "refund",
+                "row_note": row_note,
+            })
+
+    return sorted(
+        summary_rows,
+        key=lambda row: (
+            row["item_name"],
+            1 if row.get("row_type") == "refund" else 0,
+            row.get("row_note") or "",
+        ),
+    )
 
 
 def _summarize_mechanic_supply_items(mechanic_supply_sales):
@@ -1507,7 +1539,7 @@ def get_sales_report_by_date(report_date):
         paid_sales,
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
-    items_summary = _summarize_items_for_profit(financial_paid_sales)
+    items_summary = _summarize_items_for_profit(financial_paid_sales, refunds=refunds)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -1831,7 +1863,7 @@ def get_sales_report_by_range(start_date, end_date):
         paid_sales,
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
-    items_summary = _summarize_items_for_profit(financial_paid_sales)
+    items_summary = _summarize_items_for_profit(financial_paid_sales, refunds=refunds)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]

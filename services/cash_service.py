@@ -63,7 +63,7 @@ def get_cash_category_choices(include_inactive=False):
         """
         if not include_inactive:
             query += " WHERE is_active = TRUE"
-        query += " ORDER BY entry_type ASC, sort_order ASC, label ASC"
+        query += " ORDER BY entry_type ASC, LOWER(TRIM(label)) ASC, sort_order ASC"
         rows = conn.execute(query, params).fetchall()
     finally:
         conn.close()
@@ -80,6 +80,8 @@ def get_cash_category_choices(include_inactive=False):
             "is_active": bool(row["is_active"]),
             "is_system": bool(row["is_system"]),
         })
+    for entry_type in grouped:
+        grouped[entry_type].sort(key=lambda category: (category["label"] or "").strip().lower())
     return grouped
 
 

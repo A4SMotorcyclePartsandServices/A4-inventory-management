@@ -91,11 +91,21 @@ def _sync_cash_entry_category_labels(cur):
               OR LOWER(TRIM(ce.category)) = LOWER(TRIM(c.label))
               OR (
                   c.system_key = %s
+                  AND LOWER(TRIM(ce.category)) IN (%s)
+              )
+              OR (
+                  c.system_key = %s
                   AND LOWER(TRIM(ce.category)) IN (%s, %s)
               )
           )
         """,
-        ("cash_out_other_expenses", "other expenses", "others"),
+        (
+            "cash_out_to_ewallet",
+            "to gcash/e-wallet account",
+            "cash_out_other_expenses",
+            "other expenses",
+            "others",
+        ),
     )
 
 
