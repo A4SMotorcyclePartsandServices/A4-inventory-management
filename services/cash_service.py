@@ -9,6 +9,7 @@ from utils.timezone import today_local
 SYSTEM_KEY_CASH_IN_BANK_TRANSFER = "cash_in_bank_transfer"
 SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = "cash_in_ewallet_transfer"
 SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = "cash_out_mechanic_payout"
+PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE = "PAYABLE_CASH_SETTLEMENT"
 SYSTEM_KEY_CASH_OUT_UTILITIES = "cash_out_utilities"
 DEFAULT_FLOATING_CASH_IN_SYSTEM_KEY = SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
 
@@ -501,7 +502,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
         LEFT JOIN users u ON u.id = ce.user_id
         LEFT JOIN users du ON du.id = ce.deleted_by
         WHERE ce.branch_id = %s
-        AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
+        AND ce.reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION', 'PAYABLE_CASH_SETTLEMENT')
     """
 
     if deleted_state == 'active':
@@ -1008,6 +1009,7 @@ def add_cash_entry(
     description,
     reference_id,
     payout_for_date,
+    payable_id,
     user_id,
     branch_id=1,
     claim_sale_ids=None,
@@ -1036,6 +1038,13 @@ def add_cash_entry(
             normalized_reference_id = int(reference_id)
         except (TypeError, ValueError):
             raise ValueError("Invalid mechanic reference.")
+
+    normalized_payable_id = None
+    if payable_id not in (None, ""):
+        try:
+            normalized_payable_id = int(payable_id)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid payable reference.")
 
     normalized_claim_sale_ids = []
     for sale_id in (claim_sale_ids or []):
@@ -1084,6 +1093,58 @@ def add_cash_entry(
             if normalized_reference_id is not None:
                 raise ValueError("Floating collections cannot use a mechanic reference.")
             reference_type = 'FLOAT_COLLECTION'
+
+        if normalized_payable_id is not None:
+            if entry_type != 'CASH_OUT':
+                raise ValueError("Payable cash settlement must be recorded as cash out.")
+            if normalized_reference_id is not None:
+                raise ValueError("Payable cash settlement cannot use a mechanic reference.")
+            if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+                raise ValueError("Payable cash settlement cannot be combined with floating collections.")
+
+            payable_row = conn.execute(
+                """
+                SELECT id, amount_due, payee_name
+                FROM payables
+                WHERE id = %s
+                """,
+                (normalized_payable_id,),
+            ).fetchone()
+            if not payable_row:
+                raise ValueError("Linked payable was not found.")
+
+            existing_settlement = conn.execute(
+                """
+                SELECT id
+                FROM cash_entries
+                WHERE reference_type = %s
+                  AND reference_id = %s
+                  AND entry_type = 'CASH_OUT'
+                  AND COALESCE(is_deleted, FALSE) = FALSE
+                LIMIT 1
+                """,
+                (PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE, normalized_payable_id),
+            ).fetchone()
+            if existing_settlement:
+                raise ValueError("This payable has already been settled through cash ledger.")
+
+            cheque_row = conn.execute(
+                """
+                SELECT cheque_amount
+                FROM payable_cheques
+                WHERE payable_id = %s
+                  AND status = 'CANCELLED'
+                ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (normalized_payable_id,),
+            ).fetchone()
+            expected_amount = round(float((cheque_row["cheque_amount"] if cheque_row else payable_row["amount_due"]) or 0), 2)
+            if round(float(amount), 2) != expected_amount:
+                raise ValueError(f"Cash settlement amount must match the payable amount of {expected_amount:,.2f}.")
+
+            reference_type = PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE
+            normalized_reference_id = normalized_payable_id
 
         claimable_total = 0.0
 
@@ -1193,6 +1254,20 @@ def add_cash_entry(
                     """,
                     (debt_payment_id, entry_id),
                 )
+        if normalized_payable_id is not None:
+            from services.payables_service import log_payables_audit_event
+
+            log_payables_audit_event(
+                event_type="PAYABLE_CASH_SETTLED",
+                payable_id=normalized_payable_id,
+                source_type=None,
+                payee_name_snapshot=payable_row["payee_name"] if payable_row else None,
+                amount_snapshot=amount,
+                notes=f"Payable settled through cash ledger entry #{entry_id}.",
+                created_by=user_id,
+                external_conn=conn,
+            )
+
         conn.commit()
         return entry_id
     except Exception:
@@ -1218,7 +1293,7 @@ def delete_cash_entry(entry_id, user_id, branch_id=1):
                 deleted_by = %s
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION', 'PAYABLE_CASH_SETTLEMENT')
               AND COALESCE(is_deleted, FALSE) = FALSE
         """, (user_id, entry_id, branch_id))
 
@@ -1246,7 +1321,7 @@ def restore_cash_entry(entry_id, branch_id=1):
                 deleted_by = NULL
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION', 'PAYABLE_CASH_SETTLEMENT')
               AND COALESCE(is_deleted, FALSE) = TRUE
         """, (entry_id, branch_id))
 

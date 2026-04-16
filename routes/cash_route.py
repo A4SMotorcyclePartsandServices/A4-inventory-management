@@ -269,6 +269,11 @@ def cash_ledger():
     entry_type = request.args.get("type") or None
     start_date = request.args.get("start_date") or None
     end_date   = request.args.get("end_date") or None
+    prefill_entry_type = request.args.get("prefill_entry_type") or ""
+    prefill_payable_id = request.args.get("prefill_payable_id") or ""
+    prefill_amount = request.args.get("prefill_amount") or ""
+    prefill_description = request.args.get("prefill_description") or ""
+    prefill_category_key = request.args.get("prefill_category_key") or ""
 
     if entry_type not in {"CASH_IN", "CASH_OUT", None}:
         entry_type = None
@@ -340,6 +345,11 @@ def cash_ledger():
         today=today,
         overdue_payout_total=total_overdue_payouts,
         reminder_days=reminder_days,
+        prefill_entry_type=prefill_entry_type,
+        prefill_payable_id=prefill_payable_id,
+        prefill_amount=prefill_amount,
+        prefill_description=prefill_description,
+        prefill_category_key=prefill_category_key,
     )
 
 
@@ -495,6 +505,7 @@ def cash_add_api():
     if reference_id in ("", None):
         reference_id = None
     payout_for_date = data.get("payout_for_date")
+    payable_id = data.get("payable_id")
 
     try:
         entry_id = add_cash_entry(
@@ -504,6 +515,7 @@ def cash_add_api():
             description=data.get("description", ""),
             reference_id=reference_id,
             payout_for_date=payout_for_date,
+            payable_id=payable_id,
             user_id=user_id,
             branch_id=_get_branch_id(),
             claim_sale_ids=data.get("claim_sale_ids") or [],

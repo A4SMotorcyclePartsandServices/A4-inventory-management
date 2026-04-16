@@ -788,6 +788,7 @@
                 <input type="date" id="entry-payout-date" class="form-control">
             </div>
             <input type="hidden" id="entry-reference-id" value="">
+            <input type="hidden" id="entry-payable-id" value="">
             <input type="hidden" id="entry-claim-sale-ids" value="">
             <input type="hidden" id="entry-claim-debt-payment-ids" value="">
 
@@ -992,6 +993,11 @@ const LEDGER_SELECTED_START_DATE = {{ selected_start_date | tojson }};
 const LEDGER_SELECTED_END_DATE = {{ selected_end_date | tojson }};
 const LEDGER_INITIAL_PAGE = {{ page | tojson }};
 const LEDGER_CAN_DELETE = {{ (session.get('role') == 'admin') | tojson }};
+const LEDGER_PREFILL_ENTRY_TYPE = {{ prefill_entry_type | tojson }};
+const LEDGER_PREFILL_PAYABLE_ID = {{ prefill_payable_id | tojson }};
+const LEDGER_PREFILL_AMOUNT = {{ prefill_amount | tojson }};
+const LEDGER_PREFILL_DESCRIPTION = {{ prefill_description | tojson }};
+const LEDGER_PREFILL_CATEGORY_KEY = {{ prefill_category_key | tojson }};
 let ledgerDateFlatpickr = null;
 let ledgerTypeFilter = LEDGER_SELECTED_TYPE || '';
 let ledgerCurrentPage = LEDGER_INITIAL_PAGE || 1;
@@ -1004,6 +1010,8 @@ const CASH_CATEGORY_CHOICES = {{ cash_category_choices | tojson }};
 const SYSTEM_KEY_CASH_IN_BANK_TRANSFER = 'cash_in_bank_transfer';
 const SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = 'cash_in_ewallet_transfer';
 const SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = 'cash_out_mechanic_payout';
+const SYSTEM_KEY_CASH_OUT_OTHER_EXPENSES = 'cash_out_other_expenses';
+const SYSTEM_KEY_CASH_OUT_PARTS_PURCHASE = 'cash_out_parts_purchase';
 const SYSTEM_KEY_CASH_OUT_UTILITIES = 'cash_out_utilities';
 
 function getSelectedCategoryOption() {
@@ -1045,6 +1053,20 @@ function populateCategories(type) {
     updateDescriptionFieldState();
 }
 
+function selectCategoryBySystemKey(systemKey) {
+    const select = document.getElementById('entry-category');
+    if (!select || !systemKey) {
+        return false;
+    }
+    const option = Array.from(select.options).find((candidate) => candidate.dataset.systemKey === systemKey);
+    if (!option) {
+        return false;
+    }
+    select.value = option.value;
+    updateDescriptionFieldState();
+    return true;
+}
+
 function updateDescriptionFieldState() {
     const entryType = document.querySelector('input[name="entry_type"]:checked')?.value || 'CASH_IN';
     const categoryMeta = getSelectedCategoryMeta();
@@ -1067,14 +1089,14 @@ function updateDescriptionFieldState() {
     }
 }
 
-function setFloatingCollectionAmountLock(locked) {
+function setFloatingCollectionAmountLock(locked, titleText) {
     const amountInput = document.getElementById('entry-amount');
     floatingCollectionAmountLocked = Boolean(locked);
     amountInput.readOnly = floatingCollectionAmountLocked;
     amountInput.classList.toggle('bg-dark', floatingCollectionAmountLocked);
     amountInput.classList.toggle('text-info', floatingCollectionAmountLocked);
     if (floatingCollectionAmountLocked) {
-        amountInput.title = 'Amount is locked for pending non-cash collections.';
+        amountInput.title = titleText || 'Amount is locked for pending non-cash collections.';
     } else {
         amountInput.removeAttribute('title');
     }
@@ -1128,6 +1150,71 @@ function showPayoutDateIfNeeded() {
     }
 }
 
+function applyLedgerPrefill() {
+    if (LEDGER_VIEW !== 'active') {
+        return;
+    }
+
+    const hasPrefill = Boolean(
+        String(LEDGER_PREFILL_AMOUNT || '').trim()
+        || String(LEDGER_PREFILL_DESCRIPTION || '').trim()
+        || String(LEDGER_PREFILL_CATEGORY_KEY || '').trim()
+    );
+    if (!hasPrefill) {
+        return;
+    }
+
+    const cashOutRadio = document.getElementById('type_out');
+    const cashInRadio = document.getElementById('type_in');
+    if (!cashOutRadio) {
+        return;
+    }
+
+    const targetEntryType = String(LEDGER_PREFILL_ENTRY_TYPE || 'CASH_OUT').trim().toUpperCase() === 'CASH_IN'
+        ? 'CASH_IN'
+        : 'CASH_OUT';
+
+    cashOutRadio.checked = targetEntryType === 'CASH_OUT';
+    if (cashInRadio) {
+        cashInRadio.checked = targetEntryType === 'CASH_IN';
+    }
+    populateCategories(targetEntryType);
+    showPayoutDateIfNeeded();
+    setFloatingCollectionAmountLock(false);
+
+    if (!selectCategoryBySystemKey(LEDGER_PREFILL_CATEGORY_KEY || SYSTEM_KEY_CASH_OUT_PARTS_PURCHASE)) {
+        selectCategoryBySystemKey(SYSTEM_KEY_CASH_OUT_PARTS_PURCHASE);
+    }
+
+    const amountInput = document.getElementById('entry-amount');
+    const descriptionInput = document.getElementById('entry-description');
+    const payableIdInput = document.getElementById('entry-payable-id');
+    if (amountInput && String(LEDGER_PREFILL_AMOUNT || '').trim()) {
+        amountInput.value = LEDGER_PREFILL_AMOUNT;
+    }
+    if (descriptionInput && String(LEDGER_PREFILL_DESCRIPTION || '').trim()) {
+        descriptionInput.value = LEDGER_PREFILL_DESCRIPTION;
+    }
+    if (payableIdInput) {
+        payableIdInput.value = String(LEDGER_PREFILL_PAYABLE_ID || '').trim();
+    }
+    if (String(LEDGER_PREFILL_PAYABLE_ID || '').trim()) {
+        setFloatingCollectionAmountLock(true, 'Amount is locked for payable cash settlement.');
+    }
+
+    const formCard = document.getElementById('submit-entry-btn')?.closest('.card');
+    formCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    amountInput?.focus();
+
+    const cleanedUrl = new URL(window.location.href);
+    cleanedUrl.searchParams.delete('prefill_entry_type');
+    cleanedUrl.searchParams.delete('prefill_payable_id');
+    cleanedUrl.searchParams.delete('prefill_amount');
+    cleanedUrl.searchParams.delete('prefill_description');
+    cleanedUrl.searchParams.delete('prefill_category_key');
+    window.history.replaceState(window.history.state, '', cleanedUrl.toString());
+}
+
 document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
     radio.addEventListener('change', () => {
         populateCategories(radio.value);
@@ -1150,6 +1237,7 @@ populateCategories('CASH_IN');
 setPayoutDate(TODAY_FOR_INPUT);
 showPayoutDateIfNeeded();
 setFloatingCollectionAmountLock(false);
+applyLedgerPrefill();
 }
 showPendingFlashAfterReload();
 initializeLedgerFilters();
@@ -1177,6 +1265,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
     const categoryMeta = getSelectedCategoryMeta();
     const description = document.getElementById('entry-description').value.trim();
     const referenceId = document.getElementById('entry-reference-id').value || null;
+    const payableId = document.getElementById('entry-payable-id').value || null;
     const claimSaleIds = (document.getElementById('entry-claim-sale-ids').value || '')
         .split(',')
         .map(value => Number.parseInt(value, 10))
@@ -1227,6 +1316,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
                 category_id: categoryMeta.id,
                 description,
                 reference_id: referenceId,
+                payable_id: payableId,
                 payout_for_date: payoutDate,
                 claim_sale_ids: claimSaleIds,
                 claim_debt_payment_ids: claimDebtPaymentIds,

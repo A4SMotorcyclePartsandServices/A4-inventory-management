@@ -16,6 +16,7 @@ CHEQUE_STATUS_ISSUED = "ISSUED"
 CHEQUE_STATUS_CLEARED = "CLEARED"
 CHEQUE_STATUS_CANCELLED = "CANCELLED"
 CHEQUE_STATUS_BOUNCED = "BOUNCED"
+PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE = "PAYABLE_CASH_SETTLEMENT"
 MAX_PAYEE_NAME_LENGTH = 160
 MAX_DESCRIPTION_LENGTH = 500
 MAX_REFERENCE_NO_LENGTH = 120
@@ -25,6 +26,7 @@ PAYABLE_SEARCH_STATUS_OPTIONS = (
     PAYABLE_STATUS_OPEN,
     PAYABLE_STATUS_PARTIAL,
     PAYABLE_STATUS_FULLY_ISSUED,
+    PAYABLE_STATUS_CANCELLED,
 )
 
 
@@ -221,6 +223,46 @@ def _sum_active_cheque_amount(payable_id, external_conn=None):
             conn.close()
 
 
+def _sum_cash_settlement_amount(payable_id, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total_amount
+            FROM cash_entries
+            WHERE reference_type = %s
+              AND reference_id = %s
+              AND entry_type = 'CASH_OUT'
+              AND COALESCE(is_deleted, FALSE) = FALSE
+            """,
+            (PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE, int(payable_id)),
+        ).fetchone()
+        return _normalize_money(row["total_amount"] if row else 0)
+    finally:
+        if not external_conn:
+            conn.close()
+
+
+def _has_cancelled_cheques(payable_id, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1
+                FROM payable_cheques
+                WHERE payable_id = %s
+                  AND status = %s
+            ) AS has_cancelled
+            """,
+            (int(payable_id), CHEQUE_STATUS_CANCELLED),
+        ).fetchone()
+        return bool(row["has_cancelled"]) if row else False
+    finally:
+        if not external_conn:
+            conn.close()
+
+
 def sync_payable_status(payable_id, external_conn=None):
     conn = external_conn if external_conn else get_db()
     try:
@@ -239,9 +281,12 @@ def sync_payable_status(payable_id, external_conn=None):
             return PAYABLE_STATUS_CANCELLED
 
         amount_due = _normalize_money(payable["amount_due"])
-        issued_amount = _sum_active_cheque_amount(payable_id, external_conn=conn)
+        issued_amount = _sum_active_cheque_amount(payable_id, external_conn=conn) + _sum_cash_settlement_amount(payable_id, external_conn=conn)
+        has_cancelled_cheques = _has_cancelled_cheques(payable_id, external_conn=conn)
 
-        if issued_amount <= 0:
+        if issued_amount <= 0 and has_cancelled_cheques:
+            next_status = PAYABLE_STATUS_CANCELLED
+        elif issued_amount <= 0:
             next_status = PAYABLE_STATUS_OPEN
         elif issued_amount < amount_due:
             next_status = PAYABLE_STATUS_PARTIAL
@@ -559,7 +604,7 @@ def issue_payable_cheque(
         conn.close()
 
 
-def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_by_username=None):
+def update_payable_cheque_status(cheque_id, status, *, notes=None, created_by=None, created_by_username=None):
     normalized_status = str(status or "").strip().upper()
     if normalized_status not in {
         CHEQUE_STATUS_ISSUED,
@@ -568,6 +613,7 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
         CHEQUE_STATUS_BOUNCED,
     }:
         raise ValueError("Invalid cheque status.")
+    normalized_notes = _clean_text(notes, "Cancellation note", max_length=MAX_NOTES_LENGTH)
 
     conn = get_db()
     try:
@@ -579,6 +625,7 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
                 pc.cheque_no,
                 pc.cheque_amount,
                 pc.status,
+                pc.notes,
                 p.source_type,
                 p.po_id,
                 p.po_receipt_id,
@@ -593,20 +640,34 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
         if not current:
             raise ValueError("Cheque record not found.")
         current_status = str(current["status"] or "").strip().upper()
-        if current_status == CHEQUE_STATUS_CLEARED and normalized_status != CHEQUE_STATUS_CLEARED:
-            raise ValueError("Cleared cheques are locked and can no longer be changed to another status.")
+        if current_status in {CHEQUE_STATUS_CLEARED, CHEQUE_STATUS_CANCELLED} and normalized_status != current_status:
+            raise ValueError(f"{current_status.title()} cheques are locked and can no longer be changed to another status.")
+        if normalized_status == CHEQUE_STATUS_CANCELLED and not normalized_notes:
+            raise ValueError("Cancellation note is required when cancelling a cheque.")
         if current_status == normalized_status:
             return
+
+        next_notes = current["notes"] or None
+        audit_notes = f"Cheque status updated from {current_status} to {normalized_status}."
+        if normalized_status == CHEQUE_STATUS_CANCELLED:
+            cancellation_note = f"Cancellation reason: {normalized_notes}"
+            if next_notes:
+                if cancellation_note not in next_notes:
+                    next_notes = f"{next_notes}\n{cancellation_note}"
+            else:
+                next_notes = cancellation_note
+            audit_notes = f"{audit_notes} {cancellation_note}"
 
         row = conn.execute(
             """
             UPDATE payable_cheques
             SET status = %s,
+                notes = %s,
                 updated_at = %s
             WHERE id = %s
             RETURNING payable_id
             """,
-            (normalized_status, _now(), int(cheque_id)),
+            (normalized_status, next_notes, _now(), int(cheque_id)),
         ).fetchone()
         log_payables_audit_event(
             event_type="CHEQUE_STATUS_UPDATED",
@@ -621,7 +682,7 @@ def update_payable_cheque_status(cheque_id, status, *, created_by=None, created_
             amount_snapshot=current["cheque_amount"],
             old_status=current_status,
             new_status=normalized_status,
-            notes=f"Cheque status updated from {current_status} to {normalized_status}.",
+            notes=audit_notes,
             created_by=created_by,
             created_by_username=created_by_username,
             external_conn=conn,
@@ -679,6 +740,7 @@ def _to_sort_timestamp(value):
 def _serialize_payable_summary_row(row):
     amount_due = _normalize_money(row["amount_due"])
     issued_amount = _normalize_money(row["issued_amount"])
+    cash_paid_amount = _normalize_money(row.get("cash_paid_amount"))
     remaining_balance = max(0.0, amount_due - issued_amount)
     total_cheque_count = int(row.get("total_cheque_count") or 0)
     cleared_cheque_count = int(row.get("cleared_cheque_count") or 0)
@@ -688,16 +750,19 @@ def _serialize_payable_summary_row(row):
     due_soon_count = int(row.get("due_soon_cheque_count") or 0)
     due_today_count = int(row.get("due_today_cheque_count") or 0)
     latest_cheque_status = row.get("latest_cheque_status") or "-"
+    latest_cancelled_cheque_amount = _normalize_money(row.get("latest_cancelled_cheque_amount"))
     nearest_cheque_date = row.get("nearest_cheque_date")
     nearest_cheque_distance = row.get("nearest_cheque_distance")
     priority_cheque_due_date = row.get("priority_cheque_due_date")
     status = row["status"] or PAYABLE_STATUS_OPEN
+    normalized_status = str(status).strip().upper()
     is_fully_cleared = bool(
-        str(status).strip().upper() == PAYABLE_STATUS_FULLY_ISSUED
+        normalized_status == PAYABLE_STATUS_FULLY_ISSUED
         and total_cheque_count > 0
         and uncleared_cheque_count == 0
         and cleared_cheque_count == total_cheque_count
     )
+    is_history_entry = bool(is_fully_cleared or normalized_status == PAYABLE_STATUS_CANCELLED)
 
     return {
         "id": int(row["id"]),
@@ -713,8 +778,11 @@ def _serialize_payable_summary_row(row):
         "reference_no": row["reference_no"] or "",
         "amount_due": amount_due,
         "issued_amount": issued_amount,
+        "cash_paid_amount": cash_paid_amount,
         "remaining_balance": remaining_balance,
         "status": status,
+        "cash_payment_amount": latest_cancelled_cheque_amount,
+        "is_cash_paid": cash_paid_amount > 0,
         "latest_due_date": format_date(row["latest_due_date"]),
         "latest_cheque_status": latest_cheque_status,
         "nearest_cheque_date": format_date(nearest_cheque_date),
@@ -731,6 +799,7 @@ def _serialize_payable_summary_row(row):
         "due_soon_count": due_soon_count,
         "due_today_count": due_today_count,
         "is_fully_cleared": is_fully_cleared,
+        "is_history_entry": is_history_entry,
     }
 
 
@@ -767,6 +836,8 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
         conditions = ["p.status = ANY(%s)"]
         aggregate_params = [
             list(ACTIVE_CHEQUE_STATUSES),
+            PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE,
+            PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE,
             CHEQUE_STATUS_ISSUED,
             (today_value + timedelta(days=7)).isoformat(),
             CHEQUE_STATUS_CANCELLED,
@@ -814,7 +885,23 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
             f"""
             SELECT
                 p.*,
-                COALESCE(SUM(CASE WHEN pc.status = ANY(%s) THEN pc.cheque_amount ELSE 0 END), 0) AS issued_amount,
+                COALESCE(SUM(CASE WHEN pc.status = ANY(%s) THEN pc.cheque_amount ELSE 0 END), 0)
+                + COALESCE((
+                    SELECT SUM(ce_payable.amount)
+                    FROM cash_entries ce_payable
+                    WHERE ce_payable.reference_type = %s
+                      AND ce_payable.reference_id = p.id
+                      AND ce_payable.entry_type = 'CASH_OUT'
+                      AND COALESCE(ce_payable.is_deleted, FALSE) = FALSE
+                ), 0) AS issued_amount,
+                COALESCE((
+                    SELECT SUM(ce_payable.amount)
+                    FROM cash_entries ce_payable
+                    WHERE ce_payable.reference_type = %s
+                      AND ce_payable.reference_id = p.id
+                      AND ce_payable.entry_type = 'CASH_OUT'
+                      AND COALESCE(ce_payable.is_deleted, FALSE) = FALSE
+                ), 0) AS cash_paid_amount,
                 MAX(pc.due_date) AS latest_due_date,
                 (
                     SELECT pc_priority.due_date
@@ -854,7 +941,15 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                     WHERE pc_latest.payable_id = p.id
                     ORDER BY pc_latest.created_at DESC, pc_latest.id DESC
                     LIMIT 1
-                ) AS latest_cheque_status
+                ) AS latest_cheque_status,
+                (
+                    SELECT pc_cancelled.cheque_amount
+                    FROM payable_cheques pc_cancelled
+                    WHERE pc_cancelled.payable_id = p.id
+                      AND pc_cancelled.status = %s
+                    ORDER BY pc_cancelled.updated_at DESC NULLS LAST, pc_cancelled.created_at DESC, pc_cancelled.id DESC
+                    LIMIT 1
+                ) AS latest_cancelled_cheque_amount
             FROM payables p
             LEFT JOIN payable_cheques pc ON pc.payable_id = p.id
             {where_sql}
@@ -863,7 +958,7 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                 COALESCE(p.delivery_received_at_snapshot, p.created_at) DESC,
                 p.id DESC
             """,
-            aggregate_params + search_params,
+            aggregate_params + [CHEQUE_STATUS_CANCELLED] + search_params,
         ).fetchall()
     finally:
         conn.close()
@@ -891,11 +986,15 @@ def get_payables_page_context(search_query=None, statuses=None):
 
     for row in payable_rows:
         payable_data = _serialize_payable_summary_row(row)
-        if payable_data["is_fully_cleared"]:
+        if payable_data["is_history_entry"]:
             history_total_count += 1
         else:
+            # When the user explicitly filters by payable status, honor that
+            # selection even if the payable would normally be hidden by the
+            # default cheque-timing rules of the active view.
             should_show_in_active = bool(
-                payable_data["cheque_count"] == 0
+                explicit_statuses
+                or payable_data["cheque_count"] == 0
                 or payable_data["current_month_cheque_count"] > 0
                 or payable_data["due_soon_count"] > 0
                 or payable_data["due_today_count"] > 0
@@ -955,7 +1054,7 @@ def get_payables_history_month_summaries(search_query=None, statuses=None):
 
     for row in rows:
         payable_data = _serialize_payable_summary_row(row)
-        if not payable_data["is_fully_cleared"]:
+        if not payable_data["is_history_entry"]:
             continue
         anchor_date = _payable_history_anchor(row)
         month_key = anchor_date.strftime("%Y-%m")
@@ -993,7 +1092,7 @@ def get_payables_history_by_month(month_key, search_query=None, statuses=None):
     payables = []
     for row in rows:
         payable_data = _serialize_payable_summary_row(row)
-        if not payable_data["is_fully_cleared"]:
+        if not payable_data["is_history_entry"]:
             continue
         if _payable_history_anchor(row).strftime("%Y-%m") != normalized_month_key:
             continue

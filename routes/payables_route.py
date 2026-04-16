@@ -249,6 +249,7 @@ def update_cheque_status_action(cheque_id):
         update_payable_cheque_status(
             cheque_id,
             request.form.get("status"),
+            notes=request.form.get("cancellation_note"),
             created_by=session.get("user_id"),
             created_by_username=session.get("username"),
         )

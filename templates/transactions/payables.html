@@ -394,6 +394,10 @@
         color: #4ade80;
         border-color: rgba(74, 222, 128, 0.35);
     }
+    .payables-status-chip.status-cancelled {
+        color: #cbd5e1;
+        border-color: rgba(148, 163, 184, 0.35);
+    }
     .payables-status-option:checked + .payables-status-chip.status-open {
         background: rgba(220, 53, 69, 0.15);
         color: #ff8a95;
@@ -405,6 +409,10 @@
     .payables-status-option:checked + .payables-status-chip.status-fully-issued {
         background: rgba(40, 167, 69, 0.15);
         color: #7ee2a8;
+    }
+    .payables-status-option:checked + .payables-status-chip.status-cancelled {
+        background: rgba(148, 163, 184, 0.15);
+        color: #e2e8f0;
     }
     .payables-search-wrap {
         display: flex;
@@ -966,7 +974,7 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title">Payables History</h2>
-                <div class="section-note">Fully issued payables with cleared cheques, grouped by month.</div>
+                <div class="section-note">Cleared and cancelled payables, grouped by month.</div>
             </div>
         </div>
         <div id="payablesHistoryContent">
@@ -1036,7 +1044,12 @@ function renderChequeStatusOptions(currentStatus) {
 }
 
 function isChequeStatusLocked(status) {
-    return String(status || '').trim().toUpperCase() === 'CLEARED';
+    const normalizedStatus = String(status || '').trim().toUpperCase();
+    return normalizedStatus === 'CLEARED' || normalizedStatus === 'CANCELLED';
+}
+
+function statusLabel(value) {
+    return String(value || '').replaceAll('_', ' ').toLowerCase();
 }
 
 function renderChequeHistoryRow(cheque) {
@@ -1048,7 +1061,7 @@ function renderChequeHistoryRow(cheque) {
         (!cheque.is_due_today && cheque.is_due_soon) ? '<span class="cheque-due-flag soon">Due within 7 days</span>' : '',
     ].filter(Boolean).join('');
     const lockedMarkup = isLocked
-        ? '<div class="cheque-row-warning">Status locked: cleared cheques can no longer be changed.</div>'
+        ? `<div class="cheque-row-warning">Status locked: ${escapeHtml(statusLabel(status))} cheques can no longer be changed.</div>`
         : '';
 
     return `
@@ -1069,6 +1082,16 @@ function renderChequeHistoryRow(cheque) {
                 <select class="form-select form-select-sm" name="status" ${isLocked ? 'disabled' : ''}>
                     ${renderChequeStatusOptions(status)}
                 </select>
+                <div class="d-none" data-cancellation-note-wrap>
+                    <textarea
+                        class="form-control form-control-sm"
+                        name="cancellation_note"
+                        rows="2"
+                        maxlength="500"
+                        placeholder="Required when cancelling. Explain why this cheque is being cancelled."
+                        ${isLocked ? 'disabled' : ''}></textarea>
+                    <div class="cheque-row-warning d-none" data-cancellation-note-warning>Cancellation note is required before updating to Cancelled.</div>
+                </div>
                 <div class="inline-form-actions">
                     <button type="submit" class="btn btn-warning btn-sm fw-bold" ${isLocked ? 'disabled' : ''}>Update Cheque Status</button>
                 </div>
@@ -1106,6 +1129,14 @@ function renderChequeHistoryPanel(data) {
 
 function renderHistoryPayableCard(payable) {
     const isPo = String(payable.source_type || '') === 'PO_DELIVERY';
+    const payableStatus = String(payable.status || 'OPEN').toUpperCase();
+    const cashPaymentAmount = Number(payable.cash_payment_amount || payable.remaining_balance || 0);
+    const payableReference = isPo
+        ? String(payable.po_number_snapshot || '').trim()
+        : String(payable.reference_no || '').trim();
+    const cashDescription = payableReference
+        ? `${String(payable.payee_name || payable.vendor_name_snapshot || 'Payable').trim()} - Ref: ${payableReference}`
+        : String(payable.payee_name || payable.vendor_name_snapshot || 'Payable').trim();
     const noteMarkup = !isPo && payable.description
         ? `<div class="payable-inline-note">Notes: ${escapeHtml(payable.description)}</div>`
         : '';
@@ -1119,6 +1150,21 @@ function renderHistoryPayableCard(payable) {
             </a>
         `
         : '';
+    const payByCashMarkup = payableStatus === 'CANCELLED' && cashPaymentAmount > 0 && !payable.is_cash_paid
+        ? `
+            <a
+                href="/cash-ledger?view=active&prefill_entry_type=CASH_OUT&prefill_payable_id=${encodeURIComponent(String(payable.id || ''))}&prefill_amount=${encodeURIComponent(cashPaymentAmount.toFixed(2))}&prefill_description=${encodeURIComponent(cashDescription)}&prefill_category_key=${encodeURIComponent('cash_out_parts_purchase')}"
+                class="btn btn-sm btn-danger">
+                <i class="bi bi-cash-coin me-1"></i> Pay by Cash
+            </a>
+        `
+        : (payableStatus === 'CANCELLED' && payable.is_cash_paid
+            ? `
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                    <i class="bi bi-check2-circle me-1"></i> Paid by Cash
+                </button>
+            `
+            : '');
 
     return `
         <div class="payable-card" data-payable-card data-payable-id="${escapeHtml(String(payable.id || ''))}">
@@ -1141,7 +1187,7 @@ function renderHistoryPayableCard(payable) {
                         <div class="history-source-tag">Manual Payable</div>
                     `}
                 </div>
-                <span class="status-chip status-cleared">Cleared</span>
+                <span class="status-chip status-${escapeHtml(payableStatus.toLowerCase().replaceAll('_', '-'))}">${escapeHtml(payableStatus.replaceAll('_', ' '))}</span>
             </div>
             <div class="payable-amounts">
                 <div class="amount-box">
@@ -1162,6 +1208,7 @@ function renderHistoryPayableCard(payable) {
                 </div>
             </div>
             <div class="payable-actions">
+                ${payByCashMarkup}
                 ${viewPoMarkup}
             </div>
             <div class="cheque-history">
@@ -1189,7 +1236,7 @@ function renderHistoryPayableCard(payable) {
 
 function renderHistoryMonthGroups(groups) {
     if (!Array.isArray(groups) || !groups.length) {
-        return `<div class="empty-state"><i class="bi bi-clock-history"></i><div>${CURRENT_PAYABLE_SEARCH_QUERY ? 'No cleared payables matched your search.' : 'No cleared payables in history yet.'}</div></div>`;
+        return `<div class="empty-state"><i class="bi bi-clock-history"></i><div>${CURRENT_PAYABLE_SEARCH_QUERY ? 'No cleared or cancelled payables matched your search.' : 'No cleared or cancelled payables in history yet.'}</div></div>`;
     }
 
     return groups.map((group, index) => `
@@ -1346,17 +1393,37 @@ async function focusNotificationTarget() {
 function syncChequeStatusFormState(form) {
     const statusSelect = form?.querySelector('select[name="status"]');
     const submitBtn = form?.querySelector('button[type="submit"]');
+    const noteWrap = form?.querySelector('[data-cancellation-note-wrap]');
+    const noteInput = form?.querySelector('textarea[name="cancellation_note"]');
+    const noteWarning = form?.querySelector('[data-cancellation-note-warning]');
     const currentStatus = String(form?.getAttribute('data-current-status') || '').trim().toUpperCase();
     if (!statusSelect || !submitBtn) {
         return;
     }
     if (isChequeStatusLocked(currentStatus)) {
         statusSelect.disabled = true;
+        if (noteInput) {
+            noteInput.disabled = true;
+        }
         submitBtn.disabled = true;
         return;
     }
     const nextStatus = String(statusSelect.value || '').trim().toUpperCase();
-    submitBtn.disabled = !nextStatus || nextStatus === currentStatus;
+    const requiresCancellationNote = nextStatus === 'CANCELLED';
+    const noteValue = String(noteInput?.value || '').trim();
+
+    if (noteWrap) {
+        noteWrap.classList.toggle('d-none', !requiresCancellationNote);
+    }
+    if (noteInput) {
+        noteInput.disabled = !requiresCancellationNote;
+        noteInput.required = requiresCancellationNote;
+    }
+    if (noteWarning) {
+        noteWarning.classList.toggle('d-none', !requiresCancellationNote || Boolean(noteValue));
+    }
+
+    submitBtn.disabled = !nextStatus || nextStatus === currentStatus || (requiresCancellationNote && !noteValue);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -1419,7 +1486,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    if (CURRENT_PAYABLE_SEARCH_QUERY && ACTIVE_PAYABLE_TOTAL === 0 && HISTORY_PAYABLE_TOTAL > 0) {
+    if ((CURRENT_PAYABLE_SEARCH_QUERY || CURRENT_PAYABLE_STATUS_FILTERS.length) && ACTIVE_PAYABLE_TOTAL === 0 && HISTORY_PAYABLE_TOTAL > 0) {
         setActivePayablesTab('history');
         loadPayablesHistory();
     }
@@ -1614,6 +1681,14 @@ document.addEventListener('DOMContentLoaded', function () {
         syncChequeStatusFormState(statusSelect.closest('.cheque-status-form'));
     });
 
+    document.addEventListener('input', function (event) {
+        const noteInput = event.target.closest('.cheque-status-form textarea[name="cancellation_note"]');
+        if (!noteInput) {
+            return;
+        }
+        syncChequeStatusFormState(noteInput.closest('.cheque-status-form'));
+    });
+
     document.addEventListener('submit', async function (event) {
         const form = event.target.closest('.cheque-status-form');
         if (!form) {
@@ -1623,6 +1698,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const statusSelect = form.querySelector('select[name="status"]');
         const submitBtn = form.querySelector('button[type="submit"]');
+        const noteInput = form.querySelector('textarea[name="cancellation_note"]');
+        const noteWarning = form.querySelector('[data-cancellation-note-warning]');
         if (!statusSelect || !submitBtn) {
             form.submit();
             return;
@@ -1631,13 +1708,22 @@ document.addEventListener('DOMContentLoaded', function () {
         const chequeNo = form.getAttribute('data-cheque-no') || 'Unknown';
         const currentStatus = (form.getAttribute('data-current-status') || '').trim().toUpperCase();
         const nextStatus = String(statusSelect.value || '').trim().toUpperCase();
+        const cancellationNote = String(noteInput?.value || '').trim();
 
         if (!nextStatus || nextStatus === currentStatus) {
             syncChequeStatusFormState(form);
             return;
         }
 
-        const statusLabel = (value) => value.replaceAll('_', ' ').toLowerCase();
+        if (nextStatus === 'CANCELLED' && !cancellationNote) {
+            if (noteWarning) {
+                noteWarning.classList.remove('d-none');
+            }
+            syncChequeStatusFormState(form);
+            noteInput?.focus();
+            return;
+        }
+
         const confirmed = await (window.A4Confirm?.show?.({
             title: 'Update cheque status?',
             text: `Change cheque #${chequeNo} from ${statusLabel(currentStatus)} to ${statusLabel(nextStatus)}?`,
