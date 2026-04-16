@@ -268,6 +268,22 @@
         font-size: 0.9rem;
     }
 
+    .analytics-item-cell {
+        text-align: left;
+    }
+
+    .analytics-item-name {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .analytics-item-description {
+        margin-top: 0.28rem;
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--text-muted);
+    }
+
     .table tbody tr:hover {
         background: rgba(193,18,31,0.04) !important;
     }
@@ -1027,7 +1043,12 @@
                         {% if analytics.tables.top_items %}
                             {% for row in analytics.tables.top_items %}
                             <tr>
-                                <td>{{ row.name }}</td>
+                                <td class="analytics-item-cell">
+                                    <div class="analytics-item-name">{{ row.name }}</div>
+                                    {% if row.description %}
+                                    <div class="analytics-item-description">{{ row.description }}</div>
+                                    {% endif %}
+                                </td>
                                 <td>{{ row.category or '-' }}</td>
                                 <td>{{ row.quantity_sold }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>

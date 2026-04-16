@@ -128,22 +128,59 @@ def get_dashboard_stats():
 
     return total_items, total_stock, low_stock_count, top_item, items
 
-def get_hot_items(limit=5):
+def _normalize_hot_items_limit(value, default=10, max_value=50):
+    try:
+        numeric_value = int(value)
+    except (TypeError, ValueError):
+        numeric_value = default
+    return max(1, min(numeric_value, max_value))
+
+
+def get_hot_items(limit=10, category=None):
+    normalized_limit = _normalize_hot_items_limit(limit)
+    normalized_category = str(category or "").strip()
     conn = get_db()
-    rows = conn.execute("""
+    category_rows = conn.execute("""
+        SELECT DISTINCT TRIM(category) AS category
+        FROM items
+        WHERE NULLIF(TRIM(category), '') IS NOT NULL
+        ORDER BY TRIM(category) ASC
+    """).fetchall()
+
+    query_parts = [
+        """
         SELECT 
             items.name,
+            items.description,
+            items.category,
             SUM(inventory_transactions.quantity) AS total_sold_last_30_days
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
         AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
-        GROUP BY items.id
-        ORDER BY total_sold_last_30_days DESC
+        """
+    ]
+    params = []
+
+    if normalized_category:
+        query_parts.append("AND LOWER(TRIM(items.category)) = %s")
+        params.append(normalized_category.lower())
+
+    query_parts.append("""
+        GROUP BY items.id, items.name, items.description, items.category
+        ORDER BY total_sold_last_30_days DESC, items.name ASC
         LIMIT %s
-    """, (limit,)).fetchall()
+    """)
+    params.append(normalized_limit)
+
+    rows = conn.execute("\n".join(query_parts), params).fetchall()
     conn.close()
-    return rows
+    return {
+        "items": rows,
+        "categories": [row["category"] for row in category_rows if row["category"]],
+        "selected_category": normalized_category,
+        "selected_limit": normalized_limit,
+    }
 
 
 def get_dead_stock(days=60):

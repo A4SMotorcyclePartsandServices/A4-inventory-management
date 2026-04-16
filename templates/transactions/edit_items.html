@@ -81,6 +81,106 @@
         text-transform: uppercase;
     }
 
+    .change-review-modal .modal-content {
+        background: #1a1a1a;
+        border: 1px solid rgba(230, 57, 70, 0.25);
+        border-radius: 16px;
+        color: #f3f4f6;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+    }
+
+    .change-review-modal .modal-header,
+    .change-review-modal .modal-footer {
+        border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .change-review-summary {
+        display: grid;
+        gap: 12px;
+    }
+
+    .change-review-row {
+        display: grid;
+        grid-template-columns: minmax(120px, 150px) minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        padding: 12px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .change-review-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #f4c430;
+    }
+
+    .change-review-value {
+        font-size: 0.95rem;
+        line-height: 1.45;
+        color: #d1d5db;
+        word-break: break-word;
+    }
+
+    .change-review-value.before {
+        color: #fca5a5;
+    }
+
+    .change-review-value.after {
+        color: #86efac;
+    }
+
+    .change-review-arrow {
+        color: #9ca3af;
+        font-weight: 700;
+        padding-top: 1px;
+    }
+
+    .change-review-empty {
+        padding: 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        color: #9ca3af;
+        text-align: center;
+    }
+
+    .change-review-note {
+        padding: 14px 16px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .change-review-note-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #f4c430;
+        margin-bottom: 8px;
+    }
+
+    .change-review-note-text {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: #d1d5db;
+        word-break: break-word;
+    }
+
+    @media (max-width: 767.98px) {
+        .change-review-row {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .change-review-arrow {
+            display: none;
+        }
+    }
+
     #newVendorModal .modal-dialog {
         margin-top: 7.5rem;
     }
@@ -162,7 +262,7 @@
             </a>
         </div>
 
-        <form method="POST" action="{{ url_for('transaction.update_item', item_id=item.id) }}">
+        <form id="edit-item-form" method="POST" action="{{ url_for('transaction.update_item', item_id=item.id) }}">
             <div class="section-title">Item Information</div>
 
             <div class="row g-3">
@@ -310,6 +410,31 @@
     </div>
 </div>
 
+<div class="modal fade change-review-modal" id="editItemReviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title text-danger mb-1">
+                        <i class="bi bi-card-checklist me-2"></i>Review Item Changes
+                    </h5>
+                    <div class="text-white-50 small">Please double-check the before and after values before applying this update.</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="editItemReviewSummary" class="change-review-summary"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Back to Edit</button>
+                <button type="button" class="btn btn-danger" id="confirmEditItemBtn">
+                    <i class="bi bi-check-circle me-1"></i> Confirm Update
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="newVendorModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content text-white border-secondary">
@@ -369,7 +494,12 @@
     const vendorSelectedMeta = document.getElementById('vendorSelectedMeta');
     const clearVendorBtn = document.getElementById('clearVendorBtn');
     const vendorMap = new Map(vendorOptions.map(vendor => [String(vendor.id), vendor]));
-    const form = document.querySelector('form');
+    const form = document.getElementById('edit-item-form');
+    const reviewSummary = document.getElementById('editItemReviewSummary');
+    const confirmEditItemBtn = document.getElementById('confirmEditItemBtn');
+    const reviewModalEl = document.getElementById('editItemReviewModal');
+    const reviewModal = new bootstrap.Modal(reviewModalEl);
+    let allowConfirmedSubmit = false;
 
     function escapeHtml(value) {
         return String(value || '')
@@ -407,10 +537,143 @@
             markupHidden.value = decimalMarkup.toFixed(4);
         } else {
             if (markupDisplay) {
-                markupDisplay.value = '';
+            markupDisplay.value = '';
             }
             markupHidden.value = '';
         }
+    }
+
+    function normalizeText(value) {
+        return String(value ?? '').trim();
+    }
+
+    function normalizeMoney(value) {
+        const numericValue = Number.parseFloat(String(value ?? '').trim());
+        return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '';
+    }
+
+    function formatNumberLikeCurrency(value) {
+        if (value === '') {
+            return 'Blank';
+        }
+        const numericValue = Number.parseFloat(value);
+        if (!Number.isFinite(numericValue)) {
+            return String(value);
+        }
+        return numericValue.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    }
+
+    function displayText(value) {
+        const normalizedValue = normalizeText(value);
+        return normalizedValue || 'Blank';
+    }
+
+    function getSelectedCategoryValue() {
+        if (categorySelect.value === '__OTHER__') {
+            return normalizeText(newCategoryInput.value);
+        }
+        return normalizeText(categorySelect.value);
+    }
+
+    function getVendorDisplayName(vendorId) {
+        const vendor = vendorMap.get(String(vendorId || ''));
+        return vendor?.vendor_name || '';
+    }
+
+    function getCurrentFormSnapshot() {
+        return {
+            name: normalizeText(form.elements.name?.value),
+            category: getSelectedCategoryValue(),
+            description: normalizeText(form.elements.description?.value),
+            pack_size: normalizeText(form.elements.pack_size?.value),
+            vendor_price: normalizeMoney(form.elements.vendor_price?.value),
+            cost_per_piece: normalizeMoney(form.elements.cost_per_piece?.value),
+            a4s_selling_price: normalizeMoney(form.elements.a4s_selling_price?.value),
+            vendor_id: normalizeText(form.elements.vendor_id?.value),
+            mechanic: normalizeText(form.elements.mechanic?.value),
+            change_reason: normalizeText(form.elements.change_reason?.value),
+        };
+    }
+
+    function getOriginalItemSnapshot() {
+        return {
+            name: normalizeText(currentItem.name),
+            category: normalizeText(currentItem.category),
+            description: normalizeText(currentItem.description),
+            pack_size: normalizeText(currentItem.pack_size),
+            vendor_price: normalizeMoney(currentItem.vendor_price),
+            cost_per_piece: normalizeMoney(currentItem.cost_per_piece),
+            a4s_selling_price: normalizeMoney(currentItem.a4s_selling_price),
+            vendor_id: normalizeText(currentItem.vendor_id),
+            mechanic: normalizeText(currentItem.mechanic),
+            change_reason: '',
+        };
+    }
+
+    function buildItemChangeList() {
+        const before = getOriginalItemSnapshot();
+        const after = getCurrentFormSnapshot();
+        const fieldConfigs = [
+            { key: 'name', label: 'Item Name', format: displayText },
+            { key: 'category', label: 'Category', format: displayText },
+            { key: 'description', label: 'Description', format: displayText },
+            { key: 'pack_size', label: 'Pack Size', format: displayText },
+            { key: 'vendor_price', label: 'Vendor Price', format: formatNumberLikeCurrency },
+            { key: 'cost_per_piece', label: 'Cost Per Piece', format: formatNumberLikeCurrency },
+            { key: 'a4s_selling_price', label: 'Selling Price', format: formatNumberLikeCurrency },
+            {
+                key: 'vendor_id',
+                label: 'Default Vendor',
+                format: (value) => displayText(getVendorDisplayName(value)),
+            },
+            { key: 'mechanic', label: 'Mechanic', format: displayText },
+        ];
+
+        const changes = fieldConfigs.reduce((results, field) => {
+            const beforeValue = before[field.key];
+            const afterValue = after[field.key];
+            if (beforeValue === afterValue) {
+                return results;
+            }
+
+            results.push({
+                label: field.label,
+                before: field.format(beforeValue),
+                after: field.format(afterValue),
+            });
+            return results;
+        }, []);
+
+        return changes;
+    }
+
+    function renderChangeReview(changes) {
+        const reasonText = displayText(form.elements.change_reason?.value);
+
+        if (!changes.length) {
+            reviewSummary.innerHTML = '<div class="change-review-empty">No changes detected yet.</div>';
+            return;
+        }
+
+        const changeRowsMarkup = changes.map((change) => `
+            <div class="change-review-row">
+                <div class="change-review-label">${escapeHtml(change.label)}</div>
+                <div class="change-review-value before">${escapeHtml(change.before)}</div>
+                <div class="change-review-arrow">to</div>
+                <div class="change-review-value after">${escapeHtml(change.after)}</div>
+            </div>
+        `).join('');
+
+        reviewSummary.innerHTML = `
+            ${changeRowsMarkup}
+            <div class="change-review-note">
+                <div class="change-review-note-label">Reason For Edit</div>
+                <div class="change-review-note-text">${escapeHtml(reasonText)}</div>
+            </div>
+        `;
     }
 
     function renderVendorMeta(vendor) {
@@ -542,8 +805,42 @@
         }
     });
 
-    form.addEventListener('submit', function () {
+    reviewModalEl.addEventListener('hidden.bs.modal', () => {
+        if (!allowConfirmedSubmit) {
+            confirmEditItemBtn.disabled = false;
+        }
+    });
+
+    confirmEditItemBtn.addEventListener('click', () => {
+        allowConfirmedSubmit = true;
+        confirmEditItemBtn.disabled = true;
+        reviewModal.hide();
+        form.requestSubmit();
+    });
+
+    form.addEventListener('submit', function (event) {
         syncVendorValidity();
+        if (allowConfirmedSubmit) {
+            allowConfirmedSubmit = false;
+            return;
+        }
+
+        event.preventDefault();
+        if (!form.reportValidity()) {
+            return;
+        }
+
+        const changes = buildItemChangeList();
+        if (!changes.length) {
+            showFlashMessage('No item changes detected yet. Update at least one field before saving.', 'warning', {
+                clearExisting: true,
+            });
+            return;
+        }
+
+        renderChangeReview(changes);
+        confirmEditItemBtn.disabled = false;
+        reviewModal.show();
     });
 
     if (currentItem.vendor_id) {

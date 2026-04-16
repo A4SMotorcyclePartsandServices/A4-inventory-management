@@ -459,7 +459,12 @@
     <div class="mx-auto order-page-shell">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="text-danger"><i class="fas fa-file-invoice"></i> Create Purchase Order</h2>
-        <span id="poStatusBadge" class="badge bg-secondary">Status: DRAFT</span>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" id="backToOrderListBtn" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i> Back
+            </button>
+            <span id="poStatusBadge" class="badge bg-secondary">Status: DRAFT</span>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -603,6 +608,7 @@ const clearVendorBtn = document.getElementById('clearVendorBtn');
 const notesInput = document.getElementById('po_notes');
 const statusBadge = document.getElementById('poStatusBadge');
 const submitOrderBtn = document.getElementById('submitOrderBtn');
+const backToOrderListBtn = document.getElementById('backToOrderListBtn');
 const vendorRecommendations = document.getElementById('vendorRecommendations');
 const vendorRecommendationsMeta = document.getElementById('vendorRecommendationsMeta');
 const vendorRecommendationChips = document.getElementById('vendorRecommendationChips');
@@ -1042,6 +1048,13 @@ document.addEventListener('click', (e) => {
     if (!itemSearch.contains(e.target) && !searchResults.contains(e.target)) {
         searchResults.style.display = 'none';
     }
+});
+
+backToOrderListBtn?.addEventListener('click', () => {
+    if (!editingPoId) {
+        saveDraftBeforeLeaving();
+    }
+    window.location.href = '/transaction/orders/list';
 });
 
 function saveDraftBeforeLeaving() {

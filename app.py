@@ -336,8 +336,20 @@ def analytics():
     """
     Fast-moving items (last 30 days).
     """
-    hot_items = get_hot_items()
-    return render_template("fastmoving.html", hot_items=hot_items)
+    selected_category = (request.args.get("top_items_category") or "").strip()
+    try:
+        selected_limit = int((request.args.get("top_items_limit") or "10").strip())
+    except ValueError:
+        selected_limit = 10
+
+    hot_items_data = get_hot_items(limit=selected_limit, category=selected_category)
+    return render_template(
+        "fastmoving.html",
+        hot_items=hot_items_data["items"],
+        top_items_category=hot_items_data["selected_category"],
+        top_items_limit=hot_items_data["selected_limit"],
+        top_item_categories=hot_items_data["categories"],
+    )
 
 
 @app.route("/sales-analytics")

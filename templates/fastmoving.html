@@ -2,56 +2,199 @@
 
 {% block styles %}
 <style>
-    /* Unique styles for Fast Moving Items only */
-    h2 {
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 22px;
+    }
+
+    .page-title {
+        font-size: 1.55rem;
+        font-weight: 800;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .page-subtitle {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 5px;
+        max-width: 760px;
+    }
+
+    .panel-card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: none;
+    }
+
+    .panel-card h3 {
+        margin: 0 0 0.3rem;
+        font-size: 1rem;
         color: #e63946;
-        text-align: center;
-        margin-bottom: 1.5rem;
+        font-weight: 700;
+    }
+
+    .panel-meta {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        margin-bottom: 1rem;
+        line-height: 1.55;
+    }
+
+    .table-filter-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 140px auto;
+        gap: 0.65rem;
+        align-items: end;
+        margin-bottom: 1rem;
+    }
+
+    .table-filter-form .form-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 700;
+        margin-bottom: 0.35rem;
     }
 
     .table-dark {
-        background-color: #1e1e1e;
+        background: transparent;
     }
 
-    .table-dark th, .table-dark td {
-        border-color: #333;
+    .table-dark th,
+    .table-dark td {
+        border-color: var(--border-soft);
+    }
+
+    .table-dark thead th {
+        background: #151922;
+        color: #e63946;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .table thead th {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+    }
+
+    .table tbody td {
+        white-space: normal !important;
+        font-size: 0.95rem;
+    }
+
+    .table tbody tr:hover {
+        background: rgba(193,18,31,0.04) !important;
+    }
+
+    .item-name-cell {
+        text-align: left;
+    }
+
+    .item-primary {
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .item-secondary {
+        margin-top: 0.3rem;
+        font-size: 0.84rem;
+        line-height: 1.4;
+        color: var(--text-muted);
+    }
+
+    .empty-table {
+        color: var(--text-muted);
+        text-align: center;
+        padding: 1.3rem 0.5rem !important;
+    }
+
+    @media (max-width: 767.98px) {
+        .table-filter-form {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="text-center mb-4">
-    <h2><i class="bi bi-fire"></i> Hot Moving Items (Last 30 Days)</h2>
+<div class="page-header">
+    <div>
+        <h2 class="page-title"><i class="bi bi-fire me-2"></i>Hot Moving Items</h2>
+        <div class="page-subtitle">
+            Item movement for the last 30 days, ranked by quantity sold. You can show up to the top 50 and narrow the list by item category.
+        </div>
+    </div>
+    <div>
+        <a href="/" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
 </div>
 
-<div class="table-responsive col-md-8 mx-auto">
-    <table class="table table-dark table-striped align-middle text-center">
-        <thead>
-            <tr>
-                <th>Item Name</th>
-                <th>Total Sold</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if hot_items %}
-                {% for item in hot_items %}
-                <tr>
-                    <td>{{ item.name }}</td>
-                    <td class="fw-bold text-danger">{{ item.total_sold_last_30_days }}</td>
-                </tr>
+<div class="panel-card">
+    <h3>Top items</h3>
+    <div class="panel-meta">Fast-moving inventory based on `OUT` transactions from the last 30 days.</div>
+
+    <form method="GET" action="/analytics" class="table-filter-form">
+        <div>
+            <label for="top-items-category" class="form-label">Category</label>
+            <select id="top-items-category" name="top_items_category" class="form-select">
+                <option value="">All Categories</option>
+                {% for category in top_item_categories %}
+                <option value="{{ category }}" {% if category == top_items_category %}selected{% endif %}>{{ category }}</option>
                 {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="2">No sales recorded in the last 30 days.</td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-</div>
+            </select>
+        </div>
+        <div>
+            <label for="top-items-limit" class="form-label">Show</label>
+            <select id="top-items-limit" name="top_items_limit" class="form-select">
+                {% for limit in [10, 20, 30, 40, 50] %}
+                <option value="{{ limit }}" {% if limit == top_items_limit %}selected{% endif %}>Top {{ limit }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+    </form>
 
-<div class="text-center mt-4">
-    <a href="/" class="btn btn-outline-danger btn-sm">
-        <i class="bi bi-arrow-left"></i> Back to Inventory
-    </a>
+    <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle text-center mb-0">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Total Sold</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if hot_items %}
+                    {% for item in hot_items %}
+                    <tr>
+                        <td class="item-name-cell">
+                            <div class="item-primary">{{ item.name }}</div>
+                            {% if item.description %}
+                            <div class="item-secondary">{{ item.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.category or '-' }}</td>
+                        <td class="fw-bold text-danger">{{ item.total_sold_last_30_days }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="3" class="empty-table">No sales recorded in the last 30 days for this filter.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

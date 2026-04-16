@@ -28,7 +28,7 @@ def stock_movement():
     conn.close()
 
     return {
-        "labels": [row["date"] for row in rows],
+        "labels": [row["date"].strftime("%b %d") if row["date"] else "" for row in rows],
         "values": [row["net_change"] for row in rows]
     }
 
@@ -59,7 +59,7 @@ def item_movement():
     conn.close()
 
     return {
-        "labels": [row["date"] for row in rows],
+        "labels": [row["date"].strftime("%b %d") if row["date"] else "" for row in rows],
         "values": [row["net_change"] for row in rows]
     }
 

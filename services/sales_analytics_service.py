@@ -570,6 +570,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         """
         SELECT
             item_name,
+            MAX(item_description) AS item_description,
             item_category,
             SUM(quantity_sold) AS quantity_sold,
             COALESCE(SUM(total_revenue), 0) AS total_revenue,
@@ -578,6 +579,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         FROM (
             SELECT
                 i.name AS item_name,
+                COALESCE(i.description, '') AS item_description,
                 i.category AS item_category,
                 SUM(si.quantity) AS quantity_sold,
                 COALESCE(SUM(si.quantity * si.final_unit_price), 0) AS total_revenue,
@@ -589,12 +591,13 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-            GROUP BY i.id, i.name, i.category
+            GROUP BY i.id, i.name, i.description, i.category
 
             UNION ALL
 
             SELECT
                 sbi.item_name_snapshot AS item_name,
+                COALESCE(i.description, '') AS item_description,
                 i.category AS item_category,
                 SUM(COALESCE(sbi.quantity, 0)) AS quantity_sold,
                 COALESCE(SUM(
@@ -648,7 +651,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-            GROUP BY sbi.item_name_snapshot, i.category
+            GROUP BY sbi.item_name_snapshot, i.description, i.category
         ) ranked_items
         WHERE 1 = 1
         """
@@ -889,6 +892,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "top_items": [
                 {
                     "name": row["item_name"],
+                    "description": row["item_description"] or "",
                     "category": row["item_category"] or "",
                     "quantity_sold": int(row["quantity_sold"] or 0),
                     "total_revenue": round(_num(row["total_revenue"]), 2),
