@@ -2967,6 +2967,7 @@ def _get_po_items(conn, po_id):
         SELECT
             pi.*,
             i.name,
+            i.description,
             i.pack_size,
             i.cost_per_piece,
             COALESCE((
@@ -3678,7 +3679,8 @@ def _get_po_receipt_history(po_id, external_conn=None):
                 pri.stock_quantity_received,
                 pri.effective_piece_cost,
                 pri.notes,
-                i.name AS item_name
+                i.name AS item_name,
+                i.description AS item_description
             FROM po_receipt_items pri
             JOIN items i ON i.id = pri.item_id
             WHERE pri.po_id = %s
@@ -3692,6 +3694,7 @@ def _get_po_receipt_history(po_id, external_conn=None):
             items_by_receipt.setdefault(row["receipt_id"], []).append({
                 "item_id": row["item_id"],
                 "item_name": row["item_name"] or "Unknown Item",
+                "item_description": row["item_description"] or "",
                 "quantity_received": int(row["quantity_received"] or 0),
                 "unit_cost": float(row["unit_cost"] or 0),
                 "line_total": float(row["line_total"] or 0),
@@ -4358,6 +4361,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 "entries": [
                     {
                         "item_name": row["name"] or "Unknown Item",
+                        "item_description": row["description"] or "",
                         "quantity": int(row["quantity"] or 0),
                         "unit_cost": float(row["unit_price"] or 0),
                         "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
@@ -4372,6 +4376,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
             entries = [
                 {
                     "item_name": row["name"] or "Unknown Item",
+                    "item_description": row["description"] or "",
                     "quantity": int(row["quantity"] or 0),
                     "unit_cost": float(row["unit_price"] or 0),
                     "subtotal": round(int(row["quantity"] or 0) * float(row["unit_price"] or 0), 2),
@@ -4384,6 +4389,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 entries = [
                     {
                         "item_name": item.get("item_name") or "Unknown Item",
+                        "item_description": item.get("item_description") or "",
                         "quantity": int(item.get("stock_quantity_received") or 0),
                         "unit_cost": float(item.get("effective_piece_cost") or 0),
                         "subtotal": float(item.get("line_total") or 0),
@@ -4408,6 +4414,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 previous_cost, updated_cost = _parse_cost_update_note(row["notes"])
                 entries.append({
                     "item_name": row["name"] or "Unknown Item",
+                    "item_description": row["description"] or "",
                     "quantity": int(row["quantity"] or 0),
                     "unit_cost": float(row["unit_price"] or 0),
                     "previous_cost": previous_cost,
@@ -4436,7 +4443,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
             matched_receipt = None
             movement_rows = conn.execute(
                 """
-                SELECT i.name, t.item_id, t.quantity, t.unit_price, t.notes, t.change_reason
+                SELECT i.name, i.description, t.item_id, t.quantity, t.unit_price, t.notes, t.change_reason
                 FROM inventory_transactions t
                 JOIN items i ON i.id = t.item_id
                 WHERE t.reference_type = 'PURCHASE_ORDER'
@@ -4456,6 +4463,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                     total_amount += subtotal
                     snapshot_items.append({
                         "name": row["name"],
+                        "description": row["description"] or "",
                         "quantity_ordered": qty,
                         "unit_price": unit_price,
                         "subtotal": subtotal,
@@ -4473,6 +4481,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                         total_amount += float(item.get("line_total") or 0)
                         snapshot_items.append({
                             "name": item.get("item_name") or "Unknown Item",
+                            "description": item.get("item_description") or "",
                             "quantity_ordered": int(item.get("stock_quantity_received") or 0),
                             "unit_price": float(item.get("effective_piece_cost") or 0),
                             "purchase_mode": item.get("purchase_mode") or "PIECE",
@@ -4489,6 +4498,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                         total_amount += subtotal
                         snapshot_items.append({
                             "name": row["name"],
+                            "description": row["description"] or "",
                             "quantity_ordered": qty,
                             "unit_price": unit_price,
                             "subtotal": subtotal,
@@ -4546,6 +4556,7 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
         "items": [
             {
                 "name": item['name'],
+                "description": item['description'] or "",
                 "quantity_ordered": item['quantity_ordered'],
                 "unit_price": float(item['unit_price']),
                 "purchase_mode": item['purchase_mode'],

@@ -1138,6 +1138,22 @@
         margin-top: 0.7rem;
     }
 
+    .po-hover-expand {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: help;
+    }
+
+    .po-hover-expand:hover {
+        white-space: normal;
+        word-break: break-word;
+        overflow: visible;
+        position: relative;
+        z-index: 2;
+    }
+
     .po-movement-toggle {
         width: 100%;
         border: 0;
@@ -3997,6 +4013,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
 
         const entriesHtml = details.entries.map(entry => {
             const hasCostDelta = entry.previous_cost != null && entry.updated_cost != null;
+            const itemDescription = String(entry.item_description || '').trim();
             const qtyLine = entry.quantity != null
                 ? `<div class="small text-white-50">Qty</div><div class="fw-bold text-white mb-2">${escapeHtml(String(entry.quantity))}</div>`
                 : '';
@@ -4016,6 +4033,7 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
             return `
                 <div class="po-movement-entry">
                     <div class="fw-bold text-white mb-2">${escapeHtml(entry.item_name || 'Unknown Item')}</div>
+                    ${itemDescription ? `<div class="small text-white-50 mb-2 po-hover-expand" title="${escapeHtml(itemDescription)}">${escapeHtml(itemDescription)}</div>` : ''}
                     <div class="row g-3">
                         <div class="col-sm-3">${qtyLine}</div>
                         <div class="col-sm-3">${unitCostLine}</div>
@@ -4087,7 +4105,10 @@ function viewOrder(poId, snapshotAt = '', changeReason = '', transactionType = '
             const list = document.getElementById('po-items-list');
             list.innerHTML = data.items.map(item => `
                 <tr>
-                    <td>${escapeHtml(item.name)}</td>
+                    <td>
+                        <div class="fw-semibold text-white">${escapeHtml(item.name)}</div>
+                        ${item.description ? `<div class="small text-white-50 mt-1 po-hover-expand" title="${escapeHtml(item.description)}">${escapeHtml(item.description)}</div>` : ''}
+                    </td>
                     <td class="text-center">${item.quantity_ordered}</td>
                     <td class="text-end">${formatPeso(item.unit_price)}</td>
                     <td class="text-end text-info">${formatPeso(item.subtotal)}</td>
