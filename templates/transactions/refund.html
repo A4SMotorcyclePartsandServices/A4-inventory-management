@@ -1038,19 +1038,45 @@ function chooseReplacementItem(item) {
     updateExchangeSummary();
 }
 
+let replacementSearchAbortController = null;
+let replacementSearchDebounce = null;
+let replacementSearchToken = 0;
+
 function searchReplacementItems() {
     const query = document.getElementById('replacementSearchInput')?.value.trim() || '';
     const resultsEl = document.getElementById('replacementSearchResults');
     if (!resultsEl) return;
+    clearTimeout(replacementSearchDebounce);
     if (query.length < 2) {
+        if (replacementSearchAbortController) {
+            replacementSearchAbortController.abort();
+            replacementSearchAbortController = null;
+        }
         resultsEl.innerHTML = '';
         return;
     }
 
     resultsEl.innerHTML = '<div class="text-muted small">Searching items...</div>';
-    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+    replacementSearchDebounce = setTimeout(() => {
+        if (replacementSearchAbortController) {
+            replacementSearchAbortController.abort();
+        }
+        const controller = new AbortController();
+        replacementSearchAbortController = controller;
+        const searchToken = ++replacementSearchToken;
+
+        fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+        })
         .then(r => r.json())
         .then(data => {
+            if (searchToken !== replacementSearchToken) {
+                return;
+            }
+            const currentQuery = document.getElementById('replacementSearchInput')?.value.trim() || '';
+            if (currentQuery !== query) {
+                return;
+            }
             const rows = data.items || [];
             if (!rows.length) {
                 resultsEl.innerHTML = '<div class="text-muted small">No replacement items found.</div>';
@@ -1069,9 +1095,18 @@ function searchReplacementItems() {
                 resultsEl.appendChild(btn);
             });
         })
-        .catch(() => {
+        .catch((error) => {
+            if (error.name === 'AbortError') {
+                return;
+            }
             resultsEl.innerHTML = '<div class="text-danger small">Failed to search items.</div>';
+        })
+        .finally(() => {
+            if (replacementSearchAbortController === controller) {
+                replacementSearchAbortController = null;
+            }
         });
+    }, 220);
 }
 
 function initializeRefundDetailControls() {

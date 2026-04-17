@@ -2014,6 +2014,13 @@ function debouncePerElement(element, func, delay) {
     element._debounceTimer = setTimeout(() => func(element), delay);
 }
 
+async function fetchItemSearchResults(query, options = {}) {
+    const { signal } = options;
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
+    const data = await res.json();
+    return data.items || [];
+}
+
 function showAlert(message, type = 'danger') {
     if (window.A4Flash?.show) {
         return window.A4Flash.show(message, type, { replace: true });
@@ -2897,6 +2904,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('saleBatchSearchInput').addEventListener('input', function () {
         const query = this.value.trim();
         clearTimeout(saleBatchSearchDebounce);
+        fetchSaleBatchSearchResults.activeController?.abort();
         if (query.length < 2) {
             document.getElementById('saleBatchSearchResults').style.display = 'none';
             document.getElementById('saleBatchSearchResults').innerHTML = '';
@@ -2906,8 +2914,14 @@ document.addEventListener('DOMContentLoaded', () => {
         saleBatchSearchDebounce = setTimeout(async () => {
             try {
                 const items = await fetchSaleBatchSearchResults(query);
+                if ((document.getElementById('saleBatchSearchInput')?.value.trim() || '') !== query) {
+                    return;
+                }
                 renderSaleBatchSearchResults(items);
             } catch (error) {
+                if (error.name === 'AbortError') {
+                    return;
+                }
                 showAlert(error.message || 'Failed to search items.', 'danger');
             }
         }, 220);
@@ -3235,14 +3249,26 @@ const handleTableSearch = async (input) => {
         calculateRow(row);
     }
 
-    if (query.length < 2) { suggestions.style.display = 'none'; return; }
+    if (query.length < 2) {
+        input._searchAbortController?.abort();
+        input._searchAbortController = null;
+        suggestions.style.display = 'none';
+        return;
+    }
 
+    let controller = null;
     try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
+        input._searchAbortController?.abort();
+        controller = new AbortController();
+        input._searchAbortController = controller;
+        const requestQuery = query;
+        const itemsResponse = await fetchItemSearchResults(query, { signal: controller.signal });
+        if ((input.value.trim() || '') !== requestQuery) {
+            return;
+        }
         suggestions.innerHTML = '';
 
-        let items = data.items || [];
+        let items = itemsResponse || [];
         if (isQuickSaleMode()) {
             items = items.filter(item => Number(item.a4s_selling_price || 0) <= QUICK_SALE_MAX_PRICE);
         }
@@ -3331,7 +3357,14 @@ const handleTableSearch = async (input) => {
 
         suggestions.style.display = 'block';
     } catch (err) {
+        if (err.name === 'AbortError') {
+            return;
+        }
         console.error('Search error:', err);
+    } finally {
+        if (input._searchAbortController === controller) {
+            input._searchAbortController = null;
+        }
     }
 };
 
@@ -3501,9 +3534,10 @@ function renderSaleBatchSearchResults(items) {
 }
 
 async function fetchSaleBatchSearchResults(query) {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    let items = data.items || [];
+    fetchSaleBatchSearchResults.activeController?.abort();
+    const controller = new AbortController();
+    fetchSaleBatchSearchResults.activeController = controller;
+    let items = await fetchItemSearchResults(query, { signal: controller.signal });
     items = items.filter(item => Number(item.current_stock || 0) >= 0);
     return items;
 }

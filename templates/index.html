@@ -866,23 +866,49 @@ function debounce(func, delay) {
 }
 
 /* ---- Search ---- */
+let inventorySearchAbortController = null;
+let inventorySearchToken = 0;
+
 const performSearch = async () => {
     const rawInput = inventorySearchInput.value.trim();
     const tbody = inventoryTableBody;
     const badge = itemCountBadge;
 
     if (rawInput.length === 0) {
+        if (inventorySearchAbortController) {
+            inventorySearchAbortController.abort();
+            inventorySearchAbortController = null;
+        }
         if (tbody) tbody.innerHTML = initialTableMarkup;
         if (badge) badge.textContent = initialBadgeText;
         if (tbody) bindInventoryRowLinks(tbody);
         inventorySearchInput.focus();
         return;
     }
-    if (rawInput.length < 2) return;
+    if (rawInput.length < 2) {
+        if (inventorySearchAbortController) {
+            inventorySearchAbortController.abort();
+            inventorySearchAbortController = null;
+        }
+        return;
+    }
 
+    let controller = null;
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(rawInput)}`);
+        if (inventorySearchAbortController) {
+            inventorySearchAbortController.abort();
+        }
+        controller = new AbortController();
+        inventorySearchAbortController = controller;
+        const searchToken = ++inventorySearchToken;
+
+        const response = await fetch(`/api/search?q=${encodeURIComponent(rawInput)}`, {
+            signal: controller.signal,
+        });
         const data = await response.json();
+        if (searchToken !== inventorySearchToken || inventorySearchInput.value.trim() !== rawInput) {
+            return;
+        }
 
         tbody.innerHTML = "";
 
@@ -924,7 +950,14 @@ const performSearch = async () => {
         if (rawInput.length >= 3) saveRecentSearch(rawInput);
 
     } catch (err) {
+        if (err.name === 'AbortError') {
+            return;
+        }
         console.error("Search failed:", err);
+    } finally {
+        if (inventorySearchAbortController === controller) {
+            inventorySearchAbortController = null;
+        }
     }
 };
 

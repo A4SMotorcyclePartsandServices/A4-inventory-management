@@ -1039,7 +1039,12 @@ async function confirmRecentCountWarning(item) {
 }
 
 async function fetchSearchResults(query) {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const controller = new AbortController();
+    fetchSearchResults.activeController?.abort();
+    fetchSearchResults.activeController = controller;
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+    });
     const data = await response.json();
     if (!response.ok) {
         throw new Error(data.error || 'Failed to search items.');
@@ -1406,6 +1411,7 @@ document.addEventListener('DOMContentLoaded', function () {
         searchInput.addEventListener('input', function () {
             const query = searchInput.value.trim();
             clearTimeout(searchDebounce);
+            fetchSearchResults.activeController?.abort();
 
             if (query.length < 2) {
                 resultsBox.style.display = 'none';
@@ -1416,8 +1422,14 @@ document.addEventListener('DOMContentLoaded', function () {
             searchDebounce = setTimeout(async () => {
                 try {
                     const items = await fetchSearchResults(query);
+                    if ((searchInput.value.trim() || '') !== query) {
+                        return;
+                    }
                     renderSearchResults(items, { containerId: 'itemSearchResults', mode: 'main' });
                 } catch (error) {
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
                     A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
                 }
             }, 220);
@@ -1437,6 +1449,7 @@ document.addEventListener('DOMContentLoaded', function () {
         batchSearchInput.addEventListener('input', function () {
             const query = batchSearchInput.value.trim();
             clearTimeout(batchSearchDebounce);
+            fetchSearchResults.activeController?.abort();
 
             if (query.length < 2) {
                 batchResultsBox.style.display = 'none';
@@ -1447,8 +1460,14 @@ document.addEventListener('DOMContentLoaded', function () {
             batchSearchDebounce = setTimeout(async () => {
                 try {
                     const items = await fetchSearchResults(query);
+                    if ((batchSearchInput.value.trim() || '') !== query) {
+                        return;
+                    }
                     renderSearchResults(items, { containerId: 'batchCountSearchResults', mode: 'batch' });
                 } catch (error) {
+                    if (error.name === 'AbortError') {
+                        return;
+                    }
                     A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
                 }
             }, 220);

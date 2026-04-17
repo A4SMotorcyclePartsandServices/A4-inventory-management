@@ -173,6 +173,8 @@ const notFoundTerm = document.getElementById('notFoundTerm');
 const addNewItemLink = document.getElementById('addNewItemLink');
 const confirmBtn = document.getElementById('confirmBtn');
 const selectedIdInput = document.getElementById('selectedItemId');
+let itemSearchAbortController = null;
+let itemSearchToken = 0;
 
 function debounce(func, delay) {
     let timeoutId;
@@ -187,14 +189,31 @@ const handleSearch = async () => {
     
     // Hide everything if query is too short
     if (query.length < 2) {
+        if (itemSearchAbortController) {
+            itemSearchAbortController.abort();
+            itemSearchAbortController = null;
+        }
         suggestions.style.display = 'none';
         emptyState.style.display = 'none';
         return;
     }
 
+    let controller = null;
     try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        if (itemSearchAbortController) {
+            itemSearchAbortController.abort();
+        }
+        controller = new AbortController();
+        itemSearchAbortController = controller;
+        const searchToken = ++itemSearchToken;
+
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+        });
         const data = await response.json();
+        if (searchToken !== itemSearchToken || searchInput.value.trim() !== query) {
+            return;
+        }
         
         suggestions.innerHTML = '';
         
@@ -218,7 +237,14 @@ const handleSearch = async () => {
             emptyState.style.display = 'block';
         }
     } catch (err) {
+        if (err.name === 'AbortError') {
+            return;
+        }
         console.error("Search error:", err);
+    } finally {
+        if (itemSearchAbortController === controller) {
+            itemSearchAbortController = null;
+        }
     }
 };
 

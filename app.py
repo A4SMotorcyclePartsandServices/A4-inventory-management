@@ -10,6 +10,7 @@ import csv
 import io
 import os
 import secrets
+import time
 from datetime import date, timedelta
 
 from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, session, url_for
@@ -135,6 +136,18 @@ def _log_access_denied_event(event_name, error=None):
     )
 
 
+def _should_trace_request(path):
+    if not path:
+        return False
+    return (
+        path == "/api/search"
+        or path == "/transaction/out/save"
+        or path.startswith("/api/sales/")
+        or path.startswith("/api/stocktake/")
+        or path.startswith("/reports/")
+    )
+
+
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(
     app.wsgi_app,
@@ -164,6 +177,7 @@ csrf = CSRFProtect(app)
 
 @app.before_request
 def restrict_access():
+    g.request_started_at = time.perf_counter()
     public_routes = {"auth.login", "password_reset.forgot_password", "static"}
 
     if not request.endpoint or request.endpoint in public_routes:
@@ -198,6 +212,27 @@ def add_security_headers(response):
     response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
     if request.is_secure:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is not None and _should_trace_request(request.path):
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        search_query = (request.args.get("q") or "").strip()
+        item_id = (request.args.get("id") or "").strip()
+        if (
+            request.path == "/api/search"
+            or duration_ms >= 800
+            or response.status_code >= 500
+        ):
+            app.logger.warning(
+                "REQUEST_TRACE path=%s method=%s status=%s duration_ms=%s query_len=%s item_id=%s user_id=%s",
+                request.path,
+                request.method,
+                response.status_code,
+                duration_ms,
+                len(search_query),
+                item_id or "",
+                session.get("user_id"),
+            )
     return response
 
 

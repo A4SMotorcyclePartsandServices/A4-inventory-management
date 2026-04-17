@@ -106,6 +106,35 @@ If the issue appears again:
 - Check Railway logs for both `REPORT_TRACE` and `PoolError`.
 - If `route_complete` is fast but `waitress.queue` depth climbs and `/api/search` errors appear, the incident is search/pool saturation rather than report generation itself.
 
+Additional tracing added on 2026-04-17:
+- Lightweight `REQUEST_TRACE` logs now wrap the main suspect endpoints:
+  `/api/search`
+  `/transaction/out/save`
+  `/api/sales/...`
+  `/api/stocktake/...`
+  `/reports/...`
+- The log format includes:
+  `path`
+  `method`
+  `status`
+  `duration_ms`
+  `query_len`
+  `item_id`
+  `user_id`
+- Search Railway logs for:
+  `REQUEST_TRACE`
+  `REPORT_TRACE`
+  `PoolError`
+  `Task queue depth`
+- Quick interpretation guide:
+  if `REQUEST_TRACE path=/api/search` appears many times with rising `duration_ms`, the system is likely getting saturated by overlapping search traffic
+  if `/transaction/out/save` shows a long duration but still returns `status=200`, the sale may have completed while the client browser timed out or looked stuck
+  if `/reports/...` routes stay fast while queue depth still rises, the report page is probably not the true bottleneck
+  if none of the server traces are slow during the incident, the problem may be more on the client PC/browser/network side
+- Client-side hardening also added:
+  abort stale `/api/search` requests in inventory, stock-in, refund replacement search, stocktake item search, and sales item search flows
+  ignore stale search responses that return after the user already typed a newer query
+
 - Range report for mechanics may miscalculate quota when mechanic was absent
 
 Example:

@@ -35,6 +35,7 @@ from services.transactions_service import (
     update_item_record,
     update_purchase_order,
     get_purchase_order_review_context,
+    get_item_edit_history_page,
 )
 from services.idempotency_service import (
     COMPLETED_STATUS,
@@ -160,8 +161,24 @@ def edit_item_page(item_id):
         categories=categories,
         vendors=vendors,
         item=context["item"],
-        history=context["history"],
+        preview_history=context["preview_history"],
+        history_total_count=context["history_total_count"],
     )
+
+
+@transaction_bp.route("/api/items/<int:item_id>/edit-history")
+@login_required
+def item_edit_history_api(item_id):
+    try:
+        context = get_item_edit_context(item_id, preview_limit=0)
+        if not context:
+            return jsonify({"error": "Item not found."}), 404
+
+        offset = request.args.get("offset", 0)
+        limit = request.args.get("limit", 10)
+        return jsonify(get_item_edit_history_page(item_id, offset=offset, limit=limit))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @transaction_bp.route("/items/add", methods=["POST"])

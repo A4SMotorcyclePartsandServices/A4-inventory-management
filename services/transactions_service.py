@@ -430,33 +430,7 @@ def _get_item_for_edit(conn, item_id):
     return _serialize_item_for_edit_row(row)
 
 
-def get_item_edit_context(item_id, history_limit=20):
-    conn = get_db()
-    try:
-        item = _get_item_for_edit(conn, item_id)
-        if not item:
-            return None
-
-        history_rows = conn.execute(
-            """
-            SELECT
-                h.id,
-                h.changed_at,
-                h.changed_by,
-                h.changed_by_username,
-                h.change_reason,
-                h.before_payload,
-                h.after_payload
-            FROM item_edit_history h
-            WHERE h.item_id = %s
-            ORDER BY h.changed_at DESC, h.id DESC
-            LIMIT %s
-            """,
-            (item_id, history_limit),
-        ).fetchall()
-    finally:
-        conn.close()
-
+def _serialize_item_edit_history_rows(history_rows):
     history = []
     for row in history_rows:
         before_payload = row["before_payload"] or {}
@@ -492,10 +466,106 @@ def get_item_edit_context(item_id, history_limit=20):
             "after_payload": after_payload,
             "changed_fields": changed_fields,
         })
+    return history
+
+
+def get_item_edit_context(item_id, preview_limit=2):
+    conn = get_db()
+    try:
+        item = _get_item_for_edit(conn, item_id)
+        if not item:
+            return None
+
+        total_row = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM item_edit_history
+            WHERE item_id = %s
+            """,
+            (item_id,),
+        ).fetchone()
+        history_total_count = int(total_row[0] or 0)
+
+        history_rows = conn.execute(
+            """
+            SELECT
+                h.id,
+                h.changed_at,
+                h.changed_by,
+                h.changed_by_username,
+                h.change_reason,
+                h.before_payload,
+                h.after_payload
+            FROM item_edit_history h
+            WHERE h.item_id = %s
+            ORDER BY h.changed_at DESC, h.id DESC
+            LIMIT %s
+            """,
+            (item_id, preview_limit),
+        ).fetchall()
+    finally:
+        conn.close()
 
     return {
         "item": item,
-        "history": history,
+        "preview_history": _serialize_item_edit_history_rows(history_rows),
+        "history_total_count": history_total_count,
+    }
+
+
+def get_item_edit_history_page(item_id, offset=0, limit=10):
+    try:
+        offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        offset = 0
+
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+
+    conn = get_db()
+    try:
+        total_row = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM item_edit_history
+            WHERE item_id = %s
+            """,
+            (item_id,),
+        ).fetchone()
+        total_count = int(total_row[0] or 0)
+
+        history_rows = conn.execute(
+            """
+            SELECT
+                h.id,
+                h.changed_at,
+                h.changed_by,
+                h.changed_by_username,
+                h.change_reason,
+                h.before_payload,
+                h.after_payload
+            FROM item_edit_history h
+            WHERE h.item_id = %s
+            ORDER BY h.changed_at DESC, h.id DESC
+            LIMIT %s OFFSET %s
+            """,
+            (item_id, limit, offset),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    rows = _serialize_item_edit_history_rows(history_rows)
+    next_offset = offset + len(rows)
+    return {
+        "rows": rows,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "next_offset": next_offset,
+        "has_more": next_offset < total_count,
     }
 
 
