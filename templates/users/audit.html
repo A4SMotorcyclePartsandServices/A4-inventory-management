@@ -3964,6 +3964,9 @@ let auditFlatpickr   = null;
 let auditStartDate   = null;
 let auditEndDate     = null;
 let auditHasDiscount = false;
+let auditCanGoNext   = false;
+let auditRequestSeq  = 0;
+let auditActiveRequestSeq = 0;
 
 document.querySelector('[data-bs-target="#audit-tab"]')?.addEventListener('shown.bs.tab', function () {
     if (auditPage === 1 && document.getElementById('audit-trail-body').textContent.includes('Loading')) {
@@ -4022,12 +4025,20 @@ function clearAuditDateFilter() {
 }
 
 function auditChangePage(direction) {
+    if (direction > 0 && !auditCanGoNext) {
+        return;
+    }
+    if (direction < 0 && auditPage <= 1) {
+        return;
+    }
     auditPage += direction;
     loadAuditTrail();
 }
 
 function loadAuditTrail() {
     const tbody = document.getElementById('audit-trail-body');
+    const requestSeq = ++auditRequestSeq;
+    auditActiveRequestSeq = requestSeq;
     tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
 
     const params = [`page=${auditPage}`];
@@ -4039,6 +4050,9 @@ function loadAuditTrail() {
     fetch(`/api/audit/trail?${params.join('&')}`)
         .then(r => r.json())
         .then(data => {
+            if (requestSeq !== auditActiveRequestSeq) {
+                return;
+            }
             if (data.error) {
                 tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${escapeHtml(data.error)}</td></tr>`;
                 return;
@@ -4046,8 +4060,16 @@ function loadAuditTrail() {
             renderAuditTrail(data);
         })
         .catch(() => {
+            if (requestSeq !== auditActiveRequestSeq) {
+                return;
+            }
             tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">Failed to load data.</td></tr>';
         });
+}
+
+function setPaginationRowVisible(row, isVisible) {
+    if (!row) return;
+    row.style.setProperty('display', isVisible ? 'flex' : 'none', 'important');
 }
 
 function renderAuditTrail(data) {
@@ -4058,22 +4080,19 @@ function renderAuditTrail(data) {
     const prevBtn    = document.getElementById('audit-prev-btn');
     const nextBtn    = document.getElementById('audit-next-btn');
 
-    const auditSummary = `${data.total.toLocaleString()} total entries`;
+    auditPage = Number(data.page || 1);
+    const totalEntries = Number(data.total || 0);
+    const apiPerPage = Math.max(1, Number(data.per_page || 50));
+
+    const auditSummary = `${totalEntries.toLocaleString()} total entries`;
     const auditDiscountText = auditHasDiscount ? ' <span class="filter-chip filter-chip-audit">Discounted sales only</span>' : '';
     summaryEl.innerHTML = `${auditSummary}${auditDiscountText}`;
 
-    // Pagination controls
-    if (data.total_pages > 1) {
-        paginationRow.style.display = 'flex';
-        pageLabel.className = 'page-indicator small';
-        pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
-        prevBtn.disabled = data.page <= 1;
-        nextBtn.disabled = data.page >= data.total_pages;
-    } else {
-        paginationRow.style.display = 'none';
-    }
-
     if (!data.rows || data.rows.length === 0) {
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
         tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">No records found.</td></tr>';
         return;
     }
@@ -4169,6 +4188,24 @@ function renderAuditTrail(data) {
                 <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '-'}</td>
             </tr>`;
     }).join('');
+
+    const renderedRowCount = Math.max(1, tbody.querySelectorAll('tr').length);
+    const effectivePerPage = Math.max(apiPerPage, renderedRowCount);
+    const effectiveTotalPages = Math.max(1, Math.ceil(totalEntries / effectivePerPage));
+    auditCanGoNext = auditPage < effectiveTotalPages;
+
+    if (effectiveTotalPages > 1) {
+        setPaginationRowVisible(paginationRow, true);
+        pageLabel.className = 'page-indicator small';
+        pageLabel.textContent = `Page ${auditPage} of ${effectiveTotalPages}`;
+        prevBtn.disabled = auditPage <= 1;
+        nextBtn.disabled = !auditCanGoNext;
+    } else {
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
+        prevBtn.disabled = true;
+        nextBtn.disabled = true;
+    }
 }
 
 // --- ITEM EDIT TRAIL STATE ---
@@ -4275,13 +4312,14 @@ function renderItemEditTrail(data) {
     summaryEl.textContent = `${Number(data.total || 0).toLocaleString()} total edits`;
 
     if (data.total_pages > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     itemEditRowsById = {};
@@ -4525,13 +4563,14 @@ function renderPayablesAudit(data) {
     summaryEl.textContent = `${Number(data.total || 0).toLocaleString()} total entries`;
 
     if (Number(data.total_pages || 0) > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     if (!data.rows || data.rows.length === 0) {
@@ -4834,13 +4873,14 @@ function renderSalesAdmin(data) {
     summaryEl.innerHTML = `${salesSummary}${salesStatusText}${salesDiscountText}`;
 
     if (data.total_pages > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     if (!data.rows || data.rows.length === 0) {

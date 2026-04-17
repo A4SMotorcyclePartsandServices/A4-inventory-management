@@ -567,6 +567,7 @@ def get_stocktake_session(session_id):
                 si.*,
                 i.name,
                 i.category,
+                i.description,
                 i.pack_size,
                 i.a4s_selling_price,
                 i.cost_per_piece

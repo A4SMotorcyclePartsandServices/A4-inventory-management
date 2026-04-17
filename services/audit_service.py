@@ -28,7 +28,10 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     NOTE (future branches): add branch_id filter here when ready.
     """
     conn = get_db()
-    offset = (page - 1) * PER_PAGE
+    try:
+        current_page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        current_page = 1
 
     inv_conditions = []
     inv_params = []
@@ -77,39 +80,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     inv_where_clause = _build_where_clause(inv_conditions)
     sale_extra_clause = _build_and_clause(sale_conditions)
 
-    count_query = """
-        SELECT COUNT(*) FROM (
-            SELECT
-                t.reference_id,
-                t.transaction_date,
-                t.transaction_type,
-                t.change_reason
-            FROM inventory_transactions t
-            JOIN items i ON t.item_id = i.id
-    """ + inv_where_clause + """
-            GROUP BY t.reference_id, t.transaction_date, t.transaction_type, t.change_reason
-
-            UNION ALL
-
-            SELECT
-                s.id AS reference_id,
-                s.transaction_date,
-                'OUT' AS transaction_type,
-                'SERVICE_ONLY_SALE' AS change_reason
-            FROM sales s
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM inventory_transactions t2
-                WHERE t2.reference_type = 'SALE'
-                  AND CAST(t2.reference_id AS TEXT) = CAST(s.id AS TEXT)
-            )
-    """ + sale_extra_clause + """
-        )
-    """
-    total = conn.execute(count_query, inv_params + sale_params).fetchone()[0]
-    total_pages = max(1, -(-total // PER_PAGE))
-
-    data_query = """
+    base_query = """
         SELECT
             MIN(t.id) AS audit_group_id,
             t.transaction_date,
@@ -168,8 +139,19 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             WHERE t2.reference_type = 'SALE'
               AND CAST(t2.reference_id AS TEXT) = CAST(s.id AS TEXT)
         )
-    """ + sale_extra_clause + """
+    """ + sale_extra_clause
 
+    count_query = """
+        SELECT COUNT(*) FROM (
+    """ + base_query + """
+        ) audit_rows
+    """
+    total = conn.execute(count_query, inv_params + sale_params).fetchone()[0]
+    total_pages = max(1, -(-total // PER_PAGE))
+    current_page = min(current_page, total_pages)
+    offset = (current_page - 1) * PER_PAGE
+
+    data_query = base_query + """
         ORDER BY transaction_date DESC
         LIMIT %s OFFSET %s
     """
@@ -203,7 +185,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     return {
         "rows": formatted,
         "total": total,
-        "page": page,
+        "page": current_page,
         "per_page": PER_PAGE,
         "total_pages": total_pages,
     }

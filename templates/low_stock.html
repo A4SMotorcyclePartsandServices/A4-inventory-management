@@ -65,6 +65,22 @@
     .debug-table .debug-item-name {
         white-space: normal !important;
     }
+    .item-name-cell {
+        text-align: center;
+    }
+    .item-name-primary {
+        font-weight: 700;
+        color: #f8f9fa;
+        line-height: 1.2;
+    }
+    .item-name-description {
+        margin-top: 0.2rem;
+        font-size: 0.86rem;
+        color: #adb5bd;
+        line-height: 1.25;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
 </style>
 
 <div class="text-center mb-4">
@@ -98,8 +114,11 @@
         <tbody>
             {% for item in low_stock_items %}
             <tr id="low-stock-item-{{ item.id }}" data-item-id="{{ item.id }}">
-                <td>
-                    {{ item.name }}
+                <td class="item-name-cell">
+                    <div class="item-name-primary">{{ item.name }}</div>
+                    {% if item.description %}
+                    <div class="item-name-description">{{ item.description }}</div>
+                    {% endif %}
                     {% if item.is_watchlist %}
                         <span class="badge status-badge-learning ms-2">LEARNING</span>
                     {% endif %}

@@ -32,6 +32,45 @@
         text-transform: uppercase;
         letter-spacing: 1px;
     }
+    .pagination-panel {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+        color: #adb5bd;
+    }
+    .pagination-summary {
+        font-size: 0.9rem;
+    }
+    .pagination-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .pagination-nav .btn.disabled,
+    .pagination-nav .btn:disabled {
+        pointer-events: none;
+        opacity: 0.45;
+    }
+    .item-name-cell {
+        text-align: center;
+    }
+    .item-name-primary {
+        font-weight: 700;
+        color: #f8f9fa;
+        line-height: 1.2;
+    }
+    .item-name-description {
+        margin-top: 0.2rem;
+        font-size: 0.86rem;
+        color: #adb5bd;
+        line-height: 1.25;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
 </style>
 {% endblock %}
 
@@ -68,7 +107,12 @@
             {% if dead_items %}
                 {% for item in dead_items %}
                 <tr>
-                    <td>{{ item.name }}</td>
+                    <td class="item-name-cell">
+                        <div class="item-name-primary">{{ item.name }}</div>
+                        {% if item.description %}
+                        <div class="item-name-description">{{ item.description }}</div>
+                        {% endif %}
+                    </td>
                     <td class="text-secondary">{{ item.last_sold_display or "Never Sold" }}</td>
                     <td>
                         {% if not item.last_sold_at %}
@@ -88,6 +132,28 @@
             {% endif %}
         </tbody>
     </table>
+    {% if dead_stock_page %}
+    <div class="pagination-panel">
+        <div class="pagination-summary">
+            Showing {{ dead_stock_page.start_index }}-{{ dead_stock_page.end_index }} of {{ dead_stock_page.total_count }} dead stock items
+        </div>
+        <div class="pagination-nav">
+            <a
+                href="{{ url_for('dead_stock', page=dead_stock_page.prev_page) }}"
+                class="btn btn-outline-secondary btn-sm {% if not dead_stock_page.has_prev %}disabled{% endif %}"
+                {% if not dead_stock_page.has_prev %}aria-disabled="true"{% endif %}>
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+            <span class="small text-light">Page {{ dead_stock_page.page }} of {{ dead_stock_page.total_pages }}</span>
+            <a
+                href="{{ url_for('dead_stock', page=dead_stock_page.next_page) }}"
+                class="btn btn-outline-secondary btn-sm {% if not dead_stock_page.has_next %}disabled{% endif %}"
+                {% if not dead_stock_page.has_next %}aria-disabled="true"{% endif %}>
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 

@@ -43,6 +43,7 @@ from services.analytics_service import (
     get_dashboard_stats,
     get_hot_items,
     get_dead_stock,
+    get_dead_stock_page,
     get_low_stock_items,
     get_low_stock_page,
     get_low_stock_page_for_item,
@@ -441,8 +442,18 @@ def dead_stock():
     """
     Items with no sales for a long time (or never sold).
     """
-    dead_items = get_dead_stock()
-    return render_template("dead_stock.html", dead_items=dead_items)
+    page_raw = (request.args.get("page") or "").strip()
+    try:
+        page = max(1, int(page_raw or 1))
+    except ValueError:
+        page = 1
+
+    dead_stock_page = get_dead_stock_page(page=page, per_page=30)
+    return render_template(
+        "dead_stock.html",
+        dead_items=dead_stock_page["items"],
+        dead_stock_page=dead_stock_page,
+    )
 
 
 @app.route("/low-stock")

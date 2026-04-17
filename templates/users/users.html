@@ -4306,6 +4306,11 @@ function loadAuditTrail() {
         });
 }
 
+function setPaginationRowVisible(row, isVisible) {
+    if (!row) return;
+    row.style.setProperty('display', isVisible ? 'flex' : 'none', 'important');
+}
+
 function renderAuditTrail(data) {
     const tbody      = document.getElementById('audit-trail-body');
     const summaryEl  = document.getElementById('audit-summary');
@@ -4326,13 +4331,14 @@ function renderAuditTrail(data) {
 
     // Pagination controls
     if (data.total_pages > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     if (!data.rows || data.rows.length === 0) {
@@ -4623,13 +4629,14 @@ function renderPayablesAudit(data) {
     summaryEl.textContent = `${Number(data.total || 0).toLocaleString()} total entries`;
 
     if (Number(data.total_pages || 0) > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     if (!data.rows || data.rows.length === 0) {
@@ -4997,13 +5004,14 @@ function renderSalesAdmin(data) {
     }
 
     if (data.total_pages > 1) {
-        paginationRow.style.display = 'flex';
+        setPaginationRowVisible(paginationRow, true);
         pageLabel.className = 'page-indicator small';
         pageLabel.textContent = `Page ${data.page} of ${data.total_pages}`;
         prevBtn.disabled = data.page <= 1;
         nextBtn.disabled = data.page >= data.total_pages;
     } else {
-        paginationRow.style.display = 'none';
+        setPaginationRowVisible(paginationRow, false);
+        pageLabel.textContent = '';
     }
 
     if (!data.rows || data.rows.length === 0) {

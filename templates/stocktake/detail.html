@@ -287,6 +287,41 @@
         flex-wrap: wrap;
     }
 
+    .stocktake-items-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .stocktake-items-heading {
+        display: grid;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+
+    .stocktake-items-heading h5 {
+        margin: 0;
+        line-height: 1.1;
+    }
+
+    #tableCountLabel {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .stocktake-draft-controls {
+        justify-content: flex-end;
+    }
+
+    .stocktake-draft-controls .btn,
+    .stocktake-draft-controls .draft-state {
+        flex: 0 0 auto;
+    }
+
     .stocktake-items-table {
         table-layout: auto;
     }
@@ -487,11 +522,27 @@
             justify-content: flex-start;
         }
 
+        .stocktake-items-header {
+            grid-template-columns: 1fr;
+        }
+
         .stocktake-add-header,
         .stocktake-add-input-row {
             grid-template-columns: 1fr;
             flex-direction: column;
             align-items: stretch;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stocktake-draft-controls {
+            gap: 0.55rem;
+        }
+
+        .stocktake-draft-controls .btn,
+        .stocktake-draft-controls .draft-state {
+            width: 100%;
+            justify-content: center;
         }
     }
 
@@ -630,20 +681,22 @@
             {% endif %}
 
             <div class="stocktake-panel pad">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Counted Items</h5>
-                <div class="stocktake-panel-tools">
+            <div class="stocktake-items-header mb-3">
+                <div class="stocktake-items-heading">
                     <span class="text-warning" id="tableCountLabel">{{ stocktake.summary.item_count }} line(s)</span>
+                    <h5>Counted Items</h5>
+                </div>
+                <div class="stocktake-panel-tools">
                     {% if stocktake.status == 'DRAFT' %}
                     <div class="stocktake-draft-controls">
                         <button type="button" class="btn btn-outline-warning" id="openBatchCountBtn">
                             <i class="bi bi-table me-1"></i>Batch Count Entry
                         </button>
                         <span class="draft-state clean" id="draftStateBadge">
-                            <i class="bi bi-check-circle"></i><span id="draftStateText">All changes saved</span>
+                            <i class="bi bi-check-circle"></i><span id="draftStateText">Auto-saved</span>
                         </span>
                         <button type="button" class="btn btn-primary" id="saveDraftBtn" disabled>
-                            <i class="bi bi-save me-1"></i>Save Draft
+                            <i class="bi bi-save me-1"></i>Save Table Edits
                         </button>
                         <button type="button" class="btn btn-success" id="confirmSessionBtn">
                             <i class="bi bi-check2-circle me-1"></i>Confirm Session
@@ -758,6 +811,20 @@ function renderSearchMeta(item) {
     return parts.join(' · ');
 }
 
+function renderItemMetaLine(item, className = 'stocktake-item-category') {
+    const parts = [];
+    if (item.category) {
+        parts.push(escapeHtml(item.category));
+    }
+    if (item.description) {
+        parts.push(escapeHtml(item.description));
+    }
+    if (!parts.length) {
+        return '';
+    }
+    return `<div class="${className}">${parts.join(' Â· ')}</div>`;
+}
+
 function hideSearchStockMeta(container) {
     if (canViewCurrentStock || !container) return;
     container.querySelectorAll('.result-meta').forEach((meta) => {
@@ -769,6 +836,20 @@ function hideSearchStockMeta(container) {
         meta.textContent = cleanedText;
     });
 }
+
+renderItemMetaLine = function(item, className = 'stocktake-item-category') {
+    const parts = [];
+    if (item.category) {
+        parts.push(escapeHtml(item.category));
+    }
+    if (item.description) {
+        parts.push(escapeHtml(item.description));
+    }
+    if (!parts.length) {
+        return '';
+    }
+    return `<div class="${className}">${parts.join(' &middot; ')}</div>`;
+};
 
 function isItemInSession(itemId) {
     return Boolean((stocktakeSession.items || []).some((entry) => Number(entry.item_id) === Number(itemId)));
@@ -821,8 +902,8 @@ function setDirtyState(isDirty) {
 
     badge.className = `draft-state ${hasUnsavedChanges ? 'dirty' : 'clean'}`;
     badge.innerHTML = hasUnsavedChanges
-        ? '<i class="bi bi-exclamation-circle"></i><span id="draftStateText">Unsaved changes</span>'
-        : '<i class="bi bi-check-circle"></i><span id="draftStateText">All changes saved</span>';
+        ? '<i class="bi bi-exclamation-circle"></i><span id="draftStateText">Unsaved table edits</span>'
+        : '<i class="bi bi-check-circle"></i><span id="draftStateText">Auto-saved</span>';
 
     if (saveBtn) {
         saveBtn.disabled = !hasUnsavedChanges;
@@ -899,7 +980,7 @@ function renderItemsTable() {
             <td class="stocktake-item-cell">
                 <div class="stocktake-item-block">
                     <div class="stocktake-item-name">${escapeHtml(item.name || 'Unknown Item')}</div>
-                    ${item.category ? `<div class="stocktake-item-category">${escapeHtml(item.category)}</div>` : ''}
+                    ${renderItemMetaLine(item)}
                     ${item.recently_counted ? `
                         <div class="stocktake-item-history">
                             <span class="stocktake-item-history-badge">
@@ -1231,7 +1312,7 @@ function renderBatchEntries() {
         <tr data-batch-item-id="${entry.item_id}">
             <td>
                 <div class="fw-bold">${escapeHtml(entry.name)}</div>
-                <div class="small text-muted">${escapeHtml(entry.category || entry.description || '')}</div>
+                ${renderItemMetaLine(entry, 'small stocktake-item-category')}
                 ${entry.recently_counted ? `
                     <div class="stocktake-item-history mt-1">
                         <span class="stocktake-item-history-badge">

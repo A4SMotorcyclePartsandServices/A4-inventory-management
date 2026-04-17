@@ -194,6 +194,40 @@ def get_dead_stock(days=60):
     return rows
 
 
+def get_dead_stock_page(page=1, per_page=30, *, days=60, rows=None):
+    try:
+        safe_page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        safe_page = 1
+
+    try:
+        safe_per_page = max(1, min(int(per_page or 30), 200))
+    except (TypeError, ValueError):
+        safe_per_page = 30
+
+    source_rows = rows if rows is not None else get_dead_stock(days=days)
+    total_count = len(source_rows)
+    total_pages = max(1, (total_count + safe_per_page - 1) // safe_per_page)
+    safe_page = min(safe_page, total_pages)
+
+    start_index = (safe_page - 1) * safe_per_page
+    end_index = start_index + safe_per_page
+
+    return {
+        "items": source_rows[start_index:end_index],
+        "page": safe_page,
+        "per_page": safe_per_page,
+        "total_count": total_count,
+        "total_pages": total_pages,
+        "has_prev": safe_page > 1,
+        "has_next": safe_page < total_pages,
+        "prev_page": safe_page - 1,
+        "next_page": safe_page + 1,
+        "start_index": start_index + 1 if total_count else 0,
+        "end_index": min(end_index, total_count),
+    }
+
+
 def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None):
     try:
         safe_page = max(1, int(page or 1))
