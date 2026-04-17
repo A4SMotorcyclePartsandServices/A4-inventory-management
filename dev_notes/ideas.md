@@ -262,6 +262,33 @@ Applied:
   - `active` items are treated as trusted / high-confidence reorder candidates
   - `recovering` items are treated as learning / watchlist items
   - learning items can still appear on `/low-stock` with a badge, but they do not trigger tray alerts yet
+- [x] Ranked exact item-name matches above partial matches in both item search APIs
+  - applies to `/api/search`
+  - applies to `/api/search/items`
+- [x] Factored incoming PO coverage into low-stock handling
+  - if total open incoming PO quantity for an item meets or exceeds the `suggested_restock_point`, hide that item from the top-bar low-stock notification
+  - keep the item visible on `/low-stock`
+  - show `INCOMING STOCK` instead of `OUT OF STOCK` on `/low-stock`
+  - show one or more clickable PO numbers under the badge and deep-link into the specific PO modal
+- [x] Adjusted item vendor self-correction behavior for lead-time safety
+  - initial attempt changed item `vendor_id` as soon as a PO was saved
+  - that was rolled back because it could swing vendor lead time before stock actually arrived
+  - current live behavior:
+    - item `vendor_id` updates only when that item is actually received on the PO
+    - receiving the item makes the PO vendor the source of truth for item vendor assignment
+    - reorder lead time can still change later, but only after confirmed delivery
+
+### Lead-time behavior reminder
+
+- current demand learning is separate from current lead-time learning
+- demand side is based on filtered `OUT` movement only
+- lead-time side is:
+  - default `7 days` when vendor history is missing or too thin
+  - vendor-level median completed PO duration when:
+    - item has a valid `vendor_id`
+    - that vendor has at least `3` completed POs with valid dates
+- current lead-time learning is vendor-level, not vendor + item-level
+- because of that, changing item vendor can change reorder point even if item demand stays the same
 
 ## Re order algorithm - long term upgrades
 
@@ -382,3 +409,7 @@ Applied:
 - [ ] Optional future upgrade: item-level lead time override
   - current live version uses vendor-level completed PO history only
   - if needed later, item-level lead time can override vendor lead time
+- [ ] Reference options for lead-time stability
+  - Learn lead time per vendor + item, not just per vendor
+  - Keep current self-correcting behavior, but require multiple received POs before trusting the new vendor for lead time
+  - Use vendor lead time only as a hint, and cap how much it can change at once

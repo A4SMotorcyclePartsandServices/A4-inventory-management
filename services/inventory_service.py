@@ -273,6 +273,72 @@ def attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id"):
     return items
 
 
+def attach_incoming_po_profile(conn, items, item_id_key="id"):
+    if not items:
+        return items
+
+    item_ids = []
+    for item in items:
+        try:
+            item_ids.append(int(item.get(item_id_key)))
+        except (TypeError, ValueError):
+            continue
+
+    if not item_ids:
+        for item in items:
+            item["incoming_po_quantity"] = 0
+            item["incoming_po_count"] = 0
+            item["incoming_pos"] = []
+        return items
+
+    rows = conn.execute(
+        """
+        SELECT
+            pi.item_id,
+            po.id AS po_id,
+            po.po_number,
+            po.status,
+            po.created_at,
+            SUM(GREATEST(pi.quantity_ordered - pi.quantity_received, 0)) AS remaining_quantity
+        FROM po_items pi
+        JOIN purchase_orders po ON po.id = pi.po_id
+        WHERE pi.item_id = ANY(%s)
+          AND po.status IN ('PENDING', 'PARTIAL')
+          AND pi.quantity_ordered > pi.quantity_received
+        GROUP BY pi.item_id, po.id, po.po_number, po.status, po.created_at
+        ORDER BY po.created_at DESC, po.id DESC
+        """,
+        (item_ids,),
+    ).fetchall()
+
+    incoming_map = {}
+    for row in rows:
+        item_id = int(row["item_id"])
+        incoming_map.setdefault(item_id, []).append(
+            {
+                "po_id": int(row["po_id"]),
+                "po_number": row["po_number"] or f"PO #{row['po_id']}",
+                "status": row["status"] or "",
+                "remaining_quantity": int(row["remaining_quantity"] or 0),
+            }
+        )
+
+    for item in items:
+        try:
+            item_id = int(item.get(item_id_key))
+        except (TypeError, ValueError):
+            item_id = None
+
+        incoming_pos = incoming_map.get(item_id, []) if item_id is not None else []
+        item["incoming_pos"] = incoming_pos
+        item["incoming_po_count"] = len(incoming_pos)
+        item["incoming_po_quantity"] = sum(
+            int(po.get("remaining_quantity") or 0) for po in incoming_pos
+        )
+
+    return items
+
+
 def attach_restock_recommendation(conn, items, item_id_key="id", category_key="category", current_stock_key="current_stock", snapshot_date=None):
     if not items:
         return items
@@ -285,6 +351,7 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         snapshot_date=snapshot_date,
     )
     attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id")
+    attach_incoming_po_profile(conn, items, item_id_key=item_id_key)
 
     for item in items:
         current_stock = float(item.get(current_stock_key) or 0)
@@ -301,6 +368,8 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         item["restock_status"] = RESTOCK_STATUS_HEALTHY
         item["restock_confidence"] = RESTOCK_CONFIDENCE_NONE
         item["is_watchlist"] = False
+        item["incoming_po_covers_restock"] = False
+        item["hide_from_low_stock_notifications"] = False
 
         if item.get("history_status") == "excluded":
             item["suggested_restock_point"] = None
@@ -346,6 +415,14 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
             else RESTOCK_STATUS_WARNING if item["should_restock"]
             else RESTOCK_STATUS_HEALTHY
         )
+        incoming_po_quantity = int(item.get("incoming_po_quantity") or 0)
+        if (
+            item["should_restock"]
+            and suggested_restock_point > 0
+            and incoming_po_quantity >= suggested_restock_point
+        ):
+            item["incoming_po_covers_restock"] = True
+            item["hide_from_low_stock_notifications"] = True
 
     return items
 

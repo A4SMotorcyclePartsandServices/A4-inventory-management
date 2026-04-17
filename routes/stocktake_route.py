@@ -27,7 +27,7 @@ from services.stocktake_service import (
     remove_stocktake_item,
     update_stocktake_item,
 )
-from utils.timezone import today_local
+from utils.timezone import now_local, today_local
 
 
 stocktake_bp = Blueprint("stocktake", __name__)
@@ -361,6 +361,7 @@ def stocktake_report(session_id):
             "stocktake/report.html",
             stocktake=stocktake,
             partial_stocktake_label=PARTIAL_STOCKTAKE_LABEL,
+            generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
         ),
         headers={"Content-Disposition": f"inline; filename={filename}"},
     )
@@ -460,6 +461,7 @@ def stocktake_overall_report():
         render_template(
             "stocktake/overall_report.html",
             report=report_data,
+            generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
         ),
         headers={"Content-Disposition": f"inline; filename={filename}"},
     )

@@ -17,6 +17,26 @@
     .status-badge-warning { background: #ffc107; color: #111; }
     .status-badge-healthy { background: #6c757d; color: #fff; }
     .status-badge-learning { background: #17a2b8; color: #fff; }
+    .status-badge-incoming { background: #0d6efd; color: #fff; }
+    .incoming-po-links {
+        margin-top: 0.45rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        align-items: center;
+    }
+    .incoming-po-link {
+        color: #8ec5ff;
+        font-size: 0.84rem;
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .incoming-po-link:hover,
+    .incoming-po-link:focus {
+        color: #cfe7ff;
+        text-decoration: underline;
+    }
     .pagination-panel {
         display: flex;
         align-items: center;
@@ -128,6 +148,19 @@
                 <td>
                     {% if item.is_watchlist %}
                         <span class="badge status-badge-learning">WATCHLIST</span>
+                    {% elif item.incoming_po_covers_restock %}
+                        <span class="badge status-badge-incoming">INCOMING STOCK</span>
+                        {% if item.incoming_pos %}
+                        <div class="incoming-po-links">
+                            {% for po in item.incoming_pos %}
+                            <a
+                                href="/transaction/orders/list?open_po=1&po_id={{ po.po_id }}"
+                                class="incoming-po-link">
+                                {{ po.po_number }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     {% elif item.restock_status == 'critical' %}
                         <span class="badge status-badge-critical">
                             {% if item.current_stock <= 0 %}OUT OF STOCK{% else %}CRITICAL{% endif %}

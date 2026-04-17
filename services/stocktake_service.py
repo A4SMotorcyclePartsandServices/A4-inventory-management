@@ -336,7 +336,7 @@ def get_stocktake_overall_report(start_date, end_date):
                 COALESCE(SUM(
                     CASE
                         WHEN COALESCE(si.variance, 0) <> 0
-                        THEN ABS(COALESCE(si.variance, 0) * COALESCE(i.cost_per_piece, 0))
+                        THEN COALESCE(si.variance, 0) * COALESCE(i.cost_per_piece, 0)
                         ELSE 0
                     END
                 ), 0) AS variance_items_value,
@@ -390,6 +390,7 @@ def get_stocktake_overall_report(start_date, end_date):
             SELECT
                 si.*,
                 i.name,
+                i.description,
                 i.category,
                 i.pack_size,
                 i.a4s_selling_price,

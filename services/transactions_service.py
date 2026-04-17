@@ -3102,6 +3102,40 @@ def _replace_po_items_and_order_transactions(conn, po_id, items, user_id, userna
     return total_order_amount
 
 
+def _sync_po_item_vendors(conn, items, vendor_id):
+    try:
+        normalized_vendor_id = int(vendor_id or 0)
+    except (TypeError, ValueError):
+        normalized_vendor_id = 0
+
+    if normalized_vendor_id <= 0:
+        return
+
+    item_ids = []
+    for item in items or []:
+        try:
+            item_id = int(item.get("item_id") or 0)
+        except (TypeError, ValueError):
+            item_id = 0
+        if item_id > 0:
+            item_ids.append(item_id)
+
+    item_ids = sorted(set(item_ids))
+    if not item_ids:
+        return
+
+    conn.execute(
+        """
+        UPDATE items
+        SET vendor_id = %s,
+            vendor = NULL,
+            updated_at = NOW()
+        WHERE id = ANY(%s)
+        """,
+        (normalized_vendor_id, item_ids),
+    )
+
+
 def _fmt_change_value(value, value_type=None):
     if value is None:
         return None
@@ -3358,7 +3392,6 @@ def create_purchase_order(data, user_id, username, user_role):
             username=username,
             clean_time=clean_time,
         )
-
         conn.execute(
             "UPDATE purchase_orders SET total_amount = %s WHERE id = %s",
             (total_order_amount, new_po_id)
@@ -3876,7 +3909,6 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
             username=username,
             clean_time=clean_time,
         )
-
         conn.execute(
             """
             UPDATE purchase_orders
@@ -4120,6 +4152,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
             raise ValueError("Purchase order not found.")
         if (po["status"] or "").upper() not in PO_RECEIVABLE_STATUSES:
             raise ValueError("This purchase order is not approved for receiving.")
+        po_vendor_id = int(po["vendor_id"] or 0)
         all_completed = True
         received_any = False
         receipt_entries = []
@@ -4229,6 +4262,12 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 "effective_piece_cost": effective_piece_cost,
                 "notes": receive_note_suffix.strip(),
             })
+
+            _sync_po_item_vendors(
+                conn=conn,
+                items=[{"item_id": item_id}],
+                vendor_id=po_vendor_id,
+            )
 
         if not received_any:
             raise ValueError("Enter at least one received quantity before confirming delivery.")

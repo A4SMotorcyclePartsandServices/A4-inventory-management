@@ -290,6 +290,10 @@ def get_low_stock_page_for_item(item_id, per_page=75, *, include_watchlist=False
 
 def get_low_stock_summary(limit=8, *, rows=None):
     source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=False)
+    source_rows = [
+        item for item in source_rows
+        if not item.get("hide_from_low_stock_notifications")
+    ]
 
     try:
         safe_limit = max(1, min(int(limit or 8), 50))

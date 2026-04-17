@@ -188,6 +188,13 @@
             color: #0a58ca;
         }
 
+        .generated-note {
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: #555;
+            text-align: right;
+        }
+
         .note-banner {
             border: 1px solid #bfdbfe;
             border-radius: 12px;
@@ -227,7 +234,8 @@
         .session-cell {
             display: grid;
             gap: 6px;
-            text-align: left;
+            text-align: center;
+            justify-items: center;
             line-height: 1.25;
         }
 
@@ -455,7 +463,9 @@
             </div>
             <div class="summary-card tone-warning">
                 <span class="meta-label">Total Value of Items w/ Variance</span>
-                <div class="value">&#8369;{{ "{:,.2f}".format(report.summary.variance_items_value or 0) }}</div>
+                <div class="value">
+                    {% if (report.summary.variance_items_value or 0) < 0 %}-{% endif %}&#8369;{{ "{:,.2f}".format((report.summary.variance_items_value or 0)|abs) }}
+                </div>
             </div>
         </div>
         <div class="summary-stack">
@@ -479,6 +489,8 @@
             </div>
         </div>
     </div>
+
+    <div class="generated-note">Generated: {{ generated_at }}</div>
 
     <div class="note-banner">
         Only ongoing and completed stocktake sessions are included in this report.
@@ -506,12 +518,6 @@
                     <div class="session-cell">
                         <strong>{{ item.session_number or '-' }}</strong>
                         <span class="status-pill {{ item.session_status|lower }}">{{ item.session_status }}</span>
-                        <div class="session-meta">
-                            Created: {{ item.session_created_at_display }}
-                            {% if item.session_status == 'CONFIRMED' and item.session_confirmed_at_display != '-' %}
-                            <br>Confirmed: {{ item.session_confirmed_at_display }}
-                            {% endif %}
-                        </div>
                     </div>
                 </td>
                 <td>
