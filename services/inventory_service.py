@@ -499,6 +499,7 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-03-26", item_
             sql = "SELECT * FROM items WHERE id = %s"
             rows = conn.execute(sql, (item_id,)).fetchall()
         elif search_query:
+            normalized_query = search_query.strip()
             words = search_query.split()
             if not words:
                 rows = conn.execute("SELECT * FROM items ORDER BY id DESC LIMIT 75").fetchall()
@@ -514,10 +515,26 @@ def search_items_with_stock(search_query=None, snapshot_date="2026-03-26", item_
                 sql = f"""
                     SELECT * FROM items 
                     WHERE {where_clause}
-                    ORDER BY id DESC
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(TRIM(name)) = LOWER(TRIM(%s)) THEN 0
+                            WHEN LOWER(TRIM(name)) LIKE LOWER(TRIM(%s)) THEN 1
+                            WHEN LOWER(name) LIKE LOWER(%s) THEN 2
+                            WHEN LOWER(COALESCE(description, '')) LIKE LOWER(%s) THEN 3
+                            WHEN LOWER(category) LIKE LOWER(%s) THEN 4
+                            ELSE 5
+                        END,
+                        id DESC
                     LIMIT 100
                 """
-                rows = conn.execute(sql, params).fetchall()
+                order_params = [
+                    normalized_query,
+                    f"{normalized_query}%",
+                    f"%{normalized_query}%",
+                    f"%{normalized_query}%",
+                    f"%{normalized_query}%",
+                ]
+                rows = conn.execute(sql, params + order_params).fetchall()
         else:
             rows = []
 

@@ -136,6 +136,7 @@ def search_items():
     if not query:
         return jsonify({"items": []})
 
+    normalized_query = query.strip()
     words = query.split()
     where_clause = " AND ".join([
         "(name ILIKE %s OR category ILIKE %s OR COALESCE(description, '') ILIKE %s)"
@@ -157,10 +158,27 @@ def search_items():
             COALESCE(cost_per_piece, 0) AS cost_per_piece
         FROM items
         WHERE """ + where_clause + """
-        ORDER BY name ASC
+        ORDER BY
+            CASE
+                WHEN LOWER(TRIM(name)) = LOWER(TRIM(%s)) THEN 0
+                WHEN LOWER(TRIM(name)) LIKE LOWER(TRIM(%s)) THEN 1
+                WHEN LOWER(name) LIKE LOWER(%s) THEN 2
+                WHEN LOWER(COALESCE(description, '')) LIKE LOWER(%s) THEN 3
+                WHEN LOWER(category) LIKE LOWER(%s) THEN 4
+                ELSE 5
+            END,
+            name ASC,
+            id DESC
         LIMIT 20
     """
-    cursor = conn.execute(query_sql, params)
+    order_params = [
+        normalized_query,
+        f'{normalized_query}%',
+        f'%{normalized_query}%',
+        f'%{normalized_query}%',
+        f'%{normalized_query}%',
+    ]
+    cursor = conn.execute(query_sql, params + order_params)
 
     items = [dict(row) for row in cursor.fetchall()]
     conn.close()

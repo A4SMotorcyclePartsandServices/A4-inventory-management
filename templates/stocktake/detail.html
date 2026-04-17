@@ -478,8 +478,82 @@
         border-color: rgba(255,255,255,0.08);
     }
 
+    .batch-count-subtitle {
+        color: #cbd5e1;
+    }
+
     .batch-count-search {
         position: relative;
+        display: grid;
+        gap: 0.45rem;
+        padding: 0.9rem 1rem;
+        border-radius: 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.025));
+        border: 1px solid rgba(250, 204, 21, 0.18);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .batch-count-search-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fde68a;
+    }
+
+    .batch-count-search-input-wrap {
+        position: relative;
+    }
+
+    .batch-count-search-icon {
+        position: absolute;
+        top: 50%;
+        left: 0.95rem;
+        transform: translateY(-50%);
+        color: #facc15;
+        font-size: 0.95rem;
+        pointer-events: none;
+        opacity: 0.92;
+    }
+
+    #batchCountSearchInput {
+        min-height: 48px;
+        padding-left: 2.55rem;
+        padding-right: 0.95rem;
+        background: #0d121b;
+        border: 1px solid rgba(250, 204, 21, 0.34);
+        color: #f8fafc;
+        box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.08);
+    }
+
+    #batchCountSearchInput::placeholder {
+        color: #94a3b8;
+        opacity: 1;
+    }
+
+    #batchCountSearchInput:hover {
+        border-color: rgba(250, 204, 21, 0.52);
+        background: #0b1119;
+    }
+
+    #batchCountSearchInput:focus {
+        background: #0b1119;
+        color: #ffffff;
+        border-color: rgba(250, 204, 21, 0.8);
+        box-shadow: 0 0 0 0.24rem rgba(250, 204, 21, 0.18);
+    }
+
+    .batch-count-search-note {
+        font-size: 0.82rem;
+        color: #cbd5e1;
+        margin: 0;
+    }
+
+    .batch-count-summary {
+        color: #93c5fd !important;
     }
 
     .batch-count-results {
@@ -734,16 +808,24 @@
             <div class="modal-header">
                 <div>
                     <h5 class="modal-title mb-1">Batch Count Entry</h5>
-                    <div class="small text-muted">Search items, type counted stock, and apply the batch to this draft.</div>
+                    <div class="small batch-count-subtitle">Search items, type counted stock, and apply the batch to this draft.</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body d-grid gap-3">
                 <div class="batch-count-search">
-                    <input type="text" id="batchCountSearchInput" class="form-control" placeholder="Search item name, category, or description">
+                    <div class="batch-count-search-label">
+                        <i class="bi bi-search"></i>
+                        <span>Item Search</span>
+                    </div>
+                    <div class="batch-count-search-input-wrap">
+                        <i class="bi bi-search batch-count-search-icon" aria-hidden="true"></i>
+                        <input type="text" id="batchCountSearchInput" class="form-control" placeholder="Search item name, category, or description">
+                    </div>
+                    <p class="batch-count-search-note">Start typing to find an item and add it to the batch list.</p>
                     <div class="batch-count-results" id="batchCountSearchResults"></div>
                 </div>
-                <div class="small text-muted" id="batchCountSummary">0 item(s) ready to apply.</div>
+                <div class="small batch-count-summary" id="batchCountSummary">0 item(s) ready to apply.</div>
                 <div id="batchCountEmptyState" class="batch-count-empty">
                     Search for an item, add it to the batch list, then enter the counted stock and optional note.
                 </div>
