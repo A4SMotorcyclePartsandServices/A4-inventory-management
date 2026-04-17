@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 
 from auth.utils import (
     clear_failed_login_attempts,
@@ -63,6 +63,16 @@ def _begin_login_idempotency(user, username):
         request_payload=request_payload,
     )
     return idempotency_key, request_state
+
+
+def _render_login_page():
+    response = make_response(render_template("users/login.html"))
+    # Mobile browsers can reuse a backgrounded login page for a long time.
+    # Mark it non-cacheable so returning to /login fetches a fresh CSRF token.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -151,7 +161,7 @@ def login():
             return redirect(url_for("users_panel.users_panel"))
         return redirect(url_for("index"))
 
-    return render_template("users/login.html")
+    return _render_login_page()
 
 
 @auth_bp.route("/logout", methods=["POST"])

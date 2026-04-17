@@ -21,25 +21,29 @@ Use this section for things that are not necessarily broken right now, but could
 - Random admin login redirect to Access Denied on first load, then normal after refresh.
 
 Current theory:
-- Probably not a true failed login.
-- New strongest theory from repeated logs:
-  first `/login` POST succeeds, then a second in-flight or duplicate `/login` POST hits after `session.clear()` removed the session CSRF token.
-- That second POST fails in Flask-WTF with:
+- There were likely 2 overlapping causes.
+- Earlier logs pointed to duplicate in-flight `/login` POSTs after session rotation, which could fail with:
   `400 Bad Request: The CSRF session token is missing.`
-- This can look like a random Access Denied page even though the first login actually worked.
+- That path was mitigated by preserving the session CSRF token during login rotation and replaying duplicate submits through idempotency.
+- Newer Railway logs now show a different failure:
+  `400 Bad Request: The CSRF token has expired.`
+- This points to a stale login page, especially likely on mobile where the browser resumes an older `/login` tab from background or cache.
+- In that case the first submit fails before authentication runs, then refresh/retry works because the page gets a fresh CSRF token.
 - Temporary tracing was added with `AUTH_TRACE` logs in `app.py`, `auth/utils.py`, and `routes/auth_route.py`.
 
 Latest observed log pattern:
-- `login_success` for admin
-- immediately followed by `csrf_error`
-- same `/login` endpoint and same login referer
-- `user_id: None` and `session_role: None` on the CSRF line, which fits a second POST arriving after session reset
+- `csrf_error` on `/login` with:
+  `error_message: 400 Bad Request: The CSRF token has expired.`
+- followed by a later successful `/login` retry
+- this is consistent with the user submitting an old login page first, then retrying after refresh or reload
 
 Mitigation added:
 - Preserve the current session `csrf_token` during successful login session rotation.
 - Disable duplicate login submits on the login page after the first click.
 - Login form now sends an `idempotency_key` through the shared submit guard.
 - `/login` now uses the server-side idempotency table so repeated submits with the same key replay the first successful redirect instead of reprocessing the login.
+- `/login` responses now send no-store/no-cache headers so mobile browsers are less likely to reuse an old page with an expired CSRF token.
+- CSRF failures on `POST /login` now redirect back to `/login` with a warning flash instead of showing the generic Access Denied page.
 
 How to check logs in Railway:
 - Open Railway.
