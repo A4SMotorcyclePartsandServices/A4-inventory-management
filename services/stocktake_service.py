@@ -848,7 +848,65 @@ def bulk_save_stocktake_items(session_id, items, actor_user_id=None, actor_usern
 
             line = existing_map.get(item_id)
             if not line:
-                raise ValueError("One or more stocktake items are no longer part of this session.")
+                item_row = conn.execute(
+                    "SELECT id, name FROM items WHERE id = %s",
+                    (item_id,),
+                ).fetchone()
+                if not item_row:
+                    raise ValueError("One or more stocktake items are invalid.")
+
+                system_stock = _get_live_stock(conn, item_id)
+                inserted = conn.execute(
+                    """
+                    INSERT INTO stocktake_items (
+                        session_id,
+                        item_id,
+                        system_stock,
+                        active_system_stock,
+                        counted_stock,
+                        variance,
+                        baseline_mode,
+                        adjustment_type,
+                        adjustment_quantity,
+                        notes
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, item_id, system_stock, active_system_stock
+                    """,
+                    (
+                        session_id,
+                        item_id,
+                        system_stock,
+                        system_stock,
+                        None,
+                        0,
+                        "CAPTURED",
+                        None,
+                        0,
+                        None,
+                    ),
+                ).fetchone()
+
+                _record_baseline_history(
+                    conn,
+                    stocktake_item_id=int(inserted["id"]),
+                    event_type="CAPTURED",
+                    baseline_stock=system_stock,
+                    counted_stock_snapshot=None,
+                    variance_snapshot=0,
+                    live_stock=system_stock,
+                    previous_active_stock=None,
+                    actor_user_id=actor_user_id if actor_user_id is not None else session_row["created_by"],
+                    actor_username=actor_username or session_row["created_by_username"],
+                )
+
+                line = {
+                    "id": int(inserted["id"]),
+                    "item_id": int(inserted["item_id"]),
+                    "system_stock": int(inserted["system_stock"] or 0),
+                    "active_system_stock": int(inserted["active_system_stock"] or inserted["system_stock"] or 0),
+                }
+                existing_map[item_id] = line
 
             line = _auto_refresh_active_baseline(
                 conn,

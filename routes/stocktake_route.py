@@ -212,18 +212,74 @@ def stocktake_update_item_api(session_id, item_id):
 @stocktake_access_required
 def stocktake_save_draft_api(session_id):
     data = request.get_json(silent=True) or {}
+    scope = f"stocktake.save_draft:{session_id}"
+    payload = {
+        "session_id": session_id,
+        "items": data.get("items") or [],
+    }
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_state = None
+
+    if idempotency_key:
+        try:
+            request_state = begin_idempotent_request(
+                scope=scope,
+                actor_user_id=user_id,
+                idempotency_key=idempotency_key,
+                request_payload=payload,
+            )
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+
+        early_response = _idempotency_error_response(request_state)
+        if early_response:
+            return early_response
+
     try:
         result = bulk_save_stocktake_items(
             session_id=session_id,
             items=data.get("items") or [],
-            actor_user_id=session.get("user_id"),
+            actor_user_id=user_id,
             actor_username=session.get("username"),
         )
-        return jsonify({"status": "success", "session": result})
+        response_body = {"status": "success", "session": result}
+        if request_state:
+            finalize_idempotent_request(
+                scope=scope,
+                actor_user_id=user_id,
+                idempotency_key=idempotency_key,
+                status=COMPLETED_STATUS,
+                response_code=200,
+                response_body=response_body,
+                resource_type="stocktake_session",
+                resource_id=session_id,
+            )
+        return jsonify(response_body)
     except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+        response_body = {"status": "error", "message": str(exc)}
+        if request_state:
+            finalize_idempotent_request(
+                scope=scope,
+                actor_user_id=user_id,
+                idempotency_key=idempotency_key,
+                status=FAILED_STATUS,
+                response_code=400,
+                response_body=response_body,
+            )
+        return jsonify(response_body), 400
     except Exception as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        response_body = {"status": "error", "message": str(exc)}
+        if request_state:
+            finalize_idempotent_request(
+                scope=scope,
+                actor_user_id=user_id,
+                idempotency_key=idempotency_key,
+                status=FAILED_STATUS,
+                response_code=500,
+                response_body=response_body,
+            )
+        return jsonify(response_body), 500
 
 
 @stocktake_bp.route("/api/stocktake/<int:session_id>/items/<int:item_id>/delete", methods=["POST"])

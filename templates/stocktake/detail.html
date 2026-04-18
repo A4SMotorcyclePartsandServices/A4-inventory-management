@@ -869,6 +869,10 @@ const canViewCurrentStock = {{ (current_user and current_user.role == 'admin') |
 const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
 let confirmSessionGuard = null;
 let cancelSessionGuard = null;
+let saveDraftGuard = null;
+let batchApplyGuard = null;
+const mainSearchState = { activeController: null };
+const batchSearchState = { activeController: null };
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -1201,10 +1205,12 @@ async function confirmRecentCountWarning(item) {
     });
 }
 
-async function fetchSearchResults(query) {
+async function fetchSearchResults(query, state) {
     const controller = new AbortController();
-    fetchSearchResults.activeController?.abort();
-    fetchSearchResults.activeController = controller;
+    state?.activeController?.abort();
+    if (state) {
+        state.activeController = controller;
+    }
     const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
         signal: controller.signal,
     });
@@ -1317,14 +1323,22 @@ function mergeUnsavedDraftIntoSession(sessionData, draftItems, options = {}) {
 
 async function saveDraft() {
     const items = collectDraftItems();
-    return persistDraft(items, { redirectOnSuccess: true });
+    return persistDraft(items, {
+        redirectOnSuccess: true,
+        headers: saveDraftGuard
+            ? saveDraftGuard.buildHeaders({ 'Content-Type': 'application/json' })
+            : { 'Content-Type': 'application/json' },
+    });
 }
 
 async function persistDraft(items, options = {}) {
-    const { redirectOnSuccess = false } = options;
+    const {
+        redirectOnSuccess = false,
+        headers = { 'Content-Type': 'application/json' },
+    } = options;
     const response = await fetch(`/api/stocktake/${stocktakeSessionId}/save-draft`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ items }),
     });
     const data = await response.json();
@@ -1451,31 +1465,31 @@ async function applyBatchEntries() {
         throw new Error('Save the current draft changes first before applying a batch entry set.');
     }
 
-    const existingIds = new Set((stocktakeSession.items || []).map((item) => Number(item.item_id)));
-    for (const entry of batchEntries) {
-        if (!existingIds.has(Number(entry.item_id))) {
-            await addItemToSessionInternal(entry.item_id, { silent: true, rerender: false });
-            existingIds.add(Number(entry.item_id));
-        }
-    }
-
-    const mergedItems = (stocktakeSession.items || []).map((item) => {
-        const batchEntry = getBatchEntry(item.item_id);
-        if (!batchEntry) {
-            return {
+    const mergedMap = new Map(
+        (stocktakeSession.items || []).map((item) => [
+            Number(item.item_id),
+            {
                 item_id: Number(item.item_id),
                 counted_stock: item.counted_stock == null ? null : Number(item.counted_stock),
                 notes: item.notes || '',
-            };
-        }
-        return {
-            item_id: Number(item.item_id),
-            counted_stock: batchEntry.counted_stock === '' ? null : Number(batchEntry.counted_stock),
-            notes: batchEntry.notes || '',
-        };
+            },
+        ])
+    );
+
+    batchEntries.forEach((entry) => {
+        mergedMap.set(Number(entry.item_id), {
+            item_id: Number(entry.item_id),
+            counted_stock: entry.counted_stock === '' ? null : Number(entry.counted_stock),
+            notes: entry.notes || '',
+        });
     });
 
-    await persistDraft(mergedItems, { redirectOnSuccess: false });
+    await persistDraft(Array.from(mergedMap.values()), {
+        redirectOnSuccess: false,
+        headers: batchApplyGuard
+            ? batchApplyGuard.buildHeaders({ 'Content-Type': 'application/json' })
+            : { 'Content-Type': 'application/json' },
+    });
     batchEntries = [];
     renderBatchEntries();
     batchModal?.hide();
@@ -1557,6 +1571,12 @@ document.addEventListener('DOMContentLoaded', function () {
     cancelSessionGuard = window.A4Submit?.createButtonGuard(document.getElementById('cancelSessionBtn'), {
         loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Cancelling...',
     });
+    saveDraftGuard = window.A4Submit?.createButtonGuard(document.getElementById('saveDraftBtn'), {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
+    });
+    batchApplyGuard = window.A4Submit?.createButtonGuard(document.getElementById('applyBatchCountBtn'), {
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Applying...',
+    });
 
     renderSessionMeta();
     renderItemsTable();
@@ -1574,7 +1594,7 @@ document.addEventListener('DOMContentLoaded', function () {
         searchInput.addEventListener('input', function () {
             const query = searchInput.value.trim();
             clearTimeout(searchDebounce);
-            fetchSearchResults.activeController?.abort();
+            mainSearchState.activeController?.abort();
 
             if (query.length < 2) {
                 resultsBox.style.display = 'none';
@@ -1584,7 +1604,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             searchDebounce = setTimeout(async () => {
                 try {
-                    const items = await fetchSearchResults(query);
+                    const items = await fetchSearchResults(query, mainSearchState);
                     if ((searchInput.value.trim() || '') !== query) {
                         return;
                     }
@@ -1612,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', function () {
         batchSearchInput.addEventListener('input', function () {
             const query = batchSearchInput.value.trim();
             clearTimeout(batchSearchDebounce);
-            fetchSearchResults.activeController?.abort();
+            batchSearchState.activeController?.abort();
 
             if (query.length < 2) {
                 batchResultsBox.style.display = 'none';
@@ -1622,7 +1642,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             batchSearchDebounce = setTimeout(async () => {
                 try {
-                    const items = await fetchSearchResults(query);
+                    const items = await fetchSearchResults(query, batchSearchState);
                     if ((batchSearchInput.value.trim() || '') !== query) {
                         return;
                     }
@@ -1745,9 +1765,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('saveDraftBtn')?.addEventListener('click', async function () {
+        if (saveDraftGuard && !saveDraftGuard.begin()) {
+            return;
+        }
         try {
             await saveDraft();
+            saveDraftGuard?.succeed();
         } catch (error) {
+            saveDraftGuard?.reset();
             A4Flash.show(error.message || 'Failed to save stocktake draft.', 'danger', { replace: true });
         }
     });
@@ -1757,9 +1782,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('applyBatchCountBtn')?.addEventListener('click', async function () {
+        if (batchApplyGuard && !batchApplyGuard.begin()) {
+            return;
+        }
         try {
             await applyBatchEntries();
+            batchApplyGuard?.succeed();
         } catch (error) {
+            batchApplyGuard?.reset();
             A4Flash.show(error.message || 'Failed to apply batch count entry.', 'danger', { replace: true });
         }
     });
