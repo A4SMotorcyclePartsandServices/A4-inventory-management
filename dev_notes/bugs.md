@@ -18,6 +18,43 @@ Use this section for things that are not necessarily broken right now, but could
 
 ## Possible Issues
 
+## Device / Performance Fragility
+
+- The system currently appears more fragile on older or slower PCs / phones, even when the same workflow behaves normally on a newer laptop.
+- This is not only a hardware issue. In several places, the frontend flow is sensitive to slower rendering, slower JavaScript execution, slower request turnaround, browser tab suspension, and reused modal/page state.
+- Practical effect:
+  users on weaker devices are more likely to hit intermittent behavior where a feature appears broken, hangs, or needs to be retried even though the same path looks fine on a faster machine
+- This needs dedicated hardening work because the client shop environment is likely to surface these edge cases more often than development hardware.
+
+Observed pattern so far:
+- stocktake batch item search could behave intermittently on the shop machine, sometimes only working again after deleting and retyping
+- stocktake batch `Apply to draft` could appear stuck, fail to complete, or lose in-memory batch work after refresh
+- logout/login on mobile could be affected by stale pages, resumed tabs, and delayed browser state updates
+- more generally, there are incidents where a user says the system is "loading forever" or appears frozen, but the true cause may be a fragile client flow rather than a single slow SQL query
+
+Current theory:
+- Some workflows are too dependent on the client staying responsive for the whole chain of events.
+- Slower devices widen race-condition windows and make browser timing issues easier to trigger.
+- Shared frontend state, reused modals, client-only temporary data, and long request chains are especially risky on old hardware.
+- Mobile/browser backgrounding can also interrupt or desync flows that look fine on desktop development machines.
+
+Stocktake batch flow as the clearest example:
+- Search reliability was vulnerable to shared abort-controller behavior between different search inputs.
+- Batch apply was originally fragile because it relied on a long client-side sequence instead of one atomic bulk save.
+- The apply button state could remain stuck in `Applying...` because the modal reuses button state after success.
+- Batch entries themselves are high-risk if they only exist in browser memory until a full apply completes.
+
+Hardening direction:
+- Prefer atomic server-side operations over long client-side chains.
+- Avoid client-only temporary state for high-effort user input unless it has local recovery.
+- Use independent request cancellation / debounce state per input or feature.
+- Make submit buttons and modal state explicitly reset on success, failure, close, and reopen.
+- Add lightweight tracing around high-risk flows so incidents on the client PC can be distinguished from actual backend slowness.
+- When testing critical workflows, do not rely only on a dev laptop; verify behavior on the shop PC and on slower mobile devices too.
+
+- This section is a reminder that performance bugs in this system are not always "server slow" issues.
+- Some are resilience issues that only become visible on older devices, and we should treat that as a product-level bug class to fix deliberately.
+
 - Random admin login redirect to Access Denied on first load, then normal after refresh.
 
 Current theory:
