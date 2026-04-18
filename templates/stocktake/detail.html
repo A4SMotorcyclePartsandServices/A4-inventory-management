@@ -1444,6 +1444,7 @@ function renderBatchEntries() {
 
 function openBatchCountModal() {
     if (!batchModal) return;
+    batchApplyGuard?.reset();
     batchEntries = [];
     renderBatchEntries();
     const input = document.getElementById('batchCountSearchInput');
@@ -1787,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         try {
             await applyBatchEntries();
-            batchApplyGuard?.succeed();
+            batchApplyGuard?.reset();
         } catch (error) {
             batchApplyGuard?.reset();
             A4Flash.show(error.message || 'Failed to apply batch count entry.', 'danger', { replace: true });
