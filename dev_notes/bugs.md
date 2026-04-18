@@ -29,6 +29,9 @@ Use this section for things that are not necessarily broken right now, but could
 Observed pattern so far:
 - stocktake batch item search could behave intermittently on the shop machine, sometimes only working again after deleting and retyping
 - stocktake batch `Apply to draft` could appear stuck, fail to complete, or lose in-memory batch work after refresh
+- sales encoding could lose in-progress work after refresh or after staff leaves the tab to serve a customer
+- PO entry could lose vendor / notes / item rows after interruption or page refresh
+- PO receiving could lose partial receive quantities and counted-piece inputs after interruption or page refresh
 - logout/login on mobile could be affected by stale pages, resumed tabs, and delayed browser state updates
 - more generally, there are incidents where a user says the system is "loading forever" or appears frozen, but the true cause may be a fragile client flow rather than a single slow SQL query
 
@@ -38,24 +41,74 @@ Current theory:
 - Shared frontend state, reused modals, client-only temporary data, and long request chains are especially risky on old hardware.
 - Mobile/browser backgrounding can also interrupt or desync flows that look fine on desktop development machines.
 
-Stocktake batch flow as the clearest example:
-- Search reliability was vulnerable to shared abort-controller behavior between different search inputs.
-- Batch apply was originally fragile because it relied on a long client-side sequence instead of one atomic bulk save.
-- The apply button state could remain stuck in `Applying...` because the modal reuses button state after success.
-- Batch entries themselves are high-risk if they only exist in browser memory until a full apply completes.
+Hardening applied so far:
+- `templates/stocktake/detail.html`
+  batch search now resets request state more safely, ignores stale responses better, and shows clearer loading / error state
+  batch entries now persist in `sessionStorage` so they survive modal close, refresh, and interrupted apply attempts
+  batch `Apply to Draft` now behaves more like an atomic save instead of a fragile in-memory-only step
+  modal action state was tightened, including disabling `Clear Batch` / `Apply to Draft` when nothing is queued
+  main stocktake table edits now also persist locally and restore after refresh / interruption
+  add-item-from-search got duplicate-tap / in-flight protection
+- `templates/transactions/out.html`
+  in-progress sale drafts now persist in `sessionStorage` and restore after refresh, interruption, or stale-tab resume
+  restored sale state covers customer, mechanics, items, services, bundle config, payment state, notes, and pending loyalty redemptions
+  programmatic item / bundle changes now flush draft state immediately instead of relying only on delayed save timing
+  successful sale submit now disables further draft persistence before redirect so old drafts do not reappear
+- `templates/transactions/order.html`
+  in-progress PO drafts now persist continuously in `sessionStorage`
+  restored PO state covers vendor, notes, and order item rows
+  PO page now restores after refresh / interruption and warns on resumed stale-tab return
+  successful PO save now clears and disables draft persistence before redirect
+- `templates/transactions/receive.html`
+  partial receiving input now persists in `sessionStorage`
+  restored receive state covers received-today and counted-piece values per PO item row
+  receive page now restores after refresh / interruption and warns on resumed stale-tab return
+  successful receive confirm now clears and disables draft persistence before redirect
+- `templates/base.html`
+  raised shared flash z-index so warnings / errors are not hidden behind modals during fragile flows
 
-Hardening direction:
+What these changes are trying to solve:
 - Prefer atomic server-side operations over long client-side chains.
 - Avoid client-only temporary state for high-effort user input unless it has local recovery.
 - Use independent request cancellation / debounce state per input or feature.
 - Make submit buttons and modal state explicitly reset on success, failure, close, and reopen.
+- Persist high-effort in-progress form state on critical pages so interruption does not equal lost work.
+- On stale-tab resume, restore the draft and warn the user instead of silently continuing from uncertain page state.
+- Clear draft persistence immediately after successful submit so completed work does not come back on redirect.
 - Add lightweight tracing around high-risk flows so incidents on the client PC can be distinguished from actual backend slowness.
 - When testing critical workflows, do not rely only on a dev laptop; verify behavior on the shop PC and on slower mobile devices too.
+
+Pages already hardened in this pass:
+- stocktake detail page
+- sales out page
+- PO order page
+- PO receive page
+- shared flash layer in base layout
+
+Other pages that may still benefit from the same treatment:
+- `templates/transactions/stock_in.html`
+  likely still exposed to stale search state, interrupted encoding, and lost unsaved item rows
+- `templates/transactions/refund.html`
+  replacement / refund item search and in-progress refund state may still be vulnerable on slow devices
+- inventory modals / item-adjustment flows
+  reused modal state and overlapping searches are still common fragility points
+- long-lived authenticated pages in general
+  any page that keeps meaningful unsaved work only in DOM / JS memory may still freeze or become stale after tab backgrounding
+
+Pickup notes for the next pass:
+- audit `stock_in.html` first if the client reports similar "leave tab, come back, work is gone" behavior there
+- look for pages where users do high-effort input without an explicit save every few seconds
+- add per-page local draft recovery only where the input cost is high enough to justify it
+- keep storage payloads compact; store form state, IDs, and row values, not search result lists or rendered HTML
+- when a page has default prefilled values, compare against the initial state so the app does not treat untouched defaults as a real draft
+- for resumed-tab issues, prefer either:
+  restore + visible warning when unsaved work exists
+  or safe auto-refresh when there is no meaningful unsaved state
 
 - This section is a reminder that performance bugs in this system are not always "server slow" issues.
 - Some are resilience issues that only become visible on older devices, and we should treat that as a product-level bug class to fix deliberately.
 
-- Random admin login redirect to Access Denied on first load, then normal after refresh.
+## Random admin login redirect to Access Denied on first load, then normal after refresh.
 
 Current theory:
 - There were likely 2 overlapping causes.

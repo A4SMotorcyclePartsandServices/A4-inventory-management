@@ -590,7 +590,8 @@
 </div>
 
 <script>
-const DRAFT_KEY = 'po_draft_v2';
+const orderUrlParams = new URLSearchParams(window.location.search);
+const DRAFT_KEY = `po_draft_v3:${window.location.pathname}:${orderUrlParams.get('po_id') || 'new'}`;
 let orderItems = [];
 let editingPoId = null;
 const vendorOptions = {{ vendors|tojson }};
@@ -615,39 +616,23 @@ const vendorRecommendationChips = document.getElementById('vendorRecommendationC
 let vendorRecommendationItems = [];
 let itemSearchDebounceTimer = null;
 let itemSearchAbortController = null;
+let isRestoringOrderDraft = false;
+let orderDraftPersistenceDisabled = false;
+let orderPageHiddenAt = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const params = new URLSearchParams(window.location.search);
-    const prefilledId = params.get('prefilled_id');
-    editingPoId = params.get('po_id');
+    const prefilledId = orderUrlParams.get('prefilled_id');
+    editingPoId = orderUrlParams.get('po_id');
 
     if (editingPoId) {
         await loadExistingOrder(editingPoId);
+        await restoreOrderDraft();
         return;
     }
 
-    const savedDraft = sessionStorage.getItem(DRAFT_KEY);
-    if (savedDraft) {
-        try {
-            const parsedDraft = JSON.parse(savedDraft);
-            if (Array.isArray(parsedDraft)) {
-                orderItems = parsedDraft;
-            } else {
-                orderItems = parsedDraft.orderItems || [];
-                notesInput.value = parsedDraft.notes || '';
-                if (parsedDraft.vendor) {
-                    selectVendor(parsedDraft.vendor);
-                }
-            }
-            renderTable();
-        } catch (error) {
-            console.error('Failed to restore draft:', error);
-            orderItems = [];
-        }
-        sessionStorage.removeItem(DRAFT_KEY);
-    }
+    const restoredDraft = await restoreOrderDraft();
 
-    if (prefilledId) {
+    if (prefilledId && !restoredDraft) {
         try {
             const response = await fetch(`/api/search?id=${prefilledId}`);
             const data = await response.json();
@@ -661,6 +646,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 });
+
+window.addEventListener('pageshow', async (event) => {
+    if (event.persisted) {
+        await restoreOrderDraft({ reason: 'resume' });
+    }
+});
+
+document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+        orderPageHiddenAt = Date.now();
+        persistOrderDraft();
+        return;
+    }
+
+    if (!orderPageHiddenAt) {
+        return;
+    }
+
+    const hiddenDuration = Date.now() - orderPageHiddenAt;
+    orderPageHiddenAt = null;
+    if (hiddenDuration >= 60000) {
+        await restoreOrderDraft({ reason: 'resume' });
+    }
+});
+
+window.addEventListener('pagehide', flushOrderDraftPersist);
+window.addEventListener('beforeunload', flushOrderDraftPersist);
 
 function formatStatusLabel(status) {
     return String(status || 'DRAFT').replaceAll('_', ' ');
@@ -718,6 +730,144 @@ function getSelectedVendorDraft() {
     };
 }
 
+function getStoredOrderDraft() {
+    try {
+        const raw = sessionStorage.getItem(DRAFT_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.warn('Failed to read order draft state:', error);
+        return null;
+    }
+}
+
+function clearStoredOrderDraft() {
+    try {
+        sessionStorage.removeItem(DRAFT_KEY);
+    } catch (error) {
+        console.warn('Failed to clear order draft state:', error);
+    }
+}
+
+function getCurrentOrderItemsSnapshot() {
+    return orderItems.map((item) => ({
+        id: Number(item.id),
+        name: item.name || item.item_name || '',
+        qty: Number(item.qty || 1),
+        cost: Number(item.cost || 0),
+        purchase_mode: normalizePurchaseMode(item.purchase_mode),
+        default_piece_cost: Number(item.default_piece_cost || 0),
+        current_stock: Number(item.current_stock || 0),
+        pending_stock: Number(item.pending_stock || 0),
+        pending_box_quantity: Number(item.pending_box_quantity || 0),
+    }));
+}
+
+function collectOrderDraftState() {
+    return {
+        vendor: getSelectedVendorDraft(),
+        notes: notesInput.value || '',
+        orderItems: getCurrentOrderItemsSnapshot(),
+    };
+}
+
+function hasMeaningfulOrderDraftState(state) {
+    if (!state) {
+        return false;
+    }
+    return Boolean(
+        (state.vendor?.id || '').toString().trim()
+        || (state.notes || '').trim()
+        || (state.orderItems || []).length
+    );
+}
+
+function persistOrderDraft() {
+    if (isRestoringOrderDraft || orderDraftPersistenceDisabled) {
+        return;
+    }
+
+    const state = collectOrderDraftState();
+    if (!hasMeaningfulOrderDraftState(state)) {
+        clearStoredOrderDraft();
+        return;
+    }
+
+    try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+            updated_at: new Date().toISOString(),
+            state,
+        }));
+    } catch (error) {
+        console.warn('Failed to persist order draft state:', error);
+    }
+}
+
+function scheduleOrderDraftPersist(delay = 180) {
+    if (isRestoringOrderDraft || orderDraftPersistenceDisabled) {
+        return;
+    }
+
+    window.clearTimeout(scheduleOrderDraftPersist.timerId);
+    scheduleOrderDraftPersist.timerId = window.setTimeout(() => {
+        persistOrderDraft();
+    }, delay);
+}
+scheduleOrderDraftPersist.timerId = null;
+
+function flushOrderDraftPersist() {
+    window.clearTimeout(scheduleOrderDraftPersist.timerId);
+    scheduleOrderDraftPersist.timerId = null;
+    persistOrderDraft();
+}
+
+async function restoreOrderDraft(options = {}) {
+    const { reason = 'reload' } = options;
+    const snapshot = getStoredOrderDraft();
+    const state = snapshot?.state;
+    if (!hasMeaningfulOrderDraftState(state)) {
+        return false;
+    }
+
+    isRestoringOrderDraft = true;
+    try {
+        orderItems = Array.isArray(state.orderItems)
+            ? state.orderItems.map((item) => ({
+                id: Number(item.id),
+                name: item.name || '',
+                qty: Number(item.qty || 1),
+                cost: Number(item.cost || 0),
+                purchase_mode: normalizePurchaseMode(item.purchase_mode),
+                default_piece_cost: Number(item.default_piece_cost || 0),
+                current_stock: Number(item.current_stock || 0),
+                pending_stock: Number(item.pending_stock || 0),
+                pending_box_quantity: Number(item.pending_box_quantity || 0),
+            }))
+            : [];
+
+        notesInput.value = state.notes || '';
+        if (state.vendor?.id) {
+            selectVendor(state.vendor);
+        } else {
+            clearVendorSelection();
+        }
+
+        renderTable();
+        renderVendorRecommendations();
+        showOrderAlert(
+            reason === 'resume'
+                ? 'This purchase order page resumed after being idle. Restored the current draft. Review it before saving.'
+                : 'Recovered the current purchase order draft after refresh or interruption.',
+            reason === 'resume' ? 'warning' : 'info'
+        );
+        return true;
+    } catch (error) {
+        console.warn('Failed to restore order draft state:', error);
+        return false;
+    } finally {
+        isRestoringOrderDraft = false;
+    }
+}
+
 function renderVendorMeta(vendor) {
     const parts = [];
     if (vendor.address) parts.push(`Address: ${escapeHtml(vendor.address)}`);
@@ -738,6 +888,7 @@ function selectVendor(vendor) {
     vendorSelectedCard.style.display = 'block';
     vendorSelect.classList.remove('border-danger');
     loadVendorRecommendations(vendor.id, vendor.vendor_name || '');
+    scheduleOrderDraftPersist();
 }
 
 function clearVendorSelection() {
@@ -751,6 +902,7 @@ function clearVendorSelection() {
     vendorSelectedCard.style.display = 'none';
     vendorRecommendationItems = [];
     renderVendorRecommendations();
+    scheduleOrderDraftPersist();
 }
 
 function renderVendorRecommendations() {
@@ -852,6 +1004,7 @@ function openNewVendorModal(prefill = '') {
 }
 
 async function loadExistingOrder(poId) {
+    isRestoringOrderDraft = true;
     try {
         const response = await fetch(`/api/order/${poId}`);
         const data = await response.json();
@@ -899,6 +1052,8 @@ async function loadExistingOrder(poId) {
         setTimeout(() => {
             window.location.href = '/transaction/orders/list';
         }, 1200);
+    } finally {
+        isRestoringOrderDraft = false;
     }
 }
 
@@ -934,6 +1089,9 @@ document.getElementById('newVendorModal').addEventListener('hidden.bs.modal', ()
 });
 
 clearVendorBtn.addEventListener('click', clearVendorSelection);
+notesInput.addEventListener('input', () => {
+    scheduleOrderDraftPersist();
+});
 
 document.getElementById('saveNewVendorBtn').addEventListener('click', async () => {
     const vendor = {
@@ -1051,20 +1209,12 @@ document.addEventListener('click', (e) => {
 });
 
 backToOrderListBtn?.addEventListener('click', () => {
-    if (!editingPoId) {
-        saveDraftBeforeLeaving();
-    }
+    saveDraftBeforeLeaving();
     window.location.href = '/transaction/orders/list';
 });
 
 function saveDraftBeforeLeaving() {
-    if (orderItems.length > 0 || vendorSelect.value || notesInput.value.trim()) {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
-            orderItems,
-            vendor: getSelectedVendorDraft(),
-            notes: notesInput.value,
-        }));
-    }
+    flushOrderDraftPersist();
 }
 
 function addItemToOrder(item) {
@@ -1085,6 +1235,7 @@ function addItemToOrder(item) {
         pending_box_quantity: item.pending_box_quantity || 0
     });
     renderTable();
+    flushOrderDraftPersist();
 
     itemSearch.value = '';
     searchResults.style.display = 'none';
@@ -1210,11 +1361,13 @@ function renderTable() {
 function updateQty(index, val) {
     orderItems[index].qty = parseInt(val, 10) || 1;
     renderTable();
+    scheduleOrderDraftPersist();
 }
 
 function updateCost(index, val) {
     orderItems[index].cost = parseFloat(val) || 0;
     renderTable();
+    scheduleOrderDraftPersist();
 }
 
 function updatePurchaseMode(index, val) {
@@ -1225,11 +1378,13 @@ function updatePurchaseMode(index, val) {
         orderItems[index].cost = Number(orderItems[index].default_piece_cost || 0);
     }
     renderTable();
+    scheduleOrderDraftPersist();
 }
 function removeItem(index) {
     orderItems.splice(index, 1);
     renderTable();
     renderVendorRecommendations();
+    flushOrderDraftPersist();
 }
 
 function showOrderAlert(message, type) {
@@ -1393,7 +1548,8 @@ async function submitOrder() {
 
         const result = await response.json();
         if (result.status === 'success') {
-            sessionStorage.removeItem(DRAFT_KEY);
+            orderDraftPersistenceDisabled = true;
+            clearStoredOrderDraft();
             window.location.href = '/transaction/orders/list';
         } else {
             submitGuard.reset();

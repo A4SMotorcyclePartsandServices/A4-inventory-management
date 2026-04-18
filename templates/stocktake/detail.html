@@ -844,6 +844,9 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-outline-danger" id="clearBatchCountBtn">
+                    Clear Batch
+                </button>
                 <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
                 <button type="button" class="btn btn-warning" id="applyBatchCountBtn">
                     <i class="bi bi-save me-1"></i>Apply to Draft
@@ -857,6 +860,8 @@
 {% block scripts %}
 <script>
 const stocktakeSessionId = {{ stocktake.id|tojson }};
+const BATCH_DRAFT_STORAGE_KEY = `stocktake:batch-draft:${stocktakeSessionId}`;
+const TABLE_DRAFT_STORAGE_KEY = `stocktake:table-draft:${stocktakeSessionId}`;
 let stocktakeSession = {{ stocktake|tojson }};
 let searchDebounce = null;
 let batchSearchDebounce = null;
@@ -865,6 +870,8 @@ let batchModal = null;
 let batchEntries = [];
 let lastMainSearchItems = [];
 let lastBatchSearchItems = [];
+let batchSearchRequestSequence = 0;
+let pendingMainAddItemId = null;
 const canViewCurrentStock = {{ (current_user and current_user.role == 'admin') | tojson }};
 const stocktakeListUrl = {{ url_for('stocktake.stocktake_list')|tojson }};
 let confirmSessionGuard = null;
@@ -872,7 +879,7 @@ let cancelSessionGuard = null;
 let saveDraftGuard = null;
 let batchApplyGuard = null;
 const mainSearchState = { activeController: null };
-const batchSearchState = { activeController: null };
+const batchSearchState = { activeController: null, requestSequence: 0 };
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -921,6 +928,279 @@ function hideSearchStockMeta(container) {
             .trim();
         meta.textContent = cleanedText;
     });
+}
+
+function normalizeBatchEntry(entry) {
+    if (!entry) {
+        return null;
+    }
+
+    const itemId = Number(entry.item_id);
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+        return null;
+    }
+
+    const rawCount = entry.counted_stock;
+    let countedStock = '';
+    if (rawCount !== '' && rawCount != null) {
+        const numericCount = Number(rawCount);
+        if (!Number.isFinite(numericCount) || numericCount < 0) {
+            return null;
+        }
+        countedStock = String(Math.trunc(numericCount));
+    }
+
+    return {
+        item_id: itemId,
+        name: String(entry.name || 'Unknown Item'),
+        category: String(entry.category || ''),
+        description: String(entry.description || ''),
+        recently_counted: Boolean(entry.recently_counted),
+        has_stocktake_history: Boolean(entry.has_stocktake_history),
+        days_since_last_stocktake: entry.days_since_last_stocktake == null ? null : Number(entry.days_since_last_stocktake),
+        last_stocktake_session_number: String(entry.last_stocktake_session_number || ''),
+        counted_stock: countedStock,
+        notes: String(entry.notes || ''),
+        exists_in_session: Boolean(entry.exists_in_session),
+    };
+}
+
+function normalizeTableDraftEntry(entry) {
+    if (!entry) {
+        return null;
+    }
+
+    const itemId = Number(entry.item_id);
+    if (!Number.isFinite(itemId) || itemId <= 0) {
+        return null;
+    }
+
+    const rawCount = entry.counted_stock;
+    let countedStock = null;
+    if (rawCount !== '' && rawCount != null) {
+        const numericCount = Number(rawCount);
+        if (!Number.isFinite(numericCount) || numericCount < 0) {
+            return null;
+        }
+        countedStock = Math.trunc(numericCount);
+    }
+
+    return {
+        item_id: itemId,
+        counted_stock: countedStock,
+        notes: String(entry.notes || ''),
+    };
+}
+
+function persistTableDraftState(items = collectDraftItems()) {
+    try {
+        const normalizedItems = Array.isArray(items)
+            ? items.map((entry) => normalizeTableDraftEntry(entry)).filter(Boolean)
+            : [];
+        if (!normalizedItems.length) {
+            sessionStorage.removeItem(TABLE_DRAFT_STORAGE_KEY);
+            return;
+        }
+        sessionStorage.setItem(TABLE_DRAFT_STORAGE_KEY, JSON.stringify({
+            updatedAt: new Date().toISOString(),
+            items: normalizedItems,
+        }));
+    } catch (error) {
+        console.warn('Failed to persist stocktake table draft:', error);
+    }
+}
+
+function clearTableDraftState() {
+    try {
+        sessionStorage.removeItem(TABLE_DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Failed to clear stocktake table draft:', error);
+    }
+}
+
+function restoreTableDraftState() {
+    if (!sessionIsEditable()) {
+        clearTableDraftState();
+        return;
+    }
+
+    let rawValue = null;
+    try {
+        rawValue = sessionStorage.getItem(TABLE_DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Failed to read stocktake table draft:', error);
+        return;
+    }
+    if (!rawValue) {
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(rawValue);
+        const restoredItems = Array.isArray(parsed?.items)
+            ? parsed.items.map((entry) => normalizeTableDraftEntry(entry)).filter(Boolean)
+            : [];
+
+        if (!restoredItems.length) {
+            clearTableDraftState();
+            return;
+        }
+
+        stocktakeSession = mergeUnsavedDraftIntoSession(stocktakeSession, restoredItems);
+        renderItemsTable();
+        setDirtyState(true);
+        A4Flash.show('Recovered unsaved stocktake table edits for this draft.', 'info', {
+            replace: true,
+            autoCloseMs: 3200,
+        });
+    } catch (error) {
+        console.warn('Failed to restore stocktake table draft:', error);
+        clearTableDraftState();
+    }
+}
+
+function persistBatchDraftState(options = {}) {
+    const {
+        pendingApply = false,
+    } = options;
+    try {
+        if (!Array.isArray(batchEntries) || !batchEntries.length) {
+            sessionStorage.removeItem(BATCH_DRAFT_STORAGE_KEY);
+            return;
+        }
+        const payload = {
+            pendingApply: Boolean(pendingApply),
+            updatedAt: new Date().toISOString(),
+            entries: batchEntries
+                .map((entry) => normalizeBatchEntry(entry))
+                .filter(Boolean),
+        };
+        sessionStorage.setItem(BATCH_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Failed to persist stocktake batch draft:', error);
+    }
+}
+
+function clearBatchDraftState() {
+    try {
+        sessionStorage.removeItem(BATCH_DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Failed to clear stocktake batch draft:', error);
+    }
+}
+
+function resetBatchSearchUi(options = {}) {
+    const {
+        preserveInput = false,
+    } = options;
+    clearTimeout(batchSearchDebounce);
+    batchSearchDebounce = null;
+    batchSearchState.activeController?.abort();
+    batchSearchState.activeController = null;
+    batchSearchState.requestSequence = 0;
+    batchSearchRequestSequence += 1;
+    lastBatchSearchItems = [];
+
+    const input = document.getElementById('batchCountSearchInput');
+    const results = document.getElementById('batchCountSearchResults');
+    if (input && !preserveInput) {
+        input.value = '';
+    }
+    if (results) {
+        results.innerHTML = '';
+        results.style.display = 'none';
+    }
+}
+
+function showBatchSearchMessage(message, cssClass = 'text-muted') {
+    const results = document.getElementById('batchCountSearchResults');
+    if (!results) return;
+    results.innerHTML = `<div class="p-3 small ${cssClass}">${escapeHtml(message)}</div>`;
+    results.style.display = 'block';
+}
+
+function clearBatchEntries(options = {}) {
+    const {
+        persist = true,
+    } = options;
+    batchEntries = [];
+    renderBatchEntries();
+    if (persist) {
+        clearBatchDraftState();
+    }
+}
+
+function sessionAlreadyContainsBatchEntries(entries) {
+    if (!Array.isArray(entries) || !entries.length) {
+        return false;
+    }
+    const sessionItemMap = new Map(
+        (stocktakeSession.items || []).map((item) => [
+            Number(item.item_id),
+            {
+                counted_stock: item.counted_stock == null ? '' : String(Number(item.counted_stock)),
+                notes: String(item.notes || ''),
+            },
+        ])
+    );
+
+    return entries.every((entry) => {
+        const sessionItem = sessionItemMap.get(Number(entry.item_id));
+        if (!sessionItem) {
+            return false;
+        }
+        return sessionItem.counted_stock === String(entry.counted_stock || '')
+            && sessionItem.notes === String(entry.notes || '');
+    });
+}
+
+function restoreBatchDraftState() {
+    if (!sessionIsEditable()) {
+        clearBatchDraftState();
+        return;
+    }
+
+    let rawValue = null;
+    try {
+        rawValue = sessionStorage.getItem(BATCH_DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Failed to read stocktake batch draft:', error);
+        return;
+    }
+    if (!rawValue) {
+        return;
+    }
+
+    try {
+        const parsed = JSON.parse(rawValue);
+        const restoredEntries = Array.isArray(parsed?.entries)
+            ? parsed.entries.map((entry) => normalizeBatchEntry(entry)).filter(Boolean)
+            : [];
+
+        if (!restoredEntries.length) {
+            clearBatchDraftState();
+            return;
+        }
+
+        if (sessionAlreadyContainsBatchEntries(restoredEntries)) {
+            clearBatchDraftState();
+            A4Flash.show('Previous batch changes were already applied to this draft.', 'info', { replace: true, autoCloseMs: 2600 });
+            return;
+        }
+
+        batchEntries = restoredEntries;
+        renderBatchEntries();
+        A4Flash.show(
+            parsed?.pendingApply
+                ? 'Recovered batch count entries after an interrupted apply. Review and apply again if needed.'
+                : 'Recovered unsaved batch count entries for this stocktake draft.',
+            parsed?.pendingApply ? 'warning' : 'info',
+            { replace: true, autoCloseMs: 3600 }
+        );
+    } catch (error) {
+        console.warn('Failed to restore stocktake batch draft:', error);
+        clearBatchDraftState();
+    }
 }
 
 renderItemMetaLine = function(item, className = 'stocktake-item-category') {
@@ -1043,6 +1323,8 @@ function renderSessionMeta() {
 
     if (!sessionIsEditable()) {
         setDirtyState(false);
+        clearTableDraftState();
+        clearBatchDraftState();
     }
 }
 
@@ -1191,6 +1473,58 @@ function renderSearchResults(items, options = {}) {
     hideSearchStockMeta(container);
 }
 
+function renderSearchResults(items, options = {}) {
+    const {
+        containerId = 'itemSearchResults',
+        mode = 'main',
+    } = options;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (mode === 'main') {
+        lastMainSearchItems = Array.isArray(items) ? items : [];
+    }
+    if (mode === 'batch') {
+        lastBatchSearchItems = Array.isArray(items) ? items : [];
+    }
+    if (!items.length) {
+        container.innerHTML = `<div class="p-3 text-muted small">No matching items found.</div>`;
+        container.style.display = 'block';
+        return;
+    }
+
+    container.innerHTML = items.map((item) => {
+        const isPendingAdd = mode === 'main' && Number(pendingMainAddItemId) === Number(item.id);
+        const isDisabled = getSearchSelectionState(item.id).isSelected || isPendingAdd;
+        return `
+        <button type="button" class="search-result" data-item-id="${item.id}" data-search-mode="${mode}" ${isDisabled ? 'disabled' : ''}>
+            <div class="fw-bold">${escapeHtml(item.name || '')}</div>
+            <div class="result-meta">
+                Stock: ${Number(item.current_stock || 0)}
+                ${item.category ? ` &middot; ${escapeHtml(item.category)}` : ''}
+                ${item.description ? ` &middot; ${escapeHtml(item.description)}` : ''}
+            </div>
+            ${renderAlreadySelectedNote(item.id)}
+            ${isPendingAdd ? `
+                <div class="result-stocktake-meta info">
+                    Adding item to the stocktake draft...
+                </div>
+            ` : ''}
+            ${item.recently_counted ? `
+                <div class="result-stocktake-meta warning">
+                    Counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}.
+                </div>
+            ` : item.has_stocktake_history ? `
+                <div class="result-stocktake-meta info">
+                    Last counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}.
+                </div>
+            ` : ''}
+        </button>
+    `;
+    }).join('');
+    container.style.display = 'block';
+    hideSearchStockMeta(container);
+}
+
 async function confirmRecentCountWarning(item) {
     if (!item || !item.recently_counted) {
         return true;
@@ -1211,14 +1545,20 @@ async function fetchSearchResults(query, state) {
     if (state) {
         state.activeController = controller;
     }
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
-        signal: controller.signal,
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        throw new Error(data.error || 'Failed to search items.');
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+            signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to search items.');
+        }
+        return Array.isArray(data.items) ? data.items : [];
+    } finally {
+        if (state?.activeController === controller) {
+            state.activeController = null;
+        }
     }
-    return Array.isArray(data.items) ? data.items : [];
 }
 
 async function addItemToSession(itemId) {
@@ -1347,6 +1687,7 @@ async function persistDraft(items, options = {}) {
     }
     stocktakeSession = data.session;
     setDirtyState(false);
+    clearTableDraftState();
     renderSessionMeta();
     renderItemsTable();
     if (redirectOnSuccess) {
@@ -1384,6 +1725,7 @@ function upsertBatchEntry(item) {
         exists_in_session: Boolean(sessionItem),
     };
     batchEntries.push(entry);
+    persistBatchDraftState();
     return entry;
 }
 
@@ -1392,9 +1734,17 @@ function renderBatchEntries() {
     const emptyState = document.getElementById('batchCountEmptyState');
     const tableWrap = document.getElementById('batchCountTableWrap');
     const summary = document.getElementById('batchCountSummary');
+    const clearBtn = document.getElementById('clearBatchCountBtn');
+    const applyBtn = document.getElementById('applyBatchCountBtn');
     if (!tbody || !emptyState || !tableWrap || !summary) return;
 
     summary.textContent = `${batchEntries.length} item(s) ready to apply.`;
+    if (clearBtn) {
+        clearBtn.disabled = batchEntries.length === 0;
+    }
+    if (applyBtn) {
+        applyBtn.disabled = batchEntries.length === 0;
+    }
     if (!batchEntries.length) {
         emptyState.style.display = '';
         tableWrap.style.display = 'none';
@@ -1445,15 +1795,9 @@ function renderBatchEntries() {
 function openBatchCountModal() {
     if (!batchModal) return;
     batchApplyGuard?.reset();
-    batchEntries = [];
     renderBatchEntries();
+    resetBatchSearchUi();
     const input = document.getElementById('batchCountSearchInput');
-    const results = document.getElementById('batchCountSearchResults');
-    if (input) input.value = '';
-    if (results) {
-        results.innerHTML = '';
-        results.style.display = 'none';
-    }
     batchModal.show();
     window.setTimeout(() => input?.focus(), 180);
 }
@@ -1485,14 +1829,15 @@ async function applyBatchEntries() {
         });
     });
 
+    persistBatchDraftState({ pendingApply: true });
     await persistDraft(Array.from(mergedMap.values()), {
         redirectOnSuccess: false,
         headers: batchApplyGuard
             ? batchApplyGuard.buildHeaders({ 'Content-Type': 'application/json' })
             : { 'Content-Type': 'application/json' },
     });
-    batchEntries = [];
-    renderBatchEntries();
+    clearBatchEntries();
+    resetBatchSearchUi();
     batchModal?.hide();
     A4Flash.show('Batch count entry applied to the draft.', 'success', { replace: true, autoCloseMs: 2400 });
 }
@@ -1583,7 +1928,12 @@ document.addEventListener('DOMContentLoaded', function () {
     renderItemsTable();
 
     if (window.bootstrap && document.getElementById('batchCountModal')) {
-        batchModal = new bootstrap.Modal(document.getElementById('batchCountModal'));
+        const batchModalElement = document.getElementById('batchCountModal');
+        batchModal = new bootstrap.Modal(batchModalElement);
+        batchModalElement.addEventListener('hidden.bs.modal', function () {
+            batchApplyGuard?.reset();
+            resetBatchSearchUi();
+        });
     }
 
     const searchInput = document.getElementById('itemSearchInput');
@@ -1632,19 +1982,22 @@ document.addEventListener('DOMContentLoaded', function () {
     if (batchSearchInput) {
         batchSearchInput.addEventListener('input', function () {
             const query = batchSearchInput.value.trim();
-            clearTimeout(batchSearchDebounce);
-            batchSearchState.activeController?.abort();
+            resetBatchSearchUi({ preserveInput: true });
 
             if (query.length < 2) {
-                batchResultsBox.style.display = 'none';
-                batchResultsBox.innerHTML = '';
                 return;
             }
 
+            const requestSequence = ++batchSearchRequestSequence;
+            batchSearchState.requestSequence = requestSequence;
+            showBatchSearchMessage('Searching items...');
             batchSearchDebounce = setTimeout(async () => {
                 try {
                     const items = await fetchSearchResults(query, batchSearchState);
-                    if ((batchSearchInput.value.trim() || '') !== query) {
+                    if (
+                        batchSearchState.requestSequence !== requestSequence
+                        || (batchSearchInput.value.trim() || '') !== query
+                    ) {
                         return;
                     }
                     renderSearchResults(items, { containerId: 'batchCountSearchResults', mode: 'batch' });
@@ -1652,6 +2005,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (error.name === 'AbortError') {
                         return;
                     }
+                    if (batchSearchState.requestSequence !== requestSequence) {
+                        return;
+                    }
+                    showBatchSearchMessage('Search failed. Keep typing or clear the field and try again.', 'text-danger');
                     A4Flash.show(error.message || 'Failed to search items.', 'danger', { replace: true });
                 }
             }, 220);
@@ -1662,17 +2019,26 @@ document.addEventListener('DOMContentLoaded', function () {
         resultsBox.addEventListener('click', async function (event) {
             const button = event.target.closest('.search-result');
             if (!button) return;
+            if (pendingMainAddItemId != null) return;
             const item = lastMainSearchItems.find((entry) => Number(entry.id) === Number(button.dataset.itemId));
+            const itemId = Number(button.dataset.itemId);
 
             try {
+                pendingMainAddItemId = itemId;
+                renderSearchResults(lastMainSearchItems, { containerId: 'itemSearchResults', mode: 'main' });
                 const shouldContinue = await confirmRecentCountWarning(item);
                 if (!shouldContinue) return;
-                await addItemToSession(Number(button.dataset.itemId));
+                await addItemToSession(itemId);
                 resultsBox.style.display = 'none';
                 resultsBox.innerHTML = '';
                 if (searchInput) searchInput.value = '';
             } catch (error) {
                 A4Flash.show(error.message || 'Failed to add item.', 'danger', { replace: true });
+            } finally {
+                pendingMainAddItemId = null;
+                if (resultsBox && searchInput && searchInput.value.trim().length >= 2) {
+                    renderSearchResults(lastMainSearchItems, { containerId: 'itemSearchResults', mode: 'main' });
+                }
             }
         });
     }
@@ -1716,9 +2082,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!entry) return;
         if (event.target.classList.contains('batch-counted-stock-input')) {
             entry.counted_stock = event.target.value;
+            persistBatchDraftState();
         }
         if (event.target.classList.contains('batch-note-input')) {
             entry.notes = event.target.value;
+            persistBatchDraftState();
         }
     });
 
@@ -1727,6 +2095,27 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!row || !event.target.closest('.remove-batch-entry-btn')) return;
         batchEntries = batchEntries.filter((entry) => Number(entry.item_id) !== Number(row.dataset.batchItemId));
         renderBatchEntries();
+        persistBatchDraftState();
+    });
+
+    document.getElementById('clearBatchCountBtn')?.addEventListener('click', async function () {
+        if (!batchEntries.length) {
+            clearBatchEntries();
+            resetBatchSearchUi();
+            return;
+        }
+
+        const confirmed = await A4Confirm.show({
+            title: 'Clear batch count entries?',
+            text: 'This will remove all unsaved items from the current batch list.',
+            confirmButtonText: 'Clear Batch',
+            cancelButtonText: 'Keep Batch',
+            dangerMode: true,
+        });
+        if (!confirmed) return;
+
+        clearBatchEntries();
+        resetBatchSearchUi();
     });
 
     document.getElementById('stocktakeItemsBody').addEventListener('click', async function (event) {
@@ -1762,6 +2151,7 @@ document.addEventListener('DOMContentLoaded', function () {
             || event.target.classList.contains('item-note-input')
         ) {
             setDirtyState(true);
+            persistTableDraftState();
         }
     });
 
@@ -1819,7 +2209,9 @@ document.addEventListener('DOMContentLoaded', function () {
         event.returnValue = '';
     });
 
+    restoreBatchDraftState();
     setDirtyState(false);
+    restoreTableDraftState();
 });
 </script>
 {% endblock %}

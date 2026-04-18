@@ -335,6 +335,137 @@ function showToastFlash(message, type = 'warning') {
 }
 
 const RECEIVE_MAX_INPUT = 999999;
+const RECEIVE_DRAFT_KEY = `po_receive_draft:${window.location.pathname}:{{ po.id }}`;
+let isRestoringReceiveDraft = false;
+let receiveDraftPersistenceDisabled = false;
+let receivePageHiddenAt = null;
+let initialReceiveDraftSignature = '';
+
+function getStoredReceiveDraft() {
+    try {
+        const raw = sessionStorage.getItem(RECEIVE_DRAFT_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.warn('Failed to read receive draft state:', error);
+        return null;
+    }
+}
+
+function clearStoredReceiveDraft() {
+    try {
+        sessionStorage.removeItem(RECEIVE_DRAFT_KEY);
+    } catch (error) {
+        console.warn('Failed to clear receive draft state:', error);
+    }
+}
+
+function collectReceiveDraftState() {
+    return {
+        items: [...document.querySelectorAll('.item-row')].map((row) => ({
+            item_id: String(row.getAttribute('data-item-id') || ''),
+            qty_received: String(row.querySelector('.qty-input')?.value || ''),
+            stock_quantity_received: String(row.querySelector('.stock-qty-input')?.value || ''),
+        })),
+    };
+}
+
+function getReceiveDraftSignature(state) {
+    return JSON.stringify(state || { items: [] });
+}
+
+function hasMeaningfulReceiveDraftState(state) {
+    if (!state || !Array.isArray(state.items)) {
+        return false;
+    }
+
+    return getReceiveDraftSignature(state) !== initialReceiveDraftSignature;
+}
+
+function persistReceiveDraft() {
+    if (isRestoringReceiveDraft || receiveDraftPersistenceDisabled) {
+        return;
+    }
+
+    const state = collectReceiveDraftState();
+    if (!hasMeaningfulReceiveDraftState(state)) {
+        clearStoredReceiveDraft();
+        return;
+    }
+
+    try {
+        sessionStorage.setItem(RECEIVE_DRAFT_KEY, JSON.stringify({
+            updated_at: new Date().toISOString(),
+            state,
+        }));
+    } catch (error) {
+        console.warn('Failed to persist receive draft state:', error);
+    }
+}
+
+function scheduleReceiveDraftPersist(delay = 180) {
+    if (isRestoringReceiveDraft || receiveDraftPersistenceDisabled) {
+        return;
+    }
+
+    window.clearTimeout(scheduleReceiveDraftPersist.timerId);
+    scheduleReceiveDraftPersist.timerId = window.setTimeout(() => {
+        persistReceiveDraft();
+    }, delay);
+}
+scheduleReceiveDraftPersist.timerId = null;
+
+function flushReceiveDraftPersist() {
+    window.clearTimeout(scheduleReceiveDraftPersist.timerId);
+    scheduleReceiveDraftPersist.timerId = null;
+    persistReceiveDraft();
+}
+
+function restoreReceiveDraft(options = {}) {
+    const { reason = 'reload' } = options;
+    const snapshot = getStoredReceiveDraft();
+    const state = snapshot?.state;
+    if (!hasMeaningfulReceiveDraftState(state)) {
+        return false;
+    }
+
+    isRestoringReceiveDraft = true;
+    try {
+        const rowsByItemId = new Map(
+            [...document.querySelectorAll('.item-row')].map((row) => [String(row.getAttribute('data-item-id') || ''), row])
+        );
+
+        (state.items || []).forEach((entry) => {
+            const row = rowsByItemId.get(String(entry.item_id || ''));
+            if (!row) {
+                return;
+            }
+
+            const qtyInput = row.querySelector('.qty-input');
+            const stockQtyInput = row.querySelector('.stock-qty-input');
+            if (qtyInput) {
+                qtyInput.value = String(entry.qty_received || '');
+                syncReceiveRow(qtyInput);
+            }
+            if (stockQtyInput && String(row.dataset.purchaseMode || 'PIECE').toUpperCase() === 'BOX') {
+                stockQtyInput.value = String(entry.stock_quantity_received || '');
+                updateReceivePreview(row);
+            }
+        });
+
+        showToastFlash(
+            reason === 'resume'
+                ? 'This receiving page resumed after being idle. Restored the current draft. Review it before confirming.'
+                : 'Recovered the current receiving draft after refresh or interruption.',
+            reason === 'resume' ? 'warning' : 'info'
+        );
+        return true;
+    } catch (error) {
+        console.warn('Failed to restore receive draft state:', error);
+        return false;
+    } finally {
+        isRestoringReceiveDraft = false;
+    }
+}
 
 function sanitizeReceiveInput(input) {
     if (!input) {
@@ -373,6 +504,7 @@ function syncReceiveRow(input) {
     }
 
     updateReceivePreview(row);
+    scheduleReceiveDraftPersist();
 }
 
 function updateReceivePreview(row) {
@@ -471,6 +603,8 @@ async function submitReception() {
 
         const result = await response.json();
         if (result.status === 'success') {
+            receiveDraftPersistenceDisabled = true;
+            clearStoredReceiveDraft();
             window.location.href = '/transaction/orders/list';
         } else {
             submitGuard.reset();
@@ -486,13 +620,46 @@ document.querySelectorAll('.item-row').forEach(row => {
     updateReceivePreview(row);
 });
 
+initialReceiveDraftSignature = getReceiveDraftSignature(collectReceiveDraftState());
+restoreReceiveDraft();
+
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        restoreReceiveDraft({ reason: 'resume' });
+    }
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        receivePageHiddenAt = Date.now();
+        persistReceiveDraft();
+        return;
+    }
+
+    if (!receivePageHiddenAt) {
+        return;
+    }
+
+    const hiddenDuration = Date.now() - receivePageHiddenAt;
+    receivePageHiddenAt = null;
+    if (hiddenDuration >= 60000) {
+        restoreReceiveDraft({ reason: 'resume' });
+    }
+});
+
+window.addEventListener('pagehide', flushReceiveDraftPersist);
+window.addEventListener('beforeunload', flushReceiveDraftPersist);
+
 document.querySelectorAll('.qty-input').forEach(input => {
     input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
 });
 
 document.querySelectorAll('.stock-qty-input').forEach(input => {
     input.setAttribute('max', String(RECEIVE_MAX_INPUT));
-    input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
+    input.addEventListener('input', () => {
+        updateReceivePreview(input.closest('.item-row'));
+        scheduleReceiveDraftPersist();
+    });
 });
 </script>
 {% endblock %}

@@ -2027,6 +2027,188 @@ function showAlert(message, type = 'danger') {
     }
 }
 
+const SALE_DRAFT_STORAGE_KEY = `sale-draft:${window.location.pathname}`;
+let saleDraftPersistTimer = null;
+let isRestoringSaleDraft = false;
+let salePageHiddenAt = 0;
+let saleDraftPersistenceDisabled = false;
+
+function getStoredSaleDraft() {
+    try {
+        const raw = sessionStorage.getItem(SALE_DRAFT_STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch (error) {
+        console.warn('Failed to read sale draft state:', error);
+        return null;
+    }
+}
+
+function clearStoredSaleDraft() {
+    try {
+        sessionStorage.removeItem(SALE_DRAFT_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Failed to clear sale draft state:', error);
+    }
+}
+
+function getCurrentSaleItemsSnapshot() {
+    return [...document.querySelectorAll('.item-row')]
+        .map((row) => {
+            const itemId = row.querySelector('.item-id-input')?.value || '';
+            const itemName = row.querySelector('.item-input')?.value.trim() || '';
+            if (!itemId && !itemName) {
+                return null;
+            }
+            return {
+                id: itemId ? Number(itemId) : null,
+                name: itemName,
+                a4s_selling_price: Number(row.dataset.sellingPrice || 0),
+                cost_per_piece: Number(row.dataset.costPrice || 0),
+                current_stock: Number(row.querySelector('.stock-input')?.value || 0),
+                quantity: Number(row.querySelector('.qty-input')?.value || 1),
+                discount: Number(row.querySelector('.discount-input')?.value || 0),
+            };
+        })
+        .filter(Boolean);
+}
+
+function getCurrentSaleServicesSnapshot() {
+    return [...document.querySelectorAll('.service-row')]
+        .map((row) => {
+            const serviceId = row.querySelector('.service-id-input')?.value || '';
+            const serviceName = row.querySelector('.service-input')?.value.trim() || '';
+            if (!serviceId && !serviceName) {
+                return null;
+            }
+            return {
+                id: serviceId ? Number(serviceId) : null,
+                name: serviceName,
+                price: Number(row.querySelector('.service-price-input')?.value || 0),
+                mechanic_id: row.querySelector('.service-mechanic-select')?.value || '',
+                loyalty_program_id: row.dataset.loyaltyProgramId || '',
+            };
+        })
+        .filter(Boolean);
+}
+
+function getCurrentDualPaymentSnapshot() {
+    return getDualPaymentRows().map((row) => ({
+        category: row.querySelector('.dual-payment-category')?.value || '',
+        provider: row.querySelector('.dual-payment-provider')?.value || '',
+        reference: row.querySelector('.dual-payment-reference')?.value || '',
+        amount: row.querySelector('.dual-payment-amount')?.value || '',
+    }));
+}
+
+function getCurrentBundleSnapshot() {
+    const bundleId = document.getElementById('bundle-select')?.value || '';
+    const variantId = document.getElementById('bundle-variant-select')?.value || '';
+    if (!bundleId) {
+        return null;
+    }
+    return {
+        bundle_id: bundleId,
+        variant_id: variantId,
+        included_items: [...document.querySelectorAll('.bundle-item-include')].map((input) => ({
+            item_id: Number(input.dataset.itemId),
+            is_included: Boolean(input.checked),
+        })),
+    };
+}
+
+function collectSalePageState() {
+    const state = {
+        sale_mode: getActiveSaleMode(),
+        transaction_date: document.getElementById('trans-date')?.value || '',
+        date_was_manually_changed: Boolean(dateWasManuallyChanged),
+        sales_number: document.getElementById('sales-number')?.value || '',
+        quick_customer_name: document.getElementById('quick-customer-name')?.value || '',
+        customer_search: document.getElementById('customer-search')?.value || '',
+        customer: {
+            id: document.getElementById('customer-id')?.value || '',
+            no: '',
+            name: document.getElementById('customer-name')?.value || '',
+            vehicle_id: document.getElementById('vehicle-id')?.value || '',
+        },
+        mechanic_id: document.getElementById('mechanic-id')?.value || '',
+        secondary_mechanic_id: document.getElementById('mechanic-id-secondary')?.value || '',
+        payment_category: document.getElementById('payment-category')?.value || '',
+        payment_method: document.getElementById('payment-method')?.value || '',
+        reference_no: document.getElementById('ref-no')?.value || '',
+        notes: document.getElementById('trans-notes')?.value || '',
+        dual_payment_enabled: isDualPaymentEnabled(),
+        dual_payments: getCurrentDualPaymentSnapshot(),
+        items: getCurrentSaleItemsSnapshot(),
+        services: getCurrentSaleServicesSnapshot(),
+        bundle: getCurrentBundleSnapshot(),
+        loyalty_redemptions: [...loyaltyPendingRedemptions.values()],
+    };
+
+    const badgeText = document.getElementById('customer-badge-text')?.textContent || '';
+    const customerNoMatch = badgeText.match(/—\s*(.+)$/);
+    state.customer.no = customerNoMatch ? customerNoMatch[1].trim() : '';
+    return state;
+}
+
+function hasMeaningfulSalePageState(state) {
+    if (!state) return false;
+    return Boolean(
+        (state.sales_number || '').trim()
+        || (state.quick_customer_name || '').trim()
+        || (state.customer_search || '').trim()
+        || (state.customer?.id || '').trim()
+        || (state.customer?.name || '').trim()
+        || (state.mechanic_id || '').trim()
+        || (state.secondary_mechanic_id || '').trim()
+        || (state.reference_no || '').trim()
+        || (state.notes || '').trim()
+        || (state.items || []).length
+        || (state.services || []).length
+        || state.bundle
+        || (state.loyalty_redemptions || []).length
+        || Boolean(state.dual_payment_enabled)
+    );
+}
+
+function persistSalePageState() {
+    if (isRestoringSaleDraft || saleDraftPersistenceDisabled) {
+        return;
+    }
+    const state = collectSalePageState();
+    if (!hasMeaningfulSalePageState(state)) {
+        clearStoredSaleDraft();
+        return;
+    }
+    try {
+        sessionStorage.setItem(SALE_DRAFT_STORAGE_KEY, JSON.stringify({
+            updated_at: new Date().toISOString(),
+            state,
+        }));
+    } catch (error) {
+        console.warn('Failed to persist sale draft state:', error);
+    }
+}
+
+function scheduleSaleDraftPersist(delay = 180) {
+    if (isRestoringSaleDraft || saleDraftPersistenceDisabled) {
+        return;
+    }
+    window.clearTimeout(saleDraftPersistTimer);
+    saleDraftPersistTimer = window.setTimeout(() => {
+        persistSalePageState();
+    }, delay);
+}
+
+function flushSaleDraftPersist() {
+    if (isRestoringSaleDraft || saleDraftPersistenceDisabled) {
+        return;
+    }
+    window.clearTimeout(saleDraftPersistTimer);
+    saleDraftPersistTimer = null;
+    persistSalePageState();
+}
+
 /* =========================================================
    FIELD ERROR HELPERS
 ========================================================= */
@@ -2546,6 +2728,7 @@ function clearBundleSelection({ keepBundleChoice = false } = {}) {
     document.getElementById('bundle-summary').innerHTML = '';
     renderBundleMeta(null);
     calculateGrandTotal();
+    scheduleSaleDraftPersist();
 }
 
 function renderBundleVariantOptions(config) {
@@ -2631,6 +2814,7 @@ function renderBundleDetails() {
 
     syncBundleItemWarnings();
     calculateGrandTotal();
+    scheduleSaleDraftPersist();
 }
 
 function syncBundleItemWarnings() {
@@ -2720,6 +2904,7 @@ async function loadBundleConfig(bundleId) {
             document.getElementById('bundle-variant-select').value = selectedBundleConfig.variants[0].variant_id;
         }
         renderBundleDetails();
+        scheduleSaleDraftPersist();
     } catch (error) {
         console.error('Failed to load bundle config:', error);
         showAlert('Unable to load the selected bundle. Please try again.', 'warning');
@@ -2842,9 +3027,10 @@ function setSaleMode(mode) {
     toggleDualPaymentUI();
     updateQuickSaleItemHints();
     recalculateAllItemRows();
+    scheduleSaleDraftPersist();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     setDefaultTransactionDate();
 
     document.getElementById('trans-date').addEventListener('change', () => {
@@ -2874,11 +3060,15 @@ document.addEventListener('DOMContentLoaded', () => {
             updateDualPaymentTotals();
         });
     });
-    document.getElementById('bundle-select').addEventListener('change', (e) => {
-        loadBundleConfig(e.target.value);
+    document.getElementById('bundle-select').addEventListener('change', async (e) => {
+        await loadBundleConfig(e.target.value);
         updateMechanicAndServiceUI({ preserveServices: true });
+        persistSalePageState();
     });
-    document.getElementById('bundle-variant-select').addEventListener('change', renderBundleDetails);
+    document.getElementById('bundle-variant-select').addEventListener('change', () => {
+        renderBundleDetails();
+        persistSalePageState();
+    });
     document.querySelectorAll('.sale-mode-btn').forEach(btn => {
         btn.addEventListener('click', () => setSaleMode(btn.dataset.saleMode));
     });
@@ -3106,10 +3296,50 @@ document.addEventListener('DOMContentLoaded', () => {
             syncBundleItemWarnings();
             recalculateAllItemRows();
             calculateGrandTotal();
+            persistSalePageState();
         }
     });
-    loadBundleOptions();
+    await loadBundleOptions();
     setSaleMode('quick');
+    await restoreSalePageState();
+    persistSalePageState();
+
+    window.addEventListener('pageshow', async (event) => {
+        if (!event.persisted) {
+            return;
+        }
+        await restoreSalePageState({ reason: 'resume' });
+    });
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'hidden') {
+            salePageHiddenAt = Date.now();
+            persistSalePageState();
+            return;
+        }
+
+        if (!salePageHiddenAt) {
+            return;
+        }
+
+        const hiddenMs = Date.now() - salePageHiddenAt;
+        salePageHiddenAt = 0;
+        if (hiddenMs < 60000) {
+            return;
+        }
+
+        if (getStoredSaleDraft()) {
+            await restoreSalePageState({ reason: 'resume' });
+        }
+    });
+
+    window.addEventListener('pagehide', () => {
+        flushSaleDraftPersist();
+    });
+
+    window.addEventListener('beforeunload', () => {
+        flushSaleDraftPersist();
+    });
 });
 
 function setDefaultTransactionDate() {
@@ -3591,6 +3821,7 @@ function applySaleBatchEntries() {
     document.getElementById('saleBatchSearchResults').innerHTML = '';
     document.getElementById('saleBatchSearchResults').style.display = 'none';
     saleBatchModal?.hide();
+    scheduleSaleDraftPersist();
     showAlert('Batch items applied to the current sale.', 'success');
 }
 
@@ -3870,6 +4101,7 @@ async function fetchLoyaltyEligibility(customerId) {
                             }
                         }
                     }
+                    scheduleSaleDraftPersist();
                 });
             }
 
@@ -4030,10 +4262,12 @@ CUSTOMER SEARCH / AUTOCOMPLETE
 
         if (id) {
             await loadCustomerVehicles(id, vehicleId);
+            scheduleSaleDraftPersist();
             return;
         }
 
         resetVehiclePicker();
+        scheduleSaleDraftPersist();
     }
 
     function clearCustomer() {
@@ -4051,10 +4285,16 @@ CUSTOMER SEARCH / AUTOCOMPLETE
         if (newCustomerGuard) {
             newCustomerGuard.reset();
         }
+        scheduleSaleDraftPersist();
     }
 
     clearBtn.addEventListener('click', clearCustomer);
     window.clearSelectedCustomer = clearCustomer;
+    window.A4SaleCustomerHelpers = {
+        setCustomer,
+        clearCustomer,
+        loadCustomerVehicles,
+    };
 
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
@@ -4341,6 +4581,7 @@ function resetDualPaymentRows() {
         updateDualPaymentRowUI(row);
     });
     updateDualPaymentTotals();
+    scheduleSaleDraftPersist();
 }
 
 function toggleDualPaymentUI() {
@@ -4363,6 +4604,7 @@ function toggleDualPaymentUI() {
     } else {
         updatePaymentCategoryUI();
     }
+    scheduleSaleDraftPersist();
 }
 
 function buildPaymentPayload(grandTotal, mechanicSupplyMode) {
@@ -4536,6 +4778,7 @@ function assignItemToRow(row, item, { quantity = 1, discount = 0 } = {}) {
     rebuildSelectedItemIds();
     calculateRow(row);
     updateQuickSaleItemHints();
+    flushSaleDraftPersist();
 }
 
 function clearItemRow(row) {
@@ -4565,6 +4808,7 @@ function clearItemRow(row) {
     row.querySelector('.stock-warning-text').style.display = 'none';
 
     calculateGrandTotal();
+    flushSaleDraftPersist();
 }
 
 function handleMechanicSelectionChange() {
@@ -4579,6 +4823,7 @@ function handleMechanicSelectionChange() {
     if (!isMechanicSupplyMode() && getSelectedMechanicIds().length > 0) {
         applyPendingRedeemedServices();
     }
+    scheduleSaleDraftPersist();
 }
 
 document.getElementById('mechanic-id').addEventListener('change', handleMechanicSelectionChange);
@@ -4595,6 +4840,177 @@ function clearServices() {
         }
     });
     calculateGrandTotal();
+    scheduleSaleDraftPersist();
+}
+
+function clearAllItemRows() {
+    const tbody = document.getElementById('transaction-body');
+    const rows = tbody.querySelectorAll('.item-row');
+    rows.forEach((row, index) => {
+        if (index === 0) {
+            clearItemRow(row);
+        } else {
+            row.remove();
+        }
+    });
+    rebuildSelectedItemIds();
+    calculateGrandTotal();
+}
+
+async function restoreSalePageState(options = {}) {
+    const {
+        reason = 'reload',
+    } = options;
+    const snapshot = getStoredSaleDraft();
+    const state = snapshot?.state;
+    if (!hasMeaningfulSalePageState(state)) {
+        return false;
+    }
+
+    isRestoringSaleDraft = true;
+    try {
+        setSaleMode(state.sale_mode || 'quick');
+        clearFieldErrors();
+        clearAllItemRows();
+        clearServices();
+        loyaltyPendingRedemptions.clear();
+        pendingSaleDraft = null;
+
+        const salesNumberInput = document.getElementById('sales-number');
+        if (salesNumberInput) salesNumberInput.value = state.sales_number || '';
+        const transDateInput = document.getElementById('trans-date');
+        if (transDateInput && state.transaction_date) {
+            transDateInput.value = state.transaction_date;
+        }
+        dateWasManuallyChanged = Boolean(state.date_was_manually_changed);
+
+        const quickCustomerInput = document.getElementById('quick-customer-name');
+        if (quickCustomerInput) {
+            quickCustomerInput.value = state.quick_customer_name || '';
+        }
+        syncQuickCustomerName();
+
+        const customerHelpers = window.A4SaleCustomerHelpers;
+        if ((state.customer?.id || '').trim() && customerHelpers?.setCustomer) {
+            await customerHelpers.setCustomer(
+                state.customer.id,
+                state.customer.no || '',
+                state.customer.name || '',
+                state.customer.vehicle_id || ''
+            );
+        } else {
+            customerHelpers?.clearCustomer?.();
+            const customerSearchInput = document.getElementById('customer-search');
+            if (customerSearchInput) {
+                customerSearchInput.value = state.customer_search || '';
+            }
+        }
+
+        const mechanicIdInput = document.getElementById('mechanic-id');
+        if (mechanicIdInput) mechanicIdInput.value = state.mechanic_id || '';
+        const secondaryMechanicInput = document.getElementById('mechanic-id-secondary');
+        if (secondaryMechanicInput) secondaryMechanicInput.value = state.secondary_mechanic_id || '';
+        handleMechanicSelectionChange();
+
+        const notesInput = document.getElementById('trans-notes');
+        if (notesInput) notesInput.value = state.notes || '';
+
+        const paymentCategoryInput = document.getElementById('payment-category');
+        if (paymentCategoryInput) paymentCategoryInput.value = state.payment_category || String(DEFAULT_CASH_PAYMENT_ID);
+        updatePaymentCategoryUI();
+
+        const dualToggle = document.getElementById('dual-payment-toggle');
+        if (dualToggle) dualToggle.checked = Boolean(state.dual_payment_enabled);
+        toggleDualPaymentUI();
+
+        if (isDualPaymentEnabled()) {
+            getDualPaymentRows().forEach((row, index) => {
+                const snapshotRow = (state.dual_payments || [])[index] || {};
+                const categorySelect = row.querySelector('.dual-payment-category');
+                const providerSelect = row.querySelector('.dual-payment-provider');
+                const referenceInput = row.querySelector('.dual-payment-reference');
+                const amountInput = row.querySelector('.dual-payment-amount');
+
+                if (categorySelect) categorySelect.value = snapshotRow.category || categorySelect.value;
+                updateDualPaymentRowUI(row);
+                if (providerSelect) providerSelect.value = snapshotRow.provider || '';
+                if (referenceInput) referenceInput.value = snapshotRow.reference || '';
+                if (amountInput) amountInput.value = snapshotRow.amount || '';
+            });
+            updateDualPaymentTotals();
+        } else {
+            const paymentMethodInput = document.getElementById('payment-method');
+            if (paymentMethodInput) paymentMethodInput.value = state.payment_method || '';
+            const referenceInput = document.getElementById('ref-no');
+            if (referenceInput) referenceInput.value = state.reference_no || '';
+            updatePaymentCategoryUI();
+        }
+
+        (state.items || []).forEach((item) => {
+            const targetRow = getReusableEmptyItemRow() || createBlankItemRow();
+            assignItemToRow(targetRow, item, {
+                quantity: item.quantity,
+                discount: item.discount,
+            });
+        });
+
+        (state.services || []).forEach((service, index) => {
+            const row = index === 0
+                ? document.querySelector('#services-body .service-row')
+                : appendBlankServiceRow();
+            if (!row) return;
+            row.querySelector('.service-input').value = service.name || '';
+            row.querySelector('.service-id-input').value = service.id || '';
+            row.querySelector('.service-price-input').value = Number(service.price || 0).toFixed(2);
+            row.querySelector('.service-mechanic-select').value = service.mechanic_id || '';
+            if (service.loyalty_program_id) {
+                row.dataset.loyaltyProgramId = String(service.loyalty_program_id);
+            } else {
+                delete row.dataset.loyaltyProgramId;
+            }
+            calculateServiceRow(row);
+        });
+
+        if (state.bundle?.bundle_id && isFullSaleMode()) {
+            document.getElementById('bundle-select').value = String(state.bundle.bundle_id);
+            await loadBundleConfig(state.bundle.bundle_id);
+            if (state.bundle.variant_id) {
+                document.getElementById('bundle-variant-select').value = String(state.bundle.variant_id);
+                renderBundleDetails();
+            }
+            (state.bundle.included_items || []).forEach((entry) => {
+                const input = document.querySelector(`.bundle-item-include[data-item-id="${CSS.escape(String(entry.item_id))}"]`);
+                if (input) {
+                    input.checked = Boolean(entry.is_included);
+                }
+            });
+            syncBundleItemWarnings();
+        } else {
+            clearBundleSelection();
+        }
+
+        (state.loyalty_redemptions || []).forEach((entry) => {
+            loyaltyPendingRedemptions.set(Number(entry.program_id), entry);
+        });
+        applyPendingRedeemedServices();
+        window.setTimeout(() => {
+            (state.loyalty_redemptions || []).forEach((entry) => {
+                setRedeemButtonState(entry.program_id, true);
+            });
+        }, 250);
+
+        calculateGrandTotal();
+        updateQuickSaleItemHints();
+        showAlert(
+            reason === 'resume'
+                ? 'This sale page resumed after being idle. Restored the current draft. Review it before submitting.'
+                : 'Recovered the current sale draft after refresh or interruption.',
+            reason === 'resume' ? 'warning' : 'info'
+        );
+        return true;
+    } finally {
+        isRestoringSaleDraft = false;
+    }
 }
 
 document.addEventListener('input', (e) => {
@@ -4610,6 +5026,7 @@ document.addEventListener('input', (e) => {
     if (e.target.classList.contains('service-price-input')) {
         calculateServiceRow(e.target.closest('tr'));
     }
+    scheduleSaleDraftPersist();
 });
 
 document.addEventListener('click', (e) => {
@@ -4633,6 +5050,7 @@ document.addEventListener('click', (e) => {
         rebuildSelectedItemIds();
         calculateGrandTotal();
     }
+    scheduleSaleDraftPersist();
 });
 
 document.addEventListener('click', (e) => {
@@ -4650,6 +5068,7 @@ document.addEventListener('click', (e) => {
         clearServiceRow(row);
         calculateGrandTotal();
     }
+    scheduleSaleDraftPersist();
 });
 
 document.addEventListener('change', (e) => {
@@ -4660,6 +5079,7 @@ document.addEventListener('change', (e) => {
             calculateRow(e.target.closest('tr'));
         }
     }
+    scheduleSaleDraftPersist();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -4683,11 +5103,13 @@ document.getElementById('add-row-btn').addEventListener('click', (e) => {
     e.preventDefault();
     createBlankItemRow();
     rebuildSelectedItemIds();
+    scheduleSaleDraftPersist();
 });
 
 document.getElementById('add-service-btn').addEventListener('click', (e) => {
     e.preventDefault();
     appendBlankServiceRow();
+    scheduleSaleDraftPersist();
 });
 
 /* =========================================================
@@ -5113,6 +5535,8 @@ async function saveTransaction(draft, submitGuard) {
             }
         }
 
+        saleDraftPersistenceDisabled = true;
+        clearStoredSaleDraft();
         window.location.href = '/transaction/out';
 
     } catch (err) {
