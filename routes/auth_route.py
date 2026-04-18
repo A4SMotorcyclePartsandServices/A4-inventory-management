@@ -1,3 +1,5 @@
+import secrets
+
 from flask import Blueprint, current_app, flash, make_response, redirect, render_template, request, session, url_for
 
 from auth.utils import (
@@ -17,6 +19,23 @@ from services.idempotency_service import (
 from services.auth_service import authenticate_user
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _auth_trace(event, **details):
+    payload = {
+        "event": event,
+        "endpoint": request.endpoint,
+        "method": request.method,
+        "path": request.path,
+        "user_id": session.get("user_id"),
+        "username": session.get("username"),
+        "session_role": session.get("role"),
+        "remote_addr": request.remote_addr,
+        "referer": request.headers.get("Referer"),
+        "user_agent": request.user_agent.string[:200] if request.user_agent and request.user_agent.string else None,
+    }
+    payload.update(details)
+    current_app.logger.warning("AUTH_TRACE %s", payload)
 
 
 def _start_authenticated_session(user):
@@ -167,5 +186,60 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
+    request_id = request.headers.get("X-Request-ID") or secrets.token_hex(4)
+    user_id = session.get("user_id")
+    username = session.get("username")
+    role = session.get("role")
+    redirect_target = url_for("auth.login")
+
+    _auth_trace(
+        "logout_attempt",
+        request_id=request_id,
+        redirect_target=redirect_target,
+    )
+    _auth_trace(
+        "logout_success",
+        request_id=request_id,
+        cleared_user_id=user_id,
+        cleared_username=username,
+        cleared_role=role,
+        redirect_target=redirect_target,
+    )
     session.clear()
-    return redirect(url_for("auth.login"))
+    response = redirect(redirect_target)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+@auth_bp.route("/auth/client-signal", methods=["GET"])
+@login_required
+def client_signal():
+    event = (request.args.get("event") or "").strip().lower()
+    path = (request.args.get("path") or "").strip()[:160]
+    nav_type = (request.args.get("nav_type") or "").strip().lower()[:32]
+    visibility_state = (request.args.get("visibility") or "").strip().lower()[:16]
+    persisted = (request.args.get("persisted") or "").strip().lower() in {"1", "true", "yes"}
+    hidden_ms_raw = (request.args.get("hidden_ms") or "").strip()
+    cache_hint = (request.args.get("cache_hint") or "").strip().lower()[:32]
+
+    try:
+        hidden_ms = max(0, min(int(hidden_ms_raw), 86_400_000)) if hidden_ms_raw else None
+    except ValueError:
+        hidden_ms = None
+
+    _auth_trace(
+        "client_restore_signal",
+        signal_event=event,
+        signal_path=path or request.headers.get("Referer"),
+        nav_type=nav_type or None,
+        persisted=persisted,
+        visibility_state=visibility_state or None,
+        hidden_ms=hidden_ms,
+        cache_hint=cache_hint or None,
+    )
+
+    response = make_response("", 204)
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response

@@ -795,6 +795,8 @@ def page_not_found(e):
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
+    if request.path == "/logout" and request.method == "POST":
+        _log_access_denied_event("logout_csrf_error", e)
     _log_access_denied_event("csrf_error", e)
     if request.path == "/login" and request.method == "POST":
         flash("Your login page expired. Please sign in again.", "warning")

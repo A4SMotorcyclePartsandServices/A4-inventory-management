@@ -2769,6 +2769,112 @@ window.A4Confirm = {
     show: showConfirmDialog,
 };
 
+const AUTH_CLIENT_SIGNAL = {
+    hiddenAt: 0,
+    lastSentKey: '',
+};
+
+function sendAuthClientSignal(params = {}) {
+    const eventName = String(params.event || '').trim();
+    if (!eventName) {
+        return;
+    }
+
+    const url = new URL('{{ url_for("auth.client_signal") }}', window.location.origin);
+    url.searchParams.set('event', eventName);
+    url.searchParams.set('path', `${window.location.pathname}${window.location.search}`.slice(0, 160));
+
+    if (params.navType) {
+        url.searchParams.set('nav_type', String(params.navType).slice(0, 32));
+    }
+    if (params.visibility) {
+        url.searchParams.set('visibility', String(params.visibility).slice(0, 16));
+    }
+    if (params.persisted != null) {
+        url.searchParams.set('persisted', params.persisted ? '1' : '0');
+    }
+    if (params.hiddenMs != null && Number.isFinite(params.hiddenMs)) {
+        url.searchParams.set('hidden_ms', String(Math.max(0, Math.round(params.hiddenMs))));
+    }
+    if (params.cacheHint) {
+        url.searchParams.set('cache_hint', String(params.cacheHint).slice(0, 32));
+    }
+
+    const dedupeKey = [
+        eventName,
+        url.searchParams.get('path'),
+        url.searchParams.get('nav_type') || '',
+        url.searchParams.get('persisted') || '',
+        url.searchParams.get('hidden_ms') || '',
+    ].join('|');
+
+    if (AUTH_CLIENT_SIGNAL.lastSentKey === dedupeKey) {
+        return;
+    }
+    AUTH_CLIENT_SIGNAL.lastSentKey = dedupeKey;
+    window.setTimeout(() => {
+        if (AUTH_CLIENT_SIGNAL.lastSentKey === dedupeKey) {
+            AUTH_CLIENT_SIGNAL.lastSentKey = '';
+        }
+    }, 10000);
+
+    if (window.fetch) {
+        fetch(url.toString(), { method: 'GET', keepalive: true, credentials: 'same-origin' }).catch(() => {});
+        return;
+    }
+
+    const image = new Image();
+    image.src = url.toString();
+}
+
+function installAuthClientSignalHooks() {
+    const navEntry = performance.getEntriesByType?.('navigation')?.[0];
+    const navType = navEntry?.type || '';
+
+    window.addEventListener('pageshow', (event) => {
+        const persisted = Boolean(event.persisted);
+        const restoredFromHistory = persisted || navType === 'back_forward';
+        if (!restoredFromHistory) {
+            return;
+        }
+
+        sendAuthClientSignal({
+            event: 'pageshow_restore',
+            persisted,
+            navType: navType || (persisted ? 'persisted' : ''),
+            visibility: document.visibilityState,
+            cacheHint: persisted ? 'bfcache' : 'history',
+        });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            AUTH_CLIENT_SIGNAL.hiddenAt = Date.now();
+            return;
+        }
+
+        if (document.visibilityState !== 'visible' || !AUTH_CLIENT_SIGNAL.hiddenAt) {
+            return;
+        }
+
+        const hiddenMs = Date.now() - AUTH_CLIENT_SIGNAL.hiddenAt;
+        AUTH_CLIENT_SIGNAL.hiddenAt = 0;
+        if (hiddenMs < 60000) {
+            return;
+        }
+
+        sendAuthClientSignal({
+            event: 'visibility_resume',
+            navType,
+            visibility: document.visibilityState,
+            hiddenMs,
+            cacheHint: 'background_resume',
+        });
+    });
+}
+
+installAuthClientSignalHooks();
+
 document.addEventListener("DOMContentLoaded", function () {
     appendCsrfTokenToForms();
 

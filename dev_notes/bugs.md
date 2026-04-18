@@ -31,6 +31,59 @@ Current theory:
 - In that case the first submit fails before authentication runs, then refresh/retry works because the page gets a fresh CSRF token.
 - Temporary tracing was added with `AUTH_TRACE` logs in `app.py`, `auth/utils.py`, and `routes/auth_route.py`.
 
+Related mobile logout report:
+- Client reported that on phone, logout sometimes appears to do nothing on the first try.
+- She stays on the same page and only reaches logged-out state after trying again.
+- This may be the same stale mobile page / resumed-tab family of issue as the login `403` problem, not necessarily a separate auth bug.
+- The client is known to keep the web app open on her phone for long periods without clearing it, which increases the chance that the browser restores an older page state.
+- Two plausible variants:
+  first logout actually succeeds server-side, but the phone keeps showing the previously loaded protected page from cache / back-forward cache until the next real navigation
+  first logout POST fails because the old page is carrying stale form / CSRF state, then the second attempt works after the browser refreshes its state
+- Why this theory fits:
+  `/login` already needed explicit no-store headers because mobile browsers were reusing old login pages with expired CSRF tokens
+  authenticated pages may still be more vulnerable to stale restore behavior than the login page
+  logout itself is only a simple POST + redirect, so the weak point is more likely page/browser state than the server-side logout logic
+- Practical interpretation:
+  if the first logout truly cleared the session, then any refresh or new navigation after that point should redirect to `/login`
+  if the session was still active after the first logout attempt, then the first POST likely never completed or failed before session clear
+- Current combined theory:
+  both the intermittent login `403` and the phone logout retry issue may stem from mobile browsers resuming stale pages after the app has been backgrounded for a long time
+  the symptom changes depending on which page was resumed and whether the first request hits stale CSRF state or only stale visual state
+
+Tracing added for the mobile logout issue:
+- Lightweight logout-specific tracing was added so future incidents can be classified without heavy logging.
+- Added server-side `AUTH_TRACE` events:
+  `logout_attempt`
+  `logout_success`
+  `logout_csrf_error`
+- Added a very small authenticated browser restore signal:
+  `client_restore_signal`
+- The browser signal only fires in likely stale-page situations:
+  `pageshow_restore`
+  `visibility_resume`
+- To keep this lightweight, it does not poll, does not store extra data, and only sends a small GET request when the page is restored from history / bfcache or resumes after being hidden for at least about 60 seconds.
+
+How to check logs in Railway for the logout issue:
+- Open Railway.
+- Open this project.
+- Open the deployed service for the app.
+- Go to `Logs`.
+- Search for `AUTH_TRACE`.
+- Around the reported timestamp, look specifically for:
+  `logout_attempt`
+  `logout_success`
+  `logout_csrf_error`
+  `client_restore_signal`
+  `login_required_missing_session`
+
+Quick interpretation guide for logout incidents:
+- If there is no `logout_attempt` at all, the first logout tap likely never submitted or never reached the server.
+- If `logout_attempt` appears but `logout_success` does not, the request likely failed before session clear.
+- If `logout_success` appears, the server did clear the session.
+- If `logout_success` is followed by later `login_required_missing_session` on the next navigation, the first logout likely worked and the phone was showing a stale protected page.
+- If `logout_csrf_error` appears, the logout came from a stale page with expired CSRF state.
+- If `client_restore_signal` appears near the same time, that strongly supports the mobile resumed-page / stale-cache theory.
+
 Latest observed log pattern:
 - `csrf_error` on `/login` with:
   `error_message: 400 Bad Request: The CSRF token has expired.`
@@ -59,7 +112,7 @@ How to check logs in Railway:
   `http_400`
   `csrf_error`
 
-Report tracing added for intermittent report hangs:
+- Report tracing added for intermittent report hangs:
 - Lightweight `REPORT_TRACE` logs were added to the shared sales report builder in `routes/reports_route.py`.
 - This covers both `/reports/sales-summary` and `/reports/sales-report-summary`.
 - Logged stages:
