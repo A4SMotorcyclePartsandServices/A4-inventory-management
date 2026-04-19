@@ -123,6 +123,18 @@
                 </div>
 
                 <div class="col-md-6">
+                    <label class="form-label small text-white-50">Reason <span class="text-danger">*</span></label>
+                    <select name="change_reason" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="" selected disabled>Select a reason</option>
+                        {% for option in manual_stock_in_reasons %}
+                        <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="row mt-3">
+                <div class="col-12">
                     <label class="form-label small text-white-50">Notes <span class="text-danger">*</span></label>
                     <input type="text" name="notes" class="form-control bg-dark text-white border-secondary"
                         placeholder="Required: e.g., Bought from neighboring shop (Liha)"

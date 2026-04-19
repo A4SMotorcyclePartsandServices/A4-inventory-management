@@ -3,6 +3,7 @@ import time
 
 from db.database import get_db
 from services.inventory_service import (
+    DEMAND_OUT_REASONS,
     attach_inventory_history_profile,
     attach_restock_recommendation,
     get_items_with_stock,
@@ -116,11 +117,12 @@ def get_dashboard_stats():
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
+        AND inventory_transactions.change_reason = ANY(%s)
         AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
         GROUP BY items.id
         ORDER BY total_sold DESC
         LIMIT 1
-    """).fetchone()
+    """, (list(DEMAND_OUT_REASONS),)).fetchone()
 
     items = conn.execute("SELECT id, name FROM items").fetchall()
 
@@ -157,10 +159,11 @@ def get_hot_items(limit=10, category=None):
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
+        AND inventory_transactions.change_reason = ANY(%s)
         AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
         """
     ]
-    params = []
+    params = [list(DEMAND_OUT_REASONS)]
 
     if normalized_category:
         query_parts.append("AND LOWER(TRIM(items.category)) = %s")

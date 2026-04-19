@@ -23,6 +23,20 @@ from services.notification_service import (
 )
 from services.payables_service import ensure_payable_for_po_receipt
 
+MANUAL_STOCK_IN_REASON_NEW_ITEM = "NEW_ITEM"
+MANUAL_STOCK_IN_REASON_LATE_ENCODING = "LATE_ENCODING_MISSED_STOCK"
+MANUAL_STOCK_IN_REASON_PARTS_PURCHASE = "PARTS_PURCHASE"
+MANUAL_STOCK_IN_ALLOWED_REASONS = (
+    MANUAL_STOCK_IN_REASON_NEW_ITEM,
+    MANUAL_STOCK_IN_REASON_LATE_ENCODING,
+    MANUAL_STOCK_IN_REASON_PARTS_PURCHASE,
+)
+MANUAL_STOCK_IN_REASON_LABELS = {
+    MANUAL_STOCK_IN_REASON_NEW_ITEM: "New item",
+    MANUAL_STOCK_IN_REASON_LATE_ENCODING: "Late encoding/missed stock",
+    MANUAL_STOCK_IN_REASON_PARTS_PURCHASE: "Parts purchase",
+}
+
 
 def _build_where_clause(conditions):
     if not conditions:
@@ -32,6 +46,13 @@ def _build_where_clause(conditions):
 
 def _money(value):
     return round(float(value or 0), 2)
+
+
+def get_manual_stock_in_reason_options():
+    return [
+        {"value": reason, "label": MANUAL_STOCK_IN_REASON_LABELS[reason]}
+        for reason in MANUAL_STOCK_IN_ALLOWED_REASONS
+    ]
 
 
 def _build_sale_payment_summary(payment_rows):
@@ -960,7 +981,7 @@ def get_bundle_sale_config(bundle_id):
 # MANUAL STOCK IN
 # ─────────────────────────────────────────────
 
-def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, username):
+def process_manual_stock_in(item_id, qty_int, unit_price, notes, change_reason, user_id, username):
     """
     Records a manual stock IN with cost self-correction.
     Raises ValueError for invalid inputs.
@@ -970,6 +991,9 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
         raise ValueError("Invalid quantity. Must be at least 1.")
     if unit_price <= 0:
         raise ValueError("Invalid unit cost. Must be greater than 0.")
+    normalized_reason = str(change_reason or "").strip().upper()
+    if normalized_reason not in MANUAL_STOCK_IN_ALLOWED_REASONS:
+        raise ValueError("Manual stock-in reason is required.")
 
     conn = get_db()
     try:
@@ -985,7 +1009,7 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, user_id, userna
             user_name=username,
             reference_id=None,
             reference_type='MANUAL_ADJUSTMENT',
-            change_reason='WALKIN_PURCHASE',
+            change_reason=normalized_reason,
             unit_price=unit_price,
             notes=notes,
             transaction_date=clean_time,

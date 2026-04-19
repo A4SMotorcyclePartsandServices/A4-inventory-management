@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from db.database import get_db
 from auth.utils import admin_required, login_required
+from services.inventory_service import DEMAND_OUT_REASONS
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
@@ -76,11 +77,12 @@ def top_items_chart():
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
+        AND inventory_transactions.change_reason = ANY(%s)
         AND inventory_transactions.transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
         GROUP BY items.id
         ORDER BY total_out DESC
         LIMIT 5
-    """, (days,)).fetchall()
+    """, (list(DEMAND_OUT_REASONS), days)).fetchall()
 
     conn.close()
 

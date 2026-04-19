@@ -36,6 +36,7 @@ from services.transactions_service import (
     update_purchase_order,
     get_purchase_order_review_context,
     get_item_edit_history_page,
+    get_manual_stock_in_reason_options,
 )
 from services.idempotency_service import (
     COMPLETED_STATUS,
@@ -127,7 +128,11 @@ def transaction_refund():
 @login_required
 def transaction_in():
     prefilled_id = request.args.get('selected_id')
-    return render_template("transactions/in.html", prefilled_id=prefilled_id)
+    return render_template(
+        "transactions/in.html",
+        prefilled_id=prefilled_id,
+        manual_stock_in_reasons=get_manual_stock_in_reason_options(),
+    )
 
 
 @transaction_bp.route("/transaction/items")
@@ -255,17 +260,23 @@ def process_transaction_in():
     quantity = request.form.get("quantity")
     unit_price_raw = request.form.get("unit_price")
     notes = (request.form.get("notes") or "").strip()
+    change_reason = (request.form.get("change_reason") or "").strip().upper()
     payload = {
         "item_id": item_id,
         "quantity": quantity,
         "unit_price": unit_price_raw,
         "notes": notes,
+        "change_reason": change_reason,
     }
     user_id = session.get("user_id")
     idempotency_key = extract_idempotency_key(request)
 
     if not notes:
         flash("Notes are required for manual stock inserts (audit trail).", "danger")
+        return redirect(url_for('transaction.transaction_in'))
+
+    if not change_reason:
+        flash("Reason is required for manual stock inserts.", "danger")
         return redirect(url_for('transaction.transaction_in'))
 
     if not (item_id and quantity and unit_price_raw is not None):
@@ -295,6 +306,7 @@ def process_transaction_in():
             qty_int=int(quantity),
             unit_price=float(unit_price_raw),
             notes=notes,
+            change_reason=change_reason,
             user_id=user_id,
             username=session.get("username")
         )

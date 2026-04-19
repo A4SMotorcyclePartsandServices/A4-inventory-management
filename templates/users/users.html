@@ -4359,7 +4359,11 @@ function renderAuditTrail(data) {
         const type = (log.transaction_type || '').toUpperCase();
         const badgeInfo = typeBadge[type] || ['badge rounded-pill bg-secondary audit-badge', '', log.transaction_type || '-'];
         const reasonText = log.change_reason
-            ? (log.change_reason === 'WALKIN_PURCHASE' ? 'WALK IN PURCHASE' : log.change_reason.replace(/_/g, ' '))
+            ? (
+                log.change_reason === 'LATE_ENCODING_MISSED_STOCK'
+                    ? 'LATE ENCODING/MISSED STOCK'
+                    : log.change_reason.replace(/_/g, ' ')
+            )
             : '-';
         const summary = log.items_summary
             ? (log.items_summary.length > 40 ? log.items_summary.slice(0, 40) + '...' : log.items_summary)

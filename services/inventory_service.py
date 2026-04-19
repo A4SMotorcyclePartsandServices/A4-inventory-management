@@ -7,6 +7,8 @@ from utils.timezone import now_local_naive, today_local
 
 
 STOCKTAKE_WARNING_DAYS = 30
+RESTOCK_VARIANCE_ALERT_DAYS = 30
+RESTOCK_MANUAL_STOCK_REVIEW_DAYS = 30
 RESTOCK_FAST_LOOKBACK_DAYS = 30
 RESTOCK_DEFAULT_LOOKBACK_DAYS = 60
 RESTOCK_SLOW_LOOKBACK_DAYS = 90
@@ -25,6 +27,7 @@ RESTOCK_STATUS_CRITICAL = "critical"
 RESTOCK_CONFIDENCE_NONE = "none"
 RESTOCK_CONFIDENCE_LOW = "low"
 RESTOCK_CONFIDENCE_HIGH = "high"
+MANUAL_STOCK_IN_REASON_LATE_ENCODING = "LATE_ENCODING_MISSED_STOCK"
 
 
 def _normalize_anchor_date(snapshot_date=None):
@@ -273,6 +276,170 @@ def attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id"):
     return items
 
 
+def attach_recent_variance_loss_profile(conn, items, item_id_key="id", snapshot_date=None):
+    if not items:
+        return items
+
+    anchor_date = _normalize_anchor_date(snapshot_date)
+    variance_window_start = anchor_date - timedelta(days=RESTOCK_VARIANCE_ALERT_DAYS - 1)
+
+    item_ids = []
+    for item in items:
+        try:
+            item_ids.append(int(item.get(item_id_key)))
+        except (TypeError, ValueError):
+            continue
+
+    if not item_ids:
+        for item in items:
+            item["recent_variance_loss_quantity"] = 0
+            item["recent_variance_loss_days"] = 0
+            item["recent_variance_loss_at"] = None
+        return items
+
+    rows = conn.execute(
+        """
+        SELECT
+            item_id,
+            COALESCE(SUM(
+                CASE
+                    WHEN transaction_type = 'OUT'
+                     AND change_reason = 'STOCKTAKE_VARIANCE_LOSS'
+                     AND DATE(transaction_date) BETWEEN %s AND %s
+                    THEN quantity
+                    ELSE 0
+                END
+            ), 0) AS recent_variance_loss_quantity,
+            COUNT(DISTINCT CASE
+                WHEN transaction_type = 'OUT'
+                 AND change_reason = 'STOCKTAKE_VARIANCE_LOSS'
+                 AND DATE(transaction_date) BETWEEN %s AND %s
+                THEN DATE(transaction_date)
+                ELSE NULL
+            END) AS recent_variance_loss_days,
+            MAX(CASE
+                WHEN transaction_type = 'OUT'
+                 AND change_reason = 'STOCKTAKE_VARIANCE_LOSS'
+                 AND DATE(transaction_date) BETWEEN %s AND %s
+                THEN transaction_date
+                ELSE NULL
+            END) AS recent_variance_loss_at
+        FROM inventory_transactions
+        WHERE item_id = ANY(%s)
+        GROUP BY item_id
+        """,
+        (
+            variance_window_start.isoformat(),
+            anchor_date.isoformat(),
+            variance_window_start.isoformat(),
+            anchor_date.isoformat(),
+            variance_window_start.isoformat(),
+            anchor_date.isoformat(),
+            item_ids,
+        ),
+    ).fetchall()
+
+    variance_map = {int(row["item_id"]): dict(row) for row in rows}
+
+    for item in items:
+        try:
+            item_id = int(item.get(item_id_key))
+        except (TypeError, ValueError):
+            item_id = None
+
+        variance_profile = variance_map.get(item_id, {}) if item_id is not None else {}
+        item["recent_variance_loss_quantity"] = int(variance_profile.get("recent_variance_loss_quantity") or 0)
+        item["recent_variance_loss_days"] = int(variance_profile.get("recent_variance_loss_days") or 0)
+        item["recent_variance_loss_at"] = variance_profile.get("recent_variance_loss_at")
+
+    return items
+
+
+def attach_recent_manual_stock_in_review_profile(conn, items, item_id_key="id", snapshot_date=None):
+    if not items:
+        return items
+
+    anchor_date = _normalize_anchor_date(snapshot_date)
+    review_window_start = anchor_date - timedelta(days=RESTOCK_MANUAL_STOCK_REVIEW_DAYS - 1)
+
+    item_ids = []
+    for item in items:
+        try:
+            item_ids.append(int(item.get(item_id_key)))
+        except (TypeError, ValueError):
+            continue
+
+    if not item_ids:
+        for item in items:
+            item["recent_manual_review_in_quantity"] = 0
+            item["recent_manual_review_in_days"] = 0
+            item["recent_manual_review_in_at"] = None
+        return items
+
+    rows = conn.execute(
+        """
+        SELECT
+            item_id,
+            COALESCE(SUM(
+                CASE
+                    WHEN transaction_type = 'IN'
+                     AND reference_type = 'MANUAL_ADJUSTMENT'
+                     AND change_reason = %s
+                     AND DATE(transaction_date) BETWEEN %s AND %s
+                    THEN quantity
+                    ELSE 0
+                END
+            ), 0) AS recent_manual_review_in_quantity,
+            COUNT(DISTINCT CASE
+                WHEN transaction_type = 'IN'
+                 AND reference_type = 'MANUAL_ADJUSTMENT'
+                 AND change_reason = %s
+                 AND DATE(transaction_date) BETWEEN %s AND %s
+                THEN DATE(transaction_date)
+                ELSE NULL
+            END) AS recent_manual_review_in_days,
+            MAX(CASE
+                WHEN transaction_type = 'IN'
+                 AND reference_type = 'MANUAL_ADJUSTMENT'
+                 AND change_reason = %s
+                 AND DATE(transaction_date) BETWEEN %s AND %s
+                THEN transaction_date
+                ELSE NULL
+            END) AS recent_manual_review_in_at
+        FROM inventory_transactions
+        WHERE item_id = ANY(%s)
+        GROUP BY item_id
+        """,
+        (
+            MANUAL_STOCK_IN_REASON_LATE_ENCODING,
+            review_window_start.isoformat(),
+            anchor_date.isoformat(),
+            MANUAL_STOCK_IN_REASON_LATE_ENCODING,
+            review_window_start.isoformat(),
+            anchor_date.isoformat(),
+            MANUAL_STOCK_IN_REASON_LATE_ENCODING,
+            review_window_start.isoformat(),
+            anchor_date.isoformat(),
+            item_ids,
+        ),
+    ).fetchall()
+
+    review_map = {int(row["item_id"]): dict(row) for row in rows}
+
+    for item in items:
+        try:
+            item_id = int(item.get(item_id_key))
+        except (TypeError, ValueError):
+            item_id = None
+
+        review_profile = review_map.get(item_id, {}) if item_id is not None else {}
+        item["recent_manual_review_in_quantity"] = int(review_profile.get("recent_manual_review_in_quantity") or 0)
+        item["recent_manual_review_in_days"] = int(review_profile.get("recent_manual_review_in_days") or 0)
+        item["recent_manual_review_in_at"] = review_profile.get("recent_manual_review_in_at")
+
+    return items
+
+
 def attach_incoming_po_profile(conn, items, item_id_key="id"):
     if not items:
         return items
@@ -351,6 +518,8 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
         snapshot_date=snapshot_date,
     )
     attach_vendor_lead_time_profile(conn, items, vendor_id_key="vendor_id")
+    attach_recent_variance_loss_profile(conn, items, item_id_key=item_id_key, snapshot_date=snapshot_date)
+    attach_recent_manual_stock_in_review_profile(conn, items, item_id_key=item_id_key, snapshot_date=snapshot_date)
     attach_incoming_po_profile(conn, items, item_id_key=item_id_key)
 
     for item in items:
@@ -389,15 +558,46 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
 
         if item.get("history_status") == "recovering":
             suggested_restock_point = LOW_HISTORY_FALLBACK_FLOOR
+            recent_variance_loss_quantity = int(item.get("recent_variance_loss_quantity") or 0)
+            has_recent_variance_loss = recent_variance_loss_quantity > 0
+            recent_manual_review_in_quantity = int(item.get("recent_manual_review_in_quantity") or 0)
+            recent_manual_review_in_at = item.get("recent_manual_review_in_at")
+            last_sold_at = item.get("last_sold_at")
+            has_recent_manual_stock_review = (
+                recent_manual_review_in_quantity > 0
+                and current_stock <= 0
+                and bool(last_sold_at)
+                and bool(recent_manual_review_in_at)
+                and last_sold_at >= recent_manual_review_in_at
+            )
             item["suggested_restock_point"] = suggested_restock_point
-            item["should_restock"] = False
-            item["is_watchlist"] = current_stock <= suggested_restock_point
-            item["restock_basis"] = "recovering_learning_watchlist"
+            item["should_restock"] = (
+                (has_recent_variance_loss and current_stock <= 0)
+                or has_recent_manual_stock_review
+            )
+            item["is_watchlist"] = (not item["should_restock"]) and current_stock <= suggested_restock_point
+            item["restock_basis"] = (
+                "recovering_recent_variance_loss_zero_stock"
+                if has_recent_variance_loss and current_stock <= 0
+                else "recovering_manual_stock_history_review"
+                if has_recent_manual_stock_review
+                else "recovering_learning_watchlist"
+            )
             item["restock_status"] = (
-                RESTOCK_STATUS_WARNING if item["is_watchlist"]
+                RESTOCK_STATUS_CRITICAL if has_recent_variance_loss and current_stock <= 0
+                else RESTOCK_STATUS_WARNING if has_recent_manual_stock_review
+                else RESTOCK_STATUS_WARNING if item["is_watchlist"]
                 else RESTOCK_STATUS_HEALTHY
             )
             item["restock_confidence"] = RESTOCK_CONFIDENCE_LOW
+            incoming_po_quantity = int(item.get("incoming_po_quantity") or 0)
+            if (
+                item["should_restock"]
+                and suggested_restock_point > 0
+                and incoming_po_quantity >= suggested_restock_point
+            ):
+                item["incoming_po_covers_restock"] = True
+                item["hide_from_low_stock_notifications"] = True
             continue
 
         lead_time_demand = math.ceil(avg_daily_usage * effective_lead_time_days)

@@ -310,7 +310,7 @@ def get_manual_in_details(audit_group_id):
         conn.close()
 
     walkin_row = next(
-        (row for row in related_rows if row["change_reason"] == "WALKIN_PURCHASE"),
+        (row for row in related_rows if row["change_reason"] != "COST_PER_PIECE_UPDATED"),
         None,
     )
     cost_row = next(

@@ -262,6 +262,27 @@ Applied:
   - `active` items are treated as trusted / high-confidence reorder candidates
   - `recovering` items are treated as learning / watchlist items
   - learning items can still appear on `/low-stock` with a badge, but they do not trigger tray alerts yet
+- [x] Corrected "sold" analytics to match reorder demand logic
+  - fast-moving / hot-items views now count only demand-like sales
+  - stocktake variance losses and other non-demand `OUT` movements no longer inflate "sold" quantities
+- [x] Added explicit low-history override for recent stocktake variance loss
+  - if a recovering item recently had `STOCKTAKE_VARIANCE_LOSS`
+  - and that event leaves the item at `0` stock
+  - raise a low-confidence restock alert instead of leaving it only in learning
+  - current basis: `recovering_recent_variance_loss_zero_stock`
+- [x] Added explicit stock-history review path for stale-data manual stock fixes
+  - manual `IN` now requires a reason:
+    - `NEW_ITEM`
+    - `LATE_ENCODING_MISSED_STOCK`
+    - `PARTS_PURCHASE`
+  - if a recovering item had recent manual `IN` with `LATE_ENCODING_MISSED_STOCK`
+  - then had recent customer demand
+  - and is now back to `0` stock
+  - show a review-style alert rather than pretending this is clean demand history
+  - current basis: `recovering_manual_stock_history_review`
+- [x] Added helper text on `/low-stock` for non-standard alerts
+  - `VERIFY STOCK HISTORY` explains that the item is under temporary review because of stale / manually repaired stock history
+  - `VERIFY / RESTOCK` explains that the alert was triggered by a stocktake variance event
 - [x] Ranked exact item-name matches above partial matches in both item search APIs
   - applies to `/api/search`
   - applies to `/api/search/items`
@@ -296,6 +317,13 @@ Applied:
 
 - `dead_stock` items are no longer included in reorder alerts just because `current_stock <= 0`
 - low-stock warnings are now meant to represent likely reorder action, not old catalog cleanup
+- some low-confidence alerts are now intentionally split into different meanings:
+  - `WATCHLIST`
+    - item is still learning from weak demand history
+  - `VERIFY STOCK HISTORY`
+    - item hit a suspicious stale-data pattern driven by manual late encoding / missed stock
+  - `VERIFY / RESTOCK`
+    - item hit zero because of a recent stocktake variance loss and needs human review plus likely replenishment
 
 ### Problems to solve long term
 
@@ -333,6 +361,10 @@ Applied:
   - `0 stock`
   - no recent demand
   - unclear catalog status
+- monitor how often the new low-confidence helper states appear in production:
+  - `recovering_manual_stock_history_review`
+  - `recovering_recent_variance_loss_zero_stock`
+  - use that feedback to decide whether thresholds need tuning
 - separate pages or filters for:
   - `reorder candidates`
   - `dead stock / obsolete candidates`

@@ -101,6 +101,22 @@
         white-space: normal;
         overflow-wrap: anywhere;
     }
+    .status-detail-hint {
+        margin-top: 0.35rem;
+        font-size: 0.78rem;
+        color: #adb5bd;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    #lowStockTable tbody tr:hover .status-detail-hint {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        word-break: break-word;
+    }
 </style>
 
 <div class="text-center mb-4">
@@ -148,6 +164,16 @@
                 <td>
                     {% if item.is_watchlist %}
                         <span class="badge status-badge-learning">WATCHLIST</span>
+                    {% elif item.restock_basis == 'recovering_manual_stock_history_review' %}
+                        <span class="badge status-badge-warning">VERIFY STOCK HISTORY</span>
+                        <div class="status-detail-hint">
+                            Temporary review flag. This returns to normal learning after cleaner stock updates and sales history build up.
+                        </div>
+                    {% elif item.restock_basis == 'recovering_recent_variance_loss_zero_stock' %}
+                        <span class="badge status-badge-critical">VERIFY / RESTOCK</span>
+                        <div class="status-detail-hint">
+                            Triggered by a recent stocktake variance loss that brought the item to zero stock. Verify the count and restock if needed.
+                        </div>
                     {% elif item.incoming_po_covers_restock %}
                         <span class="badge status-badge-incoming">INCOMING STOCK</span>
                         {% if item.incoming_pos %}

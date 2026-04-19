@@ -2320,7 +2320,11 @@ function updateStockAlertBadge(totalCount) {
     stockAlertState.hasInitializedCount = true;
 }
 
-function stockAlertLabel(status) {
+function stockAlertLabel(status, item) {
+    const restockBasis = String(item?.restock_basis || '').toLowerCase();
+    if (restockBasis === 'recovering_manual_stock_history_review') {
+        return 'Review stock';
+    }
     return String(status || '').toLowerCase() === 'critical' ? 'Critical' : 'Reorder soon';
 }
 
@@ -2342,6 +2346,12 @@ function renderStockAlertList(items) {
         const status = String(item.restock_status || 'warning').toLowerCase();
         const currentStock = Number(item.current_stock ?? 0);
         const restockPoint = Number(item.suggested_restock_point ?? 0);
+        const restockBasis = String(item.restock_basis || '').toLowerCase();
+        const alertMessage = restockBasis === 'recovering_recent_variance_loss_zero_stock'
+            ? 'Zero stock after recent stocktake variance loss. Verify count and restock if needed.'
+            : restockBasis === 'recovering_manual_stock_history_review'
+            ? 'Late-encoding stock was manually added, then sold to zero. Verify stock history before reordering.'
+            : `Stock ${escapeHtml(currentStock)} of ${escapeHtml(restockPoint)} suggested reorder point.`;
         return `
             <button
                 type="button"
@@ -2349,10 +2359,10 @@ function renderStockAlertList(items) {
                 data-stock-alert-url="${escapeHtml(stockAlertDetailUrl(item))}">
                 <div class="stock-alert-item-head">
                     <div class="stock-alert-item-title">${escapeHtml(item.name || 'Item')}</div>
-                    <div class="stock-alert-item-status ${status === 'critical' ? 'is-critical' : 'is-warning'}">${escapeHtml(stockAlertLabel(status))}</div>
+                    <div class="stock-alert-item-status ${status === 'critical' ? 'is-critical' : 'is-warning'}">${escapeHtml(stockAlertLabel(status, item))}</div>
                 </div>
                 <div class="stock-alert-item-message">
-                    Stock ${escapeHtml(currentStock)} of ${escapeHtml(restockPoint)} suggested reorder point.
+                    ${alertMessage}
                 </div>
             </button>
         `;
