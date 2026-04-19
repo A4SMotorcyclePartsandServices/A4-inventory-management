@@ -189,7 +189,7 @@ Main reminder:
 Do not treat this as a stocktake-page-only patch. The real leak is the shared stock visibility across the app.
 
 
-## Re order algorithm
+# Re order algorithm
 
 ## Current algorithm status
 

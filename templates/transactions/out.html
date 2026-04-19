@@ -854,10 +854,16 @@
         color: #b45309;
     }
 
-    .sale-payment-pill.sale-payment-other {
+    .sale-payment-pill.sale-payment-online {
         background: rgba(30, 64, 175, 0.1);
         border-color: rgba(30, 64, 175, 0.22);
         color: #1d4ed8;
+    }
+
+    .sale-payment-pill.sale-payment-other {
+        background: rgba(75, 85, 99, 0.12);
+        border-color: rgba(75, 85, 99, 0.22);
+        color: #4b5563;
     }
 
     .sale-receipt-meta-grid {
@@ -926,6 +932,30 @@
         background: rgba(146, 64, 14, 0.08);
         color: #b45309;
         border-color: rgba(146, 64, 14, 0.18);
+    }
+
+    .sale-summary-chip.payment-cash {
+        background: rgba(22, 101, 52, 0.08);
+        color: #166534;
+        border-color: rgba(22, 101, 52, 0.18);
+    }
+
+    .sale-summary-chip.payment-credit {
+        background: rgba(180, 83, 9, 0.08);
+        color: #b45309;
+        border-color: rgba(180, 83, 9, 0.18);
+    }
+
+    .sale-summary-chip.payment-online {
+        background: rgba(30, 64, 175, 0.08);
+        color: #1d4ed8;
+        border-color: rgba(30, 64, 175, 0.16);
+    }
+
+    .sale-summary-chip.payment-other {
+        background: rgba(75, 85, 99, 0.08);
+        color: #4b5563;
+        border-color: rgba(75, 85, 99, 0.16);
     }
 
     .sale-receipt-table-wrap {
@@ -2448,18 +2478,32 @@ function getOptionLabel(selectId, value) {
     return option?.textContent?.trim() || '';
 }
 
-function getPaymentToneClass(label) {
-    if (/cash/i.test(label)) return 'sale-payment-cash';
-    if (/(utang|debt)/i.test(label)) return 'sale-payment-credit';
-    return 'sale-payment-other';
+function getPaymentToneKey(categoryOrLabel) {
+    const value = String(categoryOrLabel || '').trim().toLowerCase();
+    if (!value) return 'other';
+    if (value === String(DEFAULT_CASH_PAYMENT_ID).trim().toLowerCase() || /cash/.test(value)) return 'cash';
+    if (value === String(DEFAULT_DEBT_PAYMENT_ID).trim().toLowerCase() || /(utang|debt)/.test(value)) return 'credit';
+    if (value === 'online' || value === 'bank' || /(online|bank)/.test(value)) return 'online';
+    if (value === String(DEFAULT_OTHERS_PAYMENT_ID).trim().toLowerCase() || /other/.test(value)) return 'other';
+    return 'other';
+}
+
+function getPaymentToneClasses(categoryOrLabel) {
+    const toneKey = getPaymentToneKey(categoryOrLabel);
+    return {
+        toneKey,
+        pillClass: `sale-payment-${toneKey}`,
+        summaryClass: `payment-${toneKey}`,
+    };
 }
 
 function getPaymentPreviewSummary(payments, mechanicSupplyMode, grandTotal = 0) {
     if (mechanicSupplyMode) {
+        const cashTone = getPaymentToneClasses('Cash');
         return {
             pillLabel: 'Cash',
-            pillClass: 'sale-payment-cash',
-            lines: [{ label: 'Cash', amount: grandTotal, reference_no: null }],
+            pillClass: cashTone.pillClass,
+            lines: [{ label: 'Cash', amount: grandTotal, reference_no: null, toneClass: cashTone.summaryClass }],
         };
     }
 
@@ -2472,16 +2516,23 @@ function getPaymentPreviewSummary(payments, mechanicSupplyMode, grandTotal = 0) 
             const label = (categoryValue === 'Bank' || categoryValue === 'Online')
                 ? getOptionLabel('payment-method', providerValue)
                 : getDualPaymentCategoryLabel(categoryValue);
+            const tone = getPaymentToneClasses(categoryValue || label);
             return {
                 label: label || 'Payment',
                 amount,
                 reference_no: referenceNo,
+                toneClass: tone.summaryClass,
+                toneKey: tone.toneKey,
             };
         });
+        const uniqueToneKeys = [...new Set(lines.map(line => line.toneKey).filter(Boolean))];
+        const pillTone = uniqueToneKeys.length === 1
+            ? getPaymentToneClasses(uniqueToneKeys[0])
+            : getPaymentToneClasses('Others');
 
         return {
             pillLabel: 'Split Payment',
-            pillClass: 'sale-payment-other',
+            pillClass: pillTone.pillClass,
             lines,
         };
     }
@@ -2491,14 +2542,16 @@ function getPaymentPreviewSummary(payments, mechanicSupplyMode, grandTotal = 0) 
     const pillLabel = (paymentCategory === 'Bank' || paymentCategory === 'Online')
         ? getOptionLabel('payment-method', primaryPayment?.payment_method_id)
         : getOptionLabel('payment-category', primaryPayment?.payment_method_id);
+    const tone = getPaymentToneClasses(paymentCategory || pillLabel || 'Payment');
 
     return {
         pillLabel: pillLabel || 'Payment',
-        pillClass: getPaymentToneClass(pillLabel || 'Payment'),
+        pillClass: tone.pillClass,
         lines: primaryPayment ? [{
             label: pillLabel || 'Payment',
             amount: Number(primaryPayment.amount || 0),
             reference_no: primaryPayment.reference_no || null,
+            toneClass: tone.summaryClass,
         }] : [],
     };
 }
@@ -2553,7 +2606,7 @@ function renderSaleReviewModal(draft) {
 
     const summary = document.getElementById('saleReviewSummary');
     const paymentLineMarkup = draft.preview.payment.lines.map(line => `
-        <div class="sale-summary-chip net">
+        <div class="sale-summary-chip ${escapeHtml(line.toneClass || 'net')}">
             <i class="bi bi-wallet2"></i>
             <span>${escapeHtml(line.label)} ${formatPeso(line.amount)}${line.reference_no ? ` • Ref ${escapeHtml(line.reference_no)}` : ''}</span>
         </div>
