@@ -132,11 +132,104 @@
         opacity: 0.55;
     }
 
-    .ledger-filter-bar {
+    .ledger-filter-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        margin-top: 8px;
+    }
+
+    .ledger-filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .ledger-filter-group {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
         align-items: center;
+    }
+
+    .ledger-period-summary {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-soft);
+    }
+
+    .ledger-period-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .ledger-loading-hint {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .ledger-loading-hint.is-visible {
+        display: inline-flex;
+    }
+
+    .ledger-period-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .ledger-period-presets .btn.active {
+        background: rgba(193, 18, 31, 0.16);
+        border-color: var(--accent);
+        color: #fff;
+    }
+
+    .ledger-period-selectors,
+    .ledger-custom-range-controls {
+        display: none;
+    }
+
+    .ledger-period-selectors.is-visible,
+    .ledger-custom-range-controls.is-visible {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .ledger-period-selects {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .ledger-period-selects select {
+        min-width: 140px;
+        background: #141720;
+        border-color: #333;
+        color: #fff;
+    }
+
+    .ledger-custom-range-controls .input-group {
+        min-width: 280px;
+    }
+
+    .ledger-pagination .page-item.ellipsis .page-link {
+        pointer-events: none;
+        color: var(--text-muted);
     }
 
     #ledger-section {
@@ -161,6 +254,25 @@
         background: rgba(255,107,107,0.15);
         border-color: #ff6b6b;
         color: #ff6b6b;
+    }
+
+    .ledger-secondary-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-left: auto;
+    }
+
+    .ledger-is-busy {
+        opacity: 0.72;
+    }
+
+    .ledger-is-busy .btn,
+    .ledger-is-busy .page-link,
+    .ledger-is-busy select,
+    .ledger-is-busy .flatpickr-input {
+        pointer-events: none;
     }
 
     .pending-payouts-panel {
@@ -570,6 +682,19 @@
             flex-direction: column;
             align-items: flex-start;
         }
+
+        .ledger-filter-row {
+            align-items: stretch;
+        }
+
+        .ledger-secondary-actions {
+            margin-left: 0;
+            width: 100%;
+        }
+
+        .ledger-custom-range-controls .input-group {
+            min-width: 100%;
+        }
     }
 </style>
 {% endblock %}
@@ -819,52 +944,84 @@
                     </span>
                 </div>
 
-                <div class="ledger-filter-bar">
-                    <div class="btn-group btn-group-sm ledger-type-toggle" id="ledger-type-toggle">
-                        <button type="button"
-                                class="btn btn-outline-success btn-cash-in {% if selected_type == 'CASH_IN' %}active{% endif %}"
-                                data-filter="CASH_IN"
-                                onclick="setLedgerTypeFilter('CASH_IN', this)">
-                            <i class="bi bi-arrow-down-circle me-1"></i>Cash In
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-secondary {% if not selected_type %}active{% endif %}"
-                                data-filter=""
-                                onclick="setLedgerTypeFilter('', this)">
-                            All
-                        </button>
-                        <button type="button"
-                                class="btn btn-outline-danger btn-cash-out {% if selected_type == 'CASH_OUT' %}active{% endif %}"
-                                data-filter="CASH_OUT"
-                                onclick="setLedgerTypeFilter('CASH_OUT', this)">
-                            <i class="bi bi-arrow-up-circle me-1"></i>Cash Out
-                        </button>
+                <div class="ledger-filter-stack">
+                    <div class="ledger-filter-row">
+                        <div class="ledger-filter-group">
+                            <div class="btn-group btn-group-sm ledger-type-toggle" id="ledger-type-toggle">
+                                <button type="button"
+                                        class="btn btn-outline-success btn-cash-in {% if selected_type == 'CASH_IN' %}active{% endif %}"
+                                        data-filter="CASH_IN"
+                                        onclick="setLedgerTypeFilter('CASH_IN', this)">
+                                    <i class="bi bi-arrow-down-circle me-1"></i>Cash In
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-secondary {% if not selected_type %}active{% endif %}"
+                                        data-filter=""
+                                        onclick="setLedgerTypeFilter('', this)">
+                                    All
+                                </button>
+                                <button type="button"
+                                        class="btn btn-outline-danger btn-cash-out {% if selected_type == 'CASH_OUT' %}active{% endif %}"
+                                        data-filter="CASH_OUT"
+                                        onclick="setLedgerTypeFilter('CASH_OUT', this)">
+                                    <i class="bi bi-arrow-up-circle me-1"></i>Cash Out
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ledger-period-meta">
+                            <div class="ledger-loading-hint" id="ledger-loading-hint" aria-live="polite">
+                                <i class="bi bi-hourglass-split"></i>
+                                <span>Loading ledger...</span>
+                            </div>
+                            <div class="ledger-period-summary" id="ledger-period-summary"></div>
+                        </div>
                     </div>
 
-                    <div class="input-group input-group-sm" style="width: 240px;">
-                        <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
-                            <i class="bi bi-calendar-range"></i>
-                        </span>
-                        <input type="text" id="ledger-date-range"
-                            class="form-control form-control-sm"
-                            placeholder="Pick date range..."
-                            style="background:#141720; border-color:#333; color:#fff;"
-                            readonly>
+                    <div class="ledger-filter-row">
+                        <div class="ledger-filter-group">
+                            <div class="btn-group btn-group-sm ledger-period-presets" id="ledger-period-presets" role="group" aria-label="Ledger period presets">
+                                <button type="button" class="btn btn-outline-secondary" data-preset="this_month">This Month</button>
+                                <button type="button" class="btn btn-outline-secondary" data-preset="last_month">Last Month</button>
+                                <button type="button" class="btn btn-outline-secondary" data-preset="browse_month">Browse Month</button>
+                                <button type="button" class="btn btn-outline-secondary" data-preset="custom_range">Custom Range</button>
+                            </div>
+
+                            <div class="ledger-period-selectors" id="ledger-period-selectors">
+                                <div class="ledger-period-selects">
+                                    <select class="form-select form-select-sm" id="ledger-month-select" aria-label="Filter ledger by month"></select>
+                                    <select class="form-select form-select-sm" id="ledger-year-select" aria-label="Filter ledger by year"></select>
+                                </div>
+                            </div>
+
+                            <div class="ledger-custom-range-controls" id="ledger-custom-range-controls">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text" style="background:#141720; border-color:#333; color:#888;">
+                                        <i class="bi bi-calendar-range"></i>
+                                    </span>
+                                    <input type="text" id="ledger-date-range"
+                                        class="form-control form-control-sm"
+                                        placeholder="Pick date range..."
+                                        style="background:#141720; border-color:#333; color:#fff;"
+                                        readonly>
+                                </div>
+                                <button class="btn btn-sm btn-outline-secondary" id="ledger-clear-filters" type="button" title="Reset to this month">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="ledger-secondary-actions">
+                            <form class="ledger-report-form" id="ledger-report-form" method="get" action="{{ url_for('cash.cash_ledger_report') }}" target="_blank">
+                                <input type="hidden" name="view" id="ledger-report-view-hidden" value="{{ selected_view }}">
+                                <input type="hidden" name="type" id="ledger-report-type-hidden" value="{{ selected_type or '' }}">
+                                <input type="hidden" name="start_date" id="ledger-report-start-hidden" value="">
+                                <input type="hidden" name="end_date" id="ledger-report-end-hidden" value="">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                    <i class="bi bi-file-earmark-pdf me-1"></i> Generate PDF
+                                </button>
+                            </form>
+                        </div>
                     </div>
-
-                    <button class="btn btn-sm btn-outline-secondary" id="ledger-clear-filters" type="button" title="Clear filters">
-                        <i class="bi bi-x-lg"></i>
-                    </button>
-
-                    <form class="ledger-report-form" id="ledger-report-form" method="get" action="{{ url_for('cash.cash_ledger_report') }}" target="_blank">
-                        <input type="hidden" name="view" id="ledger-report-view-hidden" value="{{ selected_view }}">
-                        <input type="hidden" name="type" id="ledger-report-type-hidden" value="{{ selected_type or '' }}">
-                        <input type="hidden" name="start_date" id="ledger-report-start-hidden" value="">
-                        <input type="hidden" name="end_date" id="ledger-report-end-hidden" value="">
-                        <button class="btn btn-sm btn-outline-danger" type="submit">
-                            <i class="bi bi-file-earmark-pdf me-1"></i> Generate PDF
-                        </button>
-                    </form>
                 </div>
             </div>
 
@@ -958,13 +1115,43 @@
                            data-page="{{ page - 1 if page > 1 else 1 }}"
                            aria-label="Previous page">Previous</a>
                     </li>
-                    {% for page_number in range(1, total_pages + 1) %}
-                    <li class="page-item {% if page_number == page %}active{% endif %}">
-                        <a class="page-link"
-                           href="{{ url_for('cash.cash_ledger', page=page_number, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
-                           data-page="{{ page_number }}">{{ page_number }}</a>
-                    </li>
-                    {% endfor %}
+                    {% if total_pages <= 7 %}
+                        {% for page_number in range(1, total_pages + 1) %}
+                        <li class="page-item {% if page_number == page %}active{% endif %}">
+                            <a class="page-link"
+                               href="{{ url_for('cash.cash_ledger', page=page_number, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                               data-page="{{ page_number }}">{{ page_number }}</a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        {% set window_start = 2 if page - 1 < 2 else page - 1 %}
+                        {% set window_end = total_pages - 1 if page + 1 > total_pages - 1 else page + 1 %}
+                        <li class="page-item {% if page == 1 %}active{% endif %}">
+                            <a class="page-link"
+                               href="{{ url_for('cash.cash_ledger', page=1, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                               data-page="1">1</a>
+                        </li>
+                        {% if window_start > 2 %}
+                        <li class="page-item disabled ellipsis"><span class="page-link">…</span></li>
+                        {% endif %}
+                        {% for page_number in range(window_start, window_end + 1) %}
+                            {% if page_number > 1 and page_number < total_pages %}
+                            <li class="page-item {% if page_number == page %}active{% endif %}">
+                                <a class="page-link"
+                                   href="{{ url_for('cash.cash_ledger', page=page_number, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                                   data-page="{{ page_number }}">{{ page_number }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if window_end < total_pages - 1 %}
+                        <li class="page-item disabled ellipsis"><span class="page-link">…</span></li>
+                        {% endif %}
+                        <li class="page-item {% if page == total_pages %}active{% endif %}">
+                            <a class="page-link"
+                               href="{{ url_for('cash.cash_ledger', page=total_pages, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
+                               data-page="{{ total_pages }}">{{ total_pages }}</a>
+                        </li>
+                    {% endif %}
                     <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
                         <a class="page-link"
                            href="{{ url_for('cash.cash_ledger', page=page + 1 if page < total_pages else total_pages, view=selected_view, type=selected_type, start_date=selected_start_date, end_date=selected_end_date) }}"
@@ -1002,6 +1189,7 @@ let ledgerDateFlatpickr = null;
 let ledgerTypeFilter = LEDGER_SELECTED_TYPE || '';
 let ledgerCurrentPage = LEDGER_INITIAL_PAGE || 1;
 let ledgerRequestInFlight = false;
+let ledgerPeriodPreset = 'custom_range';
 let floatingCollectionAmountLocked = false;
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
@@ -1688,6 +1876,9 @@ function initializeCashPanelRowActions() {
 
 function initializeLedgerFilters() {
     const clearBtn = document.getElementById('ledger-clear-filters');
+    const monthSelect = document.getElementById('ledger-month-select');
+    const yearSelect = document.getElementById('ledger-year-select');
+    const presetButtons = document.querySelectorAll('#ledger-period-presets [data-preset]');
 
     ledgerDateFlatpickr = flatpickr('#ledger-date-range', {
         mode: 'range',
@@ -1699,13 +1890,25 @@ function initializeLedgerFilters() {
             ? [LEDGER_SELECTED_START_DATE, LEDGER_SELECTED_END_DATE]
             : null,
         onClose: function(selectedDates) {
+            if (ledgerRequestInFlight) {
+                return;
+            }
             if (selectedDates.length === 2) {
+                syncLedgerPeriodControlsFromDates(selectedDates[0], selectedDates[1]);
                 applyLedgerFilters();
             }
         }
     });
 
     clearBtn.addEventListener('click', clearLedgerFilters);
+    initializeLedgerPeriodSelectors(monthSelect, yearSelect);
+    presetButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const preset = button.dataset.preset || 'custom_range';
+            applyLedgerPreset(preset);
+        });
+    });
+    initializeLedgerPeriodState();
 }
 
 function initializeLedgerReportForm() {
@@ -1764,6 +1967,7 @@ function initializeLedgerPagination() {
 async function loadLedgerPage(targetPage) {
     if (ledgerRequestInFlight) return;
     ledgerRequestInFlight = true;
+    setLedgerInteractionDisabled(true);
     setLedgerLoadingState();
 
     try {
@@ -1784,26 +1988,27 @@ async function loadLedgerPage(targetPage) {
         showFlash('Failed to load ledger page. Please try again.', 'danger');
     } finally {
         ledgerRequestInFlight = false;
+        setLedgerInteractionDisabled(false);
     }
 }
 
 function applyLedgerFilters() {
+    if (ledgerRequestInFlight) return;
     ledgerCurrentPage = 1;
     loadLedgerPage(1);
 }
 
 function clearLedgerFilters() {
+    if (ledgerRequestInFlight) return;
     ledgerTypeFilter = '';
     document.querySelectorAll('#ledger-type-toggle .btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector('#ledger-type-toggle [data-filter=""]').classList.add('active');
-    if (ledgerDateFlatpickr) {
-        ledgerDateFlatpickr.clear();
-    }
+    applyLedgerPreset('this_month');
     ledgerCurrentPage = 1;
-    loadLedgerPage(1);
 }
 
 function setLedgerTypeFilter(filter, btn) {
+    if (ledgerRequestInFlight) return;
     ledgerTypeFilter = filter || '';
     document.querySelectorAll('#ledger-type-toggle .btn').forEach(toggleBtn => toggleBtn.classList.remove('active'));
     btn.classList.add('active');
@@ -1968,18 +2173,27 @@ function renderLedgerPagination(page, totalPages) {
 
     const previousPage = page > 1 ? page - 1 : 1;
     const nextPage = page < totalPages ? page + 1 : totalPages;
+    const pageItems = buildLedgerPaginationItems(page, totalPages);
 
     let html = `
         <li class="page-item ${page <= 1 ? 'disabled' : ''}">
             <a class="page-link" href="${buildLedgerPageHref(previousPage)}" data-page="${previousPage}" aria-label="Previous page">Previous</a>
         </li>`;
 
-    for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+    pageItems.forEach((pageNumber) => {
+        if (pageNumber === 'ellipsis') {
+            html += `
+                <li class="page-item disabled ellipsis">
+                    <span class="page-link">…</span>
+                </li>`;
+            return;
+        }
+
         html += `
             <li class="page-item ${pageNumber === page ? 'active' : ''}">
                 <a class="page-link" href="${buildLedgerPageHref(pageNumber)}" data-page="${pageNumber}">${pageNumber}</a>
             </li>`;
-    }
+    });
 
     html += `
         <li class="page-item ${page >= totalPages ? 'disabled' : ''}">
@@ -2020,6 +2234,291 @@ function formatDateForQuery(date) {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+}
+
+function parseQueryDate(dateString) {
+    if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return null;
+    }
+    const [year, month, day] = dateString.split('-').map((value) => Number.parseInt(value, 10));
+    if (!year || !month || !day) {
+        return null;
+    }
+    return new Date(year, month - 1, day);
+}
+
+function buildMonthRange(year, monthIndex) {
+    return [
+        new Date(year, monthIndex, 1),
+        new Date(year, monthIndex + 1, 0),
+    ];
+}
+
+function setLedgerDateRange(startDate, endDate) {
+    if (!ledgerDateFlatpickr) return;
+    ledgerDateFlatpickr.setDate([startDate, endDate], false);
+}
+
+function datesMatchRange(startDate, endDate, expectedStart, expectedEnd) {
+    return Boolean(startDate)
+        && Boolean(endDate)
+        && formatDateForQuery(startDate) === formatDateForQuery(expectedStart)
+        && formatDateForQuery(endDate) === formatDateForQuery(expectedEnd);
+}
+
+function getLedgerThisMonthRange() {
+    const today = parseQueryDate(CASH_LEDGER_TODAY) || new Date();
+    return buildMonthRange(today.getFullYear(), today.getMonth());
+}
+
+function getLedgerLastMonthRange() {
+    const today = parseQueryDate(CASH_LEDGER_TODAY) || new Date();
+    const lastMonthAnchor = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return buildMonthRange(lastMonthAnchor.getFullYear(), lastMonthAnchor.getMonth());
+}
+
+function syncLedgerPeriodControlsFromDates(startDate, endDate, options = {}) {
+    const { preservePreset = false } = options;
+    const monthSelect = document.getElementById('ledger-month-select');
+    const yearSelect = document.getElementById('ledger-year-select');
+    const [thisMonthStart, thisMonthEnd] = getLedgerThisMonthRange();
+    const [lastMonthStart, lastMonthEnd] = getLedgerLastMonthRange();
+
+    if (!preservePreset) {
+        if (datesMatchRange(startDate, endDate, thisMonthStart, thisMonthEnd)) {
+            ledgerPeriodPreset = 'this_month';
+        } else if (datesMatchRange(startDate, endDate, lastMonthStart, lastMonthEnd)) {
+            ledgerPeriodPreset = 'last_month';
+        } else {
+            ledgerPeriodPreset = isFullMonthRange(startDate, endDate) ? 'browse_month' : 'custom_range';
+        }
+    }
+
+    if (monthSelect && yearSelect && startDate && endDate && startDate.getDate() === 1) {
+        const [expectedStart, expectedEnd] = buildMonthRange(startDate.getFullYear(), startDate.getMonth());
+        if (datesMatchRange(startDate, endDate, expectedStart, expectedEnd)) {
+            monthSelect.value = String(startDate.getMonth());
+            yearSelect.value = String(startDate.getFullYear());
+        }
+    }
+
+    updateLedgerPresetButtons();
+    updateLedgerPeriodUi();
+}
+
+function initializeLedgerPeriodSelectors(monthSelect, yearSelect) {
+    const today = parseQueryDate(CASH_LEDGER_TODAY) || new Date();
+    const currentYear = today.getFullYear();
+    const selectedStart = parseQueryDate(LEDGER_SELECTED_START_DATE);
+    const selectedYear = selectedStart ? selectedStart.getFullYear() : currentYear;
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    if (monthSelect) {
+        monthSelect.innerHTML = monthNames.map((label, monthIndex) => `<option value="${monthIndex}">${label}</option>`).join('');
+        monthSelect.value = String(selectedStart ? selectedStart.getMonth() : today.getMonth());
+        monthSelect.addEventListener('change', () => applyLedgerMonthYearSelection());
+    }
+
+    if (yearSelect) {
+        const years = [];
+        for (let year = currentYear + 1; year >= currentYear - 10; year -= 1) {
+            years.push(`<option value="${year}">${year}</option>`);
+        }
+        if (!years.some((optionHtml) => optionHtml.includes(`value="${selectedYear}"`))) {
+            years.unshift(`<option value="${selectedYear}">${selectedYear}</option>`);
+        }
+        yearSelect.innerHTML = years.join('');
+        yearSelect.value = String(selectedYear);
+        yearSelect.addEventListener('change', () => applyLedgerMonthYearSelection());
+    }
+}
+
+function initializeLedgerPeriodState() {
+    const selectedStart = parseQueryDate(LEDGER_SELECTED_START_DATE);
+    const selectedEnd = parseQueryDate(LEDGER_SELECTED_END_DATE);
+    if (selectedStart && selectedEnd) {
+        syncLedgerPeriodControlsFromDates(selectedStart, selectedEnd);
+        return;
+    }
+    applyLedgerPreset('this_month', { skipLoad: true });
+}
+
+function applyLedgerPreset(preset, options = {}) {
+    if (ledgerRequestInFlight) return;
+    const { skipLoad = false } = options;
+    let range = null;
+
+    if (preset === 'this_month') {
+        range = getLedgerThisMonthRange();
+    } else if (preset === 'last_month') {
+        range = getLedgerLastMonthRange();
+    } else if (preset === 'browse_month') {
+        const monthSelect = document.getElementById('ledger-month-select');
+        const yearSelect = document.getElementById('ledger-year-select');
+        const monthIndex = Number.parseInt(monthSelect?.value || '', 10);
+        const year = Number.parseInt(yearSelect?.value || '', 10);
+        ledgerPeriodPreset = 'browse_month';
+        updateLedgerPresetButtons();
+        updateLedgerPeriodUi();
+        if (Number.isFinite(monthIndex) && Number.isFinite(year)) {
+            range = buildMonthRange(year, monthIndex);
+        } else {
+            return;
+        }
+    } else if (preset === 'custom_range') {
+        ledgerPeriodPreset = 'custom_range';
+        updateLedgerPresetButtons();
+        updateLedgerPeriodUi();
+        return;
+    }
+
+    if (!range) {
+        ledgerPeriodPreset = preset || 'custom_range';
+        updateLedgerPresetButtons();
+        updateLedgerPeriodUi();
+        return;
+    }
+
+    ledgerPeriodPreset = preset;
+    setLedgerDateRange(range[0], range[1]);
+    syncLedgerPeriodControlsFromDates(range[0], range[1], {
+        preservePreset: preset === 'browse_month',
+    });
+
+    if (!skipLoad) {
+        applyLedgerFilters();
+    }
+}
+
+function applyLedgerMonthYearSelection() {
+    if (ledgerRequestInFlight) return;
+    const monthSelect = document.getElementById('ledger-month-select');
+    const yearSelect = document.getElementById('ledger-year-select');
+    if (!monthSelect || !yearSelect) return;
+
+    const monthIndex = Number.parseInt(monthSelect.value, 10);
+    const year = Number.parseInt(yearSelect.value, 10);
+    if (!Number.isFinite(monthIndex) || !Number.isFinite(year)) {
+        return;
+    }
+
+    ledgerPeriodPreset = 'browse_month';
+    const [startDate, endDate] = buildMonthRange(year, monthIndex);
+    setLedgerDateRange(startDate, endDate);
+    syncLedgerPeriodControlsFromDates(startDate, endDate);
+    applyLedgerFilters();
+}
+
+function updateLedgerPresetButtons() {
+    document.querySelectorAll('#ledger-period-presets [data-preset]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.preset === ledgerPeriodPreset);
+    });
+}
+
+function updateLedgerPeriodUi() {
+    const selectorWrap = document.getElementById('ledger-period-selectors');
+    const customRangeWrap = document.getElementById('ledger-custom-range-controls');
+    const summary = document.getElementById('ledger-period-summary');
+
+    if (selectorWrap) {
+        selectorWrap.classList.toggle('is-visible', ledgerPeriodPreset === 'browse_month');
+    }
+
+    if (customRangeWrap) {
+        customRangeWrap.classList.toggle('is-visible', ledgerPeriodPreset === 'custom_range');
+    }
+
+    if (summary) {
+        summary.textContent = buildLedgerPeriodSummary();
+    }
+}
+
+function buildLedgerPeriodSummary() {
+    if (ledgerDateFlatpickr && ledgerDateFlatpickr.selectedDates.length === 2) {
+        const [startDate, endDate] = ledgerDateFlatpickr.selectedDates;
+        return `${formatLedgerSummaryDate(startDate)} to ${formatLedgerSummaryDate(endDate)}`;
+    }
+
+    if (LEDGER_SELECTED_START_DATE && LEDGER_SELECTED_END_DATE) {
+        const startDate = parseQueryDate(LEDGER_SELECTED_START_DATE);
+        const endDate = parseQueryDate(LEDGER_SELECTED_END_DATE);
+        if (startDate && endDate) {
+            return `${formatLedgerSummaryDate(startDate)} to ${formatLedgerSummaryDate(endDate)}`;
+        }
+    }
+
+    return 'No period selected';
+}
+
+function formatLedgerSummaryDate(date) {
+    return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
+function isFullMonthRange(startDate, endDate) {
+    if (!startDate || !endDate || startDate.getDate() !== 1) {
+        return false;
+    }
+    const [, expectedEnd] = buildMonthRange(startDate.getFullYear(), startDate.getMonth());
+    return formatDateForQuery(endDate) === formatDateForQuery(expectedEnd);
+}
+
+function buildLedgerPaginationItems(page, totalPages) {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const items = [1];
+    const windowStart = Math.max(2, page - 1);
+    const windowEnd = Math.min(totalPages - 1, page + 1);
+
+    if (windowStart > 2) {
+        items.push('ellipsis');
+    }
+
+    for (let pageNumber = windowStart; pageNumber <= windowEnd; pageNumber += 1) {
+        items.push(pageNumber);
+    }
+
+    if (windowEnd < totalPages - 1) {
+        items.push('ellipsis');
+    }
+
+    items.push(totalPages);
+    return items;
+}
+
+function setLedgerInteractionDisabled(disabled) {
+    const ledgerSection = document.getElementById('ledger-section');
+    const loadingHint = document.getElementById('ledger-loading-hint');
+    if (ledgerSection) {
+        ledgerSection.classList.toggle('ledger-is-busy', disabled);
+    }
+
+    if (loadingHint) {
+        loadingHint.classList.toggle('is-visible', disabled);
+    }
+
+    document.querySelectorAll('#ledger-type-toggle .btn, #ledger-period-presets .btn, #ledger-clear-filters, #ledger-pagination-list .page-link').forEach((element) => {
+        if ('disabled' in element) {
+            element.disabled = disabled;
+        }
+        element.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        element.tabIndex = disabled ? -1 : 0;
+    });
+
+    document.querySelectorAll('#ledger-month-select, #ledger-year-select').forEach((select) => {
+        select.disabled = disabled;
+        select.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    });
+
+    if (ledgerDateFlatpickr?.altInput) {
+        ledgerDateFlatpickr.altInput.disabled = disabled;
+        ledgerDateFlatpickr.altInput.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    }
 }
 </script>
 {% endblock %}

@@ -92,6 +92,25 @@ def _resolve_report_date_range():
     return start_date.isoformat(), end_date.isoformat(), start_date, end_date
 
 
+def _resolve_ledger_date_range(default_to_current_month=False):
+    start_raw = request.args.get("start_date") or None
+    end_raw = request.args.get("end_date") or None
+
+    if start_raw and not end_raw:
+        end_raw = start_raw
+    elif end_raw and not start_raw:
+        start_raw = end_raw
+
+    if not start_raw and not end_raw and default_to_current_month:
+        today = today_local()
+        month_start = today.replace(day=1)
+        next_month_anchor = (month_start + timedelta(days=32)).replace(day=1)
+        month_end = next_month_anchor - timedelta(days=1)
+        return month_start.isoformat(), month_end.isoformat()
+
+    return start_raw, end_raw
+
+
 def _build_expense_report_groups(entries):
     grouped = {}
 
@@ -267,8 +286,7 @@ def cash_ledger():
     purge_deleted_cash_entries(branch_id=branch_id)
     ledger_view = _get_ledger_view()
     entry_type = request.args.get("type") or None
-    start_date = request.args.get("start_date") or None
-    end_date   = request.args.get("end_date") or None
+    start_date, end_date = _resolve_ledger_date_range(default_to_current_month=True)
     prefill_entry_type = request.args.get("prefill_entry_type") or ""
     prefill_payable_id = request.args.get("prefill_payable_id") or ""
     prefill_amount = request.args.get("prefill_amount") or ""
@@ -397,8 +415,7 @@ def cash_ledger_api():
     purge_deleted_cash_entries(branch_id=branch_id)
     ledger_view = _get_ledger_view()
     entry_type = request.args.get("type") or None
-    start_date = request.args.get("start_date") or None
-    end_date   = request.args.get("end_date") or None
+    start_date, end_date = _resolve_ledger_date_range(default_to_current_month=True)
 
     if entry_type not in {"CASH_IN", "CASH_OUT", None}:
         entry_type = None

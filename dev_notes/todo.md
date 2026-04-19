@@ -76,3 +76,9 @@
 - [ ] Add shared frontend guard to mechanic quota top-up save/delete actions in [users.html]
 - [ ] Bundle third-party frontend assets locally for startup reliability in desktop build (Bootstrap, Bootstrap Icons, Flatpickr, SweetAlert) and stop relying on CDN-first load behavior
 - [X] ~~*payables page we need a way to resolve a payable without a cheque issuance. basically the shop paying cash instead of cheque. the idea here is when a cheque is cancelled, auto redirect the user to the*~~ [2026-04-16]
+
+## Cash Ledger Follow-up
+
+- [ ] Best immediate product decision: add month/year presets on top of the existing range filter, and shorten pagination to something like `Previous 1 ... 5 6 7 ... 20 Next`
+- [ ] Best medium-term technical decision: refactor ledger retrieval so pagination happens in SQL instead of after building a full unified list in memory
+- [ ] Best long-term UX: default the page to `This Month`, with easy switching to other months/years and custom range when needed
