@@ -132,6 +132,7 @@ def _get_sale_payment_summary_map(conn, sale_ids):
 
 def _normalize_sale_payments(conn, data, expected_total_amount, mechanic_supply=False):
     expected_total_amount = _money(expected_total_amount)
+    allow_zero_payment_amount = expected_total_amount == 0
     raw_payments = (data or {}).get("payments") or []
     sale_notes = str((data or {}).get("notes") or "").strip() or None
 
@@ -183,7 +184,10 @@ def _normalize_sale_payments(conn, data, expected_total_amount, mechanic_supply=
         except (TypeError, ValueError):
             raise ValueError("One or more payment amounts are invalid.")
 
-        if amount <= 0:
+        if amount < 0:
+            raise ValueError("Payment amounts must not be negative.")
+
+        if amount == 0 and not allow_zero_payment_amount:
             raise ValueError("Payment amounts must be greater than zero.")
 
         reference_no = str(raw_payment.get("reference_no") or "").strip() or None

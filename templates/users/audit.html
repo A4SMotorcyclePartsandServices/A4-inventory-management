@@ -365,6 +365,35 @@
         white-space: nowrap;
     }
 
+    #audit-trail-table td.audit-notes-cell .notes-text {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #audit-trail-table td.audit-summary-cell:hover,
+    #audit-trail-table td.audit-notes-cell:hover {
+        white-space: normal !important;
+        word-break: break-word;
+        overflow: visible !important;
+        background: #1a1d26 !important;
+        position: relative;
+        z-index: 10;
+    }
+
+    #audit-trail-table td.audit-summary-cell:hover .summary-text {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+
+    #audit-trail-table td.audit-notes-cell:hover .notes-text {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+    }
+
     #audit-trail-table td.audit-reference-cell .btn {
         display: inline-flex !important;
         align-items: center;
@@ -4283,7 +4312,7 @@ function renderAuditTrail(data) {
             ? (log.items_summary.length > 40 ? log.items_summary.slice(0, 40) + '...' : log.items_summary)
             : '-';
         const notes = log.notes
-            ? `<span class="text-info" style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${log.notes}">
+            ? `<span class="text-info" title="${log.notes}">
                 <i class="bi bi-chat-left-text me-1"></i>${log.notes}
             </span>`
             : '<span class="text-muted">-</span>';
@@ -4349,7 +4378,7 @@ function renderAuditTrail(data) {
                 <td class="audit-reason-cell"><span class="text-white-50 small fst-italic fw-bold">${reason}</span></td>
                 <td class="text-center fw-bold">${log.total_qty}</td>
                 <td class="audit-reference-cell">${refBtn}</td>
-                <td class="text-white-50 small audit-notes-cell">${notes}</td>
+                <td class="text-white-50 small audit-notes-cell"><div class="notes-text">${notes}</div></td>
                 <td class="text-white-50 small audit-staff-cell"><i class="bi bi-person me-1"></i>${log.user_name || '-'}</td>
             </tr>`;
     }).join('');

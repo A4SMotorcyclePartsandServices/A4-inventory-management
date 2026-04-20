@@ -4146,7 +4146,7 @@ async function fetchLoyaltyEligibility(customerId) {
                         if (prog.program_type === 'SERVICE') {
                             const mechanicSelect = document.getElementById('mechanic-id');
                             if (!getPreferredServiceMechanicId()) {
-                                showAlert('Redeem selected. Choose at least one mechanic to auto-fill the redeemed service at ₱0.00.', 'info');
+                                showAlert('Redeem selected. Choose at least one mechanic to auto-fill the redeemed service at ₱0.00.', 'warning');
                                 mechanicSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 mechanicSelect.focus();
                             } else {

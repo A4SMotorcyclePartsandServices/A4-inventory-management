@@ -122,7 +122,21 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             'SERVICE_ONLY_SALE' AS change_reason,
             'SALE' AS reference_type,
             s.id AS reference_id,
-            s.notes,
+            CASE
+                WHEN COALESCE(s.is_voided, FALSE) = TRUE THEN
+                    TRIM(BOTH ' |' FROM CONCAT(
+                        CASE
+                            WHEN COALESCE(s.void_reason, '') <> '' THEN REPLACE(s.void_reason, '_', ' ')
+                            ELSE ''
+                        END,
+                        CASE
+                            WHEN COALESCE(s.void_notes, '') <> '' AND COALESCE(s.void_reason, '') <> '' THEN ' | '
+                            ELSE ''
+                        END,
+                        COALESCE(s.void_notes, '')
+                    ))
+                ELSE s.notes
+            END AS notes,
             s.sales_number,
             NULL AS po_number,
             COALESCE((
