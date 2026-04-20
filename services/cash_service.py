@@ -154,6 +154,163 @@ def _suggest_cash_in_category_system_key(payment_category):
     return SYSTEM_KEY_CASH_IN_BANK_TRANSFER if payment_category == "Bank" else SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
 
 
+def _normalize_non_cash_description(description):
+    normalized = (description or "").strip().lower()
+    if not normalized:
+        return ""
+    normalized = normalized.replace("—", "-").replace("–", "-")
+    normalized = re.sub(r"\s*-\s*", "-", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def _extract_sales_number_hint(description):
+    normalized = (description or "").strip()
+    if not normalized:
+        return ""
+
+    match = re.match(r"^\s*([A-Za-z0-9]+)", normalized)
+    if not match:
+        return ""
+    return match.group(1).strip()
+
+
+def _get_pending_non_cash_sales_numbers(conn):
+    sales_numbers = set()
+    for candidate in _build_pending_non_cash_match_candidates(conn):
+        sales_number = (candidate.get("sales_number") or "").strip()
+        if sales_number:
+            sales_numbers.add(sales_number)
+    return sales_numbers
+
+
+def _build_pending_non_cash_match_candidates(conn):
+    sale_rows = _get_non_cash_paid_sales(conn)
+    debt_payment_rows = _get_non_cash_debt_payments(conn)
+    claimed_sale_ids = _get_active_float_claimed_sale_ids(
+        conn,
+        [row["sale_id"] for row in sale_rows],
+    )
+    claimed_debt_payment_ids = _get_active_float_claimed_debt_payment_ids(
+        conn,
+        [row["debt_payment_id"] for row in debt_payment_rows],
+    )
+
+    candidates = []
+
+    for row in sale_rows:
+        sale_id = int(row["sale_id"])
+        if sale_id in claimed_sale_ids:
+            continue
+
+        sales_number = (row["sales_number"] or "").strip()
+        customer_name = (row["customer_name"] or "").strip() or "Walk-in"
+        payment_category = row["payment_method_category"] or "Online"
+        candidates.append({
+            "source_type": "sale",
+            "source_id": sale_id,
+            "amount": _money(row["amount"]),
+            "description": f"{sales_number} — {customer_name}" if sales_number else customer_name,
+            "category_system_key": _suggest_cash_in_category_system_key(payment_category),
+            "sales_number": sales_number,
+            "normalized_description": _normalize_non_cash_description(
+                f"{sales_number} — {customer_name}" if sales_number else customer_name
+            ),
+        })
+
+    for row in debt_payment_rows:
+        debt_payment_id = int(row["debt_payment_id"])
+        if debt_payment_id in claimed_debt_payment_ids:
+            continue
+
+        sales_number = (row["sales_number"] or "").strip()
+        customer_name = (row["customer_name"] or "").strip() or "Walk-in"
+        payment_category = row["payment_method_category"] or "Online"
+        candidates.append({
+            "source_type": "debt_payment",
+            "source_id": debt_payment_id,
+            "amount": _money(row["amount"]),
+            "description": f"{sales_number} — {customer_name}" if sales_number else customer_name,
+            "category_system_key": _suggest_cash_in_category_system_key(payment_category),
+            "sales_number": sales_number,
+            "normalized_description": _normalize_non_cash_description(
+                f"{sales_number} — {customer_name}" if sales_number else customer_name
+            ),
+        })
+
+    return candidates
+
+
+def _find_pending_non_cash_match(conn, amount, description, category_system_key):
+    normalized_description = (description or "").strip()
+    normalized_category_system_key = (category_system_key or "").strip()
+    normalized_amount = _money(amount)
+    normalized_description_key = _normalize_non_cash_description(normalized_description)
+    sales_number_hint = _extract_sales_number_hint(normalized_description)
+
+    if not normalized_description or normalized_category_system_key not in {
+        SYSTEM_KEY_CASH_IN_BANK_TRANSFER,
+        SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER,
+    }:
+        return None
+
+    for candidate in _build_pending_non_cash_match_candidates(conn):
+        if candidate["amount"] != normalized_amount:
+            continue
+        if sales_number_hint and candidate["sales_number"] == sales_number_hint:
+            return candidate
+        if candidate["normalized_description"] == normalized_description_key:
+            return candidate
+
+    return None
+
+
+def _find_existing_manual_non_cash_duplicate(conn, amount, description, category_label):
+    normalized_description = (description or "").strip()
+    normalized_amount = _money(amount)
+    normalized_description_key = _normalize_non_cash_description(normalized_description)
+    sales_number_hint = _extract_sales_number_hint(normalized_description)
+    if not normalized_description:
+        return None
+
+    rows = conn.execute(
+        """
+        SELECT
+            ce.id,
+            ce.created_at,
+            ce.amount,
+            ce.description,
+            ce.category,
+            cec.system_key
+        FROM cash_entries ce
+        LEFT JOIN cash_entry_categories cec ON cec.id = ce.cash_category_id
+        WHERE ce.entry_type = 'CASH_IN'
+          AND ce.reference_type = 'MANUAL'
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+          AND ce.amount = %s
+          AND (
+                cec.system_key IN (%s, %s)
+                OR ce.category IN ('From Gcash/E-Wallet Account', 'From Bank Account')
+          )
+        ORDER BY ce.created_at DESC, ce.id DESC
+        """,
+        (
+            normalized_amount,
+            SYSTEM_KEY_CASH_IN_BANK_TRANSFER,
+            SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER,
+        ),
+    ).fetchall()
+
+    for row in rows:
+        row_sales_number_hint = _extract_sales_number_hint(row["description"])
+        if sales_number_hint and row_sales_number_hint == sales_number_hint:
+            return row
+        if _normalize_non_cash_description(row["description"]) == normalized_description_key:
+            return row
+
+    return None
+
+
 def add_cash_category_record(entry_type, label, requires_description=False, created_by=None):
     normalized_entry_type = str(entry_type or "").strip().upper()
     normalized_label = " ".join(str(label or "").strip().split())
@@ -1228,6 +1385,31 @@ def add_cash_entry(
             reference_type = PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE
             normalized_reference_id = normalized_payable_id
 
+        if (
+            reference_type == 'MANUAL'
+            and entry_type == 'CASH_IN'
+            and category_system_key in {SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER}
+        ):
+            sales_number_hint = _extract_sales_number_hint(normalized_description)
+            if sales_number_hint and sales_number_hint in _get_pending_non_cash_sales_numbers(conn):
+                raise ValueError(
+                    f"{sales_number_hint} is still pending in Non-Cash Collections. "
+                    "Use the pending panel entry instead of adding a manual cash-in."
+                )
+
+            pending_match = _find_pending_non_cash_match(
+                conn,
+                amount=amount,
+                description=normalized_description,
+                category_system_key=category_system_key,
+            )
+            if pending_match:
+                sales_number = pending_match.get("sales_number") or "this transaction"
+                raise ValueError(
+                    f"{sales_number} is still pending in Non-Cash Collections. "
+                    "Use the pending panel entry instead of adding a manual cash-in."
+                )
+
         claimable_total = 0.0
 
         if normalized_claim_sale_ids:
@@ -1298,6 +1480,18 @@ def add_cash_entry(
         if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
             if claimable_total != amount:
                 raise ValueError("Claim amount does not match the pending floating total.")
+
+            existing_manual_duplicate = _find_existing_manual_non_cash_duplicate(
+                conn,
+                amount=amount,
+                description=normalized_description,
+                category_label=category_label,
+            )
+            if existing_manual_duplicate:
+                raise ValueError(
+                    "A matching manual cash ledger entry already exists for this non-cash collection. "
+                    "Please review the ledger before claiming it again."
+                )
 
         insert_row = conn.execute("""
             INSERT INTO cash_entries
