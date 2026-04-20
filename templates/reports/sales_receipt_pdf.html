@@ -112,6 +112,30 @@
             color: #1d4ed8;
         }
 
+        .void-banner {
+            margin: 16px 24px 0;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(185, 28, 28, 0.22);
+            background: rgba(185, 28, 28, 0.06);
+            color: #7f1d1d;
+        }
+
+        .void-banner-title {
+            font-size: 15px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .void-banner-note {
+            font-size: 12px;
+            font-weight: 600;
+            color: #991b1b;
+            line-height: 1.45;
+        }
+
         .receipt-body {
             padding: 20px 24px 24px;
         }
@@ -357,6 +381,17 @@
                 </div>
                 <div class="payment-pill {{ payment_class }}">{{ payment_name }}</div>
             </div>
+            {% if sale.is_voided %}
+            <div class="void-banner">
+                <div class="void-banner-title">Voided Sale</div>
+                <div class="void-banner-note">
+                    {% if sale.voided_by_username %}By {{ sale.voided_by_username }}{% endif %}
+                    {% if sale.voided_at_display %} on {{ sale.voided_at_display }}{% endif %}
+                    {% if sale.void_reason %} · {{ sale.void_reason|replace('_', ' ')|title }}{% endif %}
+                    {% if sale.void_notes %} · {{ sale.void_notes }}{% endif %}
+                </div>
+            </div>
+            {% endif %}
 
             <div class="receipt-body">
                 <div class="meta-grid">
@@ -370,7 +405,13 @@
                     </div>
                     <div class="meta-card">
                         <span class="label">Status</span>
-                        <div class="value">{{ sale.status or '-' }}</div>
+                        <div class="value">
+                            {% if sale.is_voided %}
+                            VOIDED
+                            {% else %}
+                            {{ sale.status or '-' }}
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
 

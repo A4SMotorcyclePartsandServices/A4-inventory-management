@@ -75,6 +75,7 @@ from routes.notification_route import notification_bp
 from routes.vendor_route import vendor_bp
 from routes.payables_route import payables_bp
 from routes.stocktake_route import stocktake_bp
+from routes.void_sales_route import void_sales_bp
 
 
 # ============================================================
@@ -267,6 +268,7 @@ app.register_blueprint(notification_bp)
 app.register_blueprint(vendor_bp)
 app.register_blueprint(payables_bp)
 app.register_blueprint(stocktake_bp)
+app.register_blueprint(void_sales_bp)
 
 
 # ============================================================

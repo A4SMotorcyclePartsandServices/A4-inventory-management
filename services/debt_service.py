@@ -39,6 +39,7 @@ def get_all_debts():
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY s.id, m.name, pm.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
@@ -94,6 +95,7 @@ def get_debt_detail(sale_id):
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.id = %s
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY s.id, m.name, pm.name
     """, (sale_id,)).fetchone()
 
@@ -222,6 +224,7 @@ def get_customer_debt_statement(customer_id):
             LEFT JOIN vehicles v         ON v.id = s.vehicle_id
             LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
             WHERE s.customer_id = %s
+              AND COALESCE(s.is_voided, FALSE) = FALSE
               AND s.payment_method_id IN (
                     SELECT id FROM payment_methods WHERE category = 'Debt'
               )
@@ -421,6 +424,7 @@ def get_customer_id_for_debt_sale(sale_id):
             SELECT customer_id
             FROM sales
             WHERE id = %s
+              AND COALESCE(is_voided, FALSE) = FALSE
             """,
             (sale_id,),
         ).fetchone()
@@ -466,15 +470,18 @@ def record_payment(sale_id, amount_paid, payment_method_id, reference_no, notes,
         # 1) Current state
         sale = conn.execute("""
             SELECT s.total_amount,
+            COALESCE(s.is_voided, FALSE) AS is_voided,
             COALESCE(SUM(dp.amount_paid), 0) AS total_paid
             FROM sales s
             LEFT JOIN debt_payments dp ON dp.sale_id = s.id
             WHERE s.id = %s
-            GROUP BY s.id, s.total_amount
+            GROUP BY s.id, s.total_amount, s.is_voided
         """, (sale_id,)).fetchone()
 
         if not sale:
             raise ValueError("Sale not found.")
+        if sale["is_voided"]:
+            raise ValueError("Cannot record a payment against a voided sale.")
 
         total_amount = _money(sale['total_amount'])
         total_paid   = _money(sale['total_paid'])

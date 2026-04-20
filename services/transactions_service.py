@@ -2121,6 +2121,12 @@ def get_sale_refund_context(sale_id):
                 s.id,
                 s.sales_number,
                 COALESCE(s.transaction_class, 'NEW_SALE') AS transaction_class,
+                COALESCE(s.is_voided, FALSE) AS is_voided,
+                s.voided_at,
+                s.voided_by,
+                s.voided_by_username,
+                s.void_reason,
+                s.void_notes,
                 s.customer_name,
                 s.customer_id,
                 s.vehicle_id,
@@ -2364,6 +2370,8 @@ def get_sale_refund_context(sale_id):
 
     sale_data.update({
         "transaction_date_display": format_date(sale_data["transaction_date"], show_time=True),
+        "is_voided": bool(sale_data.get("is_voided")),
+        "voided_at_display": format_date(sale_data["voided_at"], show_time=True) if sale_data.get("voided_at") else None,
         "refund_cutoff_date": cutoff_date.isoformat() if cutoff_date else None,
         "refund_cutoff_display": format_date(cutoff_date.isoformat()) if cutoff_date else None,
         "total_amount": round(float(sale_data["total_amount"] or 0), 2),

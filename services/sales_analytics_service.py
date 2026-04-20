@@ -35,6 +35,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category IN ('Bank', 'Online')
         GROUP BY s.id
         """,
@@ -51,6 +52,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category IN ('Bank', 'Online')
         """,
         (start_date, end_date),
@@ -149,6 +151,7 @@ def _get_total_shop_topup(conn, start_date, end_date):
          AND mqto.quota_date = DATE(s.transaction_date)
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date ASC
         """,
         (start_date, end_date),
@@ -171,6 +174,7 @@ def _get_total_shop_topup(conn, start_date, end_date):
          AND mqto.quota_date = DATE(dp.paid_at)
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY dp.paid_at ASC
         """,
         (start_date, end_date),
@@ -251,6 +255,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         """,
         (start_date, end_date),
     ).fetchone()
@@ -262,6 +267,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         JOIN sales s ON s.id = dp.sale_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         """,
         (start_date, end_date),
     ).fetchone()
@@ -343,9 +349,10 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
                 LEFT JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
                 GROUP BY sb.sale_id
             ) sb ON sb.sale_id = s.id
-            WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-              AND s.status = 'Paid'
-              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ) scoped_sales
         """,
         (start_date, end_date),
@@ -363,6 +370,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+              AND COALESCE(s.is_voided, FALSE) = FALSE
 
             UNION ALL
 
@@ -380,6 +388,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+              AND COALESCE(s.is_voided, FALSE) = FALSE
         ) scoped_item_totals
         """,
         (start_date, end_date, start_date, end_date),
@@ -447,6 +456,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
               ON m.id = sst.mechanic_id
             WHERE DATE(dp.paid_at) BETWEEN %s AND %s
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+              AND COALESCE(s.is_voided, FALSE) = FALSE
         )
         SELECT
             COALESCE(SUM(
@@ -489,6 +499,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY s.status
         ORDER BY s.status ASC
         """,
@@ -507,6 +518,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY COALESCE(pm.name, 'N/A')
         ORDER BY total_amount DESC, payment_method ASC
         """,
@@ -522,6 +534,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         FROM sales s
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY DATE(s.transaction_date)
         ORDER BY day ASC
         """,
@@ -591,6 +604,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+              AND COALESCE(s.is_voided, FALSE) = FALSE
             GROUP BY i.id, i.name, i.description, i.category
 
             UNION ALL
@@ -651,6 +665,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             WHERE DATE(s.transaction_date) BETWEEN %s AND %s
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+              AND COALESCE(s.is_voided, FALSE) = FALSE
             GROUP BY sbi.item_name_snapshot, i.description, i.category
         ) ranked_items
         WHERE 1 = 1
@@ -683,6 +698,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY sv.id, sv.name
         ORDER BY total_revenue DESC, times_sold DESC, sv.name ASC
         LIMIT 10
@@ -701,6 +717,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY COALESCE(c.customer_name, s.customer_name, 'Walk-in')
         ORDER BY total_revenue DESC, sale_count DESC, customer_name ASC
         LIMIT 10

@@ -300,10 +300,20 @@ def init_db():
     ALTER TABLE sales
     ADD COLUMN IF NOT EXISTS transaction_class TEXT NOT NULL DEFAULT 'NEW_SALE'
     """)
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS is_voided BOOLEAN NOT NULL DEFAULT FALSE")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_by INTEGER REFERENCES users(id)")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_by_username TEXT")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS void_reason TEXT")
+    cur.execute("ALTER TABLE sales ADD COLUMN IF NOT EXISTS void_notes TEXT")
     cur.execute("""
     UPDATE sales
     SET transaction_class = 'NEW_SALE'
     WHERE transaction_class IS NULL
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_sales_voided_transaction_date
+    ON sales (is_voided, transaction_date DESC)
     """)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS sale_payments (

@@ -399,6 +399,30 @@
         flex: 0 0 auto;
     }
 
+    #sales-admin-body tr.sale-row-voided {
+        background: rgba(148, 163, 184, 0.08);
+    }
+
+    #sales-admin-body tr.sale-row-voided:hover {
+        background: rgba(148, 163, 184, 0.12);
+    }
+
+    .sale-receipt-label-voided {
+        color: #9ca3af !important;
+        text-decoration: line-through;
+        text-decoration-thickness: 2px;
+        text-decoration-color: rgba(248, 113, 113, 0.75);
+    }
+
+    .sale-voided-note {
+        display: block;
+        margin-top: 0.25rem;
+        color: #fca5a5;
+        font-size: 0.76rem;
+        font-weight: 700;
+        white-space: normal;
+    }
+
     .sale-modal-content {
         background:
             radial-gradient(circle at top right, rgba(230, 57, 70, 0.14), transparent 26%),
@@ -450,6 +474,30 @@
 
     .sale-receipt::before { left: -5px; }
     .sale-receipt::after { right: -5px; }
+
+    .sale-receipt-shell.sale-receipt-shell-voided {
+        background: linear-gradient(180deg, rgba(148, 163, 184, 0.20), rgba(71, 85, 105, 0.12));
+        border-color: rgba(148, 163, 184, 0.28);
+    }
+
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt {
+        background:
+            linear-gradient(180deg, rgba(229, 231, 235, 0.98), rgba(209, 213, 219, 0.98)),
+            repeating-linear-gradient(
+                to bottom,
+                rgba(75, 85, 99, 0.06) 0,
+                rgba(75, 85, 99, 0.06) 1px,
+                transparent 1px,
+                transparent 28px
+            );
+        color: #4b5563;
+        box-shadow: inset 0 0 0 1px rgba(75, 85, 99, 0.12);
+    }
+
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt::before,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt::after {
+        opacity: 0.45;
+    }
 
     .password-reset-review-card {
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -961,6 +1009,51 @@
         font-weight: 800;
         letter-spacing: -0.03em;
         color: #111827;
+    }
+
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-kicker,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-meta-label,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-line-note,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-total-label {
+        color: #6b7280 !important;
+    }
+
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-no {
+        color: #6b7280;
+        text-decoration: line-through;
+        text-decoration-thickness: 3px;
+        text-decoration-color: rgba(185, 28, 28, 0.72);
+    }
+
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-meta-value,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-line-name,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-total-amount,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-table th,
+    .sale-receipt-shell.sale-receipt-shell-voided .sale-receipt-table td {
+        color: #374151 !important;
+    }
+
+    .sale-void-banner {
+        margin-bottom: 1rem;
+        padding: 0.8rem 0.95rem;
+        border-radius: 12px;
+        border: 1px solid rgba(185, 28, 28, 0.24);
+        background: rgba(239, 68, 68, 0.10);
+        color: #991b1b;
+    }
+
+    .sale-void-banner strong {
+        display: block;
+        font-size: 0.92rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .sale-void-banner span {
+        display: block;
+        margin-top: 0.3rem;
+        font-size: 0.82rem;
+        color: #7f1d1d;
     }
 
     .sale-payment-pill {
@@ -3187,8 +3280,42 @@ function populateMechanicSupplyDetails(data, saleID, displayNum) {
     `;
 }
 
-function populateSaleDetails(data, saleID, displayNum) {
+function getSalePresentationMode(mode) {
+    return mode === 'original_purchase' ? 'original_purchase' : 'current';
+}
+
+function shouldShowVoidedSaleState(data, mode) {
+    return Boolean(data.is_voided) && getSalePresentationMode(mode) !== 'original_purchase';
+}
+
+function formatVoidReasonLabel(reason) {
+    const raw = String(reason || '').trim();
+    if (!raw) return '';
+    return raw
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .toLowerCase()
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function applySaleReceiptVisualState(showVoidedState, data) {
+    const shell = document.querySelector('#saleDetailsModal .sale-receipt-shell');
+    const receiptId = document.getElementById('modalSaleID');
+    if (shell) {
+        shell.classList.toggle('sale-receipt-shell-voided', showVoidedState);
+    }
+    if (receiptId) {
+        receiptId.classList.toggle('sale-receipt-label-voided', showVoidedState);
+        receiptId.title = showVoidedState
+            ? `Voided${data?.voided_at_display ? ` on ${data.voided_at_display}` : ''}`
+            : '';
+    }
+}
+
+function populateSaleDetails(data, saleID, displayNum, mode = 'current') {
     document.getElementById('modalSaleID').innerText = displayNum || data.sales_number || saleID;
+    const showVoidedState = shouldShowVoidedSaleState(data, mode);
+    applySaleReceiptVisualState(showVoidedState, data);
 
     const meta = document.getElementById('saleDetailsMeta');
     const summary = document.getElementById('saleDetailsSummary');
@@ -3203,7 +3330,17 @@ function populateSaleDetails(data, saleID, displayNum) {
     paymentPill.className = `sale-payment-pill ${paymentToneClass}`;
     paymentPill.textContent = paymentMethod;
 
+    const voidReasonLabel = formatVoidReasonLabel(data.void_reason);
+    const statusValue = showVoidedState
+        ? `VOIDED${data.voided_at_display ? ` · ${data.voided_at_display}` : ''}`
+        : (data.status || 'Completed');
+
     meta.innerHTML = `
+        ${showVoidedState ? `
+        <div class="sale-void-banner" style="grid-column: 1 / -1;">
+            <strong>Voided Sale</strong>
+            <span>${escapeHtml(data.voided_by_username || 'Admin')}${voidReasonLabel ? ` · ${escapeHtml(voidReasonLabel)}` : ''}${data.voided_at_display ? ` · ${escapeHtml(data.voided_at_display)}` : ''}</span>
+        </div>` : ''}
         <div class="sale-receipt-meta-card">
             <div class="sale-receipt-meta-label">Customer</div>
             <div class="sale-receipt-meta-value">${escapeHtml(data.customer_name || 'Walk-in')}</div>
@@ -3214,7 +3351,7 @@ function populateSaleDetails(data, saleID, displayNum) {
         </div>
         <div class="sale-receipt-meta-card">
             <div class="sale-receipt-meta-label">Status</div>
-            <div class="sale-receipt-meta-value">${escapeHtml(data.status || 'Completed')}</div>
+            <div class="sale-receipt-meta-value">${escapeHtml(statusValue)}</div>
         </div>
     `;
 
@@ -3223,6 +3360,15 @@ function populateSaleDetails(data, saleID, displayNum) {
             <i class="bi bi-calculator"></i>
             <span>Total ${formatPeso(data.total_amount)}</span>
         </div>
+        ${showVoidedState ? `
+        <div class="sale-summary-chip refund">
+            <i class="bi bi-slash-circle"></i>
+            <span>Voided ${escapeHtml(voidReasonLabel || '')}</span>
+        </div>
+        <div class="sale-summary-chip net">
+            <i class="bi bi-person-badge"></i>
+            <span>${escapeHtml(data.voided_by_username || 'Admin')}</span>
+        </div>` : ''}
         ${Number(data.total_refunded || 0) > 0 ? `
         <div class="sale-summary-chip refund">
             <i class="bi bi-arrow-return-left"></i>
@@ -3343,11 +3489,21 @@ function populateSaleDetails(data, saleID, displayNum) {
             <td></td>
         </tr>`;
 
+    if (showVoidedState) {
+        list.innerHTML += `
+            <tr>
+                <td colspan="3" class="text-center text-danger py-3 fw-bold">
+                    VOIDED${data.voided_by_username ? ` · ${escapeHtml(data.voided_by_username)}` : ''}${data.void_notes ? ` · ${escapeHtml(data.void_notes)}` : ''}
+                </td>
+            </tr>`;
+    }
+
     renderRefundHistory(data);
 }
 
-function viewSaleDetails(saleID, displayNum) {
+function viewSaleDetails(saleID, displayNum, mode = 'current') {
     document.getElementById('mechanicSupplyDetailsBody').innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split me-1"></i> Loading...</div>';
+    applySaleReceiptVisualState(false, null);
 
     fetch(`/sales/details/${saleID}`)
         .then(response => response.json())
@@ -3371,10 +3527,11 @@ function viewSaleDetails(saleID, displayNum) {
             document.getElementById('saleDetailsPaymentPill').textContent = 'Loading';
             document.getElementById('saleRefundHistory').innerHTML = '';
             document.getElementById('saleDetailsPrintBtn').href = `/reports/sales-receipt/${encodeURIComponent(saleID)}`;
-            populateSaleDetails(data, saleID, displayNum);
+            populateSaleDetails(data, saleID, displayNum, mode);
             new bootstrap.Modal(document.getElementById('saleDetailsModal')).show();
         })
         .catch(() => {
+            applySaleReceiptVisualState(false, null);
             document.getElementById('saleItemsList').innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Failed to load sale details.</td></tr>';
             document.getElementById('mechanicSupplyDetailsBody').innerHTML = '<div class="text-danger text-center py-3">Failed to load mechanic supply details.</div>';
         });
@@ -4178,7 +4335,7 @@ function renderAuditTrail(data) {
             } else {
                 refBtn = `<button class="btn btn-sm btn-outline-danger border-0"
                     style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-                    onclick="viewSaleDetails('${log.reference_id}', '${log.display_reference || log.sales_number || log.reference_id}')">
+                    onclick="viewSaleDetails('${log.reference_id}', '${log.display_reference || log.sales_number || log.reference_id}', '${log.change_reason === 'CUSTOMER_PURCHASE' ? 'original_purchase' : 'current'}')">
                     <i class="bi bi-receipt-cutoff me-1"></i>${log.display_reference || log.sales_number || log.reference_id}
                 </button>`;
             }
@@ -4903,9 +5060,9 @@ function renderSalesAdmin(data) {
     };
 
     tbody.innerHTML = data.rows.map(sale => `
-        <tr>
+        <tr class="${sale.is_voided ? 'sale-row-voided' : ''}">
             <td class="text-white-50 small">${sale.transaction_date}</td>
-            <td class="fw-bold text-warning" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.sales_number || '-')}</td>
+            <td class="fw-bold ${sale.is_voided ? 'sale-receipt-label-voided' : 'text-warning'}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.sales_number || '-')}</td>
             <td style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(sale.customer_name || 'Walk-in')}</td>
             <td>
                 <span class="badge bg-dark border border-secondary text-info">
@@ -4913,7 +5070,9 @@ function renderSalesAdmin(data) {
                 </span>
             </td>
             <td>
-                ${statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`}
+                ${sale.is_voided
+                    ? `<span class="badge bg-secondary">Voided</span>`
+                    : (statusBadge[sale.status] || `<span class="badge bg-secondary">${sale.status}</span>`)}
                 ${sale.has_refund ? `<div class="small text-danger mt-1 fw-bold">${escapeHtml(sale.refund_state || 'Refunded')}</div>` : ''}
             </td>
             <td class="fw-bold text-danger">

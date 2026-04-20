@@ -1,0 +1,691 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+    .void-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+        gap: 1.5rem;
+        align-items: stretch;
+    }
+
+    .void-grid.detail-active {
+        align-items: start;
+    }
+
+    .void-card {
+        background: #1a1d25;
+        border: 1px solid #2c3240;
+        border-radius: 18px;
+        padding: 1.25rem;
+        box-shadow: 0 16px 38px rgba(0, 0, 0, 0.24);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    .void-grid.detail-active .void-search-card {
+        align-self: start;
+    }
+
+    .void-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .void-title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #f8fafc;
+    }
+
+    .void-subtitle {
+        margin: 0.35rem 0 0;
+        color: #9ca3af;
+        max-width: 64ch;
+    }
+
+    .void-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.32rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(193, 18, 31, 0.14);
+        color: #ff9d9d;
+        font-weight: 700;
+        font-size: 0.78rem;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .void-search-box {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .void-results {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.75rem;
+        flex: 1 1 auto;
+        min-height: 280px;
+        overflow: auto;
+        padding-right: 0.2rem;
+        align-content: start;
+    }
+
+    .void-result {
+        width: 100%;
+        border: 1px solid #31384a;
+        background: #12161f;
+        border-radius: 14px;
+        padding: 0.95rem;
+        color: #f3f4f6;
+        text-align: left;
+        transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+        align-self: start;
+    }
+
+    .void-result:hover,
+    .void-result.active {
+        border-color: #c1121f;
+        background: #171d29;
+        transform: translateY(-1px);
+    }
+
+    .void-result-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-weight: 700;
+    }
+
+    .void-result-meta,
+    .void-inline-note,
+    .void-empty {
+        color: #9ca3af;
+        font-size: 0.92rem;
+    }
+
+    .void-empty {
+        padding: 1rem 0.25rem;
+    }
+
+    .void-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0.28rem 0.68rem;
+        font-size: 0.77rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .void-status.ok {
+        background: rgba(22, 163, 74, 0.15);
+        color: #86efac;
+    }
+
+    .void-status.blocked {
+        background: rgba(245, 158, 11, 0.14);
+        color: #fcd34d;
+    }
+
+    .void-status.voided {
+        background: rgba(239, 68, 68, 0.16);
+        color: #fda4af;
+    }
+
+    .void-detail-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+    }
+
+    .void-detail-empty {
+        flex: 1 1 auto;
+        min-height: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        text-align: center;
+        border: 1px dashed #394151;
+        border-radius: 18px;
+        color: #9ca3af;
+        background: linear-gradient(180deg, rgba(193, 18, 31, 0.08), rgba(15, 17, 21, 0));
+    }
+
+    .void-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .void-meta-card {
+        border: 1px solid #2f3747;
+        border-radius: 14px;
+        background: #131923;
+        padding: 0.9rem;
+    }
+
+    .void-meta-label {
+        color: #9ca3af;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.35rem;
+    }
+
+    .void-meta-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #f8fafc;
+    }
+
+    .void-banner {
+        border-radius: 16px;
+        padding: 1rem 1.1rem;
+        border: 1px solid transparent;
+    }
+
+    .void-banner.ok {
+        background: rgba(22, 163, 74, 0.09);
+        border-color: rgba(34, 197, 94, 0.24);
+    }
+
+    .void-banner.blocked {
+        background: rgba(245, 158, 11, 0.09);
+        border-color: rgba(245, 158, 11, 0.26);
+    }
+
+    .void-banner.voided {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.28);
+    }
+
+    .void-section-title {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+        font-weight: 800;
+    }
+
+    .void-line-list {
+        display: grid;
+        gap: 0.65rem;
+    }
+
+    .void-line {
+        border: 1px solid #2f3747;
+        border-radius: 14px;
+        background: #131923;
+        padding: 0.85rem 0.95rem;
+    }
+
+    .void-line-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-weight: 700;
+    }
+
+    .void-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 0.9rem;
+    }
+
+    .void-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .void-warning {
+        color: #fca5a5;
+        font-size: 0.92rem;
+    }
+
+    @media (max-width: 980px) {
+        .void-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .void-results {
+            min-height: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="void-header">
+    <div>
+        <h1 class="void-title">Void Sales</h1>
+        <p class="void-subtitle">Search encoded sales, review whether they are safe to reverse, and void them with a traceable admin reason. The original sale stays in history while its business effect is reversed.</p>
+    </div>
+</div>
+
+<div class="void-grid">
+    <section class="void-card void-search-card">
+        <div class="void-search-box">
+            <label for="void-sales-search" class="form-label text-light fw-semibold mb-0">Search sale</label>
+            <div class="input-group">
+                <span class="input-group-text bg-dark text-secondary border-secondary"><i class="bi bi-search"></i></span>
+                <input id="void-sales-search" type="text" class="form-control" placeholder="Receipt no, customer, date, or item">
+                <button class="btn btn-outline-secondary" type="button" id="void-sales-search-btn">Search</button>
+            </div>
+            <div class="void-inline-note">Results include normal sales and already voided sales for audit follow-up. Mechanic supply sales are excluded from this page.</div>
+        </div>
+        <div id="void-sales-results" class="void-results">
+            <div class="void-empty">Search for a receipt number, customer name, sale date, or item to begin.</div>
+        </div>
+    </section>
+
+    <section class="void-card void-detail-card">
+        <div id="void-sale-detail" class="void-detail-shell">
+            <div class="void-detail-empty">
+                <div>
+                    <div class="fs-4 fw-bold text-light mb-2">Select a sale</div>
+                    <div>We’ll show the sale contents, blockers, loyalty impact, and the final admin confirmation form here.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="modal fade" id="voidSaleConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-white border-secondary">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title"><i class="bi bi-exclamation-octagon me-2 text-danger"></i>Confirm Void Sale</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-white-50 mb-2">This will restore stock for item lines, remove the sale from normal reporting, and keep the original record in admin history.</div>
+                <div id="voidSaleConfirmSummary" class="text-light"></div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="void-sale-confirm-submit">Void Sale</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const reasonOptions = {{ void_reason_options | tojson }};
+let voidSalesRows = [];
+let selectedVoidSaleId = null;
+let selectedVoidSaleContext = null;
+let confirmModalInstance = null;
+let voidSaleSearchLoading = false;
+let voidSaleContextLoading = false;
+let voidSaleSubmitLoading = false;
+let pendingVoidIdempotencyKey = '';
+
+function setVoidDetailLayoutState(hasActiveDetail) {
+    const grid = document.querySelector('.void-grid');
+    if (!grid) return;
+    grid.classList.toggle('detail-active', Boolean(hasActiveDetail));
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function money(value) {
+    const amount = Number(value || 0);
+    return amount.toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+}
+
+function saleStatusClass(sale) {
+    if (sale.is_voided) return 'voided';
+    if (sale.can_void) return 'ok';
+    return 'blocked';
+}
+
+function saleStatusLabel(sale) {
+    if (sale.is_voided) return 'Voided';
+    if (sale.can_void) return 'Eligible';
+    return 'Blocked';
+}
+
+function clearVoidSearchSection() {
+    const searchInput = document.getElementById('void-sales-search');
+    const resultsEl = document.getElementById('void-sales-results');
+    voidSalesRows = [];
+    if (searchInput) searchInput.value = '';
+    if (resultsEl) {
+        resultsEl.innerHTML = '<div class="void-empty">Search for another receipt number, customer name, sale date, or item when you need to load a different sale.</div>';
+    }
+}
+
+function renderVoidSearchResults() {
+    const resultsEl = document.getElementById('void-sales-results');
+    if (!voidSalesRows.length) {
+        resultsEl.innerHTML = '<div class="void-empty">No sales matched this search.</div>';
+        return;
+    }
+
+    resultsEl.innerHTML = voidSalesRows.map((sale) => `
+        <button type="button" class="void-result ${selectedVoidSaleId === sale.id ? 'active' : ''}" data-sale-id="${sale.id}">
+            <div class="void-result-title">
+                <span>${escapeHtml(sale.sales_number || `Sale #${sale.id}`)}</span>
+                <span class="void-status ${saleStatusClass(sale)}">${escapeHtml(saleStatusLabel(sale))}</span>
+            </div>
+            <div class="void-result-meta mt-2">${escapeHtml(sale.customer_name || 'Walk-in')}</div>
+            <div class="void-result-meta">${escapeHtml(sale.transaction_date || '')}</div>
+            <div class="void-result-meta">${money(sale.total_amount)} · ${escapeHtml(sale.status || '-')}</div>
+            <div class="void-inline-note mt-2">${escapeHtml(sale.is_voided ? `Voided by ${sale.voided_by_username || 'Admin'} on ${sale.voided_at_display || ''}` : (sale.void_block_reason || 'Ready for admin review.'))}</div>
+        </button>
+    `).join('');
+
+    resultsEl.querySelectorAll('[data-sale-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            selectedVoidSaleId = Number(btn.dataset.saleId);
+            clearVoidSearchSection();
+            loadVoidSaleContext(selectedVoidSaleId);
+        });
+    });
+}
+
+async function performVoidSaleSearch() {
+    if (voidSaleSearchLoading) return;
+    const query = document.getElementById('void-sales-search').value.trim();
+    const resultsEl = document.getElementById('void-sales-results');
+    const searchBtn = document.getElementById('void-sales-search-btn');
+    const searchInput = document.getElementById('void-sales-search');
+    voidSaleSearchLoading = true;
+    if (searchBtn) {
+        searchBtn.disabled = true;
+        searchBtn.textContent = 'Searching...';
+    }
+    if (searchInput) searchInput.disabled = true;
+    resultsEl.innerHTML = '<div class="void-empty">Loading sales…</div>';
+    try {
+        const res = await fetch(`/api/admin/void-sales/search?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to search sales.');
+        voidSalesRows = data.rows || [];
+        renderVoidSearchResults();
+    } catch (error) {
+        resultsEl.innerHTML = `<div class="void-empty text-danger">${escapeHtml(error.message || 'Failed to search sales.')}</div>`;
+    } finally {
+        voidSaleSearchLoading = false;
+        if (searchBtn) {
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search';
+        }
+        if (searchInput) searchInput.disabled = false;
+    }
+}
+
+function buildMetaCard(label, value) {
+    return `
+        <div class="void-meta-card">
+            <div class="void-meta-label">${escapeHtml(label)}</div>
+            <div class="void-meta-value">${escapeHtml(value)}</div>
+        </div>
+    `;
+}
+
+function renderLineList(lines, formatter) {
+    if (!lines.length) {
+        return '<div class="void-inline-note">None recorded.</div>';
+    }
+    return `<div class="void-line-list">${lines.map(formatter).join('')}</div>`;
+}
+
+function renderVoidDetail(context) {
+    const detailEl = document.getElementById('void-sale-detail');
+    setVoidDetailLayoutState(true);
+    const bannerClass = context.is_voided ? 'voided' : (context.can_void ? 'ok' : 'blocked');
+    const bannerTitle = context.is_voided
+        ? 'This sale has already been voided.'
+        : (context.can_void ? 'This sale is eligible for void.' : 'This sale is currently blocked from voiding.');
+    const bannerNote = context.is_voided
+        ? `Voided by ${context.voided_by_username || 'Admin'} on ${context.voided_at_display || '-'}`
+        : (context.can_void ? 'Review the sale carefully, then record the admin reason and notes before voiding.' : (context.void_block_reason || 'This sale cannot be voided right now.'));
+    const loyalty = context.loyalty_summary || {};
+    const reasonOptionsMarkup = reasonOptions.map((option) => `
+        <option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>
+    `).join('');
+
+    detailEl.innerHTML = `
+        <div class="void-banner ${bannerClass}">
+            <div class="fw-bold fs-5">${escapeHtml(bannerTitle)}</div>
+            <div class="void-inline-note mt-1">${escapeHtml(bannerNote)}</div>
+        </div>
+
+        <div class="void-meta-grid">
+            ${buildMetaCard('Receipt', context.sales_number || `Sale #${context.id}`)}
+            ${buildMetaCard('Customer', context.customer_name || 'Walk-in')}
+            ${buildMetaCard('Date', context.transaction_date_display || '-')}
+            ${buildMetaCard('Status', context.status || '-')}
+            ${buildMetaCard('Total', money(context.total_amount))}
+            ${buildMetaCard('Payment', context.payment_method_name || '-')}
+        </div>
+
+        <div>
+            <h3 class="void-section-title">Inventory Items</h3>
+            ${renderLineList(context.items || [], (item) => `
+                <div class="void-line">
+                    <div class="void-line-title">
+                        <span>${escapeHtml(item.name || 'Item')}</span>
+                        <span>x${Number(item.sold_quantity || 0)}</span>
+                    </div>
+                    <div class="void-inline-note mt-1">${money(item.final_unit_price || 0)} each</div>
+                </div>
+            `)}
+        </div>
+
+        <div>
+            <h3 class="void-section-title">Services</h3>
+            ${renderLineList(context.services || [], (service) => `
+                <div class="void-line">
+                    <div class="void-line-title">
+                        <span>${escapeHtml(service.name || 'Service')}</span>
+                        <span>${money(service.price || 0)}</span>
+                    </div>
+                    <div class="void-inline-note mt-1">${escapeHtml(service.mechanic_name || 'No mechanic assigned')}</div>
+                </div>
+            `)}
+        </div>
+
+        <div>
+            <h3 class="void-section-title">Bundles</h3>
+            ${renderLineList(context.bundles || [], (bundle) => `
+                <div class="void-line">
+                    <div class="void-line-title">
+                        <span>${escapeHtml(bundle.bundle_name || 'Bundle')} · ${escapeHtml(bundle.subcategory_name || '')}</span>
+                        <span>${money(bundle.bundle_price || 0)}</span>
+                    </div>
+                    <div class="void-inline-note mt-1">${escapeHtml((bundle.items || []).filter(item => item.is_included).length)} included bundle item(s)</div>
+                </div>
+            `)}
+        </div>
+
+        <div>
+            <h3 class="void-section-title">Loyalty Impact</h3>
+            <div class="void-meta-grid">
+                ${buildMetaCard('Stamps Earned', String(Number(loyalty.stamp_count || 0)))}
+                ${buildMetaCard('Consumed Stamps', String(Number(loyalty.consumed_stamp_count || 0)))}
+                ${buildMetaCard('Points Earned', String(Number(loyalty.point_count || 0)))}
+                ${buildMetaCard('Consumed Points', String(Number(loyalty.consumed_point_count || 0)))}
+            </div>
+        </div>
+
+        <div class="void-card" style="padding:1rem; background:#12161f;">
+            <h3 class="void-section-title">Admin Confirmation</h3>
+            <div class="void-form-grid">
+                <div>
+                    <label for="void-reason" class="form-label">Reason</label>
+                    <select id="void-reason" class="form-select" ${context.can_void && !context.is_voided ? '' : 'disabled'}>
+                        <option value="">Select a reason</option>
+                        ${reasonOptionsMarkup}
+                    </select>
+                </div>
+                <div>
+                    <label for="void-notes" class="form-label">Notes</label>
+                    <textarea id="void-notes" class="form-control" rows="3" placeholder="Explain what was encoded incorrectly and why this sale must be voided." ${context.can_void && !context.is_voided ? '' : 'disabled'}></textarea>
+                </div>
+            </div>
+            <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" id="void-acknowledge" ${context.can_void && !context.is_voided ? '' : 'disabled'}>
+                <label class="form-check-label" for="void-acknowledge">
+                    I confirm this sale was encoded incorrectly and should be reversed from normal reporting.
+                </label>
+            </div>
+            <div class="void-actions mt-3">
+                <div class="void-warning">This action is a one-way transaction. The sale remains visible in admin history as a voided record.</div>
+                <button type="button" class="btn btn-danger" id="open-void-confirm-btn" ${context.can_void && !context.is_voided ? '' : 'disabled'}>Void Sale</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('open-void-confirm-btn')?.addEventListener('click', openVoidConfirmModal);
+}
+
+async function loadVoidSaleContext(saleId) {
+    if (voidSaleContextLoading) return;
+    const detailEl = document.getElementById('void-sale-detail');
+    voidSaleContextLoading = true;
+    setVoidDetailLayoutState(true);
+    detailEl.innerHTML = '<div class="void-detail-empty"><div>Loading sale details…</div></div>';
+    try {
+        const res = await fetch(`/api/admin/void-sales/${saleId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load sale details.');
+        selectedVoidSaleContext = data;
+        pendingVoidIdempotencyKey = '';
+        renderVoidDetail(data);
+    } catch (error) {
+        detailEl.innerHTML = `<div class="void-detail-empty text-danger"><div>${escapeHtml(error.message || 'Failed to load sale details.')}</div></div>`;
+    } finally {
+        voidSaleContextLoading = false;
+    }
+}
+
+function openVoidConfirmModal() {
+    if (!selectedVoidSaleContext) return;
+    if (voidSaleSubmitLoading) return;
+    const reason = document.getElementById('void-reason')?.value || '';
+    const notes = document.getElementById('void-notes')?.value.trim() || '';
+    const acknowledged = document.getElementById('void-acknowledge')?.checked;
+    const openBtn = document.getElementById('open-void-confirm-btn');
+
+    if (!reason) {
+        window.showFlashMessage?.('Select a void reason first.', 'warning');
+        return;
+    }
+    if (!notes) {
+        window.showFlashMessage?.('Add void notes before continuing.', 'warning');
+        return;
+    }
+    if (!acknowledged) {
+        window.showFlashMessage?.('Please confirm the acknowledgement checkbox.', 'warning');
+        return;
+    }
+
+    document.getElementById('voidSaleConfirmSummary').innerHTML = `
+        <div class="mb-2"><strong>Receipt:</strong> ${escapeHtml(selectedVoidSaleContext.sales_number || `Sale #${selectedVoidSaleContext.id}`)}</div>
+        <div class="mb-2"><strong>Customer:</strong> ${escapeHtml(selectedVoidSaleContext.customer_name || 'Walk-in')}</div>
+        <div class="mb-2"><strong>Total:</strong> ${money(selectedVoidSaleContext.total_amount)}</div>
+        <div class="mb-2"><strong>Reason:</strong> ${escapeHtml(reason)}</div>
+        <div><strong>Notes:</strong> ${escapeHtml(notes)}</div>
+    `;
+
+    if (!pendingVoidIdempotencyKey) {
+        pendingVoidIdempotencyKey = `void-sale-${selectedVoidSaleContext.id}-${Date.now()}`;
+    }
+    if (openBtn) {
+        openBtn.disabled = true;
+        openBtn.textContent = 'Confirming...';
+    }
+    confirmModalInstance = confirmModalInstance || new bootstrap.Modal(document.getElementById('voidSaleConfirmModal'));
+    confirmModalInstance.show();
+}
+
+async function submitVoidSale() {
+    if (!selectedVoidSaleContext || voidSaleSubmitLoading) return;
+    const submitBtn = document.getElementById('void-sale-confirm-submit');
+    const openBtn = document.getElementById('open-void-confirm-btn');
+    const payload = {
+        reason: document.getElementById('void-reason')?.value || '',
+        notes: document.getElementById('void-notes')?.value.trim() || '',
+    };
+
+    voidSaleSubmitLoading = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Voiding...';
+    try {
+        const res = await fetch(`/api/admin/void-sales/${selectedVoidSaleContext.id}/void`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Idempotency-Key': pendingVoidIdempotencyKey || `void-sale-${selectedVoidSaleContext.id}-${Date.now()}`,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || data.error || 'Failed to void sale.');
+        confirmModalInstance?.hide();
+        window.showFlashMessage?.(`Sale ${data.sales_number || `#${data.sale_id}`} voided successfully.`, 'success');
+        clearVoidSearchSection();
+        await loadVoidSaleContext(selectedVoidSaleContext.id);
+        pendingVoidIdempotencyKey = '';
+    } catch (error) {
+        window.showFlashMessage?.(error.message || 'Failed to void sale.', 'danger');
+    } finally {
+        voidSaleSubmitLoading = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Void Sale';
+        if (openBtn && selectedVoidSaleContext?.can_void && !selectedVoidSaleContext?.is_voided) {
+            openBtn.disabled = false;
+            openBtn.textContent = 'Void Sale';
+        }
+    }
+}
+
+document.getElementById('voidSaleConfirmModal')?.addEventListener('hidden.bs.modal', () => {
+    if (voidSaleSubmitLoading) return;
+    const openBtn = document.getElementById('open-void-confirm-btn');
+    if (openBtn && selectedVoidSaleContext?.can_void && !selectedVoidSaleContext?.is_voided) {
+        openBtn.disabled = false;
+        openBtn.textContent = 'Void Sale';
+    }
+});
+
+document.getElementById('void-sales-search-btn')?.addEventListener('click', performVoidSaleSearch);
+document.getElementById('void-sales-search')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        performVoidSaleSearch();
+    }
+});
+document.getElementById('void-sale-confirm-submit')?.addEventListener('click', submitVoidSale);
+</script>
+{% endblock %}

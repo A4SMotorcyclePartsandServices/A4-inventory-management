@@ -585,6 +585,7 @@ def customer_transactions(customer_id):
         LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
         LEFT JOIN vehicles v ON v.id = s.vehicle_id
         WHERE s.customer_id = %s
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date DESC
     """, (customer_id,)).fetchall()
 

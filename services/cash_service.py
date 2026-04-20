@@ -281,6 +281,7 @@ def _get_non_cash_paid_sales(conn, date_from=None, date_to=None):
         LEFT JOIN users u ON u.id = s.user_id
         WHERE s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category = ANY(%s)
     """
 
@@ -314,6 +315,7 @@ def _get_non_cash_debt_payments(conn, date_from=None, date_to=None):
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u ON u.id = dp.paid_by
         WHERE COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category = ANY(%s)
     """
 
@@ -413,6 +415,55 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     return conn.execute(query, params).fetchall()
 
 
+def _get_sale_voids_cash(conn, branch_id=1, date_from=None, date_to=None):
+    """
+    [Source 1b] Cash sale void reversals.
+    Keeps the original cash-in sale row visible, then adds a separate CASH_OUT
+    row when that same sale is voided.
+    """
+    params = [list(PHYSICAL_CASH_CATEGORIES)]
+
+    query = """
+        SELECT
+            s.id AS reference_id,
+            s.sales_number,
+            s.customer_name,
+            SUM(sp.amount) AS amount,
+            s.voided_at AS created_at,
+            s.voided_by_username AS recorded_by,
+            s.void_reason,
+            s.void_notes
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        WHERE pm.category = ANY(%s)
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = TRUE
+          AND s.voided_at IS NOT NULL
+    """
+
+    if date_from:
+        query += " AND DATE(s.voided_at) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(s.voided_at) <= %s"
+        params.append(date_to)
+
+    query += """
+        GROUP BY
+            s.id,
+            s.sales_number,
+            s.customer_name,
+            s.voided_at,
+            s.voided_by_username,
+            s.void_reason,
+            s.void_notes
+        ORDER BY s.voided_at ASC, s.id ASC
+    """
+    return conn.execute(query, params).fetchall()
+
+
 def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
     """
     [Source 2] Cash payments that settled Utang balances.
@@ -433,6 +484,7 @@ def _get_debt_cash_payments(conn, branch_id=1, date_from=None, date_to=None):
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         LEFT JOIN users u       ON u.id  = dp.paid_by
         WHERE pm.category = ANY(%s)
+          AND COALESCE(s.is_voided, FALSE) = FALSE
     """
 
     if date_from:
@@ -525,7 +577,7 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
     return conn.execute(query, params).fetchall()
 
 
-def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
+def _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows):
     """
     Merges all 3 sources into a single normalized list sorted newest first.
     Each row has the same shape regardless of source — the HTML never needs
@@ -582,6 +634,22 @@ def _build_unified(sales_rows, debt_rows, refund_rows, manual_rows):
             '_raw_date':   row['created_at'] or '',
         })
 
+    for row in void_rows:
+        customer = row['customer_name'] or 'Walk-in'
+        sale_reference = row['sales_number'] or f"Sale #{row['reference_id']}"
+        description = f"{sale_reference} - {customer}"
+
+        unified.append({
+            'entry_type':  'CASH_OUT',
+            'amount':      _money(row['amount']),
+            'category':    'Voided Sale',
+            'description': description,
+            'created_at':  format_date(row['created_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or '-',
+            'source':      'sale_void',
+            '_raw_date':   row['created_at'] or '',
+        })
+
     for row in manual_rows:
         unified.append({
             'id':          row['id'],
@@ -628,6 +696,7 @@ def get_cash_summary(branch_id=1):
     sales_rows  = _get_sales_cash(conn, branch_id)
     debt_rows   = _get_debt_cash_payments(conn, branch_id)
     refund_rows = _get_sale_refunds_cash(conn, branch_id)
+    void_rows   = _get_sale_voids_cash(conn, branch_id)
     manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
     pending_float_rows = _get_non_cash_paid_sales(conn)
     pending_float_debt_rows = _get_non_cash_debt_payments(conn)
@@ -649,6 +718,8 @@ def get_cash_summary(branch_id=1):
     for row in debt_rows:
         total_in += _money(row['amount'])
     for row in refund_rows:
+        total_out += _money(row['amount'])
+    for row in void_rows:
         total_out += _money(row['amount'])
     for row in manual_rows:
         if row['entry_type'] == 'CASH_IN':
@@ -687,6 +758,7 @@ def get_cash_balance_as_of(date_to, branch_id=1):
         sales_rows = _get_sales_cash(conn, branch_id, date_to=date_to)
         debt_rows = _get_debt_cash_payments(conn, branch_id, date_to=date_to)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, date_to=date_to)
+        void_rows = _get_sale_voids_cash(conn, branch_id, date_to=date_to)
         manual_rows = _get_manual_entries(
             conn,
             branch_id,
@@ -704,6 +776,8 @@ def get_cash_balance_as_of(date_to, branch_id=1):
     for row in debt_rows:
         total_in += _money(row['amount'])
     for row in refund_rows:
+        total_out += _money(row['amount'])
+    for row in void_rows:
         total_out += _money(row['amount'])
     for row in manual_rows:
         if row['entry_type'] == 'CASH_IN':
@@ -731,24 +805,28 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
         sales_rows = []
         debt_rows = []
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
+        void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
+        void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
-    return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(manual_rows)
+    return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(void_rows) + len(manual_rows)
 
 
 def get_cash_entries(branch_id=1, limit=None, offset=None,
@@ -769,24 +847,28 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
         sales_rows = []
         debt_rows = []
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
+        void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
+        void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows)
 
     # Apply pagination after merge+sort so ordering is always correct
     if offset:
@@ -1165,6 +1247,7 @@ def add_cash_entry(
                 WHERE s.id IN ({placeholders})
                   AND s.status = 'Paid'
                   AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND COALESCE(s.is_voided, FALSE) = FALSE
                   AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
                   AND ce.id IS NULL
                 GROUP BY s.id
@@ -1197,6 +1280,7 @@ def add_cash_entry(
                    AND COALESCE(ce.is_deleted, FALSE) = FALSE
                 WHERE dp.id IN ({placeholders})
                   AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND COALESCE(s.is_voided, FALSE) = FALSE
                   AND pm.category IN ({','.join(['%s'] * len(FLOATING_PAYMENT_CATEGORIES))})
                   AND ce.id IS NULL
                 """,
@@ -1379,18 +1463,22 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
         sales_rows = []
         debt_rows = []
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
         debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
         refund_rows = []
+        void_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
+        void_rows = _get_sale_voids_cash(conn, branch_id, date_from, date_to)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
         debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
+        void_rows = _get_sale_voids_cash(conn, branch_id, date_from, date_to)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(
@@ -1403,7 +1491,7 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
     )
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, refund_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows)
 
     # Reverse to oldest-first for PDF reading order
     unified.reverse()

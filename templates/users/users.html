@@ -3625,11 +3625,15 @@ function populateSaleDetails(data, saleID, displayNum) {
     paymentPill.className = `sale-payment-pill ${paymentToneClass}`;
     paymentPill.textContent = paymentMethod;
 
+    const statusValue = data.is_voided
+        ? `VOIDED${data.voided_at_display ? ` · ${data.voided_at_display}` : ''}`
+        : (data.status || 'Completed');
+
     meta.replaceChildren();
     [
         ['Customer', data.customer_name || 'Walk-in'],
         ['Date', data.transaction_date_display || ''],
-        ['Status', data.status || 'Completed'],
+        ['Status', statusValue],
     ].forEach(([label, value]) => {
         const card = document.createElement('div');
         card.className = 'sale-receipt-meta-card';
@@ -3651,6 +3655,12 @@ function populateSaleDetails(data, saleID, displayNum) {
     const summaryChips = [
         { icon: 'bi bi-calculator', label: `Total ${formatPesoText(data.total_amount)}`, tone: 'total' },
     ];
+    if (data.is_voided) {
+        summaryChips.push(
+            { icon: 'bi bi-slash-circle', label: `Voided ${data.void_reason || ''}`.trim(), tone: 'refund' },
+            { icon: 'bi bi-person-badge', label: data.voided_by_username || 'Admin', tone: 'net' },
+        );
+    }
     if (Number(data.total_refunded || 0) > 0) {
         summaryChips.push(
             { icon: 'bi bi-arrow-return-left', label: `Refunded ${formatPesoText(data.total_refunded)}`, tone: 'refund' },
@@ -3772,6 +3782,19 @@ function populateSaleDetails(data, saleID, displayNum) {
     totalRow.appendChild(totalAmountCell);
     totalRow.appendChild(document.createElement('td'));
     list.appendChild(totalRow);
+
+    if (data.is_voided) {
+        const voidRow = document.createElement('tr');
+        const voidCell = document.createElement('td');
+        voidCell.colSpan = 3;
+        voidCell.className = 'text-center text-danger py-3 fw-bold';
+        const parts = ['VOIDED'];
+        if (data.voided_by_username) parts.push(data.voided_by_username);
+        if (data.void_notes) parts.push(data.void_notes);
+        voidCell.textContent = parts.join(' · ');
+        voidRow.appendChild(voidCell);
+        list.appendChild(voidRow);
+    }
 
     renderRefundHistory(data);
 }

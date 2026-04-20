@@ -782,6 +782,7 @@ def export_items_sold_today():
             FROM sales s
             LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
             WHERE DATE(s.transaction_date) = %s
+              AND COALESCE(s.is_voided, FALSE) = FALSE
         ) x
         WHERE
             x.status = 'Paid'
@@ -897,6 +898,7 @@ def export_services_sold_today():
                 GROUP BY dp.sale_id
             ) dp ON dp.sale_id = s.id
             WHERE DATE(s.transaction_date) = %s
+              AND COALESCE(s.is_voided, FALSE) = FALSE
         ) x
         WHERE
             x.status = 'Paid'

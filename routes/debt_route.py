@@ -217,6 +217,7 @@ def debt_summary_api():
         WHERE s.payment_method_id IN (
             SELECT id FROM payment_methods WHERE category = 'Debt'
         )
+          AND COALESCE(s.is_voided, FALSE) = FALSE
     """
 
     params = []

@@ -115,6 +115,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND s.status = 'Paid'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category IN ('Bank', 'Online')
         GROUP BY s.id
         """,
@@ -131,6 +132,7 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
           AND pm.category IN ('Bank', 'Online')
         """,
         (start_date, end_date),
@@ -323,6 +325,7 @@ def _build_mechanic_supply_report_context(start_date, end_date):
         LEFT JOIN mechanics m ON m.id = s.mechanic_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date ASC, s.id ASC
         """,
         (start_date, end_date),
@@ -402,6 +405,7 @@ def get_mechanic_supply_expense_summary(start_date, end_date):
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
           AND COALESCE(s.status, 'Paid') = 'Paid'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         """,
         (start_date, end_date),
     ).fetchone()
@@ -1266,6 +1270,7 @@ def get_all_unresolved_sales(conn):
         LEFT JOIN debt_payments dp   ON dp.sale_id = s.id
         WHERE s.status IN ('Unresolved', 'Partial')
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY s.id, m.name
         ORDER BY s.transaction_date ASC
     """).fetchall()
@@ -1353,6 +1358,7 @@ def get_sales_report_by_date(report_date):
            AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) = %s
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date DESC, s.id DESC
     """, (report_date,)).fetchall()
 
@@ -1384,6 +1390,7 @@ def get_sales_report_by_date(report_date):
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) = %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY dp.paid_at DESC, dp.id DESC
     """, (report_date,)).fetchall()
     debt_payout_rows = _get_debt_payout_allocations(conn, report_date=report_date)
@@ -1406,6 +1413,7 @@ def get_sales_report_by_date(report_date):
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) = %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY sr.refund_date DESC, sr.id DESC
     """, (report_date,)).fetchall()
 
@@ -1685,6 +1693,7 @@ def get_sales_report_by_range(start_date, end_date):
            AND mqto.quota_date = DATE(s.transaction_date)
         LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date DESC, s.id DESC
     """, (start_date, end_date)).fetchall()
 
@@ -1716,6 +1725,7 @@ def get_sales_report_by_range(start_date, end_date):
         LEFT JOIN payment_methods pm ON pm.id = dp.payment_method_id
         WHERE DATE(dp.paid_at) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY dp.paid_at DESC, dp.id DESC
     """, (start_date, end_date)).fetchall()
     debt_payout_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
@@ -1738,6 +1748,7 @@ def get_sales_report_by_range(start_date, end_date):
         LEFT JOIN sale_exchanges se ON se.refund_id = sr.id
         WHERE DATE(sr.refund_date) BETWEEN %s AND %s
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY sr.refund_date DESC, sr.id DESC
     """, (start_date, end_date)).fetchall()
 
