@@ -796,7 +796,7 @@
     </div>
 
     <div class="col-md-3">
-        <div class="summary-card">
+        <div class="summary-card" id="floating-money-card">
             <div class="summary-label">Floating Money</div>
             <div class="summary-value" style="color:#4cc9f0;">
                 &#8369;{{ "{:,.2f}".format(summary.floating_total or 0) }}
@@ -916,9 +916,45 @@
             <input type="hidden" id="entry-payable-id" value="">
             <input type="hidden" id="entry-claim-sale-ids" value="">
             <input type="hidden" id="entry-claim-debt-payment-ids" value="">
+            <input type="hidden" id="entry-claim-manual-float-ids" value="">
 
             <button class="btn btn-primary w-100 fw-semibold" id="submit-entry-btn">
                 <i class="bi bi-plus-lg me-1"></i> Add Entry
+            </button>
+
+        </div>
+
+        <div class="card p-4 mt-4">
+
+            <h6 class="fw-bold mb-3">
+                <i class="bi bi-phone me-2" style="color: #4cc9f0;"></i>
+                Gcash Entry
+            </h6>
+
+            <div class="mb-3">
+                <label class="form-section-label">Amount (&#8369;)</label>
+                <input type="number" id="gcash-entry-amount" class="form-control"
+                    placeholder="0.00" min="0.01" step="0.01">
+            </div>
+
+            <div class="mb-3">
+                <label class="form-section-label">Category</label>
+                <select id="gcash-entry-category" class="form-select">
+                    <option value="">Select a category</option>
+                    {% for category in gcash_entry_category_choices %}
+                    <option value="{{ category.id }}">{{ category.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-section-label">Notes <span class="text-muted required-hint">(required)</span></label>
+                <input type="text" id="gcash-entry-notes" class="form-control"
+                    placeholder="e.g. Manual GCash sale for emergency delivery">
+            </div>
+
+            <button class="btn btn-outline-info w-100 fw-semibold" id="submit-gcash-entry-btn">
+                <i class="bi bi-wallet2 me-1"></i> Save Gcash Entry
             </button>
 
         </div>
@@ -1191,10 +1227,12 @@ let ledgerCurrentPage = LEDGER_INITIAL_PAGE || 1;
 let ledgerRequestInFlight = false;
 let ledgerPeriodPreset = 'custom_range';
 let floatingCollectionAmountLocked = false;
+let pendingNonCashDraftSource = '';
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 // Categories from the server (via Jinja)
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 const CASH_CATEGORY_CHOICES = {{ cash_category_choices | tojson }};
+const GCASH_ENTRY_CATEGORY_CHOICES = {{ gcash_entry_category_choices | tojson }};
 const SYSTEM_KEY_CASH_IN_BANK_TRANSFER = 'cash_in_bank_transfer';
 const SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = 'cash_in_ewallet_transfer';
 const SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = 'cash_out_mechanic_payout';
@@ -1255,6 +1293,21 @@ function selectCategoryBySystemKey(systemKey) {
     return true;
 }
 
+function selectCategoryById(categoryId) {
+    const select = document.getElementById('entry-category');
+    if (!select || categoryId == null || categoryId === '') {
+        return false;
+    }
+    const targetValue = String(categoryId);
+    const option = Array.from(select.options).find((candidate) => String(candidate.value) === targetValue);
+    if (!option) {
+        return false;
+    }
+    select.value = targetValue;
+    updateDescriptionFieldState();
+    return true;
+}
+
 function updateDescriptionFieldState() {
     const entryType = document.querySelector('input[name="entry_type"]:checked')?.value || 'CASH_IN';
     const categoryMeta = getSelectedCategoryMeta();
@@ -1300,13 +1353,17 @@ document.getElementById('entry-category').addEventListener('change', () => {
     } else {
         document.getElementById('entry-claim-sale-ids').value = '';
         document.getElementById('entry-claim-debt-payment-ids').value = '';
+        document.getElementById('entry-claim-manual-float-ids').value = '';
         document.getElementById('payout-date-wrapper').style.display = 'block';
         document.getElementById('entry-payout-date').value = document.getElementById('entry-payout-date').value || TODAY_FOR_INPUT;
         document.getElementById('entry-payout-date').max = TODAY_FOR_INPUT;
     }
     if (
         document.querySelector('input[name="entry_type"]:checked')?.value === 'CASH_IN'
-        && ![SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER].includes(categoryMeta.systemKey)
+        && !(
+            [SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER].includes(categoryMeta.systemKey)
+            || (document.getElementById('entry-claim-manual-float-ids').value || '').trim()
+        )
     ) {
         document.getElementById('entry-claim-sale-ids').value = '';
         document.getElementById('entry-claim-debt-payment-ids').value = '';
@@ -1405,7 +1462,12 @@ function applyLedgerPrefill() {
 
 document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
     radio.addEventListener('change', () => {
+        const shouldClearPendingDraft = hasPendingNonCashDraft();
         populateCategories(radio.value);
+
+        if (shouldClearPendingDraft) {
+            clearPendingNonCashDraftState();
+        }
 
         if (radio.value === 'CASH_IN') {
             document.getElementById('entry-reference-id').value = '';
@@ -1413,6 +1475,7 @@ document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
         } else {
             document.getElementById('entry-claim-sale-ids').value = '';
             document.getElementById('entry-claim-debt-payment-ids').value = '';
+            document.getElementById('entry-claim-manual-float-ids').value = '';
             setFloatingCollectionAmountLock(false);
         }
 
@@ -1428,6 +1491,7 @@ setFloatingCollectionAmountLock(false);
 applyLedgerPrefill();
 }
 showPendingFlashAfterReload();
+applyPendingScrollTargetAfterReload();
 initializeLedgerFilters();
 initializeLedgerReportForm();
 initializeLedgerPagination();
@@ -1459,6 +1523,10 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
         .map(value => Number.parseInt(value, 10))
         .filter(Number.isFinite);
     const claimDebtPaymentIds = (document.getElementById('entry-claim-debt-payment-ids').value || '')
+        .split(',')
+        .map(value => Number.parseInt(value, 10))
+        .filter(Number.isFinite);
+    const claimManualFloatEntryIds = (document.getElementById('entry-claim-manual-float-ids').value || '')
         .split(',')
         .map(value => Number.parseInt(value, 10))
         .filter(Number.isFinite);
@@ -1508,6 +1576,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
                 payout_for_date: payoutDate,
                 claim_sale_ids: claimSaleIds,
                 claim_debt_payment_ids: claimDebtPaymentIds,
+                claim_manual_float_entry_ids: claimManualFloatEntryIds,
             }),
         });
 
@@ -1515,6 +1584,7 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
 
         if (data.status === 'success') {
             submissionSucceeded = true;
+            pendingNonCashDraftSource = '';
             submitGuard.succeed();
             savePendingFlashForReload('Entry recorded successfully.', 'success');
             // Reload to get fresh summary + table from server
@@ -1524,6 +1594,74 @@ document.getElementById('submit-entry-btn').addEventListener('click', async () =
             showFlash(data.message || 'Failed to save entry.', 'danger');
         }
 
+    } catch (err) {
+        showFlash('Network error. Please try again.', 'danger');
+    } finally {
+        if (!submissionSucceeded) {
+            submitGuard.reset();
+        }
+    }
+});
+}
+
+if (LEDGER_VIEW === 'active') {
+document.getElementById('submit-gcash-entry-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('submit-gcash-entry-btn');
+    const submitGuard = window.A4Submit?.createButtonGuard(btn, {
+        idleHtml: '<i class="bi bi-wallet2 me-1"></i> Save Gcash Entry',
+        loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Saving...',
+    });
+
+    const amount = parseFloat(document.getElementById('gcash-entry-amount').value);
+    const categoryId = Number.parseInt(document.getElementById('gcash-entry-category').value || '', 10);
+    const notes = document.getElementById('gcash-entry-notes').value.trim();
+
+    if (!amount || amount <= 0) {
+        showFlash('Please enter a valid GCash amount.', 'danger');
+        return;
+    }
+
+    if (!Number.isFinite(categoryId)) {
+        showFlash('Please choose a GCash category.', 'danger');
+        return;
+    }
+
+    if (!notes) {
+        showFlash('Notes are required for GCash entries.', 'danger');
+        return;
+    }
+
+    if (!submitGuard || !submitGuard.begin()) {
+        return;
+    }
+
+    let submissionSucceeded = false;
+
+    try {
+        const res = await fetch('/api/cash/gcash-entry/add', {
+            method: 'POST',
+            headers: submitGuard.buildHeaders({
+                'Content-Type': 'application/json',
+                'X-CSRFToken': APP_CSRF_TOKEN,
+            }),
+            body: JSON.stringify({
+                amount,
+                category_id: categoryId,
+                notes,
+            }),
+        });
+
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            submissionSucceeded = true;
+            submitGuard.succeed();
+            savePendingFlashForReload('GCash entry saved to floating money.', 'success');
+            savePendingScrollTargetForReload('floating-money-card');
+            location.reload();
+        } else {
+            showFlash(data.message || 'Failed to save GCash entry.', 'danger');
+        }
     } catch (err) {
         showFlash('Network error. Please try again.', 'danger');
     } finally {
@@ -1607,6 +1745,11 @@ function savePendingFlashForReload(message, type) {
     );
 }
 
+function savePendingScrollTargetForReload(targetId) {
+    if (!targetId) return;
+    sessionStorage.setItem('cashLedgerPendingScrollTarget', String(targetId));
+}
+
 function showPendingFlashAfterReload() {
     const raw = sessionStorage.getItem(CASH_LEDGER_PENDING_FLASH_KEY);
     if (!raw) return;
@@ -1621,6 +1764,36 @@ function showPendingFlashAfterReload() {
     } catch (err) {
         // Ignore malformed sessionStorage data and continue normally.
     }
+}
+
+function hasPendingNonCashDraft() {
+    return Boolean(String(pendingNonCashDraftSource || '').trim());
+}
+
+function clearPendingNonCashDraftState() {
+    document.getElementById('entry-amount').value = '';
+    document.getElementById('entry-description').value = '';
+    document.getElementById('entry-reference-id').value = '';
+    document.getElementById('entry-claim-sale-ids').value = '';
+    document.getElementById('entry-claim-debt-payment-ids').value = '';
+    document.getElementById('entry-claim-manual-float-ids').value = '';
+    pendingNonCashDraftSource = '';
+    setFloatingCollectionAmountLock(false);
+    clearPayoutDate();
+}
+
+function applyPendingScrollTargetAfterReload() {
+    const targetId = sessionStorage.getItem('cashLedgerPendingScrollTarget');
+    if (!targetId) return;
+
+    sessionStorage.removeItem('cashLedgerPendingScrollTarget');
+
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1665,6 +1838,7 @@ function prefillPayout(mechanicName, mechanicId, amount, payoutForDate, autoDesc
 function prefillFloatingCollection(saleIds, debtPaymentIds, amount, categorySystemKey, autoDescription) {
     document.getElementById('type_in').checked = true;
     populateCategories('CASH_IN');
+    pendingNonCashDraftSource = 'non_cash_collection';
 
     document.getElementById('entry-amount').value = amount.toFixed(2);
 
@@ -1680,6 +1854,30 @@ function prefillFloatingCollection(saleIds, debtPaymentIds, amount, categorySyst
     document.getElementById('entry-reference-id').value = '';
     document.getElementById('entry-claim-sale-ids').value = (saleIds || []).join(',');
     document.getElementById('entry-claim-debt-payment-ids').value = (debtPaymentIds || []).join(',');
+    setFloatingCollectionAmountLock(true);
+    clearPayoutDate();
+    updateDescriptionFieldState();
+
+    const form = document.getElementById('submit-entry-btn').closest('.card');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    form.style.transition = 'border-color 0.2s ease';
+    form.style.borderColor = '#4cc9f0';
+    setTimeout(() => { form.style.borderColor = ''; }, 1500);
+}
+
+function prefillManualGcashCollection(manualFloatEntryIds, amount, categoryId, autoDescription) {
+    document.getElementById('type_in').checked = true;
+    populateCategories('CASH_IN');
+    pendingNonCashDraftSource = 'manual_gcash_entry';
+
+    document.getElementById('entry-amount').value = amount.toFixed(2);
+    selectCategoryById(categoryId);
+
+    document.getElementById('entry-description').value = autoDescription || '';
+    document.getElementById('entry-reference-id').value = '';
+    document.getElementById('entry-claim-sale-ids').value = '';
+    document.getElementById('entry-claim-debt-payment-ids').value = '';
+    document.getElementById('entry-claim-manual-float-ids').value = (manualFloatEntryIds || []).join(',');
     setFloatingCollectionAmountLock(true);
     clearPayoutDate();
     updateDescriptionFieldState();
@@ -1762,8 +1960,10 @@ function renderPendingNonCashRows(data) {
         <div class="payout-row floating-row js-floating-prefill-row"
              data-float-sale-ids="${escapeHtml((group.sale_ids || []).join(','))}"
              data-float-debt-payment-ids="${escapeHtml((group.debt_payment_ids || []).join(','))}"
+             data-float-manual-entry-ids="${escapeHtml((group.manual_float_entry_ids || []).join(','))}"
              data-float-amount="${escapeHtml(group.total_amount != null ? group.total_amount : 0)}"
              data-float-category-key="${escapeHtml(group.cash_in_category_key || SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER)}"
+             data-float-category-id="${escapeHtml(group.cash_in_category_id != null ? group.cash_in_category_id : '')}"
              data-float-description="${escapeHtml(group.auto_description || '')}"
              data-float-payment-method="${escapeHtml(group.payment_method_name || '')}"
              data-float-date="${escapeHtml(group.transaction_date || '')}">
@@ -1771,7 +1971,16 @@ function renderPendingNonCashRows(data) {
                 <i class="bi bi-phone me-2" style="color: var(--text-muted);"></i>
                 ${escapeHtml(group.payment_method_name || 'Non-cash')}
                 <span class="floating-pill ms-2">${escapeHtml(group.date_display || group.transaction_date || '')}</span>
-                <div class="small mt-1" style="color: var(--text-primary);">${Number(group.sales_count || 0)} pending collection${Number(group.sales_count || 0) === 1 ? '' : 's'} · ${escapeHtml(group.display_source_label || '')}</div>
+                <div class="small mt-1" style="color: var(--text-primary);">
+                    ${group.source_kind === 'manual_gcash_entry'
+                        ? `Manual GCash Entry · ${escapeHtml(group.category_label || group.cash_in_category || '')}`
+                        : `${Number(group.sales_count || 0)} pending collection${Number(group.sales_count || 0) === 1 ? '' : 's'} · ${escapeHtml(group.display_source_label || '')}`
+                    }
+                </div>
+                ${group.source_kind === 'manual_gcash_entry' && group.auto_description
+                    ? `<div class="small mt-1" style="color: var(--text-muted);">${escapeHtml(group.auto_description)}</div>`
+                    : ''
+                }
             </div>
             <div class="payout-amount">
                 &#8369;${Number(group.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1860,9 +2069,24 @@ function initializeCashPanelRowActions() {
             .split(',')
             .map(value => Number.parseInt(value, 10))
             .filter(Number.isFinite);
+        const manualFloatEntryIds = (floatRow.getAttribute('data-float-manual-entry-ids') || '')
+            .split(',')
+            .map(value => Number.parseInt(value, 10))
+            .filter(Number.isFinite);
         const amount = parseFloat(floatRow.getAttribute('data-float-amount') || '0');
         const categorySystemKey = floatRow.getAttribute('data-float-category-key') || SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER;
+        const categoryId = Number.parseInt(floatRow.getAttribute('data-float-category-id') || '', 10);
         const autoDescription = floatRow.getAttribute('data-float-description') || '';
+
+        if (manualFloatEntryIds.length) {
+            prefillManualGcashCollection(
+                manualFloatEntryIds,
+                Number.isFinite(amount) ? amount : 0,
+                Number.isFinite(categoryId) ? categoryId : '',
+                autoDescription
+            );
+            return;
+        }
 
         prefillFloatingCollection(
             saleIds,

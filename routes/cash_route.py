@@ -9,10 +9,12 @@ from services.cash_service import (
     get_cash_entry_count,
     get_cash_entries_for_report,
     get_cash_category_choices,
+    get_gcash_entry_category_choices,
     get_pending_non_cash_collections,
     get_pending_non_cash_collection_count,
     get_already_paid_mechanic_identifiers_for_dates,
     add_cash_entry,
+    add_manual_gcash_entry,
     delete_cash_entry,
     restore_cash_entry,
     purge_deleted_cash_entries,
@@ -357,6 +359,7 @@ def cash_ledger():
         selected_start_date=start_date,
         selected_end_date=end_date,
         cash_category_choices=category_choices,
+        gcash_entry_category_choices=get_gcash_entry_category_choices(),
         pending_payout_count=pending_payout_count,
         pending_non_cash_count=pending_non_cash_count,
         today_display=format_date(today),
@@ -537,6 +540,7 @@ def cash_add_api():
             branch_id=_get_branch_id(),
             claim_sale_ids=data.get("claim_sale_ids") or [],
             claim_debt_payment_ids=data.get("claim_debt_payment_ids") or [],
+            claim_manual_float_entry_ids=data.get("claim_manual_float_entry_ids") or [],
         )
         response_body = {"status": "success"}
         finalize_idempotent_request(
@@ -566,6 +570,76 @@ def cash_add_api():
         response_body = {"status": "error", "message": "Server error: " + str(e)}
         finalize_idempotent_request(
             scope="cash.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=500,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 500
+
+
+@cash_bp.route("/api/cash/gcash-entry/add", methods=["POST"])
+@login_required
+def cash_gcash_entry_add_api():
+    data = request.get_json(silent=True) or {}
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+
+    try:
+        request_state = begin_idempotent_request(
+            scope="cash.gcash_entry.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=data,
+        )
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    if request_state["state"] == "replay":
+        return jsonify(request_state["response_body"]), request_state["response_code"]
+
+    if request_state["state"] == "processing":
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+
+    if request_state["state"] == "mismatch":
+        return jsonify({"status": "error", "message": request_state["message"]}), 409
+
+    try:
+        entry_id = add_manual_gcash_entry(
+            amount=data.get("amount"),
+            category_id=data.get("category_id"),
+            notes=data.get("notes", ""),
+            user_id=user_id,
+            branch_id=_get_branch_id(),
+        )
+        response_body = {"status": "success"}
+        finalize_idempotent_request(
+            scope="cash.gcash_entry.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=200,
+            response_body=response_body,
+            resource_type="cash_manual_float_entry",
+            resource_id=entry_id,
+        )
+        return jsonify(response_body), 200
+    except ValueError as e:
+        response_body = {"status": "error", "message": str(e)}
+        finalize_idempotent_request(
+            scope="cash.gcash_entry.add",
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=400,
+            response_body=response_body,
+        )
+        return jsonify(response_body), 400
+    except Exception as e:
+        response_body = {"status": "error", "message": "Server error: " + str(e)}
+        finalize_idempotent_request(
+            scope="cash.gcash_entry.add",
             actor_user_id=user_id,
             idempotency_key=idempotency_key,
             status=FAILED_STATUS,

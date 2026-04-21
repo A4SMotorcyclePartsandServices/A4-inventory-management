@@ -8,6 +8,8 @@ VOID_BLOCKED_TRANSACTION_CLASSES = {"MECHANIC_SUPPLY"}
 VOID_REASON_OPTIONS = [
     {"value": "WRONG_ITEMS", "label": "Wrong items encoded"},
     {"value": "WRONG_QTY", "label": "Wrong quantity encoded"},
+    {"value": "WRONG_PAYMENT_METHOD", "label": "Wrong Payment Method"},
+    {"value": "WRONG_ITEM_PRICE", "label": "Wrong Item Price"},
     {"value": "WRONG_CUSTOMER", "label": "Wrong customer selected"},
     {"value": "DUPLICATE_ENCODING", "label": "Duplicate sale encoding"},
     {"value": "TEST_ENTRY", "label": "Test / accidental entry"},

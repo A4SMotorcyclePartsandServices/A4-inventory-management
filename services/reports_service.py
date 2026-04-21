@@ -138,7 +138,18 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         (start_date, end_date),
     ).fetchall()
 
-    if not sale_rows and not debt_payment_rows:
+    manual_gcash_rows = conn.execute(
+        """
+        SELECT
+            cmfe.id,
+            cmfe.amount
+        FROM cash_manual_float_entries cmfe
+        WHERE DATE(cmfe.created_at) BETWEEN %s AND %s
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sale_rows and not debt_payment_rows and not manual_gcash_rows:
         return {
             "total_non_cash_sales": 0.0,
             "total_non_cash_claimed": 0.0,
@@ -173,7 +184,6 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
     claimed_debt_payment_ids = set()
     if debt_payment_totals:
         debt_payment_ids = list(debt_payment_totals.keys())
-        placeholders = ",".join(["%s"] * len(debt_payment_ids))
         claimed_rows = conn.execute(
             """
             SELECT DISTINCT cdpc.debt_payment_id
@@ -187,13 +197,45 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         ).fetchall()
         claimed_debt_payment_ids = {int(row["debt_payment_id"]) for row in claimed_rows}
 
-    total_non_cash_sales = round(sum(sale_totals.values()) + sum(debt_payment_totals.values()), 2)
+    manual_gcash_totals = {
+        int(row["id"]): round(_num(row["amount"]), 2)
+        for row in manual_gcash_rows
+    }
+    claimed_manual_gcash_ids = set()
+    if manual_gcash_totals:
+        manual_gcash_ids = list(manual_gcash_totals.keys())
+        claimed_rows = conn.execute(
+            """
+            SELECT DISTINCT cmfc.manual_float_entry_id
+            FROM cash_manual_float_claims cmfc
+            JOIN cash_entries ce ON ce.id = cmfc.cash_entry_id
+            WHERE cmfc.manual_float_entry_id = ANY(%s)
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            [manual_gcash_ids, end_date],
+        ).fetchall()
+        claimed_manual_gcash_ids = {int(row["manual_float_entry_id"]) for row in claimed_rows}
+
+    total_non_cash_sales = round(
+        sum(sale_totals.values()) + sum(debt_payment_totals.values()) + sum(manual_gcash_totals.values()),
+        2,
+    )
     total_non_cash_claimed = round(
         sum(amount for sale_id, amount in sale_totals.items() if sale_id in claimed_sale_ids)
         + sum(
             amount
             for debt_payment_id, amount in debt_payment_totals.items()
             if debt_payment_id in claimed_debt_payment_ids
+        ),
+        2,
+    )
+    total_non_cash_claimed = round(
+        total_non_cash_claimed
+        + sum(
+            amount
+            for manual_gcash_id, amount in manual_gcash_totals.items()
+            if manual_gcash_id in claimed_manual_gcash_ids
         ),
         2,
     )
@@ -1417,7 +1459,17 @@ def get_sales_report_by_date(report_date):
         ORDER BY sr.refund_date DESC, sr.id DESC
     """, (report_date,)).fetchall()
 
-    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
+    manual_gcash_row = conn.execute(
+        """
+        SELECT id
+        FROM cash_manual_float_entries
+        WHERE DATE(created_at) = %s
+        LIMIT 1
+        """,
+        (report_date,),
+    ).fetchone()
+
+    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows and not manual_gcash_row:
         conn.close()
         return []
 
@@ -1752,7 +1804,17 @@ def get_sales_report_by_range(start_date, end_date):
         ORDER BY sr.refund_date DESC, sr.id DESC
     """, (start_date, end_date)).fetchall()
 
-    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows:
+    manual_gcash_row = conn.execute(
+        """
+        SELECT id
+        FROM cash_manual_float_entries
+        WHERE DATE(created_at) BETWEEN %s AND %s
+        LIMIT 1
+        """,
+        (start_date, end_date),
+    ).fetchone()
+
+    if not sales_rows and not all_unresolved and not debt_collected_rows and not refund_rows and not manual_gcash_row:
         conn.close()
         return []
 

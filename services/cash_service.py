@@ -12,6 +12,12 @@ SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = "cash_out_mechanic_payout"
 PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE = "PAYABLE_CASH_SETTLEMENT"
 SYSTEM_KEY_CASH_OUT_UTILITIES = "cash_out_utilities"
 DEFAULT_FLOATING_CASH_IN_SYSTEM_KEY = SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
+GCASH_ENTRY_ALLOWED_CATEGORY_LABELS = (
+    "Expenses",
+    "Sale",
+    "Others (Related to shop)",
+    "Others (Non-related to shop)",
+)
 
 # --- PHYSICAL CASH FILTER ---
 # Only payment methods in this category count as physical cash in the drawer.
@@ -91,6 +97,19 @@ def get_cash_category_admin_records():
     return grouped["CASH_IN"] + grouped["CASH_OUT"]
 
 
+def get_gcash_entry_category_choices():
+    grouped = get_cash_category_choices(include_inactive=False)
+    allowed_labels = {
+        normalize_cash_category_label(label)
+        for label in GCASH_ENTRY_ALLOWED_CATEGORY_LABELS
+    }
+    return [
+        category
+        for category in grouped["CASH_IN"]
+        if normalize_cash_category_label(category["label"]) in allowed_labels
+    ]
+
+
 def _get_active_cash_category_by_id(conn, category_id, entry_type):
     try:
         normalized_id = int(category_id)
@@ -150,6 +169,18 @@ def _get_cash_category_id_by_system_key(conn, system_key):
     return int(row["id"])
 
 
+def _get_active_manual_gcash_category_by_id(conn, category_id):
+    row = _get_active_cash_category_by_id(conn, category_id, "CASH_IN")
+    if not row:
+        return None
+    if normalize_cash_category_label(row["label"]) not in {
+        normalize_cash_category_label(label)
+        for label in GCASH_ENTRY_ALLOWED_CATEGORY_LABELS
+    }:
+        return None
+    return row
+
+
 def _suggest_cash_in_category_system_key(payment_category):
     return SYSTEM_KEY_CASH_IN_BANK_TRANSFER if payment_category == "Bank" else SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER
 
@@ -182,6 +213,75 @@ def _get_pending_non_cash_sales_numbers(conn):
         if sales_number:
             sales_numbers.add(sales_number)
     return sales_numbers
+
+
+def _get_active_manual_float_claimed_ids(conn, manual_float_entry_ids):
+    normalized_ids = [int(value) for value in (manual_float_entry_ids or []) if value is not None]
+    if not normalized_ids:
+        return set()
+
+    rows = conn.execute(
+        """
+        SELECT DISTINCT cmfc.manual_float_entry_id
+        FROM cash_manual_float_claims cmfc
+        JOIN cash_entries ce ON ce.id = cmfc.cash_entry_id
+        WHERE cmfc.manual_float_entry_id = ANY(%s)
+          AND COALESCE(ce.is_deleted, FALSE) = FALSE
+        """,
+        (normalized_ids,),
+    ).fetchall()
+    return {int(row["manual_float_entry_id"]) for row in rows}
+
+
+def _get_manual_gcash_float_entries(conn, branch_id=1):
+    rows = conn.execute(
+        """
+        SELECT
+            cmfe.id,
+            cmfe.branch_id,
+            cmfe.amount,
+            cmfe.cash_category_id,
+            cmfe.category_label_snapshot,
+            cmfe.notes,
+            cmfe.payment_channel,
+            cmfe.user_id,
+            cmfe.created_at,
+            u.username AS recorded_by
+        FROM cash_manual_float_entries cmfe
+        LEFT JOIN users u ON u.id = cmfe.user_id
+        WHERE cmfe.branch_id = %s
+        ORDER BY cmfe.created_at ASC, cmfe.id ASC
+        """,
+        (branch_id,),
+    ).fetchall()
+    return rows
+
+
+def _get_claimable_manual_gcash_rows(conn, manual_float_entry_ids, branch_id=1):
+    normalized_ids = [int(value) for value in (manual_float_entry_ids or []) if value is not None]
+    if not normalized_ids:
+        return []
+
+    rows = conn.execute(
+        """
+        SELECT
+            cmfe.id,
+            cmfe.amount,
+            cmfe.cash_category_id,
+            cmfe.category_label_snapshot,
+            cmfe.notes
+        FROM cash_manual_float_entries cmfe
+        LEFT JOIN cash_manual_float_claims cmfc ON cmfc.manual_float_entry_id = cmfe.id
+        LEFT JOIN cash_entries ce
+            ON ce.id = cmfc.cash_entry_id
+           AND COALESCE(ce.is_deleted, FALSE) = FALSE
+        WHERE cmfe.branch_id = %s
+          AND cmfe.id = ANY(%s)
+          AND ce.id IS NULL
+        """,
+        (branch_id, normalized_ids),
+    ).fetchall()
+    return rows
 
 
 def _build_pending_non_cash_match_candidates(conn):
@@ -857,6 +957,7 @@ def get_cash_summary(branch_id=1):
     manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
     pending_float_rows = _get_non_cash_paid_sales(conn)
     pending_float_debt_rows = _get_non_cash_debt_payments(conn)
+    manual_gcash_rows = _get_manual_gcash_float_entries(conn, branch_id=branch_id)
     claimed_float_ids = _get_active_float_claimed_sale_ids(
         conn,
         [row['sale_id'] for row in pending_float_rows],
@@ -864,6 +965,10 @@ def get_cash_summary(branch_id=1):
     claimed_float_debt_ids = _get_active_float_claimed_debt_payment_ids(
         conn,
         [row['debt_payment_id'] for row in pending_float_debt_rows],
+    )
+    claimed_manual_gcash_ids = _get_active_manual_float_claimed_ids(
+        conn,
+        [row['id'] for row in manual_gcash_rows],
     )
     conn.close()
 
@@ -892,6 +997,11 @@ def get_cash_summary(branch_id=1):
             _money(row['amount'])
             for row in pending_float_debt_rows
             if int(row['debt_payment_id']) not in claimed_float_debt_ids
+        )
+        + sum(
+            _money(row['amount'])
+            for row in manual_gcash_rows
+            if int(row['id']) not in claimed_manual_gcash_ids
         ),
         2,
     )
@@ -1129,6 +1239,7 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
     try:
         sale_rows = _get_non_cash_paid_sales(conn)
         debt_payment_rows = _get_non_cash_debt_payments(conn)
+        manual_gcash_rows = _get_manual_gcash_float_entries(conn, branch_id=branch_id)
         claimed_sale_ids = _get_active_float_claimed_sale_ids(
             conn,
             [row['sale_id'] for row in sale_rows],
@@ -1136,6 +1247,10 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
         claimed_debt_payment_ids = _get_active_float_claimed_debt_payment_ids(
             conn,
             [row['debt_payment_id'] for row in debt_payment_rows],
+        )
+        claimed_manual_gcash_ids = _get_active_manual_float_claimed_ids(
+            conn,
+            [row['id'] for row in manual_gcash_rows],
         )
         groups = []
         total_amount = 0.0
@@ -1203,6 +1318,39 @@ def get_pending_non_cash_collections(branch_id=1, limit_groups=None):
             total_amount = round(total_amount + amount, 2)
             total_sales += 1
 
+        for row in manual_gcash_rows:
+            manual_gcash_id = int(row['id'])
+            if manual_gcash_id in claimed_manual_gcash_ids:
+                continue
+
+            created_at = row['created_at']
+            transaction_date = str(created_at)[:10] if created_at else today_local().isoformat()
+            amount = _money(row['amount'])
+            category_label = (row['category_label_snapshot'] or 'Sale').strip() or 'Sale'
+            notes = (row['notes'] or '').strip()
+
+            groups.append({
+                'transaction_date': transaction_date,
+                'date_display': format_date(transaction_date),
+                'payment_method_name': 'GCash Entry',
+                'payment_method_category': 'Manual GCash',
+                'cash_in_category_key': '',
+                'cash_in_category': category_label,
+                'cash_in_category_id': int(row['cash_category_id']),
+                'sale_ids': [],
+                'debt_payment_ids': [],
+                'manual_float_entry_ids': [manual_gcash_id],
+                'sales_count': 1,
+                'total_amount': amount,
+                'auto_description': notes,
+                'display_source_label': 'Manual GCash Entry',
+                'source_kind': 'manual_gcash_entry',
+                'category_label': category_label,
+            })
+
+            total_amount = round(total_amount + amount, 2)
+            total_sales += 1
+
         groups.sort(key=lambda row: (row['transaction_date'], row['payment_method_name'].lower(), row['display_source_label'].lower()))
 
         if limit_groups is not None:
@@ -1222,6 +1370,7 @@ def get_pending_non_cash_collection_count(branch_id=1):
     try:
         sale_rows = _get_non_cash_paid_sales(conn)
         debt_payment_rows = _get_non_cash_debt_payments(conn)
+        manual_gcash_rows = _get_manual_gcash_float_entries(conn, branch_id=branch_id)
         claimed_sale_ids = _get_active_float_claimed_sale_ids(
             conn,
             [row['sale_id'] for row in sale_rows],
@@ -1229,6 +1378,10 @@ def get_pending_non_cash_collection_count(branch_id=1):
         claimed_debt_payment_ids = _get_active_float_claimed_debt_payment_ids(
             conn,
             [row['debt_payment_id'] for row in debt_payment_rows],
+        )
+        claimed_manual_gcash_ids = _get_active_manual_float_claimed_ids(
+            conn,
+            [row['id'] for row in manual_gcash_rows],
         )
     finally:
         conn.close()
@@ -1238,7 +1391,62 @@ def get_pending_non_cash_collection_count(branch_id=1):
         1 for row in debt_payment_rows
         if int(row['debt_payment_id']) not in claimed_debt_payment_ids
     )
-    return sale_count + debt_count
+    manual_gcash_count = sum(
+        1 for row in manual_gcash_rows
+        if int(row['id']) not in claimed_manual_gcash_ids
+    )
+    return sale_count + debt_count + manual_gcash_count
+
+
+def add_manual_gcash_entry(amount, category_id, notes, user_id, branch_id=1):
+    normalized_notes = str(notes or "").strip()
+    if not normalized_notes:
+        raise ValueError("Notes are required.")
+
+    try:
+        normalized_amount = round(float(amount), 2)
+    except (TypeError, ValueError):
+        raise ValueError("Please enter a valid amount.")
+
+    if normalized_amount <= 0:
+        raise ValueError("Please enter a valid amount.")
+
+    conn = get_db()
+    try:
+        category_row = _get_active_manual_gcash_category_by_id(conn, category_id)
+        if not category_row:
+            raise ValueError("Please choose a valid GCash category.")
+
+        insert_row = conn.execute(
+            """
+            INSERT INTO cash_manual_float_entries (
+                branch_id,
+                amount,
+                cash_category_id,
+                category_label_snapshot,
+                notes,
+                payment_channel,
+                user_id
+            )
+            VALUES (%s, %s, %s, %s, %s, 'GCASH', %s)
+            RETURNING id
+            """,
+            (
+                branch_id,
+                normalized_amount,
+                int(category_row["id"]),
+                category_row["label"],
+                normalized_notes,
+                user_id,
+            ),
+        ).fetchone()
+        conn.commit()
+        return int(insert_row["id"])
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def add_cash_entry(
@@ -1253,6 +1461,7 @@ def add_cash_entry(
     branch_id=1,
     claim_sale_ids=None,
     claim_debt_payment_ids=None,
+    claim_manual_float_entry_ids=None,
 ):
     """
     Records a single manual petty cash movement only.
@@ -1301,6 +1510,14 @@ def add_cash_entry(
             raise ValueError("Invalid debt floating collection reference.")
     normalized_claim_debt_payment_ids = sorted(set(normalized_claim_debt_payment_ids))
 
+    normalized_claim_manual_float_entry_ids = []
+    for manual_float_entry_id in (claim_manual_float_entry_ids or []):
+        try:
+            normalized_claim_manual_float_entry_ids.append(int(manual_float_entry_id))
+        except (TypeError, ValueError):
+            raise ValueError("Invalid manual GCash floating reference.")
+    normalized_claim_manual_float_entry_ids = sorted(set(normalized_claim_manual_float_entry_ids))
+
     conn = get_db()
     try:
         category_row = _get_active_cash_category_by_id(conn, category_id, entry_type)
@@ -1324,13 +1541,20 @@ def add_cash_entry(
         else:
             payout_for_date = None
 
-        if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+        if normalized_claim_sale_ids or normalized_claim_debt_payment_ids or normalized_claim_manual_float_entry_ids:
             if entry_type != 'CASH_IN':
                 raise ValueError("Floating collections must be recorded as cash in.")
-            if category_system_key not in {SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER}:
-                raise ValueError("Floating collections must use a bank or e-wallet cash-in category.")
+            if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+                if category_system_key not in {SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER}:
+                    raise ValueError("Floating collections must use a bank or e-wallet cash-in category.")
+            if normalized_claim_manual_float_entry_ids and category_system_key in {SYSTEM_KEY_CASH_IN_BANK_TRANSFER, SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER}:
+                raise ValueError("Manual GCash claims must use the matching GCash cash-in category.")
+            if normalized_claim_manual_float_entry_ids and (normalized_claim_sale_ids or normalized_claim_debt_payment_ids):
+                raise ValueError("Manual GCash claims cannot be combined with sale or debt floating collections.")
             if normalized_reference_id is not None:
                 raise ValueError("Floating collections cannot use a mechanic reference.")
+            if normalized_payable_id is not None:
+                raise ValueError("Floating collections cannot be combined with payable settlements.")
             reference_type = 'FLOAT_COLLECTION'
 
         if normalized_payable_id is not None:
@@ -1338,7 +1562,7 @@ def add_cash_entry(
                 raise ValueError("Payable cash settlement must be recorded as cash out.")
             if normalized_reference_id is not None:
                 raise ValueError("Payable cash settlement cannot use a mechanic reference.")
-            if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+            if normalized_claim_sale_ids or normalized_claim_debt_payment_ids or normalized_claim_manual_float_entry_ids:
                 raise ValueError("Payable cash settlement cannot be combined with floating collections.")
 
             payable_row = conn.execute(
@@ -1477,21 +1701,44 @@ def add_cash_entry(
                 2,
             )
 
-        if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+        if normalized_claim_manual_float_entry_ids:
+            claimable_rows = _get_claimable_manual_gcash_rows(
+                conn,
+                normalized_claim_manual_float_entry_ids,
+                branch_id=branch_id,
+            )
+            if len(claimable_rows) != len(normalized_claim_manual_float_entry_ids):
+                raise ValueError("One or more manual GCash entries were already claimed or are no longer eligible.")
+
+            category_ids = {int(row["cash_category_id"]) for row in claimable_rows}
+            if len(category_ids) != 1 or selected_category_id not in category_ids:
+                raise ValueError("Manual GCash claims must use the matching GCash category.")
+
+            claimable_total = round(
+                claimable_total + sum(_money(row['amount']) for row in claimable_rows),
+                2,
+            )
+
+        if (
+            normalized_claim_sale_ids
+            or normalized_claim_debt_payment_ids
+            or normalized_claim_manual_float_entry_ids
+        ):
             if claimable_total != amount:
                 raise ValueError("Claim amount does not match the pending floating total.")
 
-            existing_manual_duplicate = _find_existing_manual_non_cash_duplicate(
-                conn,
-                amount=amount,
-                description=normalized_description,
-                category_label=category_label,
-            )
-            if existing_manual_duplicate:
-                raise ValueError(
-                    "A matching manual cash ledger entry already exists for this non-cash collection. "
-                    "Please review the ledger before claiming it again."
+            if normalized_claim_sale_ids or normalized_claim_debt_payment_ids:
+                existing_manual_duplicate = _find_existing_manual_non_cash_duplicate(
+                    conn,
+                    amount=amount,
+                    description=normalized_description,
+                    category_label=category_label,
                 )
+                if existing_manual_duplicate:
+                    raise ValueError(
+                        "A matching manual cash ledger entry already exists for this non-cash collection. "
+                        "Please review the ledger before claiming it again."
+                    )
 
         insert_row = conn.execute("""
             INSERT INTO cash_entries
@@ -1532,6 +1779,15 @@ def add_cash_entry(
                     """,
                     (debt_payment_id, entry_id),
                 )
+        if normalized_claim_manual_float_entry_ids:
+            for manual_float_entry_id in normalized_claim_manual_float_entry_ids:
+                conn.execute(
+                    """
+                    INSERT INTO cash_manual_float_claims (manual_float_entry_id, cash_entry_id)
+                    VALUES (%s, %s)
+                    """,
+                    (manual_float_entry_id, entry_id),
+                )
         if normalized_payable_id is not None:
             from services.payables_service import log_payables_audit_event
 
@@ -1558,7 +1814,8 @@ def add_cash_entry(
 def delete_cash_entry(entry_id, user_id, branch_id=1):
     """
     Soft deletes a manual cash entry.
-    reference_type in ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION') guard means sales and debt rows
+    reference_type in ('MANUAL', 'MECHANIC_PAYOUT', 'PAYABLE_CASH_SETTLEMENT') guard means sales, debt,
+    and float collection rows
     can never be deleted through this path even if called directly.
     Admin-only enforced at route level.
     """
@@ -1571,7 +1828,7 @@ def delete_cash_entry(entry_id, user_id, branch_id=1):
                 deleted_by = %s
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION', 'PAYABLE_CASH_SETTLEMENT')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'PAYABLE_CASH_SETTLEMENT')
               AND COALESCE(is_deleted, FALSE) = FALSE
         """, (user_id, entry_id, branch_id))
 
@@ -1599,7 +1856,7 @@ def restore_cash_entry(entry_id, branch_id=1):
                 deleted_by = NULL
             WHERE id = %s
               AND branch_id = %s
-              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'FLOAT_COLLECTION', 'PAYABLE_CASH_SETTLEMENT')
+              AND reference_type IN ('MANUAL', 'MECHANIC_PAYOUT', 'PAYABLE_CASH_SETTLEMENT')
               AND COALESCE(is_deleted, FALSE) = TRUE
         """, (entry_id, branch_id))
 

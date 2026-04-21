@@ -58,7 +58,18 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         (start_date, end_date),
     ).fetchall()
 
-    if not sale_rows and not debt_payment_rows:
+    manual_gcash_rows = conn.execute(
+        """
+        SELECT
+            cmfe.id,
+            cmfe.amount
+        FROM cash_manual_float_entries cmfe
+        WHERE DATE(cmfe.created_at) BETWEEN %s AND %s
+        """,
+        (start_date, end_date),
+    ).fetchall()
+
+    if not sale_rows and not debt_payment_rows and not manual_gcash_rows:
         return 0.0
 
     sale_totals = {
@@ -103,12 +114,38 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
         ).fetchall()
         claimed_debt_payment_ids = {int(row["debt_payment_id"]) for row in claimed_rows}
 
+    manual_gcash_totals = {
+        int(row["id"]): round(_num(row["amount"]), 2)
+        for row in manual_gcash_rows
+    }
+    claimed_manual_gcash_ids = set()
+    if manual_gcash_totals:
+        manual_gcash_ids = list(manual_gcash_totals.keys())
+        placeholders = ",".join(["%s"] * len(manual_gcash_ids))
+        claimed_rows = conn.execute(
+            f"""
+            SELECT DISTINCT cmfc.manual_float_entry_id
+            FROM cash_manual_float_claims cmfc
+            JOIN cash_entries ce ON ce.id = cmfc.cash_entry_id
+            WHERE cmfc.manual_float_entry_id IN ({placeholders})
+              AND COALESCE(ce.is_deleted, FALSE) = FALSE
+              AND DATE(ce.created_at) <= %s
+            """,
+            manual_gcash_ids + [end_date],
+        ).fetchall()
+        claimed_manual_gcash_ids = {int(row["manual_float_entry_id"]) for row in claimed_rows}
+
     return round(
         sum(amount for sale_id, amount in sale_totals.items() if sale_id not in claimed_sale_ids)
         + sum(
             amount
             for debt_payment_id, amount in debt_payment_totals.items()
             if debt_payment_id not in claimed_debt_payment_ids
+        )
+        + sum(
+            amount
+            for manual_gcash_id, amount in manual_gcash_totals.items()
+            if manual_gcash_id not in claimed_manual_gcash_ids
         ),
         2,
     )

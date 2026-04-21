@@ -22,7 +22,7 @@ SYSTEM_CASH_CATEGORY_DEFINITIONS = [
     },
     {
         "entry_type": "CASH_IN",
-        "label": "Others",
+        "label": "Others (Non-related to shop)",
         "system_key": "cash_in_others",
         "requires_description": True,
         "sort_order": 40,
@@ -128,6 +128,7 @@ CASH_CATEGORY_BACKFILL_ALIASES = {
     ("CASH_IN", "from gcash/e-wallet account"): "cash_in_ewallet_transfer",
     ("CASH_IN", "from e-wallet account"): "cash_in_ewallet_transfer",
     ("CASH_IN", "others"): "cash_in_others",
+    ("CASH_IN", "others (non-related to shop)"): "cash_in_others",
     ("CASH_IN", "petty cash"): "cash_in_petty_cash",
     ("CASH_OUT", "to gcash/e-wallet account"): "cash_out_to_ewallet",
     ("CASH_OUT", "to gcash/e-wallet account (related to shop)"): "cash_out_to_ewallet",

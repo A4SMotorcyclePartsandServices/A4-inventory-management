@@ -91,6 +91,11 @@ def _sync_cash_entry_category_labels(cur):
               OR LOWER(TRIM(ce.category)) = LOWER(TRIM(c.label))
               OR (
                   c.system_key = %s
+                  AND ce.entry_type = 'CASH_IN'
+                  AND LOWER(TRIM(ce.category)) IN (%s)
+              )
+              OR (
+                  c.system_key = %s
                   AND LOWER(TRIM(ce.category)) IN (%s)
               )
               OR (
@@ -100,6 +105,8 @@ def _sync_cash_entry_category_labels(cur):
           )
         """,
         (
+            "cash_in_others",
+            "others",
             "cash_out_to_ewallet",
             "to gcash/e-wallet account",
             "cash_out_other_expenses",
@@ -1109,6 +1116,40 @@ def init_db():
     )
     """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_cash_debt_payment_claims_entry ON cash_debt_payment_claims(cash_entry_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS cash_manual_float_entries (
+        id                      SERIAL PRIMARY KEY,
+        branch_id               INTEGER NOT NULL DEFAULT 1,
+        amount                  NUMERIC(12,2) NOT NULL,
+        cash_category_id        INTEGER NOT NULL REFERENCES cash_entry_categories(id),
+        category_label_snapshot TEXT NOT NULL,
+        notes                   TEXT NOT NULL,
+        payment_channel         TEXT NOT NULL DEFAULT 'GCASH',
+        user_id                 INTEGER REFERENCES users(id),
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("ALTER TABLE cash_manual_float_entries ADD COLUMN IF NOT EXISTS payment_channel TEXT NOT NULL DEFAULT 'GCASH'")
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_cash_manual_float_entries_branch_created
+    ON cash_manual_float_entries(branch_id, created_at DESC)
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_cash_manual_float_entries_category
+    ON cash_manual_float_entries(cash_category_id)
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS cash_manual_float_claims (
+        id                      SERIAL PRIMARY KEY,
+        manual_float_entry_id   INTEGER NOT NULL UNIQUE REFERENCES cash_manual_float_entries(id) ON DELETE CASCADE,
+        cash_entry_id           INTEGER NOT NULL REFERENCES cash_entries(id) ON DELETE CASCADE,
+        created_at              TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_cash_manual_float_claims_entry
+    ON cash_manual_float_claims(cash_entry_id)
+    """)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS idempotency_requests (
         id                  SERIAL PRIMARY KEY,
