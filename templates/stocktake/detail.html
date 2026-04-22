@@ -282,9 +282,31 @@
 
     .stocktake-panel-tools {
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: flex-end;
         gap: 0.65rem;
-        flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .stocktake-session-search {
+        min-width: min(100%, 320px);
+        width: min(100%, 320px);
+    }
+
+    .stocktake-session-search .input-group-text {
+        background: #141720;
+        border-color: var(--border-soft);
+        color: var(--text-muted);
+    }
+
+    .stocktake-session-search .form-control {
+        min-width: 0;
+    }
+
+    .stocktake-session-search-note {
+        margin: 0.35rem 0 0;
+        font-size: 0.8rem;
+        color: var(--text-muted);
     }
 
     .stocktake-items-header {
@@ -314,12 +336,24 @@
     }
 
     .stocktake-draft-controls {
-        justify-content: flex-end;
+        display: grid;
+        grid-template-columns: max-content repeat(2, max-content);
+        justify-content: end;
+        gap: 0.65rem;
     }
 
-    .stocktake-draft-controls .btn,
+    .stocktake-draft-controls .btn {
+        min-width: 190px;
+    }
+
     .stocktake-draft-controls .draft-state {
-        flex: 0 0 auto;
+        align-self: center;
+        justify-self: end;
+    }
+
+    .stocktake-draft-status-spacer {
+        width: 100%;
+        min-width: 0;
     }
 
     .stocktake-items-table {
@@ -402,6 +436,25 @@
     .stocktake-note-text {
         color: var(--text-primary);
         word-break: break-word;
+    }
+
+    .stocktake-search-highlight {
+        background: rgba(250, 204, 21, 0.28);
+        color: #fde68a;
+        border-radius: 4px;
+        padding: 0 0.1rem;
+    }
+
+    .stocktake-row-nonmatch {
+        opacity: 0.52;
+    }
+
+    .stocktake-row-nonmatch .stocktake-item-name,
+    .stocktake-row-nonmatch .stocktake-note-text,
+    .stocktake-row-nonmatch .stocktake-count-value,
+    .stocktake-row-nonmatch .stocktake-item-history-copy,
+    .stocktake-row-nonmatch .stocktake-item-category {
+        color: var(--text-muted);
     }
 
     .stocktake-action-cell {
@@ -594,6 +647,11 @@
 
         .stocktake-panel-tools {
             justify-content: flex-start;
+            align-items: stretch;
+        }
+
+        .stocktake-session-search {
+            width: 100%;
         }
 
         .stocktake-items-header {
@@ -610,6 +668,8 @@
 
     @media (max-width: 768px) {
         .stocktake-draft-controls {
+            grid-template-columns: 1fr;
+            justify-content: stretch;
             gap: 0.55rem;
         }
 
@@ -739,7 +799,7 @@
 
         <div class="stocktake-main-column">
             {% if stocktake.status == 'DRAFT' %}
-            <div class="stocktake-add-bar">
+            <div class="stocktake-add-bar" id="stocktakeAddBar">
                 <div class="stocktake-add-header">
                     <h5 class="stocktake-add-title text-warning">
                         <i class="bi bi-search"></i>Search and add an item to this stocktake.
@@ -762,24 +822,40 @@
                 </div>
                 <div class="stocktake-panel-tools">
                     {% if stocktake.status == 'DRAFT' %}
-                    <div class="stocktake-draft-controls">
-                        <button type="button" class="btn btn-outline-warning" id="openBatchCountBtn">
-                            <i class="bi bi-table me-1"></i>Batch Count Entry
-                        </button>
-                        <span class="draft-state clean" id="draftStateBadge">
-                            <i class="bi bi-check-circle"></i><span id="draftStateText">Auto-saved</span>
-                        </span>
-                        <button type="button" class="btn btn-primary" id="saveDraftBtn" disabled>
-                            <i class="bi bi-save me-1"></i>Save Table Edits
-                        </button>
-                        <button type="button" class="btn btn-success" id="confirmSessionBtn">
-                            <i class="bi bi-check2-circle me-1"></i>Confirm Session
-                        </button>
-                        <button type="button" class="btn stocktake-cancel-btn" id="cancelSessionBtn">
-                            <i class="bi bi-x-circle me-1"></i>Cancel Session
-                        </button>
+                    <div id="stocktakeDraftControlsWrap">
+                        <div class="stocktake-draft-controls">
+                            <span class="draft-state clean" id="draftStateBadge">
+                                <i class="bi bi-check-circle"></i><span id="draftStateText">Auto-saved</span>
+                            </span>
+                            <button type="button" class="btn btn-outline-warning" id="openBatchCountBtn">
+                                <i class="bi bi-table me-1"></i>Batch Count Entry
+                            </button>
+                            <button type="button" class="btn btn-success" id="confirmSessionBtn">
+                                <i class="bi bi-check2-circle me-1"></i>Confirm Session
+                            </button>
+                            <span class="stocktake-draft-status-spacer" aria-hidden="true"></span>
+                            <button type="button" class="btn btn-primary" id="saveDraftBtn" disabled>
+                                <i class="bi bi-save me-1"></i>Save Table Edits
+                            </button>
+                            <button type="button" class="btn stocktake-cancel-btn" id="cancelSessionBtn">
+                                <i class="bi bi-x-circle me-1"></i>Cancel Session
+                            </button>
+                        </div>
                     </div>
                     {% endif %}
+                    <div class="stocktake-session-search">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text">
+                                <i class="bi bi-search"></i>
+                            </span>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="stocktakeSessionSearchInput"
+                                placeholder="Search counted items in this session">
+                        </div>
+                        <p class="stocktake-session-search-note">Search only within items already included in this stocktake session.</p>
+                    </div>
                 </div>
             </div>
 
@@ -865,6 +941,7 @@ const TABLE_DRAFT_STORAGE_KEY = `stocktake:table-draft:${stocktakeSessionId}`;
 let stocktakeSession = {{ stocktake|tojson }};
 let searchDebounce = null;
 let batchSearchDebounce = null;
+let sessionSearchDebounce = null;
 let hasUnsavedChanges = false;
 let batchModal = null;
 let batchEntries = [];
@@ -878,6 +955,7 @@ let confirmSessionGuard = null;
 let cancelSessionGuard = null;
 let saveDraftGuard = null;
 let batchApplyGuard = null;
+let stocktakeSessionSearchQuery = '';
 const mainSearchState = { activeController: null };
 const batchSearchState = { activeController: null, requestSequence: 0 };
 
@@ -888,6 +966,22 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function escapeRegExp(value) {
+    return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function highlightSessionSearchMatch(value, query) {
+    const rawValue = String(value ?? '');
+    const normalizedQuery = normalizeSessionItemSearchValue(query);
+    if (!normalizedQuery || normalizedQuery.length < 3) {
+        return escapeHtml(rawValue);
+    }
+
+    const escapedValue = escapeHtml(rawValue);
+    const pattern = escapeRegExp(normalizedQuery);
+    return escapedValue.replace(new RegExp(`(${pattern})`, 'gi'), '<mark class="stocktake-search-highlight">$1</mark>');
 }
 
 function renderSearchMeta(item) {
@@ -1206,10 +1300,10 @@ function restoreBatchDraftState() {
 renderItemMetaLine = function(item, className = 'stocktake-item-category') {
     const parts = [];
     if (item.category) {
-        parts.push(escapeHtml(item.category));
+        parts.push(highlightSessionSearchMatch(item.category, stocktakeSessionSearchQuery));
     }
     if (item.description) {
-        parts.push(escapeHtml(item.description));
+        parts.push(highlightSessionSearchMatch(item.description, stocktakeSessionSearchQuery));
     }
     if (!parts.length) {
         return '';
@@ -1257,6 +1351,31 @@ function renderAlreadySelectedNote(itemId) {
 
 function sessionIsEditable() {
     return String(stocktakeSession.status || '').toUpperCase() === 'DRAFT';
+}
+
+function normalizeSessionItemSearchValue(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function itemMatchesSessionSearch(item, query) {
+    const normalizedQuery = normalizeSessionItemSearchValue(query);
+    if (!normalizedQuery || normalizedQuery.length < 3) {
+        return true;
+    }
+
+    const haystack = [
+        item?.name,
+        item?.category,
+        item?.description,
+        item?.notes,
+        item?.counted_stock,
+        item?.last_stocktake_session_number,
+    ]
+        .map((value) => normalizeSessionItemSearchValue(value))
+        .filter(Boolean)
+        .join(' ');
+
+    return haystack.includes(normalizedQuery);
 }
 
 function setDirtyState(isDirty) {
@@ -1308,13 +1427,21 @@ function renderSessionMeta() {
     const confirmBtn = document.getElementById('confirmSessionBtn');
     const cancelBtn = document.getElementById('cancelSessionBtn');
     const batchBtn = document.getElementById('openBatchCountBtn');
+    const saveDraftBtn = document.getElementById('saveDraftBtn');
+    const draftStateBadge = document.getElementById('draftStateBadge');
+    const draftControlsWrap = document.getElementById('stocktakeDraftControlsWrap');
     const csvBtn = document.getElementById('stocktakeCsvBtn');
     const pdfBtn = document.getElementById('stocktakePdfBtn');
+    const addBar = document.getElementById('stocktakeAddBar');
     if (confirmBtn) confirmBtn.style.display = sessionIsEditable() ? '' : 'none';
     if (cancelBtn) cancelBtn.style.display = sessionIsEditable() ? '' : 'none';
     if (batchBtn) batchBtn.style.display = sessionIsEditable() ? '' : 'none';
+    if (saveDraftBtn) saveDraftBtn.style.display = sessionIsEditable() ? '' : 'none';
+    if (draftStateBadge) draftStateBadge.style.display = sessionIsEditable() ? '' : 'none';
+    if (draftControlsWrap) draftControlsWrap.style.display = sessionIsEditable() ? '' : 'none';
     if (csvBtn) csvBtn.style.display = String(stocktakeSession.status || '').toUpperCase() === 'CONFIRMED' ? '' : 'none';
     if (pdfBtn) pdfBtn.style.display = String(stocktakeSession.status || '').toUpperCase() === 'CONFIRMED' ? '' : 'none';
+    if (addBar) addBar.style.display = sessionIsEditable() ? '' : 'none';
 
     const searchInput = document.getElementById('itemSearchInput');
     if (searchInput) {
@@ -1330,10 +1457,24 @@ function renderSessionMeta() {
 
 function renderItemsTable() {
     const tbody = document.getElementById('stocktakeItemsBody');
-    const items = Array.isArray(stocktakeSession.items) ? stocktakeSession.items : [];
+    const allItems = Array.isArray(stocktakeSession.items) ? stocktakeSession.items : [];
     const editable = sessionIsEditable();
+    const matchedItems = allItems.filter((item) => itemMatchesSessionSearch(item, stocktakeSessionSearchQuery));
+    const unmatchedItems = stocktakeSessionSearchQuery
+        ? allItems.filter((item) => !itemMatchesSessionSearch(item, stocktakeSessionSearchQuery))
+        : [];
+    const visibleItems = stocktakeSessionSearchQuery
+        ? [...matchedItems, ...unmatchedItems]
+        : allItems;
+    const countLabel = document.getElementById('tableCountLabel');
 
-    if (!items.length) {
+    if (countLabel) {
+        countLabel.textContent = stocktakeSessionSearchQuery
+            ? `${matchedItems.length} of ${allItems.length} line(s)`
+            : `${allItems.length} line(s)`;
+    }
+
+    if (!allItems.length) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="4" class="text-center text-muted py-4">
@@ -1343,11 +1484,11 @@ function renderItemsTable() {
         return;
     }
 
-    tbody.innerHTML = items.map((item) => `
-        <tr data-item-id="${item.item_id}">
+    tbody.innerHTML = visibleItems.map((item) => `
+        <tr data-item-id="${item.item_id}" class="${stocktakeSessionSearchQuery && !itemMatchesSessionSearch(item, stocktakeSessionSearchQuery) ? 'stocktake-row-nonmatch' : ''}">
             <td class="stocktake-item-cell">
                 <div class="stocktake-item-block">
-                    <div class="stocktake-item-name">${escapeHtml(item.name || 'Unknown Item')}</div>
+                    <div class="stocktake-item-name">${highlightSessionSearchMatch(item.name || 'Unknown Item', stocktakeSessionSearchQuery)}</div>
                     ${renderItemMetaLine(item)}
                     ${item.recently_counted ? `
                         <div class="stocktake-item-history">
@@ -1355,13 +1496,13 @@ function renderItemsTable() {
                                 <i class="bi bi-clock-history"></i>Recently counted
                             </span>
                             <span class="stocktake-item-history-copy">
-                                ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}
+                                ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${highlightSessionSearchMatch(item.last_stocktake_session_number || 'a confirmed stocktake', stocktakeSessionSearchQuery)}
                             </span>
                         </div>
                     ` : item.has_stocktake_history ? `
                         <div class="stocktake-item-history">
                             <span class="stocktake-item-history-copy">
-                                Last counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${escapeHtml(item.last_stocktake_session_number || 'a confirmed stocktake')}
+                                Last counted ${Number(item.days_since_last_stocktake || 0)} day(s) ago in ${highlightSessionSearchMatch(item.last_stocktake_session_number || 'a confirmed stocktake', stocktakeSessionSearchQuery)}
                             </span>
                         </div>
                     ` : ''}
@@ -1370,12 +1511,12 @@ function renderItemsTable() {
             <td class="stocktake-count-cell">
                 ${editable
                     ? `<input type="number" class="form-control form-control-sm counted-stock-input" min="0" step="1" value="${item.counted_stock == null ? '' : Number(item.counted_stock)}">`
-                    : `<span class="stocktake-count-value">${item.counted_stock == null ? '-' : Number(item.counted_stock)}</span>`}
+                    : `<span class="stocktake-count-value">${highlightSessionSearchMatch(item.counted_stock == null ? '-' : Number(item.counted_stock), stocktakeSessionSearchQuery)}</span>`}
             </td>
             <td class="stocktake-note-cell">
                 ${editable
                     ? `<input type="text" class="form-control form-control-sm item-note-input" value="${escapeHtml(item.notes || '')}" placeholder="Optional note">`
-                    : `<span class="stocktake-note-text">${escapeHtml(item.notes || '-')}</span>`}
+                    : `<span class="stocktake-note-text">${highlightSessionSearchMatch(item.notes || '-', stocktakeSessionSearchQuery)}</span>`}
             </td>
             <td class="stocktake-action-cell">
                 ${editable ? `
@@ -1940,6 +2081,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const resultsBox = document.getElementById('itemSearchResults');
     const batchSearchInput = document.getElementById('batchCountSearchInput');
     const batchResultsBox = document.getElementById('batchCountSearchResults');
+    const sessionSearchInput = document.getElementById('stocktakeSessionSearchInput');
+
+    if (sessionSearchInput) {
+        sessionSearchInput.addEventListener('input', function () {
+            const nextQuery = this.value.trim();
+            clearTimeout(sessionSearchDebounce);
+            sessionSearchDebounce = setTimeout(() => {
+                stocktakeSessionSearchQuery = nextQuery.length >= 3 ? nextQuery : '';
+                renderItemsTable();
+            }, 180);
+        });
+    }
 
     if (searchInput) {
         searchInput.addEventListener('input', function () {

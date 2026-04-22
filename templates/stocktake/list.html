@@ -9,9 +9,7 @@
     }
 
     .stocktake-grid {
-        display: grid;
-        grid-template-columns: 360px 1fr;
-        gap: 1.25rem;
+        display: block;
     }
 
     .stocktake-note {
@@ -44,11 +42,22 @@
 
     .stocktake-table-card {
         padding: 1rem;
+        overflow: hidden;
+        min-width: 0;
+    }
+
+    .stocktake-table-card .table-responsive {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
     }
 
     .stocktake-table-card .table {
         table-layout: auto;
         width: 100%;
+        min-width: 980px;
     }
 
     .stocktake-table-card .table th,
@@ -65,20 +74,22 @@
     }
 
     {% if session.get('role') == 'admin' %}
+    .stocktake-table-card .table thead th:nth-child(1) { width: 18%; }
+    .stocktake-table-card .table thead th:nth-child(2) { width: 11%; }
+    .stocktake-table-card .table thead th:nth-child(3) { width: 11%; }
+    .stocktake-table-card .table thead th:nth-child(4) { width: 8%; }
+    .stocktake-table-card .table thead th:nth-child(5) { width: 12%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 24%; }
+    .stocktake-table-card .table thead th:nth-child(7) { width: 16%; }
+    .stocktake-table-card .table thead th:nth-child(8) { width: 10%; }
+    {% else %}
     .stocktake-table-card .table thead th:nth-child(1) { width: 20%; }
     .stocktake-table-card .table thead th:nth-child(2) { width: 12%; }
     .stocktake-table-card .table thead th:nth-child(3) { width: 12%; }
     .stocktake-table-card .table thead th:nth-child(4) { width: 9%; }
-    .stocktake-table-card .table thead th:nth-child(5) { width: 14%; }
-    .stocktake-table-card .table thead th:nth-child(6) { width: 21%; }
-    .stocktake-table-card .table thead th:nth-child(7) { width: 12%; }
-    {% else %}
-    .stocktake-table-card .table thead th:nth-child(1) { width: 22%; }
-    .stocktake-table-card .table thead th:nth-child(2) { width: 13%; }
-    .stocktake-table-card .table thead th:nth-child(3) { width: 13%; }
-    .stocktake-table-card .table thead th:nth-child(4) { width: 10%; }
     .stocktake-table-card .table thead th:nth-child(5) { width: 28%; }
-    .stocktake-table-card .table thead th:nth-child(6) { width: 14%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 19%; }
+    .stocktake-table-card .table thead th:nth-child(7) { width: 10%; }
     {% endif %}
 
     .stocktake-created {
@@ -96,14 +107,40 @@
         text-align: left !important;
     }
 
+    .stocktake-notes-cell {
+        min-width: 220px;
+        text-align: left !important;
+    }
+
+    .stocktake-note-preview {
+        color: var(--text-muted);
+        cursor: help;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+    }
+
+    .stocktake-note-preview:hover {
+        white-space: normal !important;
+        word-break: break-word;
+        background: #1a1d26 !important;
+        z-index: 10;
+        position: relative;
+        overflow: visible;
+        border-radius: 8px;
+        padding: 0.2rem 0.35rem;
+        margin: -0.2rem -0.35rem;
+    }
+
     .stocktake-table-card .table td:nth-child(2),
     .stocktake-table-card .table td:nth-child(3),
     .stocktake-table-card .table td:nth-child(4),
     {% if session.get('role') == 'admin' %}
     .stocktake-table-card .table td:nth-child(5),
-    .stocktake-table-card .table td:nth-child(7) {
+    .stocktake-table-card .table td:nth-child(8) {
     {% else %}
-    .stocktake-table-card .table td:nth-child(6) {
+    .stocktake-table-card .table td:nth-child(7) {
     {% endif %}
         vertical-align: middle !important;
     }
@@ -170,6 +207,10 @@
         font-size: 1.05rem;
     }
 
+    .stocktake-new-session-btn {
+        white-space: nowrap;
+    }
+
     @media (max-width: 992px) {
         .stocktake-grid {
             grid-template-columns: 1fr;
@@ -220,32 +261,18 @@
     </div>
 
     <div class="stocktake-grid">
-        <div class="stocktake-form-card">
-            <h5 class="mb-3">New Stocktake Session</h5>
-            <form method="POST" action="{{ url_for('stocktake.create_stocktake') }}" id="stocktakeCreateForm">
-                <div class="mb-3">
-                    <label class="form-label">Count Scope</label>
-                    <select class="form-select" name="count_scope">
-                        <option value="PARTIAL" selected>Partial</option>
-                        <option value="FULL">Full</option>
-                        <option value="CATEGORY">Category</option>
-                        <option value="VENDOR">Vendor</option>
-                    </select>
-                    <div class="form-text text-muted">Use notes to specify the exact category or vendor when needed.</div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea class="form-control" name="notes" rows="4" placeholder="Optional notes for this counting session"></textarea>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-plus-circle me-1"></i>Create Session
-                </button>
-            </form>
-        </div>
-
         <div class="stocktake-table-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Sessions</h5>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h5 class="mb-0">Sessions</h5>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-primary stocktake-new-session-btn"
+                        data-bs-toggle="modal"
+                        data-bs-target="#newStocktakeSessionModal">
+                        <i class="bi bi-plus-circle me-1"></i>New Session
+                    </button>
+                </div>
                 <span class="stocktake-summary">{{ sessions|length }} session(s)</span>
             </div>
 
@@ -260,6 +287,7 @@
                             {% if session.get('role') == 'admin' %}
                             <th>Variance Items</th>
                             {% endif %}
+                            <th>Notes</th>
                             <th>Created</th>
                             <th>Action</th>
                         </tr>
@@ -286,6 +314,13 @@
                                 </div>
                             </td>
                             {% endif %}
+                            <td class="stocktake-notes-cell">
+                                <div class="stocktake-cell-stack">
+                                    <span class="stocktake-note-preview" title="{{ stocktake.notes or 'No notes' }}">
+                                        {{ stocktake.notes or "No notes" }}
+                                    </span>
+                                </div>
+                            </td>
                             <td class="stocktake-created">
                                 <div class="stocktake-cell-stack">
                                     <div>{{ stocktake.created_at_display }}</div>
@@ -294,7 +329,7 @@
                             </td>
                             <td class="stocktake-action-cell">
                                 <div class="stocktake-cell-center">
-                                    <a href="{{ url_for('stocktake.stocktake_detail', session_id=stocktake.id) }}" class="btn btn-sm btn-outline-light">
+                                    <a href="{{ url_for('stocktake.stocktake_detail', session_id=stocktake.id) }}" class="btn btn-sm btn-outline-light" target="_blank" rel="noopener noreferrer">
                                         <i class="bi bi-box-arrow-up-right me-1"></i>Open
                                     </a>
                                 </div>
@@ -302,12 +337,47 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="{% if session.get('role') == 'admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No stocktake sessions yet.</td>
+                            <td colspan="{% if session.get('role') == 'admin' %}8{% else %}7{% endif %}" class="text-center text-muted py-4">No stocktake sessions yet.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="newStocktakeSessionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-soft);">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title">New Stocktake Session</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('stocktake.create_stocktake') }}" id="stocktakeCreateForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Count Scope</label>
+                        <select class="form-select" name="count_scope">
+                            <option value="PARTIAL" selected>Partial</option>
+                            <option value="FULL">Full</option>
+                            <option value="CATEGORY">Category</option>
+                            <option value="VENDOR">Vendor</option>
+                        </select>
+                        <div class="form-text text-info">Use notes to specify the exact category or vendor when needed.</div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" name="notes" rows="4" placeholder="Optional notes for this counting session"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Create Session
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
