@@ -48,6 +48,8 @@ def _normalize_item_category(value):
         return "SVC"
     if normalized == "ACC":
         return "ACC"
+    if normalized == "TIRE":
+        return "TIRE"
     if normalized == "OIL":
         return "OIL"
     if normalized == "PMS":
@@ -59,7 +61,7 @@ def _normalize_requested_item_categories(values):
     normalized = []
     for value in values or []:
         category = _normalize_item_category(value)
-        if category in {"OIL", "PMS", "ACC"} and category not in normalized:
+        if category in {"OIL", "PMS", "ACC", "TIRE"} and category not in normalized:
             normalized.append(category)
     return normalized
 
@@ -595,6 +597,7 @@ def items_overall_report():
         "OIL": "Oil",
         "PMS": "Pms",
         "ACC": "Acc",
+        "TIRE": "Tire",
     }
     selected_category_labels = [category_labels[category] for category in selected_categories]
 
