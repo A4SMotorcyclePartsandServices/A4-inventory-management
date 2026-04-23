@@ -283,10 +283,28 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         """
         SELECT
             COUNT(*) AS total_transactions,
-            COUNT(*) FILTER (WHERE s.status = 'Paid') AS paid_transactions,
+            COALESCE((
+                SELECT COUNT(DISTINCT paid_s.id)
+                FROM sale_payments sp
+                JOIN sales paid_s ON paid_s.id = sp.sale_id
+                JOIN payment_methods pm ON pm.id = sp.payment_method_id
+                WHERE DATE(sp.created_at) BETWEEN %s AND %s
+                  AND COALESCE(pm.category, '') <> 'Debt'
+                  AND COALESCE(paid_s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND COALESCE(paid_s.is_voided, FALSE) = FALSE
+            ), 0) AS paid_transactions,
             COUNT(*) FILTER (WHERE s.status = 'Partial') AS partial_transactions,
             COUNT(*) FILTER (WHERE s.status = 'Unresolved') AS unresolved_transactions,
-            COALESCE(SUM(CASE WHEN s.status = 'Paid' THEN s.total_amount ELSE 0 END), 0) AS gross_sales,
+            COALESCE((
+                SELECT SUM(sp.amount)
+                FROM sale_payments sp
+                JOIN sales paid_s ON paid_s.id = sp.sale_id
+                JOIN payment_methods pm ON pm.id = sp.payment_method_id
+                WHERE DATE(sp.created_at) BETWEEN %s AND %s
+                  AND COALESCE(pm.category, '') <> 'Debt'
+                  AND COALESCE(paid_s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND COALESCE(paid_s.is_voided, FALSE) = FALSE
+            ), 0) AS gross_sales,
             COALESCE(SUM(CASE WHEN s.status = 'Partial' THEN s.total_amount ELSE 0 END), 0) AS partial_sales_amount,
             COALESCE(SUM(CASE WHEN s.status = 'Unresolved' THEN s.total_amount ELSE 0 END), 0) AS unresolved_sales_amount
         FROM sales s
@@ -294,7 +312,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND COALESCE(s.is_voided, FALSE) = FALSE
         """,
-        (start_date, end_date),
+        (start_date, end_date, start_date, end_date, start_date, end_date),
     ).fetchone()
 
     debt_row = conn.execute(
@@ -552,8 +570,8 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         FROM sale_payments sp
         JOIN sales s ON s.id = sp.sale_id
         LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND s.status = 'Paid'
+        WHERE DATE(sp.created_at) BETWEEN %s AND %s
+          AND COALESCE(pm.category, '') <> 'Debt'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND COALESCE(s.is_voided, FALSE) = FALSE
         GROUP BY COALESCE(pm.name, 'N/A')
@@ -565,14 +583,17 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     sales_trend_rows = conn.execute(
         """
         SELECT
-            DATE(s.transaction_date) AS day,
-            COUNT(*) FILTER (WHERE s.status = 'Paid') AS paid_count,
-            COALESCE(SUM(CASE WHEN s.status = 'Paid' THEN s.total_amount ELSE 0 END), 0) AS gross_sales
-        FROM sales s
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+            DATE(sp.created_at) AS day,
+            COUNT(DISTINCT s.id) AS paid_count,
+            COALESCE(SUM(sp.amount), 0) AS gross_sales
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        WHERE DATE(sp.created_at) BETWEEN %s AND %s
+          AND COALESCE(pm.category, '') <> 'Debt'
           AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
           AND COALESCE(s.is_voided, FALSE) = FALSE
-        GROUP BY DATE(s.transaction_date)
+        GROUP BY DATE(sp.created_at)
         ORDER BY day ASC
         """,
         (start_date, end_date),
