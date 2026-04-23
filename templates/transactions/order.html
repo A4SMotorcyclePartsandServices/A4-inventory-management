@@ -142,7 +142,37 @@
         color: #f3f4f6;
         font-weight: 700;
         line-height: 1.25;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         word-break: break-word;
+        cursor: help;
+    }
+    .table-order tbody tr:hover .order-item-name {
+        white-space: normal;
+        overflow: visible;
+        background: #1a1d26;
+        border-radius: 6px;
+        padding: 4px 6px;
+        margin: -4px -6px 0;
+        position: relative;
+        z-index: 10;
+    }
+    .order-item-description {
+        color: #cbd5e1;
+        font-size: 0.78rem;
+        line-height: 1.25;
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+    }
+    .order-item-description.is-empty {
+        color: #6b7280;
+        font-style: italic;
+    }
+    .order-item-text {
+        min-width: 0;
+        width: 100%;
     }
     .order-cell-stack {
         display: flex;
@@ -752,6 +782,7 @@ function getCurrentOrderItemsSnapshot() {
     return orderItems.map((item) => ({
         id: Number(item.id),
         name: item.name || item.item_name || '',
+        description: item.description || item.item_description || '',
         qty: Number(item.qty || 1),
         cost: Number(item.cost || 0),
         purchase_mode: normalizePurchaseMode(item.purchase_mode),
@@ -834,6 +865,7 @@ async function restoreOrderDraft(options = {}) {
             ? state.orderItems.map((item) => ({
                 id: Number(item.id),
                 name: item.name || '',
+                description: item.description || item.item_description || '',
                 qty: Number(item.qty || 1),
                 cost: Number(item.cost || 0),
                 purchase_mode: normalizePurchaseMode(item.purchase_mode),
@@ -1038,6 +1070,7 @@ async function loadExistingOrder(poId) {
         orderItems = (data.items || []).map(item => ({
             id: item.item_id,
             name: item.name,
+            description: item.description || item.item_description || '',
             qty: item.quantity_ordered,
             cost: item.unit_cost,
             purchase_mode: normalizePurchaseMode(item.purchase_mode),
@@ -1226,6 +1259,7 @@ function addItemToOrder(item) {
     orderItems.push({
         id: item.id,
         name: item.name,
+        description: item.description || item.item_description || '',
         qty: 1,
         cost: item.cost_per_piece || 0,
         purchase_mode: 'PIECE',
@@ -1251,6 +1285,7 @@ function renderTable() {
     const overallTotal = orderItems.reduce((sum, item) => sum + getLineTotal(item), 0);
     const rows = orderItems.map((item, index) => {
         const displayName = item.name || item.item_name || 'Unnamed Item';
+        const displayDescription = item.description || item.item_description || '';
         const purchaseMode = normalizePurchaseMode(item.purchase_mode);
         const pendingBoxQty = Number(item.pending_box_quantity || 0);
         const pendingPieceQty = Number(item.pending_stock || 0);
@@ -1274,7 +1309,10 @@ function renderTable() {
                 <td>
                     <div class="order-cell-stack">
                         <div class="order-cell-main">
-                            <div class="order-item-name">${escapeHtml(displayName)}</div>
+                            <div class="order-item-text">
+                                <div class="order-item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>
+                                <div class="order-item-description ${displayDescription ? '' : 'is-empty'}">${displayDescription ? escapeHtml(displayDescription) : 'No description'}</div>
+                            </div>
                         </div>
                         <div class="order-cell-hint">${escapeHtml(modeHint)}</div>
                     </div>

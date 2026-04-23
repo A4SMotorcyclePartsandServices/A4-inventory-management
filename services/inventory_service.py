@@ -885,6 +885,7 @@ def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-03-26")
             SELECT
                 i.id,
                 i.name,
+                i.description,
                 i.cost_per_piece,
                 COUNT(DISTINCT po.id) AS vendor_order_count,
                 COALESCE(SUM(pi.quantity_ordered), 0) AS vendor_total_qty,
@@ -894,7 +895,7 @@ def get_vendor_recommended_items(vendor_id, limit=5, snapshot_date="2026-03-26")
             JOIN items i ON i.id = pi.item_id
             WHERE po.vendor_id = %s
               AND po.status <> 'CANCELLED'
-            GROUP BY i.id, i.name, i.cost_per_piece
+            GROUP BY i.id, i.name, i.description, i.cost_per_piece
             ORDER BY
                 COUNT(DISTINCT po.id) DESC,
                 COALESCE(SUM(pi.quantity_ordered), 0) DESC,

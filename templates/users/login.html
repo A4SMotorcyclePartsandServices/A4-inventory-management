@@ -42,6 +42,33 @@
         font-size: 1.1rem !important; 
     }
 
+    .password-field {
+        position: relative;
+    }
+
+    .password-field .form-control {
+        padding-right: 3.25rem;
+    }
+
+    .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 0.85rem;
+        transform: translateY(-50%);
+        border: 0;
+        background: transparent;
+        color: #bbb;
+        font-size: 1.2rem;
+        line-height: 1;
+        padding: 0.35rem;
+    }
+
+    .password-toggle:hover,
+    .password-toggle:focus {
+        color: #fff;
+        outline: none;
+    }
+
     /* Fix for Browser Autofill "jumping" and background color changes */
     input:-webkit-autofill,
     input:-webkit-autofill:hover, 
@@ -76,7 +103,12 @@
             
             <div class="mb-4">
                 <label class="form-label">Password</label>
-                <input name="password" type="password" class="form-control form-control-lg" placeholder="Enter password" required>
+                <div class="password-field">
+                    <input id="passwordInput" name="password" type="password" class="form-control form-control-lg" placeholder="Enter password" required>
+                    <button type="button" class="password-toggle" id="passwordToggle" aria-label="Show password" aria-pressed="false">
+                        <i class="bi bi-eye-fill" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
             
             <button type="submit" class="btn btn-danger btn-login">
@@ -95,6 +127,23 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const passwordInput = document.getElementById('passwordInput');
+    const passwordToggle = document.getElementById('passwordToggle');
+
+    if (passwordInput && passwordToggle) {
+        const toggleIcon = passwordToggle.querySelector('i');
+
+        passwordToggle.addEventListener('click', function () {
+            const shouldShowPassword = passwordInput.type === 'password';
+
+            passwordInput.type = shouldShowPassword ? 'text' : 'password';
+            passwordToggle.setAttribute('aria-label', shouldShowPassword ? 'Hide password' : 'Show password');
+            passwordToggle.setAttribute('aria-pressed', String(shouldShowPassword));
+            toggleIcon.classList.toggle('bi-eye-fill', !shouldShowPassword);
+            toggleIcon.classList.toggle('bi-eye-slash-fill', shouldShowPassword);
+        });
+    }
+
     const loginForm = document.getElementById('loginForm');
     if (!loginForm || !window.A4Submit?.createFormGuard) {
         return;
