@@ -8,7 +8,9 @@ from services.payables_service import (
     get_payables_history_by_month,
     get_payables_history_month_summaries,
     get_payables_page_context,
+    issue_payable_cash_payment,
     issue_payable_cheque,
+    update_payable_cash_payment_status,
     update_payable_cheque_status,
 )
 from services.idempotency_service import (
@@ -258,6 +260,107 @@ def update_cheque_status_action(cheque_id):
         flash(str(exc), "danger")
     except Exception as exc:
         flash(f"Failed to update cheque status: {exc}", "danger")
+    return redirect(url_for("payables.payables_page"))
+
+
+@payables_bp.route("/transaction/payables/<int:payable_id>/cash-payments", methods=["POST"])
+@login_required
+def issue_cash_payment_action(payable_id):
+    user_id = session.get("user_id")
+    idempotency_key = extract_idempotency_key(request)
+    request_payload = request.form.to_dict(flat=False)
+    redirect_to = url_for("payables.payables_page")
+    scope = f"payable.cash_payment.issue:{payable_id}"
+    try:
+        request_state = begin_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            request_payload=request_payload,
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(redirect_to)
+
+    if request_state["state"] == "replay":
+        return _redirect_from_idempotency_replay(request_state["response_body"])
+    if request_state["state"] in {"processing", "mismatch"}:
+        flash(request_state["message"], "warning")
+        return redirect(redirect_to)
+
+    try:
+        payment_id = issue_payable_cash_payment(
+            payable_id,
+            payment_due_date=request.form.get("payment_due_date"),
+            amount=request.form.get("amount"),
+            notes=request.form.get("notes"),
+            created_by=user_id,
+            created_by_username=session.get("username"),
+        )
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": "Cash payment issued successfully.",
+            "flash_category": "success",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=COMPLETED_STATUS,
+            response_code=302,
+            response_body=response_body,
+            resource_type="payable_cash_payment",
+            resource_id=payment_id,
+        )
+    except ValueError as exc:
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": str(exc),
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+    except Exception as exc:
+        response_body = {
+            "redirect_to": redirect_to,
+            "flash_message": f"Failed to issue cash payment: {exc}",
+            "flash_category": "danger",
+        }
+        flash(response_body["flash_message"], response_body["flash_category"])
+        finalize_idempotent_request(
+            scope=scope,
+            actor_user_id=user_id,
+            idempotency_key=idempotency_key,
+            status=FAILED_STATUS,
+            response_code=302,
+            response_body=response_body,
+        )
+    return redirect(redirect_to)
+
+
+@payables_bp.route("/transaction/payables/cash-payments/<int:payment_id>/status", methods=["POST"])
+@login_required
+def update_cash_payment_status_action(payment_id):
+    try:
+        update_payable_cash_payment_status(
+            payment_id,
+            request.form.get("status"),
+            created_by=session.get("user_id"),
+            created_by_username=session.get("username"),
+        )
+        flash("Cash payment status updated.", "success")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Failed to update cash payment status: {exc}", "danger")
     return redirect(url_for("payables.payables_page"))
 
 

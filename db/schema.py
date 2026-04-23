@@ -1198,12 +1198,28 @@ def init_db():
         description                  TEXT,
         reference_no                 TEXT,
         amount_due                   NUMERIC(12,2) NOT NULL DEFAULT 0,
+        payment_method               TEXT CHECK(payment_method IN ('CHEQUE', 'CASH')),
         status                       TEXT NOT NULL CHECK(status IN ('OPEN', 'PARTIAL', 'FULLY_ISSUED', 'CANCELLED')) DEFAULT 'OPEN',
         created_by                   INTEGER REFERENCES users(id),
         created_by_username          TEXT,
         created_at                   TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at                   TIMESTAMP NOT NULL DEFAULT NOW()
     )
+    """)
+    cur.execute("ALTER TABLE payables ADD COLUMN IF NOT EXISTS payment_method TEXT")
+    cur.execute("""
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conname = 'payables_payment_method_check'
+        ) THEN
+            ALTER TABLE payables
+            ADD CONSTRAINT payables_payment_method_check
+            CHECK(payment_method IN ('CHEQUE', 'CASH'));
+        END IF;
+    END $$;
     """)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payable_cheques (
@@ -1223,8 +1239,24 @@ def init_db():
         updated_at                  TIMESTAMP NOT NULL DEFAULT NOW()
     )
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS payable_cash_payments (
+        id                          SERIAL PRIMARY KEY,
+        payable_id                  INTEGER NOT NULL REFERENCES payables(id) ON DELETE CASCADE,
+        payment_ref                 TEXT NOT NULL,
+        payment_due_date            DATE NOT NULL,
+        amount                      NUMERIC(12,2) NOT NULL DEFAULT 0,
+        status                      TEXT NOT NULL CHECK(status IN ('UNPAID', 'PAID')) DEFAULT 'UNPAID',
+        notes                       TEXT,
+        created_by                  INTEGER REFERENCES users(id),
+        created_by_username         TEXT,
+        created_at                  TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at                  TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_source_type ON payables(source_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_status ON payables(status)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_payment_method ON payables(payment_method)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_po_id ON payables(po_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payables_po_receipt_id ON payables(po_receipt_id)")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payables_po_receipt_unique ON payables(po_receipt_id) WHERE po_receipt_id IS NOT NULL")
@@ -1232,6 +1264,34 @@ def init_db():
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_due_date ON payable_cheques(due_date)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cheques_status ON payable_cheques(status)")
     cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_payable_cheques_cheque_no_unique ON payable_cheques(cheque_no)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cash_payments_payable_id ON payable_cash_payments(payable_id)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cash_payments_due_date ON payable_cash_payments(payment_due_date)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cash_payments_status ON payable_cash_payments(status)")
+    cur.execute("DROP INDEX IF EXISTS idx_payable_cash_payments_ref_unique")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_payable_cash_payments_ref ON payable_cash_payments(payment_ref)")
+    cur.execute("""
+    UPDATE payables p
+    SET payment_method = 'CHEQUE'
+    WHERE payment_method IS NULL
+      AND EXISTS (
+          SELECT 1
+          FROM payable_cheques pc
+          WHERE pc.payable_id = p.id
+      )
+    """)
+    cur.execute("""
+    UPDATE payables p
+    SET payment_method = 'CASH'
+    WHERE payment_method IS NULL
+      AND EXISTS (
+          SELECT 1
+          FROM cash_entries ce
+          WHERE ce.reference_type = 'PAYABLE_CASH_SETTLEMENT'
+            AND ce.reference_id = p.id
+            AND ce.entry_type = 'CASH_OUT'
+            AND COALESCE(ce.is_deleted, FALSE) = FALSE
+      )
+    """)
     cur.execute("""
     UPDATE payable_cheques
     SET due_date = cheque_date

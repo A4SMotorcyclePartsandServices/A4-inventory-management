@@ -169,8 +169,9 @@
     }
     .status-open { background: rgba(193,18,31,0.15); color: #f87171; border: 1px solid rgba(193,18,31,0.35); }
     .status-partial { background: rgba(244,196,48,0.15); color: #f4c430; border: 1px solid rgba(244,196,48,0.35); }
-    .status-fully-issued, .status-cleared { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.35); }
+    .status-fully-issued, .status-cleared, .status-paid { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.35); }
     .status-issued { background: rgba(103,194,228,0.15); color: #67c2e4; border: 1px solid rgba(103,194,228,0.35); }
+    .status-unpaid { background: rgba(103,194,228,0.15); color: #67c2e4; border: 1px solid rgba(103,194,228,0.35); }
     .status-cancelled, .status-bounced { background: rgba(148,163,184,0.15); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.35); }
     .payable-amounts {
         display: grid;
@@ -205,6 +206,31 @@
         gap: 10px;
         flex-wrap: wrap;
         margin-top: 12px;
+    }
+    .btn-payable-cash {
+        --bs-btn-color: #fff;
+        --bs-btn-bg: #0d6efd;
+        --bs-btn-border-color: #0d6efd;
+        --bs-btn-hover-color: #fff;
+        --bs-btn-hover-bg: #0b5ed7;
+        --bs-btn-hover-border-color: #0a58ca;
+        --bs-btn-focus-shadow-rgb: 49, 132, 253;
+        --bs-btn-active-color: #fff;
+        --bs-btn-active-bg: #0a58ca;
+        --bs-btn-active-border-color: #0a53be;
+        --bs-btn-disabled-color: #fff;
+        --bs-btn-disabled-bg: #0d6efd;
+        --bs-btn-disabled-border-color: #0d6efd;
+        background: #0d6efd !important;
+        border-color: #0d6efd !important;
+        color: #fff !important;
+    }
+    .btn-payable-cash:hover,
+    .btn-payable-cash:focus,
+    .btn-payable-cash:active {
+        background: #0b5ed7 !important;
+        border-color: #0a58ca !important;
+        color: #fff !important;
     }
     .cheque-history {
         margin-top: 16px;
@@ -619,7 +645,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title"><i class="bi bi-journal-check me-2" style="color: var(--accent);"></i>Payables Tracker</h1>
-        <div class="page-subtitle">Track supplier delivery cheques and other free-form payable obligations in one page.</div>
+        <div class="page-subtitle">Track supplier delivery payments and other free-form payable obligations in one page.</div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#manualPayableModal">
@@ -638,11 +664,11 @@
         <div class="summary-value">₱{{ "{:,.2f}".format(summary.total_remaining) }}</div>
     </div>
     <div class="summary-card">
-        <div class="summary-label">Cheques Due In Next 7 Days</div>
+        <div class="summary-label">Payments Due In Next 7 Days</div>
         <div class="summary-value warning">{{ summary.due_soon_count }}</div>
     </div>
     <div class="summary-card">
-        <div class="summary-label">Cheques Due Today</div>
+        <div class="summary-label">Payments Due Today</div>
         <div class="summary-value info">{{ summary.due_today_count }}</div>
     </div>
 </div>
@@ -683,7 +709,7 @@
                 class="form-control"
                 name="q"
                 value="{{ search_query }}"
-                placeholder="Search cheque no., PO no., vendor, or payee">
+                placeholder="Search payment ref., cheque no., PO no., vendor, or payee">
         </div>
     </div>
     <div class="payables-filter-group">
@@ -770,13 +796,14 @@
                     <div class="amount-value remaining">₱{{ "{:,.2f}".format(payable.remaining_balance) }}</div>
                 </div>
                 <div class="amount-box">
-                    <div class="amount-label">Latest Cheque Status</div>
-                    <div class="amount-value">{{ payable.latest_cheque_status }}</div>
+                    <div class="amount-label">Latest Payment Status</div>
+                    <div class="amount-value">{{ payable.latest_payment_status }}</div>
                 </div>
             </div>
 
             <div class="payable-actions">
                 {% if payable.remaining_balance > 0 and payable.status != 'CANCELLED' %}
+                {% if payable.payment_method == 'CHEQUE' %}
                 <button
                     type="button"
                     class="btn btn-sm btn-danger"
@@ -787,6 +814,50 @@
                     data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
                     <i class="bi bi-pencil-square me-1"></i> Issue Cheque
                 </button>
+                {% elif payable.payment_method == 'CASH' %}
+                <button
+                    type="button"
+                    class="btn btn-sm btn-payable-cash"
+                    data-bs-toggle="modal"
+                    data-bs-target="#sharedIssueCashPaymentModal"
+                    data-payable-id="{{ payable.id }}"
+                    data-payee-name="{{ payable.vendor_name_snapshot or payable.payee_name }}"
+                    data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                    <i class="bi bi-pencil-square me-1"></i> Issue Payment
+                </button>
+                {% else %}
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-pencil-square me-1"></i> Issue Payment
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li>
+                            <button
+                                type="button"
+                                class="dropdown-item"
+                                data-bs-toggle="modal"
+                                data-bs-target="#sharedIssueChequeModal"
+                                data-payable-id="{{ payable.id }}"
+                                data-payee-name="{{ payable.vendor_name_snapshot or payable.payee_name }}"
+                                data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                                Pay by Cheque
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                type="button"
+                                class="dropdown-item"
+                                data-bs-toggle="modal"
+                                data-bs-target="#sharedIssueCashPaymentModal"
+                                data-payable-id="{{ payable.id }}"
+                                data-payee-name="{{ payable.vendor_name_snapshot or payable.payee_name }}"
+                                data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                                Pay by Cash
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
                 {% endif %}
                 <a href="{{ url_for('transaction.list_orders', po_id=payable.po_id, open_po=1) }}" class="btn btn-sm btn-outline-light">
                     <i class="bi bi-box-arrow-up-right me-1"></i> View PO Page
@@ -795,23 +866,23 @@
 
             <div class="cheque-history">
                 <div class="cheque-history-top">
-                    <div class="cheque-history-title">Cheque History</div>
+                    <div class="cheque-history-title">Payment History</div>
                     <div class="cheque-history-summary">
-                        {{ payable.due_this_month_count }} due this month • {{ payable.cheque_count }} total cheque{{ '' if payable.cheque_count == 1 else 's' }}
+                        {{ payable.due_this_month_count }} due this month • {{ payable.payment_count }} total payment{{ '' if payable.payment_count == 1 else 's' }}
                     </div>
                 </div>
-                {% if payable.cheque_count > 0 %}
+                {% if payable.payment_count > 0 %}
                 <button
                     type="button"
                     class="btn btn-outline-light btn-sm history-toggle-btn"
                     data-history-toggle
                     data-payable-id="{{ payable.id }}"
                     aria-expanded="false">
-                    <i class="bi bi-chevron-down me-1"></i> View cheque history
+                    <i class="bi bi-chevron-down me-1"></i> View payment history
                 </button>
                 <div class="cheque-history-panel d-none" data-history-panel></div>
                 {% else %}
-                    <div class="history-empty">No cheques issued yet for this delivery batch.</div>
+                    <div class="history-empty">No payments issued yet for this delivery batch.</div>
                 {% endif %}
             </div>
         </div>
@@ -868,13 +939,14 @@
                     <div class="amount-value remaining">₱{{ "{:,.2f}".format(payable.remaining_balance) }}</div>
                 </div>
                 <div class="amount-box">
-                    <div class="amount-label">Latest Cheque Status</div>
-                    <div class="amount-value">{{ payable.latest_cheque_status }}</div>
+                    <div class="amount-label">Latest Payment Status</div>
+                    <div class="amount-value">{{ payable.latest_payment_status }}</div>
                 </div>
             </div>
 
             <div class="payable-actions">
                 {% if payable.remaining_balance > 0 and payable.status != 'CANCELLED' %}
+                {% if payable.payment_method == 'CHEQUE' %}
                 <button
                     type="button"
                     class="btn btn-sm btn-danger"
@@ -885,28 +957,72 @@
                     data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
                     <i class="bi bi-pencil-square me-1"></i> Issue Cheque
                 </button>
+                {% elif payable.payment_method == 'CASH' %}
+                <button
+                    type="button"
+                    class="btn btn-sm btn-payable-cash"
+                    data-bs-toggle="modal"
+                    data-bs-target="#sharedIssueCashPaymentModal"
+                    data-payable-id="{{ payable.id }}"
+                    data-payee-name="{{ payable.payee_name }}"
+                    data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                    <i class="bi bi-pencil-square me-1"></i> Issue Payment
+                </button>
+                {% else %}
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-danger dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-pencil-square me-1"></i> Issue Payment
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        <li>
+                            <button
+                                type="button"
+                                class="dropdown-item"
+                                data-bs-toggle="modal"
+                                data-bs-target="#sharedIssueChequeModal"
+                                data-payable-id="{{ payable.id }}"
+                                data-payee-name="{{ payable.payee_name }}"
+                                data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                                Pay by Cheque
+                            </button>
+                        </li>
+                        <li>
+                            <button
+                                type="button"
+                                class="dropdown-item"
+                                data-bs-toggle="modal"
+                                data-bs-target="#sharedIssueCashPaymentModal"
+                                data-payable-id="{{ payable.id }}"
+                                data-payee-name="{{ payable.payee_name }}"
+                                data-remaining-balance="{{ '%.2f'|format(payable.remaining_balance) }}">
+                                Pay by Cash
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                {% endif %}
                 {% endif %}
             </div>
 
             <div class="cheque-history">
                 <div class="cheque-history-top">
-                    <div class="cheque-history-title">Cheque History</div>
+                    <div class="cheque-history-title">Payment History</div>
                     <div class="cheque-history-summary">
-                        {{ payable.due_this_month_count }} due this month • {{ payable.cheque_count }} total cheque{{ '' if payable.cheque_count == 1 else 's' }}
+                        {{ payable.due_this_month_count }} due this month • {{ payable.payment_count }} total payment{{ '' if payable.payment_count == 1 else 's' }}
                     </div>
                 </div>
-                {% if payable.cheque_count > 0 %}
+                {% if payable.payment_count > 0 %}
                 <button
                     type="button"
                     class="btn btn-outline-light btn-sm history-toggle-btn"
                     data-history-toggle
                     data-payable-id="{{ payable.id }}"
                     aria-expanded="false">
-                    <i class="bi bi-chevron-down me-1"></i> View cheque history
+                    <i class="bi bi-chevron-down me-1"></i> View payment history
                 </button>
                 <div class="cheque-history-panel d-none" data-history-panel></div>
                 {% else %}
-                    <div class="history-empty">No cheques issued yet for this payable.</div>
+                    <div class="history-empty">No payments issued yet for this payable.</div>
                 {% endif %}
             </div>
         </div>
@@ -969,6 +1085,44 @@
     </div>
 </div>
 
+<div class="modal fade" id="sharedIssueCashPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form method="post" action="#" class="issue-cash-payment-form" data-remaining-balance="0">
+                <div class="modal-header">
+                    <h5 class="modal-title text-danger"><i class="bi bi-cash-coin me-2"></i><span id="sharedIssueCashPaymentTitle">Issue Cash Payment</span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Payment Due Date</label>
+                            <input type="date" name="payment_due_date" class="form-control" value="{{ today }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Remaining Balance</label>
+                            <input type="text" id="sharedIssueCashPaymentRemaining" class="form-control" value="â‚±0.00" disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Amount</label>
+                            <input type="number" step="0.01" min="0.01" name="amount" class="form-control cash-payment-amount-input" required>
+                            <div class="inline-warning cash-payment-amount-warning">Amount cannot go over the remaining balance.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Optional remarks about this cash payment"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-payable-cash">Issue Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="payables-panel" id="panel-payables-history">
     <div class="section-block">
         <div class="section-header">
@@ -1024,6 +1178,7 @@
 {% block scripts %}
 <script>
 const PAYABLE_CHEQUE_STATUS_OPTIONS = ['ISSUED', 'CLEARED', 'CANCELLED', 'BOUNCED'];
+const PAYABLE_CASH_PAYMENT_STATUS_OPTIONS = ['UNPAID', 'PAID'];
 const CURRENT_PAYABLE_SEARCH_QUERY = {{ (search_query or '')|tojson }};
 const CURRENT_PAYABLE_STATUS_FILTERS = {{ (selected_statuses or [])|tojson }};
 const ACTIVE_PAYABLE_TOTAL = {{ active_total_count|int }};
@@ -1046,6 +1201,16 @@ function renderChequeStatusOptions(currentStatus) {
 function isChequeStatusLocked(status) {
     const normalizedStatus = String(status || '').trim().toUpperCase();
     return normalizedStatus === 'CLEARED' || normalizedStatus === 'CANCELLED';
+}
+
+function renderCashPaymentStatusOptions(currentStatus) {
+    return PAYABLE_CASH_PAYMENT_STATUS_OPTIONS.map((option) => (
+        `<option value="${option}" ${String(currentStatus || '').toUpperCase() === option ? 'selected' : ''}>${escapeHtml(option.replaceAll('_', ' '))}</option>`
+    )).join('');
+}
+
+function isCashPaymentStatusLocked(status) {
+    return String(status || '').trim().toUpperCase() === 'PAID';
 }
 
 function statusLabel(value) {
@@ -1100,22 +1265,72 @@ function renderChequeHistoryRow(cheque) {
     `;
 }
 
+function renderCashPaymentHistoryRow(payment) {
+    const status = String(payment.status || 'UNPAID').toUpperCase();
+    const isLocked = isCashPaymentStatusLocked(status);
+    const notesMarkup = payment.notes ? `<div class="cheque-row-notes">${escapeHtml(payment.notes)}</div>` : '';
+    const dueFlags = [
+        payment.is_due_today ? '<span class="cheque-due-flag today">Due today</span>' : '',
+        (!payment.is_due_today && payment.is_due_soon) ? '<span class="cheque-due-flag soon">Due within 7 days</span>' : '',
+    ].filter(Boolean).join('');
+    const lockedMarkup = isLocked
+        ? '<div class="cheque-row-warning">Status locked: paid payments can no longer be changed.</div>'
+        : '';
+
+    return `
+        <div class="cheque-row" data-cash-payment-row data-cash-payment-id="${escapeHtml(String(payment.id || ''))}">
+            <div class="cheque-row-head">
+                <div>
+                    <div class="payable-title"><span class="payable-cheque-number">Payment ${escapeHtml(payment.payment_ref || '-')}</span> • ${escapeHtml(formatPayableCurrency(payment.amount))}</div>
+                    <div class="cheque-row-meta">
+                        <span>Payment Due Date: ${escapeHtml(payment.payment_due_date || '-')}</span>
+                        ${dueFlags}
+                    </div>
+                </div>
+                <span class="status-chip status-${escapeHtml(status.toLowerCase().replaceAll('_', '-'))}">${escapeHtml(status.replaceAll('_', ' '))}</span>
+            </div>
+            ${notesMarkup}
+            ${lockedMarkup}
+            <form class="inline-form cash-payment-status-form" method="post" action="/transaction/payables/cash-payments/${encodeURIComponent(payment.id)}/status" data-payment-ref="${escapeHtml(payment.payment_ref_raw || payment.payment_ref || '')}" data-current-status="${escapeHtml(status)}">
+                <select class="form-select form-select-sm" name="status" ${isLocked ? 'disabled' : ''}>
+                    ${renderCashPaymentStatusOptions(status)}
+                </select>
+                <div class="inline-form-actions">
+                    <button type="submit" class="btn btn-warning btn-sm fw-bold" ${isLocked ? 'disabled' : ''}>Update Payment Status</button>
+                </div>
+            </form>
+        </div>
+    `;
+}
+
 function renderChequeHistoryPanel(data) {
     const currentMonthRows = Array.isArray(data.current_month_due) ? data.current_month_due : [];
     const otherRows = Array.isArray(data.other_history) ? data.other_history : [];
+    const currentMonthCashRows = Array.isArray(data.current_month_cash_due) ? data.current_month_cash_due : [];
+    const otherCashRows = Array.isArray(data.other_cash_history) ? data.other_cash_history : [];
+    const currentRowsMarkup = [
+        ...currentMonthRows.map(renderChequeHistoryRow),
+        ...currentMonthCashRows.map(renderCashPaymentHistoryRow),
+    ].join('');
+    const otherRowsMarkup = [
+        ...otherRows.map(renderChequeHistoryRow),
+        ...otherCashRows.map(renderCashPaymentHistoryRow),
+    ].join('');
     const currentMonthMarkup = currentMonthRows.length
-        ? currentMonthRows.map(renderChequeHistoryRow).join('')
-        : '<div class="history-empty">No issued cheques due this month.</div>';
-    const otherMarkup = otherRows.length
-        ? otherRows.map(renderChequeHistoryRow).join('')
-        : '<div class="history-empty">No other cheque history found.</div>';
-    const toggleMarkup = otherRows.length
+        || currentMonthCashRows.length
+        ? currentRowsMarkup
+        : '<div class="history-empty">No unpaid payments or issued cheques due this month.</div>';
+    const otherMarkup = otherRows.length || otherCashRows.length
+        ? otherRowsMarkup
+        : '<div class="history-empty">No other payment history found.</div>';
+    const otherCount = otherRows.length + otherCashRows.length;
+    const toggleMarkup = otherCount
         ? `
             <button type="button" class="btn btn-outline-light btn-sm history-secondary-btn" data-other-history-toggle>
-                <i class="bi bi-clock-history me-1"></i> Show cleared / older history (${otherRows.length})
+                <i class="bi bi-clock-history me-1"></i> Show paid / cleared / older history (${otherCount})
             </button>
             <div class="history-other-wrap d-none" data-other-history-wrap>
-                <div class="history-other-title">Cleared / Older History</div>
+                <div class="history-other-title">Paid / Cleared / Older History</div>
                 ${otherMarkup}
             </div>
         `
@@ -1203,8 +1418,8 @@ function renderHistoryPayableCard(payable) {
                     <div class="amount-value remaining">${escapeHtml(formatPayableCurrency(payable.remaining_balance))}</div>
                 </div>
                 <div class="amount-box">
-                    <div class="amount-label">Latest Cheque Status</div>
-                    <div class="amount-value">${escapeHtml(payable.latest_cheque_status || '-')}</div>
+                    <div class="amount-label">Latest Payment Status</div>
+                    <div class="amount-value">${escapeHtml(payable.latest_payment_status || '-')}</div>
                 </div>
             </div>
             <div class="payable-actions">
@@ -1213,22 +1428,22 @@ function renderHistoryPayableCard(payable) {
             </div>
             <div class="cheque-history">
                 <div class="cheque-history-top">
-                    <div class="cheque-history-title">Cheque History</div>
+                    <div class="cheque-history-title">Payment History</div>
                     <div class="cheque-history-summary">
-                        ${escapeHtml(String(payable.due_this_month_count || 0))} due this month • ${escapeHtml(String(payable.cheque_count || 0))} total cheque${Number(payable.cheque_count || 0) === 1 ? '' : 's'}
+                        ${escapeHtml(String(payable.due_this_month_count || 0))} due this month • ${escapeHtml(String(payable.payment_count || 0))} total payment${Number(payable.payment_count || 0) === 1 ? '' : 's'}
                     </div>
                 </div>
-                ${Number(payable.cheque_count || 0) > 0 ? `
+                ${Number(payable.payment_count || 0) > 0 ? `
                     <button
                         type="button"
                         class="btn btn-outline-light btn-sm history-toggle-btn"
                         data-history-toggle
                         data-payable-id="${escapeHtml(String(payable.id || ''))}"
                         aria-expanded="false">
-                        <i class="bi bi-chevron-down me-1"></i> View cheque history
+                        <i class="bi bi-chevron-down me-1"></i> View payment history
                     </button>
                     <div class="cheque-history-panel d-none" data-history-panel></div>
-                ` : '<div class="history-empty">No cheque history found for this payable.</div>'}
+                ` : '<div class="history-empty">No payment history found for this payable.</div>'}
             </div>
         </div>
     `;
@@ -1330,7 +1545,7 @@ async function expandPayableHistory(button) {
     const isExpanded = button.getAttribute('aria-expanded') === 'true';
     if (!isExpanded) {
         button.setAttribute('aria-expanded', 'true');
-        button.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Hide cheque history';
+        button.innerHTML = '<i class="bi bi-chevron-up me-1"></i> Hide payment history';
         panel.classList.remove('d-none');
     }
 
@@ -1338,22 +1553,23 @@ async function expandPayableHistory(button) {
         return panel;
     }
 
-    panel.innerHTML = '<div class="history-loading"><i class="bi bi-hourglass-split me-1"></i> Loading cheque history...</div>';
+    panel.innerHTML = '<div class="history-loading"><i class="bi bi-hourglass-split me-1"></i> Loading payment history...</div>';
 
     try {
         const payableId = button.getAttribute('data-payable-id');
         const response = await fetch(`/api/payables/${encodeURIComponent(payableId)}/cheques`);
         const data = await response.json();
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to load cheque history.');
+            throw new Error(data.error || 'Failed to load payment history.');
         }
 
         panel.innerHTML = renderChequeHistoryPanel(data);
         panel.dataset.loaded = '1';
         panel.querySelectorAll('.cheque-status-form').forEach(syncChequeStatusFormState);
+        panel.querySelectorAll('.cash-payment-status-form').forEach(syncCashPaymentStatusFormState);
         return panel;
     } catch (error) {
-        panel.innerHTML = `<div class="history-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i> ${escapeHtml(error.message || 'Failed to load cheque history.')}</div>`;
+        panel.innerHTML = `<div class="history-empty text-danger"><i class="bi bi-exclamation-triangle me-1"></i> ${escapeHtml(error.message || 'Failed to load payment history.')}</div>`;
         return panel;
     }
 }
@@ -1424,6 +1640,22 @@ function syncChequeStatusFormState(form) {
     }
 
     submitBtn.disabled = !nextStatus || nextStatus === currentStatus || (requiresCancellationNote && !noteValue);
+}
+
+function syncCashPaymentStatusFormState(form) {
+    const statusSelect = form?.querySelector('select[name="status"]');
+    const submitBtn = form?.querySelector('button[type="submit"]');
+    const currentStatus = String(form?.getAttribute('data-current-status') || '').trim().toUpperCase();
+    if (!statusSelect || !submitBtn) {
+        return;
+    }
+    if (isCashPaymentStatusLocked(currentStatus)) {
+        statusSelect.disabled = true;
+        submitBtn.disabled = true;
+        return;
+    }
+    const nextStatus = String(statusSelect.value || '').trim().toUpperCase();
+    submitBtn.disabled = !nextStatus || nextStatus === currentStatus;
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -1558,6 +1790,40 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    const sharedIssueCashPaymentModal = document.getElementById('sharedIssueCashPaymentModal');
+    if (sharedIssueCashPaymentModal) {
+        sharedIssueCashPaymentModal.addEventListener('show.bs.modal', (event) => {
+            const trigger = event.relatedTarget;
+            if (!(trigger instanceof HTMLElement)) {
+                return;
+            }
+
+            const payableId = trigger.getAttribute('data-payable-id') || '';
+            const payeeName = trigger.getAttribute('data-payee-name') || 'Payable';
+            const remainingBalance = Number.parseFloat(trigger.getAttribute('data-remaining-balance') || '0');
+            const form = sharedIssueCashPaymentModal.querySelector('.issue-cash-payment-form');
+            const titleEl = document.getElementById('sharedIssueCashPaymentTitle');
+            const remainingEl = document.getElementById('sharedIssueCashPaymentRemaining');
+            const amountInput = form?.querySelector('.cash-payment-amount-input');
+            const dateInput = form?.querySelector('input[name="payment_due_date"]');
+            const notesInput = form?.querySelector('textarea[name="notes"]');
+
+            if (!form || !amountInput || !dateInput || !remainingEl || !notesInput) {
+                return;
+            }
+
+            form.action = `/transaction/payables/${encodeURIComponent(payableId)}/cash-payments`;
+            form.setAttribute('data-remaining-balance', Number.isFinite(remainingBalance) ? remainingBalance.toFixed(2) : '0.00');
+            titleEl.textContent = `Issue Cash Payment for ${payeeName}`;
+            remainingEl.value = formatPayableCurrency(Number.isFinite(remainingBalance) ? remainingBalance : 0);
+            amountInput.value = Number.isFinite(remainingBalance) ? remainingBalance.toFixed(2) : '';
+            amountInput.setAttribute('max', Number.isFinite(remainingBalance) ? remainingBalance.toFixed(2) : '0.00');
+            dateInput.value = {{ today|tojson }};
+            notesInput.value = '';
+            amountInput.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+
     document.querySelectorAll('.issue-cheque-form').forEach((form) => {
         const amountInput = form.querySelector('.cheque-amount-input');
         const warningEl = form.querySelector('.cheque-amount-warning');
@@ -1565,6 +1831,67 @@ document.addEventListener('DOMContentLoaded', function () {
         const formGuard = window.A4Submit?.createFormGuard(form, {
             submitButton: submitBtn,
             idleHtml: submitBtn?.innerHTML || 'Issue Cheque',
+            loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Issuing...',
+        });
+
+        if (!amountInput || !warningEl) {
+            return;
+        }
+
+        const getRemainingBalance = () => {
+            const parsed = Number.parseFloat(form.getAttribute('data-remaining-balance') || '0');
+            return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const syncAmountState = () => {
+            const remainingBalance = getRemainingBalance();
+            const parsed = Number.parseFloat(amountInput.value || '0');
+            if (!Number.isFinite(parsed)) {
+                warningEl.classList.remove('is-visible');
+                if (submitBtn) submitBtn.disabled = false;
+                return;
+            }
+
+            if (parsed > remainingBalance) {
+                amountInput.value = remainingBalance.toFixed(2);
+                warningEl.classList.add('is-visible');
+                if (submitBtn) submitBtn.disabled = false;
+            } else {
+                warningEl.classList.remove('is-visible');
+                if (submitBtn) submitBtn.disabled = parsed <= 0;
+            }
+        };
+
+        amountInput.addEventListener('input', syncAmountState);
+        amountInput.addEventListener('change', syncAmountState);
+
+        form.addEventListener('submit', (event) => {
+            const remainingBalance = getRemainingBalance();
+            const parsed = Number.parseFloat(amountInput.value || '0');
+            if (!Number.isFinite(parsed) || parsed <= 0 || parsed > remainingBalance) {
+                event.preventDefault();
+                amountInput.value = remainingBalance.toFixed(2);
+                warningEl.classList.add('is-visible');
+                amountInput.focus();
+                formGuard?.reset();
+                return;
+            }
+
+            if (!formGuard || !formGuard.begin()) {
+                event.preventDefault();
+            }
+        });
+
+        syncAmountState();
+    });
+
+    document.querySelectorAll('.issue-cash-payment-form').forEach((form) => {
+        const amountInput = form.querySelector('.cash-payment-amount-input');
+        const warningEl = form.querySelector('.cash-payment-amount-warning');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const formGuard = window.A4Submit?.createFormGuard(form, {
+            submitButton: submitBtn,
+            idleHtml: submitBtn?.innerHTML || 'Issue Payment',
             loadingHtml: '<span class="spinner-border spinner-border-sm me-1"></span> Issuing...',
         });
 
@@ -1649,7 +1976,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const isExpanded = button.getAttribute('aria-expanded') === 'true';
         if (isExpanded) {
             button.setAttribute('aria-expanded', 'false');
-            button.innerHTML = '<i class="bi bi-chevron-down me-1"></i> View cheque history';
+            button.innerHTML = '<i class="bi bi-chevron-down me-1"></i> View payment history';
             panel.classList.add('d-none');
             return;
         }
@@ -1669,16 +1996,21 @@ document.addEventListener('DOMContentLoaded', function () {
         const isHidden = wrapper.classList.contains('d-none');
         wrapper.classList.toggle('d-none', !isHidden);
         secondaryToggle.innerHTML = isHidden
-            ? '<i class="bi bi-eye-slash me-1"></i> Hide cleared / older history'
-            : `<i class="bi bi-clock-history me-1"></i> Show cleared / older history (${wrapper.querySelectorAll('.cheque-row').length})`;
+            ? '<i class="bi bi-eye-slash me-1"></i> Hide paid / cleared / older history'
+            : `<i class="bi bi-clock-history me-1"></i> Show paid / cleared / older history (${wrapper.querySelectorAll('.cheque-row').length})`;
     });
 
     document.addEventListener('change', function (event) {
         const statusSelect = event.target.closest('.cheque-status-form select[name="status"]');
-        if (!statusSelect) {
+        if (statusSelect) {
+            syncChequeStatusFormState(statusSelect.closest('.cheque-status-form'));
             return;
         }
-        syncChequeStatusFormState(statusSelect.closest('.cheque-status-form'));
+
+        const cashStatusSelect = event.target.closest('.cash-payment-status-form select[name="status"]');
+        if (cashStatusSelect) {
+            syncCashPaymentStatusFormState(cashStatusSelect.closest('.cash-payment-status-form'));
+        }
     });
 
     document.addEventListener('input', function (event) {
@@ -1690,6 +2022,46 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.addEventListener('submit', async function (event) {
+        const cashPaymentForm = event.target.closest('.cash-payment-status-form');
+        if (cashPaymentForm) {
+            event.preventDefault();
+
+            const statusSelect = cashPaymentForm.querySelector('select[name="status"]');
+            const submitBtn = cashPaymentForm.querySelector('button[type="submit"]');
+            if (!statusSelect || !submitBtn) {
+                cashPaymentForm.submit();
+                return;
+            }
+
+            const paymentRef = cashPaymentForm.getAttribute('data-payment-ref') || 'Unknown';
+            const currentStatus = (cashPaymentForm.getAttribute('data-current-status') || '').trim().toUpperCase();
+            const nextStatus = String(statusSelect.value || '').trim().toUpperCase();
+
+            if (!nextStatus || nextStatus === currentStatus) {
+                syncCashPaymentStatusFormState(cashPaymentForm);
+                return;
+            }
+
+            const confirmed = await (window.A4Confirm?.show?.({
+                title: 'Update payment status?',
+                text: `Change payment ${paymentRef} from ${statusLabel(currentStatus)} to ${statusLabel(nextStatus)}?`,
+                icon: nextStatus === 'PAID' ? 'info' : 'warning',
+                confirmButtonText: 'Yes, update status',
+                cancelButtonText: 'Keep current status',
+                dangerMode: false,
+            }) ?? Promise.resolve(window.confirm(`Change payment ${paymentRef} from ${statusLabel(currentStatus)} to ${statusLabel(nextStatus)}?`)));
+
+            if (!confirmed) {
+                statusSelect.value = currentStatus;
+                syncCashPaymentStatusFormState(cashPaymentForm);
+                return;
+            }
+
+            submitBtn.disabled = true;
+            cashPaymentForm.submit();
+            return;
+        }
+
         const form = event.target.closest('.cheque-status-form');
         if (!form) {
             return;

@@ -834,7 +834,43 @@ def _get_manual_entries(conn, branch_id=1, date_from=None, date_to=None, entry_t
     return conn.execute(query, params).fetchall()
 
 
-def _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows):
+def _get_paid_payable_cash_payments(conn, date_from=None, date_to=None):
+    params = []
+    query = """
+        SELECT
+            pcp.id,
+            pcp.payment_ref,
+            pcp.amount,
+            pcp.updated_at AS paid_at,
+            p.payee_name,
+            COALESCE(
+                (
+                    SELECT pal.created_by_username
+                    FROM payables_audit_log pal
+                    WHERE pal.cheque_no_snapshot = pcp.payment_ref
+                      AND pal.event_type = 'CASH_PAYMENT_STATUS_UPDATED'
+                      AND pal.new_status = 'PAID'
+                    ORDER BY pal.created_at DESC, pal.id DESC
+                    LIMIT 1
+                ),
+                pcp.created_by_username,
+                'System'
+            ) AS recorded_by
+        FROM payable_cash_payments pcp
+        JOIN payables p ON p.id = pcp.payable_id
+        WHERE pcp.status = 'PAID'
+    """
+    if date_from:
+        query += " AND DATE(pcp.updated_at) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(pcp.updated_at) <= %s"
+        params.append(date_to)
+
+    return conn.execute(query, params).fetchall()
+
+
+def _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows, paid_payable_cash_rows=None):
     """
     Merges all 3 sources into a single normalized list sorted newest first.
     Each row has the same shape regardless of source — the HTML never needs
@@ -907,6 +943,7 @@ def _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows):
             '_raw_date':   row['created_at'] or '',
         })
 
+    manual_offset = len(unified)
     for row in manual_rows:
         unified.append({
             'id':          row['id'],
@@ -920,7 +957,20 @@ def _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows):
             '_raw_date':   row['created_at'] or '',
         })
 
-    manual_offset = len(unified) - len(manual_rows)
+    for row in paid_payable_cash_rows or []:
+        payment_ref = row['payment_ref'] or f"Payment #{row['id']}"
+        payee_name = row['payee_name'] or 'Payee'
+        unified.append({
+            'entry_type':  'CASH_OUT',
+            'amount':      _money(row['amount']),
+            'category':    'Payable paid by cash',
+            'description': f"Payment {payment_ref} - {payee_name}",
+            'created_at':  format_date(row['paid_at'], show_time=True),
+            'recorded_by': row['recorded_by'] or 'System',
+            'source':      'payable_cash_paid',
+            '_raw_date':   row['paid_at'] or '',
+        })
+
     for index, row in enumerate(manual_rows):
         if not row['deleted_at']:
             continue
@@ -955,6 +1005,7 @@ def get_cash_summary(branch_id=1):
     refund_rows = _get_sale_refunds_cash(conn, branch_id)
     void_rows   = _get_sale_voids_cash(conn, branch_id)
     manual_rows = _get_manual_entries(conn, branch_id, deleted_state='active')
+    paid_payable_cash_rows = _get_paid_payable_cash_payments(conn)
     pending_float_rows = _get_non_cash_paid_sales(conn)
     pending_float_debt_rows = _get_non_cash_debt_payments(conn)
     manual_gcash_rows = _get_manual_gcash_float_entries(conn, branch_id=branch_id)
@@ -988,6 +1039,8 @@ def get_cash_summary(branch_id=1):
             total_in  += _money(row['amount'])
         else:
             total_out += _money(row['amount'])
+    for row in paid_payable_cash_rows:
+        total_out += _money(row['amount'])
 
     total_in  = round(total_in,  2)
     total_out = round(total_out, 2)
@@ -1032,6 +1085,7 @@ def get_cash_balance_as_of(date_to, branch_id=1):
             date_to=date_to,
             deleted_state='active',
         )
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, date_to=date_to)
     finally:
         conn.close()
 
@@ -1051,6 +1105,8 @@ def get_cash_balance_as_of(date_to, branch_id=1):
             total_in += _money(row['amount'])
         else:
             total_out += _money(row['amount'])
+    for row in paid_payable_cash_rows:
+        total_out += _money(row['amount'])
 
     return round(total_in - total_out, 2)
 
@@ -1073,27 +1129,31 @@ def get_cash_entry_count(branch_id=1, entry_type=None, start_date=None, end_date
         debt_rows = []
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
         void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
         void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, start_date, end_date)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
-    return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(void_rows) + len(manual_rows)
+    return len(sales_rows) + len(debt_rows) + len(refund_rows) + len(void_rows) + len(manual_rows) + len(paid_payable_cash_rows)
 
 
 def get_cash_entries(branch_id=1, limit=None, offset=None,
@@ -1115,27 +1175,31 @@ def get_cash_entries(branch_id=1, limit=None, offset=None,
         debt_rows = []
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows  = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
         void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, start_date, end_date)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, start_date, end_date)
         debt_rows  = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
         void_rows = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, start_date, end_date)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(conn, branch_id, start_date, end_date, entry_type, deleted_state=deleted_state)
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows, paid_payable_cash_rows)
 
     # Apply pagination after merge+sort so ordering is always correct
     if offset:
@@ -1915,21 +1979,25 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
         debt_rows = []
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_IN':
         sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
         debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
         refund_rows = []
         void_rows = []
+        paid_payable_cash_rows = []
     elif entry_type == 'CASH_OUT':
         sales_rows = []
         debt_rows = []
         refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
         void_rows = _get_sale_voids_cash(conn, branch_id, date_from, date_to)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, date_from, date_to)
     else:
         sales_rows = _get_sales_cash(conn, branch_id, date_from, date_to)
         debt_rows = _get_debt_cash_payments(conn, branch_id, date_from, date_to)
         refund_rows = _get_sale_refunds_cash(conn, branch_id, date_from, date_to)
         void_rows = _get_sale_voids_cash(conn, branch_id, date_from, date_to)
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, date_from, date_to)
 
     deleted_state = 'deleted' if ledger_view == 'deleted' else 'active'
     manual_rows = _get_manual_entries(
@@ -1942,7 +2010,7 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
     )
     conn.close()
 
-    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows)
+    unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows, paid_payable_cash_rows)
 
     # Reverse to oldest-first for PDF reading order
     unified.reverse()

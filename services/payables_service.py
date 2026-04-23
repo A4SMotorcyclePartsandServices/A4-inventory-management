@@ -1,3 +1,5 @@
+import secrets
+import string
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -8,6 +10,9 @@ from utils.timezone import now_local, now_local_str, today_local
 
 
 ACTIVE_CHEQUE_STATUSES = ("ISSUED", "CLEARED")
+ACTIVE_CASH_PAYMENT_STATUSES = ("UNPAID", "PAID")
+PAYMENT_METHOD_CHEQUE = "CHEQUE"
+PAYMENT_METHOD_CASH = "CASH"
 PAYABLE_STATUS_OPEN = "OPEN"
 PAYABLE_STATUS_PARTIAL = "PARTIAL"
 PAYABLE_STATUS_FULLY_ISSUED = "FULLY_ISSUED"
@@ -16,6 +21,8 @@ CHEQUE_STATUS_ISSUED = "ISSUED"
 CHEQUE_STATUS_CLEARED = "CLEARED"
 CHEQUE_STATUS_CANCELLED = "CANCELLED"
 CHEQUE_STATUS_BOUNCED = "BOUNCED"
+CASH_PAYMENT_STATUS_UNPAID = "UNPAID"
+CASH_PAYMENT_STATUS_PAID = "PAID"
 PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE = "PAYABLE_CASH_SETTLEMENT"
 MAX_PAYEE_NAME_LENGTH = 160
 MAX_DESCRIPTION_LENGTH = 500
@@ -223,6 +230,24 @@ def _sum_active_cheque_amount(payable_id, external_conn=None):
             conn.close()
 
 
+def _sum_active_cash_payment_amount(payable_id, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT COALESCE(SUM(amount), 0) AS total_amount
+            FROM payable_cash_payments
+            WHERE payable_id = %s
+              AND status = ANY(%s)
+            """,
+            (int(payable_id), list(ACTIVE_CASH_PAYMENT_STATUSES)),
+        ).fetchone()
+        return _normalize_money(row["total_amount"] if row else 0)
+    finally:
+        if not external_conn:
+            conn.close()
+
+
 def _sum_cash_settlement_amount(payable_id, external_conn=None):
     conn = external_conn if external_conn else get_db()
     try:
@@ -238,6 +263,25 @@ def _sum_cash_settlement_amount(payable_id, external_conn=None):
             (PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE, int(payable_id)),
         ).fetchone()
         return _normalize_money(row["total_amount"] if row else 0)
+    finally:
+        if not external_conn:
+            conn.close()
+
+
+def _has_cash_payments(payable_id, external_conn=None):
+    conn = external_conn if external_conn else get_db()
+    try:
+        row = conn.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1
+                FROM payable_cash_payments
+                WHERE payable_id = %s
+            ) AS has_cash_payments
+            """,
+            (int(payable_id),),
+        ).fetchone()
+        return bool(row["has_cash_payments"]) if row else False
     finally:
         if not external_conn:
             conn.close()
@@ -281,7 +325,11 @@ def sync_payable_status(payable_id, external_conn=None):
             return PAYABLE_STATUS_CANCELLED
 
         amount_due = _normalize_money(payable["amount_due"])
-        issued_amount = _sum_active_cheque_amount(payable_id, external_conn=conn) + _sum_cash_settlement_amount(payable_id, external_conn=conn)
+        issued_amount = (
+            _sum_active_cheque_amount(payable_id, external_conn=conn)
+            + _sum_active_cash_payment_amount(payable_id, external_conn=conn)
+            + _sum_cash_settlement_amount(payable_id, external_conn=conn)
+        )
         has_cancelled_cheques = _has_cancelled_cheques(payable_id, external_conn=conn)
 
         if issued_amount <= 0 and has_cancelled_cheques:
@@ -514,9 +562,10 @@ def issue_payable_cheque(
     try:
         payable = conn.execute(
             """
-            SELECT id, source_type, po_id, po_receipt_id, po_number_snapshot, payee_name, amount_due, status
+            SELECT id, source_type, po_id, po_receipt_id, po_number_snapshot, payee_name, amount_due, payment_method, status
             FROM payables
             WHERE id = %s
+            FOR UPDATE
             """,
             (int(payable_id),),
         ).fetchone()
@@ -524,6 +573,9 @@ def issue_payable_cheque(
             raise ValueError("Payable record not found.")
         if str(payable["status"] or "").strip().upper() == PAYABLE_STATUS_CANCELLED:
             raise ValueError("Cancelled payables cannot receive new cheques.")
+        payment_method = str(payable["payment_method"] or "").strip().upper()
+        if payment_method == PAYMENT_METHOD_CASH:
+            raise ValueError("This payable is locked to cash payments and cannot receive cheques.")
 
         duplicate = conn.execute(
             """
@@ -541,6 +593,17 @@ def issue_payable_cheque(
         remaining_balance = max(0.0, _normalize_money(payable["amount_due"]) - issued_amount)
         if cheque_amount_value > remaining_balance:
             raise ValueError(f"Cheque amount exceeds the remaining balance of {remaining_balance:,.2f}.")
+
+        if not payment_method:
+            conn.execute(
+                """
+                UPDATE payables
+                SET payment_method = %s,
+                    updated_at = %s
+                WHERE id = %s
+                """,
+                (PAYMENT_METHOD_CHEQUE, _now(), int(payable_id)),
+            )
 
         cheque_row = conn.execute(
             """
@@ -697,6 +760,215 @@ def update_payable_cheque_status(cheque_id, status, *, notes=None, created_by=No
         conn.close()
 
 
+def _generate_cash_payment_ref(conn, payable):
+    source_type = str(payable["source_type"] or "").strip().upper()
+    po_number = str(payable["po_number_snapshot"] or "").strip()
+    if source_type == "PO_DELIVERY" and po_number:
+        return po_number
+
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(20):
+        candidate = "".join(secrets.choice(alphabet) for _ in range(5))
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM payable_cash_payments
+            WHERE payment_ref = %s
+            LIMIT 1
+            """,
+            (candidate,),
+        ).fetchone()
+        if not duplicate:
+            return candidate
+    raise ValueError("Could not generate a unique payment reference. Please try again.")
+
+
+def issue_payable_cash_payment(
+    payable_id,
+    *,
+    payment_due_date,
+    amount,
+    notes=None,
+    created_by=None,
+    created_by_username=None,
+):
+    notes = _clean_text(notes, "Notes", max_length=MAX_NOTES_LENGTH)
+    amount_value = _parse_money(amount, "Amount")
+    due_date_value = _parse_iso_date(payment_due_date, "Payment due date")
+
+    if amount_value <= 0:
+        raise ValueError("Amount must be greater than zero.")
+
+    conn = get_db()
+    try:
+        payable = conn.execute(
+            """
+            SELECT id, source_type, po_id, po_receipt_id, po_number_snapshot, payee_name, amount_due, payment_method, status
+            FROM payables
+            WHERE id = %s
+            FOR UPDATE
+            """,
+            (int(payable_id),),
+        ).fetchone()
+        if not payable:
+            raise ValueError("Payable record not found.")
+        if str(payable["status"] or "").strip().upper() == PAYABLE_STATUS_CANCELLED:
+            raise ValueError("Cancelled payables cannot receive new payments.")
+
+        payment_method = str(payable["payment_method"] or "").strip().upper()
+        if payment_method == PAYMENT_METHOD_CHEQUE:
+            raise ValueError("This payable is locked to cheque payments and cannot receive cash payments.")
+
+        issued_amount = _sum_active_cash_payment_amount(payable_id, external_conn=conn)
+        remaining_balance = max(0.0, _normalize_money(payable["amount_due"]) - issued_amount)
+        if amount_value > remaining_balance:
+            raise ValueError(f"Payment amount exceeds the remaining balance of {remaining_balance:,.2f}.")
+
+        if not payment_method:
+            conn.execute(
+                """
+                UPDATE payables
+                SET payment_method = %s,
+                    updated_at = %s
+                WHERE id = %s
+                """,
+                (PAYMENT_METHOD_CASH, _now(), int(payable_id)),
+            )
+
+        payment_ref = _generate_cash_payment_ref(conn, payable)
+        row = conn.execute(
+            """
+            INSERT INTO payable_cash_payments (
+                payable_id,
+                payment_ref,
+                payment_due_date,
+                amount,
+                status,
+                notes,
+                created_by,
+                created_by_username,
+                created_at,
+                updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                int(payable_id),
+                payment_ref,
+                due_date_value.isoformat(),
+                amount_value,
+                CASH_PAYMENT_STATUS_UNPAID,
+                notes or None,
+                int(created_by) if created_by else None,
+                str(created_by_username or "").strip() or None,
+                _now(),
+                _now(),
+            ),
+        ).fetchone()
+        payment_id = int(row["id"])
+
+        log_payables_audit_event(
+            event_type="CASH_PAYMENT_ISSUED",
+            payable_id=payable_id,
+            source_type=payable["source_type"],
+            po_id=payable["po_id"],
+            po_receipt_id=payable["po_receipt_id"],
+            po_number_snapshot=payable["po_number_snapshot"],
+            payee_name_snapshot=payable["payee_name"],
+            cheque_no_snapshot=payment_ref,
+            amount_snapshot=amount_value,
+            new_status=CASH_PAYMENT_STATUS_UNPAID,
+            notes=notes,
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
+        )
+
+        sync_payable_status(payable_id, external_conn=conn)
+        conn.commit()
+        return payment_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def update_payable_cash_payment_status(payment_id, status, *, created_by=None, created_by_username=None):
+    normalized_status = str(status or "").strip().upper()
+    if normalized_status not in {CASH_PAYMENT_STATUS_UNPAID, CASH_PAYMENT_STATUS_PAID}:
+        raise ValueError("Invalid cash payment status.")
+
+    conn = get_db()
+    try:
+        current = conn.execute(
+            """
+            SELECT
+                pcp.id,
+                pcp.payable_id,
+                pcp.payment_ref,
+                pcp.amount,
+                pcp.status,
+                p.source_type,
+                p.po_id,
+                p.po_receipt_id,
+                p.po_number_snapshot,
+                p.payee_name
+            FROM payable_cash_payments pcp
+            JOIN payables p ON p.id = pcp.payable_id
+            WHERE pcp.id = %s
+            """,
+            (int(payment_id),),
+        ).fetchone()
+        if not current:
+            raise ValueError("Cash payment record not found.")
+
+        current_status = str(current["status"] or "").strip().upper()
+        if current_status == CASH_PAYMENT_STATUS_PAID and normalized_status != current_status:
+            raise ValueError("Paid cash payments are locked and can no longer be changed.")
+        if current_status == normalized_status:
+            return
+
+        row = conn.execute(
+            """
+            UPDATE payable_cash_payments
+            SET status = %s,
+                updated_at = %s
+            WHERE id = %s
+            RETURNING payable_id
+            """,
+            (normalized_status, _now(), int(payment_id)),
+        ).fetchone()
+
+        log_payables_audit_event(
+            event_type="CASH_PAYMENT_STATUS_UPDATED",
+            payable_id=current["payable_id"],
+            cheque_id=None,
+            source_type=current["source_type"],
+            po_id=current["po_id"],
+            po_receipt_id=current["po_receipt_id"],
+            po_number_snapshot=current["po_number_snapshot"],
+            payee_name_snapshot=current["payee_name"],
+            cheque_no_snapshot=current["payment_ref"],
+            amount_snapshot=current["amount"],
+            old_status=current_status,
+            new_status=normalized_status,
+            notes=f"Cash payment status updated from {current_status} to {normalized_status}.",
+            created_by=created_by,
+            created_by_username=created_by_username,
+            external_conn=conn,
+        )
+
+        sync_payable_status(int(row["payable_id"]), external_conn=conn)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _serialize_cheque_row(row, today_value):
     data = dict(row)
     due_date_value = data.get("due_date")
@@ -719,6 +991,29 @@ def _serialize_cheque_row(row, today_value):
         "notes": data["notes"] or "",
         "is_due_today": bool(due_date_obj and due_date_obj == today_value and (data["status"] or "").upper() == CHEQUE_STATUS_ISSUED),
         "is_due_soon": bool(due_date_obj and today_value < due_date_obj <= today_value + timedelta(days=7) and (data["status"] or "").upper() == CHEQUE_STATUS_ISSUED),
+    }
+
+
+def _serialize_cash_payment_row(row, today_value):
+    data = dict(row)
+    due_date_value = data.get("payment_due_date")
+    due_date_obj = due_date_value if isinstance(due_date_value, date) else None
+    if not due_date_obj:
+        try:
+            due_date_obj = datetime.strptime(str(due_date_value), "%Y-%m-%d").date()
+        except ValueError:
+            due_date_obj = None
+
+    return {
+        "id": int(data["id"]),
+        "payment_ref": data["payment_ref"] or "-",
+        "payment_ref_raw": data["payment_ref"] or "",
+        "payment_due_date": format_date(due_date_value),
+        "amount": _normalize_money(data["amount"]),
+        "status": data["status"] or CASH_PAYMENT_STATUS_UNPAID,
+        "notes": data["notes"] or "",
+        "is_due_today": bool(due_date_obj and due_date_obj == today_value and (data["status"] or "").upper() == CASH_PAYMENT_STATUS_UNPAID),
+        "is_due_soon": bool(due_date_obj and today_value < due_date_obj <= today_value + timedelta(days=7) and (data["status"] or "").upper() == CASH_PAYMENT_STATUS_UNPAID),
     }
 
 
@@ -745,11 +1040,16 @@ def _serialize_payable_summary_row(row):
     total_cheque_count = int(row.get("total_cheque_count") or 0)
     cleared_cheque_count = int(row.get("cleared_cheque_count") or 0)
     uncleared_cheque_count = int(row.get("uncleared_cheque_count") or 0)
+    total_cash_payment_count = int(row.get("total_cash_payment_count") or 0)
+    paid_cash_payment_count = int(row.get("paid_cash_payment_count") or 0)
+    unpaid_cash_payment_count = int(row.get("unpaid_cash_payment_count") or 0)
     current_month_cheque_count = int(row.get("current_month_cheque_count") or 0)
-    due_this_month_count = int(row.get("due_this_month_count") or 0)
-    due_soon_count = int(row.get("due_soon_cheque_count") or 0)
-    due_today_count = int(row.get("due_today_cheque_count") or 0)
+    current_month_cash_payment_count = int(row.get("current_month_cash_payment_count") or 0)
+    due_this_month_count = int(row.get("due_this_month_count") or 0) + int(row.get("due_this_month_cash_payment_count") or 0)
+    due_soon_count = int(row.get("due_soon_cheque_count") or 0) + int(row.get("due_soon_cash_payment_count") or 0)
+    due_today_count = int(row.get("due_today_cheque_count") or 0) + int(row.get("due_today_cash_payment_count") or 0)
     latest_cheque_status = row.get("latest_cheque_status") or "-"
+    latest_cash_payment_status = row.get("latest_cash_payment_status") or "-"
     latest_cancelled_cheque_amount = _normalize_money(row.get("latest_cancelled_cheque_amount"))
     nearest_cheque_date = row.get("nearest_cheque_date")
     nearest_cheque_distance = row.get("nearest_cheque_distance")
@@ -759,10 +1059,18 @@ def _serialize_payable_summary_row(row):
     is_fully_cleared = bool(
         normalized_status == PAYABLE_STATUS_FULLY_ISSUED
         and total_cheque_count > 0
+        and total_cash_payment_count == 0
         and uncleared_cheque_count == 0
         and cleared_cheque_count == total_cheque_count
     )
-    is_history_entry = bool(is_fully_cleared or normalized_status == PAYABLE_STATUS_CANCELLED)
+    is_fully_cash_paid = bool(
+        normalized_status == PAYABLE_STATUS_FULLY_ISSUED
+        and total_cash_payment_count > 0
+        and total_cheque_count == 0
+        and unpaid_cash_payment_count == 0
+        and paid_cash_payment_count == total_cash_payment_count
+    )
+    is_history_entry = bool(is_fully_cleared or is_fully_cash_paid or normalized_status == PAYABLE_STATUS_CANCELLED)
 
     return {
         "id": int(row["id"]),
@@ -781,10 +1089,13 @@ def _serialize_payable_summary_row(row):
         "cash_paid_amount": cash_paid_amount,
         "remaining_balance": remaining_balance,
         "status": status,
+        "payment_method": row.get("payment_method") or "",
         "cash_payment_amount": latest_cancelled_cheque_amount,
         "is_cash_paid": cash_paid_amount > 0,
         "latest_due_date": format_date(row["latest_due_date"]),
         "latest_cheque_status": latest_cheque_status,
+        "latest_cash_payment_status": latest_cash_payment_status,
+        "latest_payment_status": latest_cash_payment_status if total_cash_payment_count > 0 else latest_cheque_status,
         "nearest_cheque_date": format_date(nearest_cheque_date),
         "nearest_cheque_distance": int(nearest_cheque_distance) if nearest_cheque_distance is not None else None,
         "priority_cheque_due_date": format_date(priority_cheque_due_date),
@@ -792,13 +1103,20 @@ def _serialize_payable_summary_row(row):
         "sort_anchor_ts": _to_sort_timestamp(row.get("delivery_received_at_snapshot") or row.get("created_at")),
         "created_at": format_date(row["created_at"], show_time=True),
         "cheque_count": total_cheque_count,
+        "cash_payment_count": total_cash_payment_count,
+        "payment_count": total_cheque_count + total_cash_payment_count,
         "cleared_cheque_count": cleared_cheque_count,
         "uncleared_cheque_count": uncleared_cheque_count,
+        "paid_cash_payment_count": paid_cash_payment_count,
+        "unpaid_cash_payment_count": unpaid_cash_payment_count,
         "current_month_cheque_count": current_month_cheque_count,
+        "current_month_cash_payment_count": current_month_cash_payment_count,
+        "current_month_payment_count": current_month_cheque_count + current_month_cash_payment_count,
         "due_this_month_count": due_this_month_count,
         "due_soon_count": due_soon_count,
         "due_today_count": due_today_count,
         "is_fully_cleared": is_fully_cleared,
+        "is_fully_cash_paid": is_fully_cash_paid,
         "is_history_entry": is_history_entry,
     }
 
@@ -836,6 +1154,9 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
         conditions = ["p.status = ANY(%s)"]
         aggregate_params = [
             list(ACTIVE_CHEQUE_STATUSES),
+            list(ACTIVE_CASH_PAYMENT_STATUSES),
+            PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE,
+            CASH_PAYMENT_STATUS_PAID,
             PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE,
             PAYABLE_CASH_SETTLEMENT_REFERENCE_TYPE,
             CHEQUE_STATUS_ISSUED,
@@ -858,6 +1179,19 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
             next_month_start.isoformat(),
             CHEQUE_STATUS_CLEARED,
             CHEQUE_STATUS_CLEARED,
+            CASH_PAYMENT_STATUS_UNPAID,
+            month_start.isoformat(),
+            next_month_start.isoformat(),
+            CASH_PAYMENT_STATUS_UNPAID,
+            today_value.isoformat(),
+            CASH_PAYMENT_STATUS_UNPAID,
+            today_value.isoformat(),
+            (today_value + timedelta(days=7)).isoformat(),
+            CASH_PAYMENT_STATUS_UNPAID,
+            month_start.isoformat(),
+            next_month_start.isoformat(),
+            CASH_PAYMENT_STATUS_PAID,
+            CASH_PAYMENT_STATUS_PAID,
         ]
         search_params = [selected_statuses]
 
@@ -874,11 +1208,17 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                         WHERE pc_search.payable_id = p.id
                           AND pc_search.cheque_no ILIKE %s ESCAPE '\\'
                     )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM payable_cash_payments pcp_search
+                        WHERE pcp_search.payable_id = p.id
+                          AND pcp_search.payment_ref ILIKE %s ESCAPE '\\'
+                    )
                 )
                 """
             )
             like_value = f"%{_escape_like(query_value)}%"
-            search_params.extend([like_value, like_value, like_value, like_value])
+            search_params.extend([like_value, like_value, like_value, like_value, like_value])
 
         where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         payable_rows = conn.execute(
@@ -886,6 +1226,12 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
             SELECT
                 p.*,
                 COALESCE(SUM(CASE WHEN pc.status = ANY(%s) THEN pc.cheque_amount ELSE 0 END), 0)
+                + COALESCE((
+                    SELECT SUM(pcp_issued.amount)
+                    FROM payable_cash_payments pcp_issued
+                    WHERE pcp_issued.payable_id = p.id
+                      AND pcp_issued.status = ANY(%s)
+                ), 0)
                 + COALESCE((
                     SELECT SUM(ce_payable.amount)
                     FROM cash_entries ce_payable
@@ -895,6 +1241,12 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                       AND COALESCE(ce_payable.is_deleted, FALSE) = FALSE
                 ), 0) AS issued_amount,
                 COALESCE((
+                    SELECT SUM(pcp_paid.amount)
+                    FROM payable_cash_payments pcp_paid
+                    WHERE pcp_paid.payable_id = p.id
+                      AND pcp_paid.status = %s
+                ), 0)
+                + COALESCE((
                     SELECT SUM(ce_payable.amount)
                     FROM cash_entries ce_payable
                     WHERE ce_payable.reference_type = %s
@@ -902,7 +1254,22 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                       AND ce_payable.entry_type = 'CASH_OUT'
                       AND COALESCE(ce_payable.is_deleted, FALSE) = FALSE
                 ), 0) AS cash_paid_amount,
-                MAX(pc.due_date) AS latest_due_date,
+                COALESCE((
+                    SELECT SUM(ce_payable.amount)
+                    FROM cash_entries ce_payable
+                    WHERE ce_payable.reference_type = %s
+                      AND ce_payable.reference_id = p.id
+                      AND ce_payable.entry_type = 'CASH_OUT'
+                      AND COALESCE(ce_payable.is_deleted, FALSE) = FALSE
+                ), 0) AS legacy_cash_paid_amount,
+                GREATEST(
+                    MAX(pc.due_date),
+                    (
+                        SELECT MAX(pcp_due.payment_due_date)
+                        FROM payable_cash_payments pcp_due
+                        WHERE pcp_due.payable_id = p.id
+                    )
+                ) AS latest_due_date,
                 (
                     SELECT pc_priority.due_date
                     FROM payable_cheques pc_priority
@@ -936,12 +1303,67 @@ def _get_payable_summary_rows(search_query=None, statuses=None):
                 COUNT(CASE WHEN pc.status = %s THEN 1 END) AS cleared_cheque_count,
                 COUNT(CASE WHEN pc.id IS NOT NULL AND pc.status <> %s THEN 1 END) AS uncleared_cheque_count,
                 (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                ) AS total_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status = %s
+                      AND pcp_count.payment_due_date >= %s
+                      AND pcp_count.payment_due_date < %s
+                ) AS current_month_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status = %s
+                      AND pcp_count.payment_due_date = %s
+                ) AS due_today_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status = %s
+                      AND pcp_count.payment_due_date > %s
+                      AND pcp_count.payment_due_date <= %s
+                ) AS due_soon_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status = %s
+                      AND pcp_count.payment_due_date >= %s
+                      AND pcp_count.payment_due_date < %s
+                ) AS due_this_month_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status = %s
+                ) AS paid_cash_payment_count,
+                (
+                    SELECT COUNT(*)
+                    FROM payable_cash_payments pcp_count
+                    WHERE pcp_count.payable_id = p.id
+                      AND pcp_count.status <> %s
+                ) AS unpaid_cash_payment_count,
+                (
                     SELECT pc_latest.status
                     FROM payable_cheques pc_latest
                     WHERE pc_latest.payable_id = p.id
                     ORDER BY pc_latest.created_at DESC, pc_latest.id DESC
                     LIMIT 1
                 ) AS latest_cheque_status,
+                (
+                    SELECT pcp_latest.status
+                    FROM payable_cash_payments pcp_latest
+                    WHERE pcp_latest.payable_id = p.id
+                    ORDER BY pcp_latest.created_at DESC, pcp_latest.id DESC
+                    LIMIT 1
+                ) AS latest_cash_payment_status,
                 (
                     SELECT pc_cancelled.cheque_amount
                     FROM payable_cheques pc_cancelled
@@ -994,8 +1416,8 @@ def get_payables_page_context(search_query=None, statuses=None):
             # default cheque-timing rules of the active view.
             should_show_in_active = bool(
                 explicit_statuses
-                or payable_data["cheque_count"] == 0
-                or payable_data["current_month_cheque_count"] > 0
+                or payable_data["payment_count"] == 0
+                or payable_data["current_month_payment_count"] > 0
                 or payable_data["due_soon_count"] > 0
                 or payable_data["due_today_count"] > 0
                 or query_value
@@ -1127,7 +1549,7 @@ def get_payable_cheque_history(payable_id):
     try:
         payable = conn.execute(
             """
-            SELECT id, payee_name, source_type, po_number_snapshot
+            SELECT id, payee_name, source_type, po_number_snapshot, payment_method
             FROM payables
             WHERE id = %s
             """,
@@ -1142,6 +1564,15 @@ def get_payable_cheque_history(payable_id):
             FROM payable_cheques
             WHERE payable_id = %s
             ORDER BY due_date ASC, id ASC
+            """,
+            (int(payable_id),),
+        ).fetchall()
+        cash_rows = conn.execute(
+            """
+            SELECT *
+            FROM payable_cash_payments
+            WHERE payable_id = %s
+            ORDER BY payment_due_date ASC, id ASC
             """,
             (int(payable_id),),
         ).fetchall()
@@ -1170,17 +1601,44 @@ def get_payable_cheque_history(payable_id):
         else:
             other_history.append(serialized)
 
+    current_month_cash_due = []
+    other_cash_history = []
+    for row in cash_rows:
+        serialized = _serialize_cash_payment_row(row, today_value)
+        due_date_value = row["payment_due_date"]
+        due_date_obj = due_date_value if isinstance(due_date_value, date) else None
+        if not due_date_obj:
+            try:
+                due_date_obj = datetime.strptime(str(due_date_value), "%Y-%m-%d").date()
+            except ValueError:
+                due_date_obj = None
+
+        is_current_month_due = bool(
+            due_date_obj
+            and month_start <= due_date_obj < next_month_start
+            and str(row["status"] or "").strip().upper() == CASH_PAYMENT_STATUS_UNPAID
+        )
+        if is_current_month_due:
+            current_month_cash_due.append(serialized)
+        else:
+            other_cash_history.append(serialized)
+
     return {
         "payable_id": int(payable["id"]),
         "payee_name": payable["payee_name"] or "-",
         "source_type": payable["source_type"] or "MANUAL",
         "po_number_snapshot": payable["po_number_snapshot"] or "",
+        "payment_method": payable["payment_method"] or "",
         "current_month_due": current_month_due,
         "other_history": other_history,
+        "current_month_cash_due": current_month_cash_due,
+        "other_cash_history": other_cash_history,
         "counts": {
             "current_month_due": len(current_month_due),
             "other_history": len(other_history),
-            "total": len(current_month_due) + len(other_history),
+            "current_month_cash_due": len(current_month_cash_due),
+            "other_cash_history": len(other_cash_history),
+            "total": len(current_month_due) + len(other_history) + len(current_month_cash_due) + len(other_cash_history),
         },
     }
 
@@ -1237,6 +1695,41 @@ def build_payables_report_context(start_date=None, end_date=None):
                 today_value.isoformat(),
             ),
         ).fetchall()
+        cash_rows = conn.execute(
+            """
+            SELECT
+                pcp.id,
+                pcp.payment_ref,
+                pcp.payment_due_date,
+                pcp.amount,
+                pcp.status,
+                pcp.updated_at,
+                pcp.notes,
+                p.source_type,
+                p.payee_name,
+                p.description,
+                p.po_number_snapshot,
+                p.delivery_received_at_snapshot
+            FROM payable_cash_payments pcp
+            JOIN payables p ON p.id = pcp.payable_id
+            WHERE (
+                pcp.payment_due_date BETWEEN %s AND %s
+                OR (
+                    pcp.status = %s
+                    AND DATE(pcp.updated_at) BETWEEN %s AND %s
+                )
+            )
+            ORDER BY ABS(pcp.payment_due_date - %s) ASC, pcp.payment_due_date ASC, pcp.id ASC
+            """,
+            (
+                start_value,
+                end_value,
+                CASH_PAYMENT_STATUS_PAID,
+                start_value,
+                end_value,
+                today_value.isoformat(),
+            ),
+        ).fetchall()
     finally:
         conn.close()
 
@@ -1262,10 +1755,36 @@ def build_payables_report_context(start_date=None, end_date=None):
             "po_number_snapshot": row["po_number_snapshot"] or "",
             "delivery_received_at_snapshot": format_date(row["delivery_received_at_snapshot"], show_time=True),
             "notes": row["notes"] or "",
+            "payment_type": "CHEQUE",
         })
 
+    for row in cash_rows:
+        amount = _normalize_money(row["amount"])
+        total_amount += amount
+        items.append({
+            "id": int(row["id"]),
+            "cheque_no": row["payment_ref"] or "-",
+            "cheque_date": format_date(row["payment_due_date"]),
+            "cleared_at": (
+                format_date(row["updated_at"], show_time=True)
+                if str(row["status"] or "").strip().upper() == CASH_PAYMENT_STATUS_PAID
+                else ""
+            ),
+            "cheque_amount": amount,
+            "status": row["status"] or CASH_PAYMENT_STATUS_UNPAID,
+            "payee_name": row["payee_name"] or "-",
+            "description": row["description"] or "",
+            "source_type": row["source_type"] or "MANUAL",
+            "po_number_snapshot": row["po_number_snapshot"] or "",
+            "delivery_received_at_snapshot": format_date(row["delivery_received_at_snapshot"], show_time=True),
+            "notes": row["notes"] or "",
+            "payment_type": "CASH",
+        })
+
+    items.sort(key=lambda item: (item["cheque_date"] or "", item["payment_type"], item["id"]))
+
     return {
-        "report_title": "Payables Cheque Report",
+        "report_title": "Payables Payment Report",
         "date_label": f"{format_date(start_value)} to {format_date(end_value)}",
         "generated_at": format_date(now_local(), show_time=True),
         "items": items,
@@ -1334,6 +1853,65 @@ def get_cleared_cheque_entries_for_report(start_date, end_date):
     return entries
 
 
+def get_paid_cash_payment_entries_for_report(start_date, end_date):
+    start_value = str(start_date or "").strip()
+    end_value = str(end_date or "").strip()
+    if not start_value or not end_value:
+        return []
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                pcp.id,
+                pcp.payment_ref,
+                pcp.amount,
+                pcp.updated_at AS paid_at,
+                p.payee_name,
+                COALESCE(
+                    (
+                        SELECT pal.created_by_username
+                        FROM payables_audit_log pal
+                        WHERE pal.cheque_no_snapshot = pcp.payment_ref
+                          AND pal.event_type = 'CASH_PAYMENT_STATUS_UPDATED'
+                          AND pal.new_status = %s
+                        ORDER BY pal.created_at DESC, pal.id DESC
+                        LIMIT 1
+                    ),
+                    pcp.created_by_username,
+                    'System'
+                ) AS paid_by
+            FROM payable_cash_payments pcp
+            JOIN payables p ON p.id = pcp.payable_id
+            WHERE pcp.status = %s
+              AND DATE(pcp.updated_at) BETWEEN %s AND %s
+            ORDER BY pcp.updated_at ASC, pcp.id ASC
+            """,
+            (CASH_PAYMENT_STATUS_PAID, CASH_PAYMENT_STATUS_PAID, start_value, end_value),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    entries = []
+    for row in rows:
+        payment_ref = str(row["payment_ref"] or "").strip() or "-"
+        payee_name = str(row["payee_name"] or "").strip() or "Payee"
+        entries.append({
+            "id": f"cash-payment-paid-{int(row['id'])}",
+            "entry_type": "CASH_OUT",
+            "amount": _normalize_money(row["amount"]),
+            "category": "Payable paid by cash",
+            "description": f"Payment {payment_ref} - {payee_name}",
+            "created_at": format_date(row["paid_at"], show_time=True),
+            "recorded_by": row["paid_by"] or "System",
+            "source": "payable_cash_paid",
+            "_sort_at": row["paid_at"],
+        })
+
+    return entries
+
+
 def get_payables_audit_log(
     *,
     page=1,
@@ -1360,7 +1938,15 @@ def get_payables_audit_log(
         params.append(end_value)
 
     event_value = str(event_type or "").strip().upper() or None
-    valid_event_types = {"PO_PAYABLE_CREATED", "MANUAL_PAYABLE_CREATED", "CHEQUE_ISSUED", "CHEQUE_STATUS_UPDATED"}
+    valid_event_types = {
+        "PO_PAYABLE_CREATED",
+        "MANUAL_PAYABLE_CREATED",
+        "CHEQUE_ISSUED",
+        "CHEQUE_STATUS_UPDATED",
+        "CASH_PAYMENT_ISSUED",
+        "CASH_PAYMENT_STATUS_UPDATED",
+        "PAYABLE_CASH_SETTLED",
+    }
     if event_value:
         if event_value not in valid_event_types:
             raise ValueError("Invalid payables audit event type.")
@@ -1430,6 +2016,9 @@ def get_payables_audit_log(
                 "MANUAL_PAYABLE_CREATED": "Manual Payable Created",
                 "CHEQUE_ISSUED": "Cheque Issued",
                 "CHEQUE_STATUS_UPDATED": "Cheque Status Updated",
+                "CASH_PAYMENT_ISSUED": "Cash Payment Issued",
+                "CASH_PAYMENT_STATUS_UPDATED": "Cash Payment Status Updated",
+                "PAYABLE_CASH_SETTLED": "Payable Cash Settled",
             }.get(event_type_value, event_type_value.replace("_", " ").title()),
             "source_type": source_type_value,
             "source_label": "PO Delivery" if source_type_value == "PO_DELIVERY" else ("Manual" if source_type_value == "MANUAL" else source_type_value),

@@ -74,6 +74,17 @@ def _get_profit_card_cash_ledger_expense(conn, start_date, end_date):
     ).fetchall()
     total += sum(_num(row["cheque_amount"]) for row in cleared_cheque_rows)
 
+    paid_cash_payment_rows = conn.execute(
+        """
+        SELECT pcp.amount
+        FROM payable_cash_payments pcp
+        WHERE pcp.status = 'PAID'
+          AND DATE(pcp.updated_at) BETWEEN %s AND %s
+        """,
+        (start_date, end_date),
+    ).fetchall()
+    total += sum(_num(row["amount"]) for row in paid_cash_payment_rows)
+
     return round(total, 2)
 
 
