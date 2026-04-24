@@ -839,14 +839,31 @@ function escapeRegExp(text) {
 }
 
 function highlightText(element, tokens) {
-    if (!element || !element.dataset.original) return;
-    const original = element.dataset.original;
-    let highlighted = escapeHtml(original);
-    tokens.forEach(token => {
-        if (!token) return;
-        const regex = new RegExp(`(${escapeRegExp(token)})`, "gi");
-        highlighted = highlighted.replace(regex, `<span class="highlight">$1</span>`);
+    if (!element) return;
+    const original = element.dataset.original ?? element.textContent ?? "";
+    const cleanedTokens = Array.from(new Set(
+        (tokens || [])
+            .map(token => String(token || "").trim())
+            .filter(Boolean)
+    ));
+
+    if (!cleanedTokens.length) {
+        element.textContent = original;
+        return;
+    }
+
+    const regex = new RegExp(`(${cleanedTokens.map(escapeRegExp).join("|")})`, "gi");
+    let lastIndex = 0;
+    let highlighted = "";
+
+    original.replace(regex, (match, _group, offset) => {
+        highlighted += escapeHtml(original.slice(lastIndex, offset));
+        highlighted += `<span class="highlight">${escapeHtml(match)}</span>`;
+        lastIndex = offset + match.length;
+        return match;
     });
+
+    highlighted += escapeHtml(original.slice(lastIndex));
     element.innerHTML = highlighted;
 }
 
