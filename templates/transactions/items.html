@@ -206,17 +206,17 @@
             <div class="row g-3">
                 <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Vendor price <span class="req">*</span></label>
-                    <input type="number" step="0.01" name="vendor_price" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="text" name="vendor_price" class="form-control bg-dark text-white border-secondary js-decimal-input" inputmode="decimal" autocomplete="off" required>
                 </div>
 
                 <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Cost per piece <span class="req">*</span></label>
-                    <input type="number" step="0.01" name="cost_per_piece" id="cost_input" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="text" name="cost_per_piece" id="cost_input" class="form-control bg-dark text-white border-secondary js-decimal-input" inputmode="decimal" autocomplete="off" required>
                 </div>
 
                 <div class="{% if session.get('role') == 'admin' %}col-md-3{% else %}col-md-4{% endif %}">
                     <label class="form-label small text-white-50">Selling price <span class="req">*</span></label>
-                    <input type="number" step="0.01" name="a4s_selling_price" id="selling_input" class="form-control bg-dark text-white border-secondary" required>
+                    <input type="text" name="a4s_selling_price" id="selling_input" class="form-control bg-dark text-white border-secondary js-decimal-input" inputmode="decimal" autocomplete="off" required>
                 </div>
 
                 {% if session.get('role') == 'admin' %}
@@ -335,6 +335,20 @@
     const clearVendorBtn = document.getElementById('clearVendorBtn');
     const vendorMap = new Map(vendorOptions.map(vendor => [String(vendor.id), vendor]));
 
+    function sanitizeDecimalValue(rawValue, maxDecimals = 2) {
+        let cleaned = String(rawValue || '').replace(/[^0-9.]/g, '');
+        const firstDotIndex = cleaned.indexOf('.');
+        if (firstDotIndex !== -1) {
+            const integerPart = cleaned.slice(0, firstDotIndex + 1);
+            const decimalPart = cleaned
+                .slice(firstDotIndex + 1)
+                .replace(/\./g, '')
+                .slice(0, maxDecimals);
+            cleaned = `${integerPart}${decimalPart}`;
+        }
+        return cleaned;
+    }
+
     function syncCategoryFields() {
         if (categorySelect.value === "__OTHER__") {
             newCategoryInput.disabled = false;
@@ -380,6 +394,13 @@
 
     costInput.addEventListener('input', calculateMarkup);
     sellingInput.addEventListener('input', calculateMarkup);
+
+    document.addEventListener('input', (event) => {
+        if (!event.target.classList.contains('js-decimal-input')) {
+            return;
+        }
+        event.target.value = sanitizeDecimalValue(event.target.value);
+    });
 
     function renderVendorMeta(vendor) {
         const parts = [];
