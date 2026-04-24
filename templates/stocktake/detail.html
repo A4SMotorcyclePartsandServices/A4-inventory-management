@@ -357,28 +357,29 @@
     }
 
     .stocktake-items-table {
-        table-layout: auto;
+        table-layout: fixed;
+        width: 100%;
     }
 
     .stocktake-items-table th:nth-child(1),
     .stocktake-items-table td:nth-child(1) {
-        width: 34%;
+        width: 40%;
     }
 
     .stocktake-items-table th:nth-child(2),
     .stocktake-items-table td:nth-child(2) {
-        width: 180px;
+        width: 16%;
         text-align: center;
     }
 
     .stocktake-items-table th:nth-child(3),
     .stocktake-items-table td:nth-child(3) {
-        width: 32%;
+        width: 24%;
     }
 
     .stocktake-items-table th:nth-child(4),
     .stocktake-items-table td:nth-child(4) {
-        width: 72px;
+        width: 20%;
         text-align: center;
     }
 
@@ -427,6 +428,7 @@
 
     .stocktake-note-cell {
         text-align: left;
+        overflow: visible;
     }
 
     .stocktake-note-cell .item-note-input {
@@ -435,7 +437,63 @@
 
     .stocktake-note-text {
         color: var(--text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.35;
+        max-height: calc(1.35em * 2);
         word-break: break-word;
+        position: relative;
+        transition: max-height 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .stocktake-items-table tbody tr {
+        transition: background-color 0.18s ease;
+    }
+
+    .stocktake-items-table tbody tr:hover {
+        background: rgba(125, 211, 252, 0.04);
+    }
+
+    .stocktake-items-table tbody tr:hover .stocktake-note-text,
+    .stocktake-note-text:focus-visible {
+        display: block;
+        -webkit-line-clamp: unset;
+        max-height: 12rem;
+        overflow: visible;
+        background: #1a1d26;
+        z-index: 10;
+        border-radius: 8px;
+        padding: 0.35rem 0.45rem;
+        margin: -0.2rem -0.35rem;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+    }
+
+    .stocktake-action-status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
+        padding: 0.38rem 0.78rem;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .stocktake-action-status.updated {
+        background: rgba(25, 135, 84, 0.16);
+        color: #4ade80;
+        border: 1px solid rgba(74, 222, 128, 0.26);
+    }
+
+    .stocktake-action-status.locked {
+        background: rgba(148, 163, 184, 0.12);
+        color: #cbd5e1;
+        border: 1px solid rgba(148, 163, 184, 0.2);
     }
 
     .stocktake-search-highlight {
@@ -459,6 +517,7 @@
 
     .stocktake-action-cell {
         text-align: center;
+        white-space: nowrap;
     }
 
     .stocktake-remove-btn {
@@ -1527,7 +1586,7 @@ function renderItemsTable() {
                     </div>
                 ` : `
                     <div class="d-grid gap-1 justify-content-center">
-                        <span class="small ${item.is_applied ? 'text-success' : 'text-muted'}">
+                        <span class="stocktake-action-status ${item.is_applied ? 'updated' : 'locked'}">
                             ${item.is_applied ? 'Updated' : 'Locked'}
                         </span>
                     </div>

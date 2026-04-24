@@ -461,6 +461,7 @@ def _serialize_session_row(row):
     data["variance_item_count"] = int(data.get("variance_item_count") or 0)
     data["count_scope"] = _normalize_scope(data.get("count_scope"))
     data["status"] = str(data.get("status") or STOCKTAKE_STATUS_DRAFT).upper()
+    data["created_date_display"] = format_date(data.get("created_at"))
     data["created_at_display"] = format_date(data.get("created_at"), show_time=True)
     data["confirmed_at_display"] = format_date(data.get("confirmed_at"), show_time=True)
     data["cancelled_at_display"] = format_date(data.get("cancelled_at"), show_time=True)

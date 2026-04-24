@@ -49,22 +49,20 @@
     .stocktake-table-card .table-responsive {
         width: 100%;
         max-width: 100%;
-        overflow-x: auto;
+        overflow-x: hidden;
         overflow-y: visible;
-        -webkit-overflow-scrolling: touch;
     }
 
     .stocktake-table-card .table {
-        table-layout: auto;
+        table-layout: fixed;
         width: 100%;
-        min-width: 980px;
     }
 
     .stocktake-table-card .table th,
     .stocktake-table-card .table td {
-        white-space: normal;
-        overflow: visible;
-        text-overflow: unset;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         vertical-align: top !important;
     }
 
@@ -74,26 +72,25 @@
     }
 
     {% if session.get('role') == 'admin' %}
-    .stocktake-table-card .table thead th:nth-child(1) { width: 18%; }
+    .stocktake-table-card .table thead th:nth-child(1) { width: 15%; }
     .stocktake-table-card .table thead th:nth-child(2) { width: 11%; }
+    .stocktake-table-card .table thead th:nth-child(3) { width: 10%; }
+    .stocktake-table-card .table thead th:nth-child(4) { width: 7%; }
+    .stocktake-table-card .table thead th:nth-child(5) { width: 11%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 24%; }
+    .stocktake-table-card .table thead th:nth-child(7) { width: 14%; }
+    .stocktake-table-card .table thead th:nth-child(8) { width: 8%; }
+    {% else %}
+    .stocktake-table-card .table thead th:nth-child(1) { width: 17%; }
+    .stocktake-table-card .table thead th:nth-child(2) { width: 12%; }
     .stocktake-table-card .table thead th:nth-child(3) { width: 11%; }
     .stocktake-table-card .table thead th:nth-child(4) { width: 8%; }
-    .stocktake-table-card .table thead th:nth-child(5) { width: 12%; }
-    .stocktake-table-card .table thead th:nth-child(6) { width: 24%; }
-    .stocktake-table-card .table thead th:nth-child(7) { width: 16%; }
-    .stocktake-table-card .table thead th:nth-child(8) { width: 10%; }
-    {% else %}
-    .stocktake-table-card .table thead th:nth-child(1) { width: 20%; }
-    .stocktake-table-card .table thead th:nth-child(2) { width: 12%; }
-    .stocktake-table-card .table thead th:nth-child(3) { width: 12%; }
-    .stocktake-table-card .table thead th:nth-child(4) { width: 9%; }
-    .stocktake-table-card .table thead th:nth-child(5) { width: 28%; }
-    .stocktake-table-card .table thead th:nth-child(6) { width: 19%; }
-    .stocktake-table-card .table thead th:nth-child(7) { width: 10%; }
+    .stocktake-table-card .table thead th:nth-child(5) { width: 31%; }
+    .stocktake-table-card .table thead th:nth-child(6) { width: 14%; }
+    .stocktake-table-card .table thead th:nth-child(7) { width: 7%; }
     {% endif %}
 
     .stocktake-created {
-        min-width: 170px;
         text-align: left !important;
     }
 
@@ -103,34 +100,51 @@
     }
 
     .stocktake-session-cell {
-        min-width: 150px;
         text-align: left !important;
     }
 
     .stocktake-notes-cell {
-        min-width: 220px;
         text-align: left !important;
+        overflow: visible !important;
     }
 
     .stocktake-note-preview {
         color: var(--text-muted);
         cursor: help;
-        white-space: nowrap;
+        white-space: normal;
         overflow: hidden;
-        text-overflow: ellipsis;
-        display: block;
+        text-overflow: unset;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-height: 1.35;
+        max-height: calc(1.35em * 2);
+        word-break: break-word;
+        position: relative;
+        transition: max-height 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
     }
 
-    .stocktake-note-preview:hover {
-        white-space: normal !important;
-        word-break: break-word;
+    .stocktake-table-card tbody tr {
+        transition: background-color 0.18s ease;
+    }
+
+    .stocktake-table-card tbody tr:hover {
+        background: rgba(125, 211, 252, 0.04);
+    }
+
+    .stocktake-table-card tbody tr:hover .stocktake-note-preview,
+    .stocktake-note-preview:focus-visible {
+        display: block;
+        -webkit-line-clamp: unset;
+        max-height: 12rem;
         background: #1a1d26 !important;
         z-index: 10;
         position: relative;
         overflow: visible;
         border-radius: 8px;
-        padding: 0.2rem 0.35rem;
+        padding: 0.35rem 0.45rem;
         margin: -0.2rem -0.35rem;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
     }
 
     .stocktake-table-card .table td:nth-child(2),
@@ -147,7 +161,7 @@
 
     .stocktake-action-cell {
         text-align: center !important;
-        min-width: 110px;
+        min-width: 0;
     }
 
     .stocktake-cell-stack,
@@ -214,6 +228,15 @@
     @media (max-width: 992px) {
         .stocktake-grid {
             grid-template-columns: 1fr;
+        }
+
+        .stocktake-table-card .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .stocktake-table-card .table {
+            min-width: 880px;
         }
     }
 </style>
@@ -323,7 +346,7 @@
                             </td>
                             <td class="stocktake-created">
                                 <div class="stocktake-cell-stack">
-                                    <div>{{ stocktake.created_at_display }}</div>
+                                    <div>{{ stocktake.created_date_display }}</div>
                                     <div class="small stocktake-created-user">{{ stocktake.created_by_username or "System" }}</div>
                                 </div>
                             </td>
