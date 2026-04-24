@@ -422,10 +422,18 @@
                             <div class="muted">Includes P {{ "%.2f"|format(mech.shop_only_services_total) }} shop-only services to Shop Share.</div>
                             {% endif %}
                         </td>
-                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.paid_services_total) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.service_sales_total) }}</span></td>
                         <td class="text-right">{{ (mech.commission_rate * 100) | int }}%</td>
                         <td class="text-right strong"><span class="currency">P {{ "%.2f"|format(mech.mechanic_cut) }}</span></td>
-                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(mech.payout_shop_share) }}</span></td>
+                        <td class="text-right">
+                            <span class="currency">P {{ "%.2f"|format(mech.shop_commission_share) }}</span>
+                            {% if mech.shop_only_services_total > 0 %}
+                            <div class="muted">(Hangin)</div>
+                            {% endif %}
+                            {% if mech.bundle_shop_share > 0 %}
+                            <div class="muted">(bundle)</div>
+                            {% endif %}
+                        </td>
                         <td class="text-right">
                             {% if mech.shop_topup > 0 %}
                             <span class="currency">P {{ "%.2f"|format(mech.shop_topup) }}</span>
@@ -438,7 +446,7 @@
                     {% endfor %}
                     <tr class="totals-row">
                         <td>Totals</td>
-                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.mechanic_summary | sum(attribute='paid_services_total')) }}</span></td>
+                        <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.mechanic_summary | sum(attribute='service_sales_total')) }}</span></td>
                         <td class="text-right">-</td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_mech_cut) }}</span></td>
                         <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</span></td>

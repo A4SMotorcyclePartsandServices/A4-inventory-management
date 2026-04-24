@@ -1559,12 +1559,12 @@
                         <div class="stock-warning-text" style="display:none;">Insufficient stock</div>
                     </td>
                     <td class="discount-column">
-                        <input type="number" class="form-control form-control-sm discount-input" min="0" step="0.01" value="0">
+                        <input type="text" class="form-control form-control-sm discount-input js-decimal-input" inputmode="decimal" autocomplete="off" value="0">
                     </td>
                     <td>
                         <div class="d-flex flex-column">
                             <small class="original-price" style="display:none;">₱0.00</small>
-                            <input type="number" class="form-control form-control-sm price-input" readonly>
+                            <input type="text" class="form-control form-control-sm price-input js-decimal-input" inputmode="decimal" autocomplete="off" readonly>
                         </div>
                     </td>
                     <td class="subtotal-display">₱0.00</td>
@@ -1639,7 +1639,7 @@
                             </select>
                         </td>
                         <td>
-                            <input type="number" class="form-control form-control-sm border-info-soft service-price-input">
+                            <input type="text" class="form-control form-control-sm border-info-soft service-price-input js-decimal-input" inputmode="decimal" autocomplete="off">
                         </td>
                         <td class="service-subtotal-display">₱0.00</td>
                         <td>
@@ -1755,7 +1755,7 @@
                                     </div>
                                     <div class="col-lg-6 col-md-6">
                                         <label class="form-label accent">Amount</label>
-                                        <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
+                                        <input type="text" class="form-control dual-payment-amount js-decimal-input" inputmode="decimal" autocomplete="off" placeholder="0.00">
                                     </div>
                                 </div>
                             </div>
@@ -1796,7 +1796,7 @@
                                     </div>
                                     <div class="col-lg-6 col-md-6">
                                         <label class="form-label accent">Amount</label>
-                                        <input type="number" min="0" step="0.01" class="form-control dual-payment-amount" placeholder="0.00">
+                                        <input type="text" class="form-control dual-payment-amount js-decimal-input" inputmode="decimal" autocomplete="off" placeholder="0.00">
                                     </div>
                                 </div>
                             </div>
@@ -2743,6 +2743,20 @@ function openSaleReviewModal(draft) {
 
 function roundMoney(value) {
     return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function sanitizeDecimalValue(rawValue, maxDecimals = 2) {
+    let cleaned = String(rawValue || '').replace(/[^0-9.]/g, '');
+    const firstDotIndex = cleaned.indexOf('.');
+    if (firstDotIndex !== -1) {
+        const integerPart = cleaned.slice(0, firstDotIndex + 1);
+        const decimalPart = cleaned
+            .slice(firstDotIndex + 1)
+            .replace(/\./g, '')
+            .slice(0, maxDecimals);
+        cleaned = `${integerPart}${decimalPart}`;
+    }
+    return cleaned;
 }
 
 function getBundleSubtotalValue() {
@@ -3746,7 +3760,7 @@ function renderSaleBatchEntries() {
                 </td>
                 <td>
                     <div class="sale-batch-cell-stack">
-                        <input type="number" class="form-control form-control-sm sale-batch-discount-input" min="0" step="0.01" max="${maxDiscount}" value="${discount}">
+                        <input type="text" class="form-control form-control-sm sale-batch-discount-input js-decimal-input" inputmode="decimal" autocomplete="off" value="${discount}">
                     </div>
                 </td>
                 <td><div class="sale-batch-center fw-bold text-warning">${formatPeso(subtotal)}</div></td>
@@ -5067,6 +5081,9 @@ async function restoreSalePageState(options = {}) {
 }
 
 document.addEventListener('input', (e) => {
+    if (e.target.classList.contains('js-decimal-input')) {
+        e.target.value = sanitizeDecimalValue(e.target.value);
+    }
     if (e.target.classList.contains('item-input')) {
         debouncePerElement(e.target, handleTableSearch, 300);
     }

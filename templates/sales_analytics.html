@@ -872,6 +872,10 @@
                         <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</span>
                     </div>
                     <div class="profit-breakdown-row">
+                        <span class="profit-breakdown-label">Services</span>
+                        <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(analytics.summary.service_revenue) }}</span>
+                    </div>
+                    <div class="profit-breakdown-row">
                         <span class="profit-breakdown-label">Shop Share</span>
                         <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</span>
                     </div>
@@ -897,12 +901,17 @@
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Product Sales</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</div>
-                    <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
+                    <div class="profit-metric-sub">Includes standalone items plus bundle item portions - item refunds.</div>
                 </div>
                 <div class="profit-metric cost">
                     <div class="profit-metric-label">Product Cost</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }}</div>
                     <div class="profit-metric-sub">Standalone item cost snapshots plus included bundle item cost snapshot.</div>
+                </div>
+                <div class="profit-metric revenue">
+                    <div class="profit-metric-label">Services</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.service_revenue) }}</div>
+                    <div class="profit-metric-sub">Gross of all paid standalone services plus bundle service and shop-share portions.</div>
                 </div>
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Shop Share</div>

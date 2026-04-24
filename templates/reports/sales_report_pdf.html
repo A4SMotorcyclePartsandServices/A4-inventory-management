@@ -891,7 +891,7 @@
                         <span class="value">P {{ "%.2f"|format(data.total_service_revenue) }}</span>
                     </div>
                     <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
-                        <span class="label">↳ Shop's Share</span>
+                        <span class="label">↳ Shop's Share{% if (data.mechanic_summary | sum(attribute='shop_only_services_total')) > 0 %} (Hangin){% endif %}</span>
                         <span class="value">P {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
                     </div>
                     {% if data.total_bundle_shop_share > 0 %}

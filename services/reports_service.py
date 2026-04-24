@@ -1009,6 +1009,10 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             2,
         )
         total_shop_share = round(payout_shop_share + bundle_shop_share, 2)
+        service_sales_total = round(
+            paid_services + shop_only_paid_services + bundle_mech_share + bundle_shop_share,
+            2,
+        )
         total_payout     = round(total_mech_cut_this + shop_topup, 2)
 
         total_mech_cut        += total_mech_cut_this
@@ -1023,6 +1027,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
             "mechanic_name":         mechanic_name,
             "commission_rate":       commission_rate,
             "applies_quota_topup":   1 if applies_quota_topup else 0,
+            "service_sales_total":   service_sales_total,
             "paid_services_total":   paid_services,
             "shop_only_services_total": round(shop_only_paid_services + shop_only_debt_services, 2),
             "bundle_shop_share":     bundle_shop_share,
@@ -1059,6 +1064,7 @@ def _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map):
 def _aggregate_mechanic_summary_rows(summary_rows):
     grouped = {}
     numeric_fields = [
+        "service_sales_total",
         "paid_services_total",
         "shop_only_services_total",
         "bundle_shop_share",

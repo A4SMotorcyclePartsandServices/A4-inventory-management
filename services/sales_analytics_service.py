@@ -539,8 +539,41 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         (start_date, end_date),
     ).fetchone()
 
+    mechanic_rollup_sales_rows = conn.execute(
+        """
+        SELECT
+            s.id,
+            s.transaction_date,
+            s.status,
+            m.id AS mechanic_id,
+            m.name AS mechanic_name,
+            m.commission_rate,
+            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
+        FROM sales s
+        LEFT JOIN mechanics m ON m.id = s.mechanic_id
+        LEFT JOIN mechanic_quota_topup_overrides mqto
+          ON mqto.mechanic_id = s.mechanic_id
+         AND mqto.quota_date = DATE(s.transaction_date)
+        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
+        ORDER BY s.transaction_date ASC
+        """,
+        (start_date, end_date),
+    ).fetchall()
+    mechanic_rollup_paid_sale_ids = [row["id"] for row in mechanic_rollup_sales_rows if row["status"] == "Paid"]
+    mechanic_rollup_services_by_sale = _load_services_by_sale(conn, mechanic_rollup_paid_sale_ids)
+    mechanic_rollup_bundles_by_sale = _load_bundles_by_sale(conn, mechanic_rollup_paid_sale_ids)
+    mechanic_rollup_debt_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
+    _, mechanic_rollup_totals, _ = _calculate_range_mechanic_rollups(
+        mechanic_rollup_sales_rows,
+        mechanic_rollup_debt_rows,
+        mechanic_rollup_services_by_sale,
+        mechanic_rollup_bundles_by_sale,
+    )
+
     total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
-    total_shop_topup = _get_total_shop_topup(conn, start_date, end_date)
+    total_shop_topup = round(_num(mechanic_rollup_totals["total_shop_topup"]), 2)
     total_mechanic_supply_expense = _get_total_mechanic_supply_expense(conn, start_date, end_date)
     total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, start_date, end_date)
     expense_breakdown = _get_expense_breakdown(conn, start_date, end_date)
@@ -839,6 +872,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     total_refunds = round(_num(refund_row["total_refunds"]), 2)
     total_debt_collected = round(_num(debt_row["total_debt_collected"]), 2)
     net_sales = round(gross_sales + total_debt_collected - total_refunds, 2)
+    net_product_revenue = round(_num(product_service_row["product_revenue"]) - total_refunds, 2)
     paid_transactions = int(summary_row["paid_transactions"] or 0)
     average_sale_value = round(gross_sales / paid_transactions, 2) if paid_transactions else 0.0
     total_items_sold = int(round(_num(item_quantity_row["total_items_sold"])))
@@ -896,10 +930,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         for row in payment_method_rows
     ]
 
-    shop_share_profit = round(
-        _num(product_service_row["shop_share_profit"]) + _num(debt_service_shop_row["debt_shop_share"]),
-        2,
-    )
+    shop_share_profit = round(_num(mechanic_rollup_totals["total_shop_commission"]), 2)
     profit_with_shop_share = round(
         _num(product_service_row["product_profit"])
         + shop_share_profit
@@ -924,7 +955,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "unresolved_transactions": int(summary_row["unresolved_transactions"] or 0),
             "partial_sales_amount": round(_num(summary_row["partial_sales_amount"]), 2),
             "unresolved_sales_amount": round(_num(summary_row["unresolved_sales_amount"]), 2),
-            "product_revenue": round(_num(product_service_row["product_revenue"]), 2),
+            "product_revenue": net_product_revenue,
             "product_cost": round(_num(product_service_row["product_cost"]), 2),
             "product_profit": round(_num(product_service_row["product_profit"]), 2),
             "shop_share_profit": shop_share_profit,
@@ -954,7 +985,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "revenue_mix": {
                 "labels": ["Items", "Services"],
                 "amounts": [
-                    round(_num(product_service_row["product_revenue"]), 2),
+                    net_product_revenue,
                     round(_num(product_service_row["service_revenue"]), 2),
                 ],
             },

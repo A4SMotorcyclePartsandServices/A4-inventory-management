@@ -890,8 +890,8 @@
             <!-- Amount -->
             <div class="mb-3">
                 <label class="form-section-label">Amount (&#8369;)</label>
-                <input type="number" id="entry-amount" class="form-control"
-                    placeholder="0.00" min="0.01" step="0.01">
+                <input type="text" id="entry-amount" class="form-control js-decimal-input"
+                    placeholder="0.00" inputmode="decimal" autocomplete="off">
             </div>
 
             <!-- Category (dynamic based on type) -->
@@ -933,8 +933,8 @@
 
             <div class="mb-3">
                 <label class="form-section-label">Amount (&#8369;)</label>
-                <input type="number" id="gcash-entry-amount" class="form-control"
-                    placeholder="0.00" min="0.01" step="0.01">
+                <input type="text" id="gcash-entry-amount" class="form-control js-decimal-input"
+                    placeholder="0.00" inputmode="decimal" autocomplete="off">
             </div>
 
             <div class="mb-3">
@@ -1239,6 +1239,27 @@ const SYSTEM_KEY_CASH_OUT_MECHANIC_PAYOUT = 'cash_out_mechanic_payout';
 const SYSTEM_KEY_CASH_OUT_OTHER_EXPENSES = 'cash_out_other_expenses';
 const SYSTEM_KEY_CASH_OUT_PARTS_PURCHASE = 'cash_out_parts_purchase';
 const SYSTEM_KEY_CASH_OUT_UTILITIES = 'cash_out_utilities';
+
+function sanitizeDecimalValue(rawValue, maxDecimals = 2) {
+    let cleaned = String(rawValue || '').replace(/[^0-9.]/g, '');
+    const firstDotIndex = cleaned.indexOf('.');
+    if (firstDotIndex !== -1) {
+        const integerPart = cleaned.slice(0, firstDotIndex + 1);
+        const decimalPart = cleaned
+            .slice(firstDotIndex + 1)
+            .replace(/\./g, '')
+            .slice(0, maxDecimals);
+        cleaned = `${integerPart}${decimalPart}`;
+    }
+    return cleaned;
+}
+
+document.addEventListener('input', (event) => {
+    if (!event.target.classList.contains('js-decimal-input')) {
+        return;
+    }
+    event.target.value = sanitizeDecimalValue(event.target.value);
+});
 
 function getSelectedCategoryOption() {
     return document.getElementById('entry-category').selectedOptions[0] || null;
