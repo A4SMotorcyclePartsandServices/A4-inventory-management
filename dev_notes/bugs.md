@@ -174,6 +174,14 @@ Quick interpretation guide for logout incidents:
 - If `logout_csrf_error` appears, the logout came from a stale page with expired CSRF state.
 - If `client_restore_signal` appears near the same time, that strongly supports the mobile resumed-page / stale-cache theory.
 
+Quick mobile logout hardening added:
+- Authenticated HTML responses now send `no-store` cache headers so mobile browsers are less likely to keep showing old protected pages after auth state changes.
+- Protected pages now log a clearer `client_restore_signal` on bfcache/history restore and force one real reload, allowing Flask to redirect to `/login` if the session was already cleared.
+- Logout submits now include a client-generated `request_id` in the form body and briefly show it as `Logout trace: ...` in the menu, making client reports easier to match to Railway logs.
+- Logout/auth tracing now includes raw `User-Agent`.
+- `AUTH_REQUEST_TRACE` now logs `/logout` plus slow/error `/login` and `/users` requests with status, duration, request id, user id, role, user agent, and referer.
+- Stale-CSRF `POST /logout` now clears the session and redirects to `/login` instead of showing the generic Access Denied page, because the user's intent was to log out.
+
 Latest observed log pattern:
 - `csrf_error` on `/login` with:
   `error_message: 400 Bad Request: The CSRF token has expired.`

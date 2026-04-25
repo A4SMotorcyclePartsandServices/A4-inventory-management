@@ -1774,10 +1774,12 @@
                     </a>
 
                     <form id="logoutForm" action="{{ url_for('auth.logout') }}" method="post" class="m-0">
+                        <input type="hidden" name="request_id" id="logoutRequestId" value="">
                         <button type="submit" class="dropdown-item profile-action text-danger border-0 bg-transparent w-100 text-start">
                             <i class="bi bi-box-arrow-right me-2"></i>
                             <span>Logout</span>
                         </button>
+                        <div id="logoutTraceId" class="small text-muted px-3 pb-2 d-none"></div>
                     </form>
 
                 </div>
@@ -2801,6 +2803,10 @@ const AUTH_CLIENT_SIGNAL = {
     lastSentKey: '',
 };
 
+function currentAuthPath() {
+    return `${window.location.pathname}${window.location.search}${window.location.hash}`.slice(0, 240);
+}
+
 function sendAuthClientSignal(params = {}) {
     const eventName = String(params.event || '').trim();
     if (!eventName) {
@@ -2810,6 +2816,7 @@ function sendAuthClientSignal(params = {}) {
     const url = new URL('{{ url_for("auth.client_signal") }}', window.location.origin);
     url.searchParams.set('event', eventName);
     url.searchParams.set('path', `${window.location.pathname}${window.location.search}`.slice(0, 160));
+    url.searchParams.set('full_path', currentAuthPath());
 
     if (params.navType) {
         url.searchParams.set('nav_type', String(params.navType).slice(0, 32));
@@ -2825,6 +2832,9 @@ function sendAuthClientSignal(params = {}) {
     }
     if (params.cacheHint) {
         url.searchParams.set('cache_hint', String(params.cacheHint).slice(0, 32));
+    }
+    if (params.reloadIntent != null) {
+        url.searchParams.set('reload_intent', params.reloadIntent ? '1' : '0');
     }
 
     const dedupeKey = [
@@ -2865,13 +2875,23 @@ function installAuthClientSignalHooks() {
             return;
         }
 
+        const reloadKey = `a4:protected-restore-reload:${window.location.pathname}`;
+        const lastReloadAt = Number(sessionStorage.getItem(reloadKey) || 0);
+        const shouldForceReload = Date.now() - lastReloadAt > 10000;
+
         sendAuthClientSignal({
             event: 'pageshow_restore',
             persisted,
             navType: navType || (persisted ? 'persisted' : ''),
             visibility: document.visibilityState,
             cacheHint: persisted ? 'bfcache' : 'history',
+            reloadIntent: shouldForceReload,
         });
+
+        if (shouldForceReload) {
+            sessionStorage.setItem(reloadKey, String(Date.now()));
+            window.setTimeout(() => window.location.reload(), 80);
+        }
     });
 
     document.addEventListener('visibilitychange', () => {
@@ -2896,6 +2916,7 @@ function installAuthClientSignalHooks() {
             visibility: document.visibilityState,
             hiddenMs,
             cacheHint: 'background_resume',
+            reloadIntent: false,
         });
     });
 }
@@ -2949,8 +2970,23 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const requestInput = document.getElementById('logoutRequestId');
+    const traceEl = document.getElementById('logoutTraceId');
+    const submitButton = logoutForm.querySelector('button[type="submit"]');
+
+    function newLogoutRequestId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return `lo-${window.crypto.randomUUID().slice(0, 8)}`;
+        }
+        return `lo-${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 6)}`;
+    }
+
     logoutForm.addEventListener('submit', async function(event) {
         event.preventDefault();
+        if (logoutForm.dataset.confirmed === 'true') {
+            return;
+        }
+
         const confirmed = await showConfirmDialog({
             title: 'Log out now?',
             text: 'You will need to sign in again to continue.',
@@ -2961,7 +2997,19 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (confirmed) {
-            logoutForm.submit();
+            const requestId = newLogoutRequestId();
+            logoutForm.dataset.confirmed = 'true';
+            if (requestInput) {
+                requestInput.value = requestId;
+            }
+            if (traceEl) {
+                traceEl.textContent = `Logout trace: ${requestId}`;
+                traceEl.classList.remove('d-none');
+            }
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+            HTMLFormElement.prototype.submit.call(logoutForm);
         }
     });
 });

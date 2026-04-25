@@ -13,7 +13,7 @@ import secrets
 import time
 from datetime import date, timedelta
 
-from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -132,10 +132,23 @@ def _log_access_denied_event(event_name, error=None):
             "session_role": session.get("role"),
             "remote_addr": request.remote_addr,
             "referer": request.headers.get("Referer"),
+            "user_agent": request.headers.get("User-Agent"),
             "error_type": type(error).__name__ if error else None,
             "error_message": str(error) if error else None,
         },
     )
+
+
+def _is_html_response(response):
+    content_type = (response.content_type or "").lower()
+    return content_type.startswith("text/html")
+
+
+def _apply_no_store(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 def _should_trace_request(path):
@@ -148,6 +161,12 @@ def _should_trace_request(path):
         or path.startswith("/api/stocktake/")
         or path.startswith("/reports/")
     )
+
+
+def _should_trace_auth_request(path):
+    if not path:
+        return False
+    return path in {"/login", "/logout", "/users"} or path.startswith("/users/")
 
 
 app = Flask(__name__)
@@ -215,7 +234,26 @@ def add_security_headers(response):
     if request.is_secure:
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
+    if session.get("user_id") and _is_html_response(response):
+        _apply_no_store(response)
+
     started_at = getattr(g, "request_started_at", None)
+    if started_at is not None and _should_trace_auth_request(request.path):
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        if request.path == "/logout" or response.status_code >= 400 or duration_ms >= 800:
+            app.logger.warning(
+                "AUTH_REQUEST_TRACE path=%s method=%s status=%s duration_ms=%s user_id=%s role=%s request_id=%s ua=%s referer=%s",
+                request.path,
+                request.method,
+                response.status_code,
+                duration_ms,
+                session.get("user_id"),
+                session.get("role"),
+                request.form.get("request_id") or request.headers.get("X-Request-ID") or "",
+                request.headers.get("User-Agent") or "",
+                request.headers.get("Referer") or "",
+            )
+
     if started_at is not None and _should_trace_request(request.path):
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
         search_query = (request.args.get("q") or "").strip()
@@ -799,10 +837,14 @@ def page_not_found(e):
 def handle_csrf_error(e):
     if request.path == "/logout" and request.method == "POST":
         _log_access_denied_event("logout_csrf_error", e)
+        _log_access_denied_event("csrf_error", e)
+        session.clear()
+        flash("You have been logged out. Please sign in again.", "info")
+        return _apply_no_store(redirect(url_for("auth.login")))
     _log_access_denied_event("csrf_error", e)
     if request.path == "/login" and request.method == "POST":
         flash("Your login page expired. Please sign in again.", "warning")
-        return redirect(url_for("auth.login"))
+        return _apply_no_store(redirect(url_for("auth.login")))
     return render_template('errors/403.html'), 400
 
 @app.errorhandler(400)
@@ -823,6 +865,7 @@ def conflict_error(e):
 
 @app.errorhandler(500)
 def server_error(e):
+    _log_access_denied_event("http_500", e)
     return render_template('errors/500.html'), 500
 
 # ============================================================

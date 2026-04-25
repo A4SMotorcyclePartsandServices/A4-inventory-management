@@ -22,6 +22,7 @@ auth_bp = Blueprint("auth", __name__)
 
 
 def _auth_trace(event, **details):
+    raw_user_agent = request.headers.get("User-Agent")
     payload = {
         "event": event,
         "endpoint": request.endpoint,
@@ -32,7 +33,7 @@ def _auth_trace(event, **details):
         "session_role": session.get("role"),
         "remote_addr": request.remote_addr,
         "referer": request.headers.get("Referer"),
-        "user_agent": request.user_agent.string[:200] if request.user_agent and request.user_agent.string else None,
+        "user_agent": raw_user_agent[:300] if raw_user_agent else None,
     }
     payload.update(details)
     current_app.logger.warning("AUTH_TRACE %s", payload)
@@ -186,7 +187,12 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
-    request_id = request.headers.get("X-Request-ID") or secrets.token_hex(4)
+    request_id = (
+        (request.form.get("request_id") or "").strip()
+        or request.headers.get("X-Request-ID")
+        or secrets.token_hex(4)
+    )
+    request_id = request_id[:64]
     user_id = session.get("user_id")
     username = session.get("username")
     role = session.get("role")
@@ -218,11 +224,13 @@ def logout():
 def client_signal():
     event = (request.args.get("event") or "").strip().lower()
     path = (request.args.get("path") or "").strip()[:160]
+    full_path = (request.args.get("full_path") or "").strip()[:240]
     nav_type = (request.args.get("nav_type") or "").strip().lower()[:32]
     visibility_state = (request.args.get("visibility") or "").strip().lower()[:16]
     persisted = (request.args.get("persisted") or "").strip().lower() in {"1", "true", "yes"}
     hidden_ms_raw = (request.args.get("hidden_ms") or "").strip()
     cache_hint = (request.args.get("cache_hint") or "").strip().lower()[:32]
+    reload_intent = (request.args.get("reload_intent") or "").strip().lower() in {"1", "true", "yes"}
 
     try:
         hidden_ms = max(0, min(int(hidden_ms_raw), 86_400_000)) if hidden_ms_raw else None
@@ -233,11 +241,13 @@ def client_signal():
         "client_restore_signal",
         signal_event=event,
         signal_path=path or request.headers.get("Referer"),
+        signal_full_path=full_path or None,
         nav_type=nav_type or None,
         persisted=persisted,
         visibility_state=visibility_state or None,
         hidden_ms=hidden_ms,
         cache_hint=cache_hint or None,
+        reload_intent=reload_intent,
     )
 
     response = make_response("", 204)
