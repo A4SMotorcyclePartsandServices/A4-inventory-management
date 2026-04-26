@@ -1,10 +1,10 @@
 from db.database import get_db
 from psycopg2 import errors as pg_errors
 from utils.formatters import format_date
-from datetime import timedelta
+from datetime import datetime, timedelta
 import re
 from utils.cash_categories import normalize_cash_category_label
-from utils.timezone import today_local
+from utils.timezone import now_local_naive, today_local
 
 SYSTEM_KEY_CASH_IN_BANK_TRANSFER = "cash_in_bank_transfer"
 SYSTEM_KEY_CASH_IN_EWALLET_TRANSFER = "cash_in_ewallet_transfer"
@@ -1602,8 +1602,17 @@ def add_cash_entry(
             reference_type = 'MECHANIC_PAYOUT'
             if payout_for_date in ("", None):
                 payout_for_date = today_local().isoformat()
+            try:
+                payout_date_obj = datetime.strptime(str(payout_for_date), "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                raise ValueError("Invalid mechanic payout date.")
+            if payout_date_obj > today_local():
+                raise ValueError("Mechanic payout date cannot be in the future.")
+            payout_for_date = payout_date_obj.isoformat()
+            ledger_created_at = datetime.combine(payout_date_obj, now_local_naive().time())
         else:
             payout_for_date = None
+            ledger_created_at = None
 
         if normalized_claim_sale_ids or normalized_claim_debt_payment_ids or normalized_claim_manual_float_entry_ids:
             if entry_type != 'CASH_IN':
@@ -1807,8 +1816,8 @@ def add_cash_entry(
         insert_row = conn.execute("""
             INSERT INTO cash_entries
                 (branch_id, entry_type, amount, cash_category_id, category, description,
-                reference_type, reference_id, payout_for_date, user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                reference_type, reference_id, payout_for_date, user_id, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()))
             RETURNING id
         """, (
             branch_id,
@@ -1820,7 +1829,8 @@ def add_cash_entry(
             reference_type,
             normalized_reference_id,
             payout_for_date,
-            user_id
+            user_id,
+            ledger_created_at,
         )).fetchone()
 
         entry_id = int(insert_row['id'])

@@ -16,6 +16,7 @@ npm-debug.log*
 *.csv
 *.sql
 *.dump
+test scripts/
 
 # OS clutter
 .DS_Store
