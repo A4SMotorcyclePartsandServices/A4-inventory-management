@@ -430,8 +430,17 @@
     }
 
     .refund-table {
+        table-layout: fixed;
+        width: 100%;
         margin-bottom: 0;
     }
+
+    .refund-items-table th:nth-child(1) { width: 36%; }
+    .refund-items-table th:nth-child(2),
+    .refund-items-table th:nth-child(3),
+    .refund-items-table th:nth-child(4) { width: 12%; }
+    .refund-items-table th:nth-child(5) { width: 14%; }
+    .refund-items-table th:nth-child(6) { width: 14%; }
 
     .refund-table thead th {
         color: var(--accent);
@@ -447,10 +456,55 @@
         background: transparent !important;
         border-color: var(--border-soft);
         vertical-align: middle;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .refund-table tbody tr:hover {
         background: #1a1d26 !important;
+    }
+
+    .refund-item-row {
+        transition: background 0.15s ease;
+    }
+
+    .refund-item-cell {
+        min-width: 0;
+        cursor: help;
+    }
+
+    .refund-item-name,
+    .refund-item-discount {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .refund-item-name {
+        color: #fff;
+        font-weight: 700;
+    }
+
+    .refund-item-discount {
+        color: #63d48a;
+        font-size: 0.78rem;
+        margin-top: 4px;
+    }
+
+    .refund-item-row:hover .refund-item-cell {
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .refund-item-row:hover .refund-item-name,
+    .refund-item-row:hover .refund-item-discount {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .services-table thead th {
@@ -1329,7 +1383,7 @@ function renderRefundDetail(data) {
             <div class="detail-block">
                 <div class="block-title">Refundable Items</div>
                 <div class="table-responsive">
-                    <table class="table table-dark refund-table align-middle">
+                    <table class="table table-dark refund-table refund-items-table align-middle">
                         <thead>
                             <tr>
                                 <th>Item</th>
@@ -1342,10 +1396,10 @@ function renderRefundDetail(data) {
                         </thead>
                         <tbody>
                             ${(data.items || []).map(item => `
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold text-white">${escapeHtml(item.name)}</div>
-                                        ${Number(item.discount_amount || 0) > 0 ? `<div class="small text-success mt-1">Discount applied: ${refundMoney(item.discount_amount)}</div>` : ''}
+                                <tr class="refund-item-row">
+                                    <td class="refund-item-cell" title="${escapeHtml(item.name || '')}">
+                                        <span class="refund-item-name">${escapeHtml(item.name || 'Unnamed Item')}</span>
+                                        ${Number(item.discount_amount || 0) > 0 ? `<span class="refund-item-discount">Discount applied: ${refundMoney(item.discount_amount)}</span>` : ''}
                                     </td>
                                     <td class="text-center">${item.sold_quantity}</td>
                                     <td class="text-center text-danger">${item.refunded_quantity}</td>
