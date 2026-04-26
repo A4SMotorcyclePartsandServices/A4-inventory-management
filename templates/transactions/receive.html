@@ -334,6 +334,37 @@ function showToastFlash(message, type = 'warning') {
     }
 }
 
+function receiveValidationRoot() {
+    return document.querySelector('.receive-board') || document;
+}
+
+function clearReceiveValidation() {
+    if (window.A4Validation?.clear) {
+        window.A4Validation.clear(receiveValidationRoot());
+    }
+}
+
+function flagReceiveError(field, message) {
+    if (window.A4Validation?.addError) {
+        return window.A4Validation.addError(field, message);
+    }
+    if (field) {
+        field.classList.add('border-danger');
+    }
+    return null;
+}
+
+function failReceiveValidation(firstErrorField) {
+    if (window.A4Validation?.fail) {
+        window.A4Validation.fail(receiveValidationRoot(), 'Please review the highlighted receiving fields before confirming.', {
+            type: 'warning',
+            target: firstErrorField,
+        });
+        return;
+    }
+    showToastFlash('Please review the highlighted receiving fields before confirming.', 'warning');
+}
+
 const RECEIVE_MAX_INPUT = 999999;
 const RECEIVE_DRAFT_KEY = `po_receive_draft:${window.location.pathname}:{{ po.id }}`;
 let isRestoringReceiveDraft = false;
@@ -485,6 +516,7 @@ function sanitizeReceiveInput(input) {
 }
 
 function syncReceiveRow(input) {
+    clearReceiveValidation();
     const row = input.closest('.item-row');
     const remaining = parseInt(row.dataset.remaining, 10);
     let qty = sanitizeReceiveInput(input);
@@ -543,7 +575,16 @@ async function submitReception() {
     });
     const rows = document.querySelectorAll('.item-row');
     const items = [];
-    let hasError = false;
+    let firstErrorField = null;
+
+    clearReceiveValidation();
+
+    function markError(field, message) {
+        flagReceiveError(field, message);
+        if (!firstErrorField) {
+            firstErrorField = field;
+        }
+    }
 
     rows.forEach(row => {
         const itemId = row.getAttribute('data-item-id');
@@ -555,23 +596,17 @@ async function submitReception() {
         const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
 
         if (qtyReceived > remaining) {
-            row.querySelector('.qty-input').classList.add('border-danger');
-            row.querySelector('.qty-input').focus();
-            hasError = true;
+            markError(row.querySelector('.qty-input'), 'Received quantity cannot exceed the pending PO quantity.');
             return;
         }
 
         if (purchaseMode === 'BOX' && qtyReceived > 0 && stockQtyReceived <= 0) {
-            stockQtyInput.classList.add('border-danger');
-            stockQtyInput.focus();
-            hasError = true;
+            markError(stockQtyInput, 'Counted pieces are required for boxes/plastic received today.');
             return;
         }
 
         if (qtyReceived > 0 && unitCost <= 0) {
-            row.querySelector('.qty-input').classList.add('border-danger');
-            row.querySelector('.qty-input').focus();
-            hasError = true;
+            markError(row.querySelector('.qty-input'), 'Unit cost is required before receiving this item.');
             return;
         }
 
@@ -582,8 +617,8 @@ async function submitReception() {
         });
     });
 
-    if (hasError) {
-        showToastFlash("Please review the received quantity, counted pieces, and unit cost before confirming.", "warning");
+    if (firstErrorField) {
+        failReceiveValidation(firstErrorField);
         return;
     }
 
@@ -651,12 +686,16 @@ window.addEventListener('pagehide', flushReceiveDraftPersist);
 window.addEventListener('beforeunload', flushReceiveDraftPersist);
 
 document.querySelectorAll('.qty-input').forEach(input => {
-    input.addEventListener('input', () => updateReceivePreview(input.closest('.item-row')));
+    input.addEventListener('input', () => {
+        clearReceiveValidation();
+        updateReceivePreview(input.closest('.item-row'));
+    });
 });
 
 document.querySelectorAll('.stock-qty-input').forEach(input => {
     input.setAttribute('max', String(RECEIVE_MAX_INPUT));
     input.addEventListener('input', () => {
+        clearReceiveValidation();
         updateReceivePreview(input.closest('.item-row'));
         scheduleReceiveDraftPersist();
     });

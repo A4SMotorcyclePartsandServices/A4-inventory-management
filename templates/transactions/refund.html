@@ -926,6 +926,37 @@ function refundAlert(message, type = 'warning') {
     }
 }
 
+function refundValidationRoot() {
+    return document.getElementById('refund-detail-panel') || document;
+}
+
+function clearRefundValidation() {
+    if (window.A4Validation?.clear) {
+        window.A4Validation.clear(refundValidationRoot());
+    }
+}
+
+function flagRefundError(field, message, options = {}) {
+    if (window.A4Validation?.addError) {
+        return window.A4Validation.addError(field, message, options);
+    }
+    if (field) {
+        field.classList.add('border-danger');
+    }
+    return null;
+}
+
+function failRefundValidation(firstErrorField) {
+    if (window.A4Validation?.fail) {
+        window.A4Validation.fail(refundValidationRoot(), 'Please complete the highlighted refund fields.', {
+            type: 'warning',
+            target: firstErrorField,
+        });
+        return;
+    }
+    refundAlert('Please complete the highlighted refund fields.', 'warning');
+}
+
 function refundStateClass(state) {
     if (state === 'Fully Refunded') return 'full';
     if (state === 'Partially Refunded') return 'partial';
@@ -1019,6 +1050,7 @@ function renderReplacementSelectedCard() {
 }
 
 function clearReplacementSelection() {
+    clearRefundValidation();
     selectedReplacementItem = null;
     const searchInput = document.getElementById('replacementSearchInput');
     const qtyInput = document.getElementById('replacementQuantityInput');
@@ -1031,6 +1063,7 @@ function clearReplacementSelection() {
 }
 
 function chooseReplacementItem(item) {
+    clearRefundValidation();
     selectedReplacementItem = item;
     document.getElementById('replacementSearchInput').value = item.name || '';
     document.getElementById('replacementSearchResults').innerHTML = '';
@@ -1043,6 +1076,7 @@ let replacementSearchDebounce = null;
 let replacementSearchToken = 0;
 
 function searchReplacementItems() {
+    clearRefundValidation();
     const query = document.getElementById('replacementSearchInput')?.value.trim() || '';
     const resultsEl = document.getElementById('replacementSearchResults');
     if (!resultsEl) return;
@@ -1111,11 +1145,17 @@ function searchReplacementItems() {
 
 function initializeRefundDetailControls() {
     document.querySelectorAll('.refund-qty-input').forEach(input => {
-        input.addEventListener('input', updateExchangeSummary);
+        input.addEventListener('input', () => {
+            clearRefundValidation();
+            updateExchangeSummary();
+        });
     });
 
     document.querySelectorAll('.refund-mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => toggleRefundMode(btn.dataset.mode));
+        btn.addEventListener('click', () => {
+            clearRefundValidation();
+            toggleRefundMode(btn.dataset.mode);
+        });
     });
 
     const replacementSearchInput = document.getElementById('replacementSearchInput');
@@ -1125,8 +1165,14 @@ function initializeRefundDetailControls() {
 
     const replacementQtyInput = document.getElementById('replacementQuantityInput');
     if (replacementQtyInput) {
-        replacementQtyInput.addEventListener('input', updateExchangeSummary);
+        replacementQtyInput.addEventListener('input', () => {
+            clearRefundValidation();
+            updateExchangeSummary();
+        });
     }
+
+    document.getElementById('refundReasonInput')?.addEventListener('input', clearRefundValidation);
+    document.getElementById('refundNotesInput')?.addEventListener('input', clearRefundValidation);
 
     renderReplacementSelectedCard();
     toggleRefundMode('refund');
@@ -1450,7 +1496,9 @@ function openRefundSale(saleId) {
 
 function submitRefundForSelectedSale() {
     if (!selectedRefundSaleId) return;
+    clearRefundValidation();
 
+    const quantityInputs = Array.from(document.querySelectorAll('.refund-qty-input'));
     const items = Array.from(document.querySelectorAll('.refund-qty-input'))
         .map(input => ({
             sale_item_id: Number(input.dataset.saleItemId),
@@ -1461,23 +1509,34 @@ function submitRefundForSelectedSale() {
     const reason = document.getElementById('refundReasonInput')?.value.trim() || '';
     const notes = document.getElementById('refundNotesInput')?.value.trim() || '';
     const mode = getSelectedRefundMode();
+    let firstErrorField = null;
+
+    function markError(field, message, options = {}) {
+        flagRefundError(field, message, options);
+        if (!firstErrorField) {
+            firstErrorField = field;
+        }
+    }
 
     if (!items.length) {
-        refundAlert('Select at least one item quantity to refund.', 'warning');
-        return;
+        const firstQuantityInput = quantityInputs[0] || document.getElementById('submitRefundBtn');
+        markError(firstQuantityInput, 'Select at least one item quantity to refund.', {
+            errorHost: firstQuantityInput?.closest('.detail-block'),
+        });
     }
     if (!reason) {
-        refundAlert('Refund reason is required.', 'warning');
-        return;
+        markError(document.getElementById('refundReasonInput'), 'Refund reason is required.');
     }
     if (mode === 'swap') {
         const replacementQuantity = Number(document.getElementById('replacementQuantityInput')?.value || 0);
         if (!selectedReplacementItem || !selectedReplacementItem.id) {
-            refundAlert('Select a replacement item for the swap.', 'warning');
-            return;
+            markError(document.getElementById('replacementSearchInput'), 'Select a replacement item for the swap.');
         }
         if (replacementQuantity <= 0) {
-            refundAlert('Replacement quantity must be at least 1.', 'warning');
+            markError(document.getElementById('replacementQuantityInput'), 'Replacement quantity must be at least 1.');
+        }
+        if (firstErrorField) {
+            failRefundValidation(firstErrorField);
             return;
         }
         pendingRefundPayload = {
@@ -1500,6 +1559,10 @@ function submitRefundForSelectedSale() {
             : 'This is an even exchange.';
         document.getElementById('refundConfirmMessage').textContent = `This swap will return stock for the selected refund item(s), create a linked replacement sale for ${selectedReplacementItem.name}, and settle the difference immediately. ${adjustmentText}`;
     } else {
+        if (firstErrorField) {
+            failRefundValidation(firstErrorField);
+            return;
+        }
         pendingRefundPayload = { items, reason, notes };
         document.getElementById('refundConfirmMessage').textContent = 'This refund will return stock to inventory and record cash out for the refund.';
     }

@@ -423,6 +423,17 @@
             background: rgba(193,18,31,0.06) !important;
         }
 
+        .a4-field-error-msg {
+            color: #f87171;
+            font-size: 0.72rem;
+            margin-top: 4px;
+            line-height: 1.35;
+        }
+
+        .a4-field-invalid {
+            border-color: var(--accent) !important;
+        }
+
         .table-responsive,
         .card .table-responsive {
             width: 100%;
@@ -2034,6 +2045,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="{{ url_for('static', filename='utils/a4_submission.js') }}"></script>
 <script src="{{ url_for('static', filename='utils/a4_submission_forms.js') }}"></script>
+<script src="{{ url_for('static', filename='utils/a4_validation.js') }}"></script>
 
 <script>
 const appBody = document.body;

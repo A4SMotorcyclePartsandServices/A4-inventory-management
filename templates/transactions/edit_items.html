@@ -911,13 +911,68 @@
         }
     }
 
+    function clearNewVendorValidation() {
+        const modalEl = document.getElementById('newVendorModal');
+        if (window.A4Validation?.clear) {
+            window.A4Validation.clear(modalEl);
+        }
+        document.getElementById('new-vendor-error').textContent = '';
+    }
+
+    function showNewVendorError(message, type = 'danger') {
+        const text = String(message || 'Could not save vendor.').trim();
+        document.getElementById('new-vendor-error').textContent = text;
+        if (window.A4Validation?.showSummary) {
+            window.A4Validation.showSummary(text, type);
+        }
+    }
+
+    function validateNewVendorFields(vendor) {
+        const modalEl = document.getElementById('newVendorModal');
+        const fieldChecks = [
+            ['vendor_name', document.getElementById('new-vendor-name'), 'Vendor name is required.'],
+            ['address', document.getElementById('new-vendor-address'), 'Address is required.'],
+            ['contact_person', document.getElementById('new-vendor-contact-person'), 'Contact person is required.'],
+            ['contact_no', document.getElementById('new-vendor-contact-no'), 'Contact no. is required.'],
+            ['email', document.getElementById('new-vendor-email'), 'Email is required.'],
+        ];
+
+        clearNewVendorValidation();
+        let hasMissing = false;
+        fieldChecks.forEach(([key, field, message]) => {
+            if (!vendor[key]) {
+                hasMissing = true;
+                window.A4Validation?.addError(field, message);
+            }
+        });
+
+        if (hasMissing) {
+            if (window.A4Validation?.fail) {
+                window.A4Validation.fail(modalEl, 'Please complete the highlighted vendor fields.', {
+                    block: 'nearest',
+                });
+            } else {
+                showNewVendorError('Please complete the highlighted vendor fields.', 'warning');
+            }
+            return false;
+        }
+
+        if (window.A4Validation?.hasErrors?.(modalEl)) {
+            window.A4Validation.fail(modalEl, 'Please complete the highlighted vendor fields.', {
+                block: 'nearest',
+            });
+            return false;
+        }
+        return true;
+    }
+
     function openNewVendorModal(prefill = '') {
         document.getElementById('new-vendor-name').value = prefill;
         document.getElementById('new-vendor-address').value = '';
         document.getElementById('new-vendor-contact-person').value = '';
         document.getElementById('new-vendor-contact-no').value = '';
         document.getElementById('new-vendor-email').value = '';
-        document.getElementById('new-vendor-error').textContent = '';
+        clearNewVendorValidation();
         new bootstrap.Modal(document.getElementById('newVendorModal')).show();
     }
 
@@ -958,12 +1013,23 @@
     itemHistoryLoadMoreBtn?.addEventListener('click', loadOlderItemHistory);
 
     document.getElementById('newVendorModal').addEventListener('hidden.bs.modal', () => {
+        clearNewVendorValidation();
         if (!vendorSelectedCard.style.display || vendorSelectedCard.style.display === 'none') {
             if (vendorSelect.value === NEW_VENDOR_OPTION) {
                 vendorSelect.value = currentItem.vendor_id ? String(currentItem.vendor_id) : '';
             }
             handleVendorSelectionChange();
         }
+    });
+
+    document.getElementById('newVendorModal').addEventListener('input', (event) => {
+        if (!event.target.matches('input, textarea')) {
+            return;
+        }
+        if (window.A4Validation?.clear) {
+            window.A4Validation.clear(event.target.closest('.mb-3, .mb-2') || event.target.parentElement);
+        }
+        document.getElementById('new-vendor-error').textContent = '';
     });
 
     document.getElementById('saveNewVendorBtn').addEventListener('click', async () => {
@@ -974,13 +1040,11 @@
             contact_no: document.getElementById('new-vendor-contact-no').value.trim(),
             email: document.getElementById('new-vendor-email').value.trim(),
         };
-        const errorEl = document.getElementById('new-vendor-error');
-        errorEl.textContent = '';
 
-        if (!vendor.vendor_name || !vendor.address || !vendor.contact_person || !vendor.contact_no || !vendor.email) {
-            errorEl.textContent = 'All vendor fields are required.';
+        if (!validateNewVendorFields(vendor)) {
             return;
         }
+        window.A4Flash?.clearDynamic?.();
 
         try {
             const response = await fetch('/api/vendors/add', {
@@ -991,6 +1055,7 @@
             const data = await response.json();
 
             if (data.status === 'success') {
+                window.A4Flash?.clearDynamic?.();
                 bootstrap.Modal.getInstance(document.getElementById('newVendorModal')).hide();
                 vendorMap.set(String(data.vendor.id), data.vendor);
                 const existingOption = Array.from(vendorSelect.options).find(option => option.value === String(data.vendor.id));
@@ -1005,9 +1070,9 @@
                 return;
             }
 
-            errorEl.textContent = data.message || 'Could not save vendor.';
+            showNewVendorError(data.message || 'Could not save vendor.');
         } catch (error) {
-            errorEl.textContent = 'Network error. Try again.';
+            showNewVendorError('Network error. Try again.');
         }
     });
 

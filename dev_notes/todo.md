@@ -82,3 +82,7 @@
 - [ ] Best immediate product decision: add month/year presets on top of the existing range filter, and shorten pagination to something like `Previous 1 ... 5 6 7 ... 20 Next`
 - [ ] Best medium-term technical decision: refactor ledger retrieval so pagination happens in SQL instead of after building a full unified list in memory
 - [ ] Best long-term UX: default the page to `This Month`, with easy switching to other months/years and custom range when needed
+
+## Validation
+
+- [ ] Continue larger validation cleanup later: admin/user/payables/stocktake forms and any remaining page-specific required-field handling should move toward the shared inline + toast helper pattern.

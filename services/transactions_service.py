@@ -1074,6 +1074,7 @@ def record_sale(data, user_id, username):
     raw_sales_number = str(data.get("sales_number") or "").strip()
     raw_mechanic_id = data.get("mechanic_id")
     raw_secondary_mechanic_id = data.get("secondary_mechanic_id")
+    raw_customer_id = data.get("customer_id")
     try:
         submitted_total_amount = _money(data.get("total_amount"))
     except (TypeError, ValueError):
@@ -1098,6 +1099,8 @@ def record_sale(data, user_id, username):
 
     quick_sale = requested_transaction_class == "QUICK_SALE"
     mechanic_supply = requested_transaction_class == "MECHANIC_SUPPLY"
+    if requested_transaction_class == "NEW_SALE" and raw_customer_id in ("", None):
+        raise ValueError("New Sale requires an existing customer. Select a customer from the list or add the customer first.")
 
     def _coerce_optional_mechanic_id(raw_value, field_label):
         if raw_value in ("", None):
@@ -3058,6 +3061,25 @@ def _total_received_quantity(items):
     return sum(int(item["quantity_received"] or 0) for item in items)
 
 
+def _get_po_receiving_status(conn, po_id):
+    row = conn.execute("""
+        SELECT
+            COUNT(*) AS total_item_count,
+            COUNT(*) FILTER (WHERE quantity_received >= quantity_ordered) AS completed_item_count,
+            COALESCE(SUM(quantity_received), 0) AS total_received
+        FROM po_items
+        WHERE po_id = %s
+    """, (po_id,)).fetchone()
+
+    if not row or int(row["total_item_count"] or 0) <= 0:
+        return "PENDING"
+    if int(row["total_received"] or 0) <= 0:
+        return "PENDING"
+    if int(row["completed_item_count"] or 0) >= int(row["total_item_count"] or 0):
+        return "COMPLETED"
+    return "PARTIAL"
+
+
 def _normalize_po_revision_items(current_items, revision_items):
     item_lookup = {}
     for item in current_items:
@@ -4189,7 +4211,6 @@ def receive_purchase_order(po_id, received_items, user_id, username):
         if (po["status"] or "").upper() not in PO_RECEIVABLE_STATUSES:
             raise ValueError("This purchase order is not approved for receiving.")
         po_vendor_id = int(po["vendor_id"] or 0)
-        all_completed = True
         received_any = False
         receipt_entries = []
 
@@ -4279,14 +4300,6 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 WHERE po_id = %s AND item_id = %s
             """, (qty_in, po_id, item_id))
 
-            updated = conn.execute("""
-                SELECT quantity_ordered, quantity_received
-                FROM po_items WHERE po_id = %s AND item_id = %s
-            """, (po_id, item_id)).fetchone()
-
-            if updated['quantity_received'] < updated['quantity_ordered']:
-                all_completed = False
-
             receipt_entries.append({
                 "po_id": po_id,
                 "item_id": item_id,
@@ -4341,7 +4354,7 @@ def receive_purchase_order(po_id, received_items, user_id, username):
                 ),
             )
 
-        new_status = 'COMPLETED' if all_completed else 'PARTIAL'
+        new_status = _get_po_receiving_status(conn, po_id)
         conn.execute("""
             UPDATE purchase_orders SET status = %s, received_at = %s
             WHERE id = %s

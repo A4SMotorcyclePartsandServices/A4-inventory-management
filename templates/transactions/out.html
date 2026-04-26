@@ -2243,29 +2243,15 @@ function flushSaleDraftPersist() {
    FIELD ERROR HELPERS
 ========================================================= */
 function clearFieldErrors() {
-    document.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-    ['sales-number', 'customer-search', 'quick-customer-name', 'vehicle-id', 'payment-method', 'ref-no', 'mechanic-id', 'mechanic-id-secondary'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            el.classList.remove('border-danger');
-            el.style.boxShadow = '';
-        }
-    });
-    document.querySelectorAll('.service-mechanic-select').forEach(el => {
-        el.classList.remove('border-danger');
-        el.style.boxShadow = '';
-    });
+    if (window.A4Validation?.clear) {
+        window.A4Validation.clear(document);
+        return;
+    }
 }
 
 function flagError(el, message) {
-    el.classList.add('border-danger');
-    el.style.boxShadow = '0 0 0 2px rgba(193,18,31,0.3)';
-    const existing = el.parentElement.querySelector('.field-error-msg');
-    if (!existing) {
-        const err = document.createElement('div');
-        err.className = 'field-error-msg';
-        err.textContent = message;
-        el.parentElement.appendChild(err);
+    if (window.A4Validation?.addError) {
+        return window.A4Validation.addError(el, message);
     }
 }
 
@@ -3051,6 +3037,9 @@ function setSaleMode(mode) {
     } else {
         document.getElementById('quick-customer-name').classList.remove('border-danger');
         document.getElementById('quick-customer-name').style.boxShadow = '';
+        if (isFull && !document.getElementById('customer-id').value) {
+            document.getElementById('customer-name').value = '';
+        }
         if (!isFull) {
             document.getElementById('customer-id').value = '';
             document.getElementById('customer-name').value = '';
@@ -5193,6 +5182,7 @@ function buildSaleDraft() {
     const mechanicSupplyMode = isMechanicSupplyMode();
     const fullSaleMode = isFullSaleMode();
     const salesNum      = document.getElementById('sales-number').value.trim();
+    const customerId    = document.getElementById('customer-id').value;
     const customerName  = quickSaleMode
         ? document.getElementById('quick-customer-name').value.trim()
         : (fullSaleMode ? document.getElementById('customer-name').value.trim() : '');
@@ -5219,6 +5209,7 @@ function buildSaleDraft() {
 
     if (!mechanicSupplyMode && !salesNum)         markError(document.getElementById('sales-number'), 'OR No. is required.');
     if (!mechanicSupplyMode && !customerName)     markError(document.getElementById(quickSaleMode ? 'quick-customer-name' : 'customer-search'), 'Customer is required.');
+    if (fullSaleMode && !customerId)              markError(document.getElementById('customer-search'), 'Select an existing customer from the list or add this customer first.');
     if (mechanicSupplyMode && !primaryMechanicId) markError(document.getElementById('mechanic-id'), 'Assigned mechanic is required.');
     if (vehicleRequired && !vehicleId)            markError(document.getElementById('vehicle-id'), 'Vehicle is required.');
     if (vehicleRequired && vehicleId && !vehicleIsActive) markError(document.getElementById('vehicle-id'), 'Selected vehicle is inactive.');
@@ -5261,8 +5252,15 @@ function buildSaleDraft() {
     }
 
     if (firstErrorEl) {
-        firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        if (typeof firstErrorEl.focus === 'function') firstErrorEl.focus();
+        if (window.A4Validation?.fail) {
+            window.A4Validation.fail(document, 'Please complete the highlighted required fields.', {
+                type: 'warning',
+                target: firstErrorEl,
+            });
+        } else {
+            firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (typeof firstErrorEl.focus === 'function') firstErrorEl.focus();
+        }
         return null;
     }
 
