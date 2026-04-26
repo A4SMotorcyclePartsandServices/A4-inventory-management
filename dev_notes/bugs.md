@@ -108,52 +108,70 @@ Pickup notes for the next pass:
 - This section is a reminder that performance bugs in this system are not always "server slow" issues.
 - Some are resilience issues that only become visible on older devices, and we should treat that as a product-level bug class to fix deliberately.
 
-## Random admin login redirect to Access Denied on first load, then normal after refresh.
+## Resolved: mobile stale auth pages, login CSRF retry, and first logout retry
 
-Current theory:
+Status:
+- Resolved / mitigated after adding server-side auth session tokens.
+- Client-side signed Flask cookies are no longer the only source of truth for whether a login session is valid.
+- If a mobile browser replays an old cookie after logout, the shared auth guard now rejects it because the matching DB token has already been revoked.
+- Verified after implementation: normal login/logout flows continued working.
+
+Resolved diagnosis:
 - There were likely 2 overlapping causes.
 - Earlier logs pointed to duplicate in-flight `/login` POSTs after session rotation, which could fail with:
   `400 Bad Request: The CSRF session token is missing.`
 - That path was mitigated by preserving the session CSRF token during login rotation and replaying duplicate submits through idempotency.
-- Newer Railway logs now show a different failure:
+- Later Railway logs showed a different failure:
   `400 Bad Request: The CSRF token has expired.`
-- This points to a stale login page, especially likely on mobile where the browser resumes an older `/login` tab from background or cache.
+- That pointed to a stale login page, especially likely on mobile where the browser resumes an older `/login` tab from background or cache.
 - In that case the first submit fails before authentication runs, then refresh/retry works because the page gets a fresh CSRF token.
-- Temporary tracing was added with `AUTH_TRACE` logs in `app.py`, `auth/utils.py`, and `routes/auth_route.py`.
 
-Related mobile logout report:
+Resolved mobile logout report:
 - Client reported that on phone, logout sometimes appears to do nothing on the first try.
 - She stays on the same page and only reaches logged-out state after trying again.
-- This may be the same stale mobile page / resumed-tab family of issue as the login `403` problem, not necessarily a separate auth bug.
+- This was from the same stale mobile page / resumed-tab family of issue as the login CSRF problem, but with one extra risk: Flask's default session is a client-side signed cookie.
 - The client is known to keep the web app open on her phone for long periods without clearing it, which increases the chance that the browser restores an older page state.
-- Two plausible variants:
-  first logout actually succeeds server-side, but the phone keeps showing the previously loaded protected page from cache / back-forward cache until the next real navigation
-  first logout POST fails because the old page is carrying stale form / CSRF state, then the second attempt works after the browser refreshes its state
-- Why this theory fits:
-  `/login` already needed explicit no-store headers because mobile browsers were reusing old login pages with expired CSRF tokens
-  authenticated pages may still be more vulnerable to stale restore behavior than the login page
-  logout itself is only a simple POST + redirect, so the weak point is more likely page/browser state than the server-side logout logic
-- Practical interpretation:
-  if the first logout truly cleared the session, then any refresh or new navigation after that point should redirect to `/login`
-  if the session was still active after the first logout attempt, then the first POST likely never completed or failed before session clear
-- Current combined theory:
-  both the intermittent login `403` and the phone logout retry issue may stem from mobile browsers resuming stale pages after the app has been backgrounded for a long time
-  the symptom changes depending on which page was resumed and whether the first request hits stale CSRF state or only stale visual state
+- Confirmed server-side clue:
+  Railway logs showed `logout_attempt` and `logout_success` for `/logout`, followed by `AUTH_REQUEST_TRACE path=/logout method=POST status=302 ... user_id=None`.
+- That meant the Flask route completed normally, returned a redirect to `/login`, and had no active session by the end of the request.
+- The repeated later `logout_attempt` entries still showing `user_id: 1` pointed to the browser sending an old signed Flask session cookie again.
+- Because Flask's default session cookie is client-side, `session.clear()` only tells the browser to delete/replace the cookie. It does not revoke the old cookie server-side.
+- Likely pre-fix flow:
+  first logout succeeds and responds with `Set-Cookie` clearing the session plus `302 /login`
+  the phone still presents or reuses the old cookie during the redirect / resumed page state
+  `/login` sees `user_id` in that old cookie and redirects the user back to `/users`
+  the second logout works once the browser finally accepts the cleared cookie or performs a fresh navigation
 
-Tracing added for the mobile logout issue:
+Fixes applied:
+- Added `auth_sessions` table with hashed per-login tokens, expiry, revocation, user agent, and IP metadata.
+- Successful login creates a new DB auth session token and stores the raw token only in the signed Flask session cookie.
+- The shared auth guard now rejects missing, revoked, expired, mismatched, or unknown auth session tokens.
+- Logout revokes the DB token before clearing the browser session.
+- Stale-CSRF logout also revokes the DB token before redirecting to `/login`.
+- After deployment, users with old pre-token cookies are asked to sign in again once.
+- Authenticated HTML responses send `no-store` cache headers so mobile browsers are less likely to keep showing old protected pages after auth state changes.
+- Protected pages log `client_restore_signal` on bfcache/history restore and force one real reload, allowing Flask to redirect to `/login` if the session was already cleared.
+- Logout submits include a client-generated `request_id` in the form body and briefly show it as `Logout trace: ...` in the menu, making client reports easier to match to Railway logs.
+- Logout/auth tracing includes raw `User-Agent`.
+- `AUTH_REQUEST_TRACE` logs `/logout` plus slow/error `/login` and `/users` requests with status, duration, request id, user id, role, user agent, and referer.
+- CSRF failures on `POST /login` redirect back to `/login` with a warning flash instead of showing the generic Access Denied page.
+- `/login` uses the server-side idempotency table so repeated submits with the same key replay the first successful redirect instead of reprocessing the login.
+- `/login` responses send no-store/no-cache headers so mobile browsers are less likely to reuse an old page with an expired CSRF token.
+
+Tracing left in place:
 - Lightweight logout-specific tracing was added so future incidents can be classified without heavy logging.
-- Added server-side `AUTH_TRACE` events:
+- Server-side `AUTH_TRACE` events:
   `logout_attempt`
   `logout_success`
   `logout_csrf_error`
-- Added a very small authenticated browser restore signal:
+- Authenticated browser restore signal:
   `client_restore_signal`
 - The browser signal only fires in likely stale-page situations:
   `pageshow_restore`
   `visibility_resume`
 - To keep this lightweight, it does not poll, does not store extra data, and only sends a small GET request when the page is restored from history / bfcache or resumes after being hidden for at least about 60 seconds.
 
-How to check logs in Railway for the logout issue:
+If this ever appears again, check Railway logs:
 - Open Railway.
 - Open this project.
 - Open the deployed service for the app.
@@ -163,38 +181,17 @@ How to check logs in Railway for the logout issue:
   `logout_attempt`
   `logout_success`
   `logout_csrf_error`
+  `auth_session_invalid`
   `client_restore_signal`
   `login_required_missing_session`
 
-Quick interpretation guide for logout incidents:
+Quick interpretation guide:
 - If there is no `logout_attempt` at all, the first logout tap likely never submitted or never reached the server.
 - If `logout_attempt` appears but `logout_success` does not, the request likely failed before session clear.
-- If `logout_success` appears, the server did clear the session.
-- If `logout_success` is followed by later `login_required_missing_session` on the next navigation, the first logout likely worked and the phone was showing a stale protected page.
+- If `logout_success` appears with `revoked_auth_session: True`, logout revoked the DB session token.
+- If a later request with an old cookie appears, it should now log `auth_session_invalid` and redirect to `/login`.
 - If `logout_csrf_error` appears, the logout came from a stale page with expired CSRF state.
 - If `client_restore_signal` appears near the same time, that strongly supports the mobile resumed-page / stale-cache theory.
-
-Quick mobile logout hardening added:
-- Authenticated HTML responses now send `no-store` cache headers so mobile browsers are less likely to keep showing old protected pages after auth state changes.
-- Protected pages now log a clearer `client_restore_signal` on bfcache/history restore and force one real reload, allowing Flask to redirect to `/login` if the session was already cleared.
-- Logout submits now include a client-generated `request_id` in the form body and briefly show it as `Logout trace: ...` in the menu, making client reports easier to match to Railway logs.
-- Logout/auth tracing now includes raw `User-Agent`.
-- `AUTH_REQUEST_TRACE` now logs `/logout` plus slow/error `/login` and `/users` requests with status, duration, request id, user id, role, user agent, and referer.
-- Stale-CSRF `POST /logout` now clears the session and redirects to `/login` instead of showing the generic Access Denied page, because the user's intent was to log out.
-
-Latest observed log pattern:
-- `csrf_error` on `/login` with:
-  `error_message: 400 Bad Request: The CSRF token has expired.`
-- followed by a later successful `/login` retry
-- this is consistent with the user submitting an old login page first, then retrying after refresh or reload
-
-Mitigation added:
-- Preserve the current session `csrf_token` during successful login session rotation.
-- Disable duplicate login submits on the login page after the first click.
-- Login form now sends an `idempotency_key` through the shared submit guard.
-- `/login` now uses the server-side idempotency table so repeated submits with the same key replay the first successful redirect instead of reprocessing the login.
-- `/login` responses now send no-store/no-cache headers so mobile browsers are less likely to reuse an old page with an expired CSRF token.
-- CSRF failures on `POST /login` now redirect back to `/login` with a warning flash instead of showing the generic Access Denied page.
 
 How to check logs in Railway:
 - Open Railway.

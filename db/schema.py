@@ -151,6 +151,34 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_login_attempts_attempted_at
     ON login_attempts (attempted_at DESC)
     """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+        id                  SERIAL PRIMARY KEY,
+        user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash          TEXT NOT NULL UNIQUE,
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        last_seen_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+        expires_at          TIMESTAMP NOT NULL,
+        revoked_at          TIMESTAMP,
+        revoked_reason      TEXT,
+        user_agent          TEXT,
+        ip_address          TEXT
+    )
+    """)
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP NOT NULL DEFAULT NOW()")
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP")
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMP")
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS revoked_reason TEXT")
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent TEXT")
+    cur.execute("ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS ip_address TEXT")
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_token_hash
+    ON auth_sessions (token_hash)
+    """)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_active
+    ON auth_sessions (user_id, revoked_at, expires_at DESC)
+    """)
 
     # 2. MECHANICS TABLE
     cur.execute("""

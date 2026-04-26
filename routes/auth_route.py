@@ -16,6 +16,11 @@ from services.idempotency_service import (
     extract_idempotency_key,
     finalize_idempotent_request,
 )
+from services.auth_session_service import (
+    AUTH_SESSION_TOKEN_KEY,
+    create_auth_session,
+    revoke_auth_session,
+)
 from services.auth_service import authenticate_user
 
 auth_bp = Blueprint("auth", __name__)
@@ -51,6 +56,12 @@ def _start_authenticated_session(user):
     session["username"] = user["username"]
     session["role"] = user["role"]
     session["must_change_password"] = int(user.get("must_change_password") or 0)
+    session[AUTH_SESSION_TOKEN_KEY] = create_auth_session(
+        user_id=user["id"],
+        lifetime_seconds=current_app.permanent_session_lifetime.total_seconds(),
+        user_agent=request.headers.get("User-Agent"),
+        ip_address=request.remote_addr,
+    )
 
 
 def _login_redirect_target(user):
@@ -196,6 +207,7 @@ def logout():
     user_id = session.get("user_id")
     username = session.get("username")
     role = session.get("role")
+    auth_session_token = session.get(AUTH_SESSION_TOKEN_KEY)
     redirect_target = url_for("auth.login")
 
     _auth_trace(
@@ -203,12 +215,18 @@ def logout():
         request_id=request_id,
         redirect_target=redirect_target,
     )
+    revoked_auth_session = revoke_auth_session(
+        user_id=user_id,
+        token=auth_session_token,
+        reason="logout",
+    )
     _auth_trace(
         "logout_success",
         request_id=request_id,
         cleared_user_id=user_id,
         cleared_username=username,
         cleared_role=role,
+        revoked_auth_session=revoked_auth_session,
         redirect_target=redirect_target,
     )
     session.clear()

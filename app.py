@@ -52,6 +52,7 @@ from services.analytics_service import (
 )
 from services.sales_analytics_service import get_sales_analytics_snapshot
 from services.stocktake_access_service import get_stocktake_access_state
+from services.auth_session_service import AUTH_SESSION_TOKEN_KEY, revoke_auth_session
 
 # ------------------------
 # Importers (CSV handling)
@@ -838,6 +839,11 @@ def handle_csrf_error(e):
     if request.path == "/logout" and request.method == "POST":
         _log_access_denied_event("logout_csrf_error", e)
         _log_access_denied_event("csrf_error", e)
+        revoke_auth_session(
+            user_id=session.get("user_id"),
+            token=session.get(AUTH_SESSION_TOKEN_KEY),
+            reason="logout_csrf_error",
+        )
         session.clear()
         flash("You have been logged out. Please sign in again.", "info")
         return _apply_no_store(redirect(url_for("auth.login")))

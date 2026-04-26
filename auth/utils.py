@@ -4,6 +4,7 @@ from functools import wraps
 from flask import abort, current_app, flash, g, request, session, redirect, url_for, jsonify
 
 from db.database import get_db
+from services.auth_session_service import AUTH_SESSION_TOKEN_KEY, validate_auth_session
 
 _LOGIN_WINDOW_SECONDS = 15 * 60
 _LOGIN_MAX_ATTEMPTS = 5
@@ -141,6 +142,22 @@ def get_current_user():
 
 
 def ensure_authenticated_user():
+    user_id = session.get("user_id")
+    auth_session_token = session.get(AUTH_SESSION_TOKEN_KEY)
+    auth_session_state = validate_auth_session(
+        user_id=user_id,
+        token=auth_session_token,
+    )
+    if not auth_session_state["valid"]:
+        _auth_log(
+            "auth_session_invalid",
+            reason=auth_session_state["reason"],
+            has_token=bool(auth_session_token),
+        )
+        session.clear()
+        flash("Your session expired. Please sign in again.", "warning")
+        return None
+
     user = get_current_user()
     if not user or user["is_active"] == 0:
         _auth_log(
