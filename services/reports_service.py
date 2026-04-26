@@ -93,25 +93,107 @@ def _build_sale_payment_summary_map(conn, sale_ids):
     if not normalized_sale_ids:
         return {}
 
-    rows = conn.execute(
+    payment_rows = conn.execute(
         """
         SELECT
-            s.id AS sale_id,
-            COALESCE(
-                NULLIF(STRING_AGG(DISTINCT pm.name, ' + ' ORDER BY pm.name), ''),
-                legacy_pm.name,
-                '—'
-            ) AS payment_method
-        FROM sales s
-        LEFT JOIN sale_payments sp ON sp.sale_id = s.id
+            sp.sale_id,
+            COALESCE(pm.name, 'Payment') AS payment_method
+        FROM sale_payments sp
         LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
-        LEFT JOIN payment_methods legacy_pm ON legacy_pm.id = s.payment_method_id
-        WHERE s.id = ANY(%s)
-        GROUP BY s.id, legacy_pm.name
+        WHERE sp.sale_id = ANY(%s)
+        ORDER BY sp.sale_id ASC, sp.sequence_no ASC, sp.id ASC
         """,
         (normalized_sale_ids,),
     ).fetchall()
-    return {int(row["sale_id"]): row["payment_method"] for row in rows}
+
+    grouped_methods = {}
+    for row in payment_rows:
+        sale_id = int(row["sale_id"])
+        method_name = str(row["payment_method"] or "Payment").strip() or "Payment"
+        grouped_methods.setdefault(sale_id, []).append(method_name)
+
+    payment_method_map = {}
+    for sale_id, method_names in grouped_methods.items():
+        display_names = []
+        seen_names = set()
+        for method_name in method_names:
+            method_key = method_name.lower()
+            if method_key in seen_names:
+                continue
+            seen_names.add(method_key)
+            display_names.append(method_name)
+        payment_method_map[sale_id] = " + ".join(display_names) if display_names else "-"
+
+    missing_sale_ids = [
+        sale_id
+        for sale_id in normalized_sale_ids
+        if sale_id not in payment_method_map
+    ]
+    if missing_sale_ids:
+        legacy_rows = conn.execute(
+            """
+            SELECT
+                s.id AS sale_id,
+                COALESCE(pm.name, '-') AS payment_method
+            FROM sales s
+            LEFT JOIN payment_methods pm ON pm.id = s.payment_method_id
+            WHERE s.id = ANY(%s)
+            """,
+            (missing_sale_ids,),
+        ).fetchall()
+        for row in legacy_rows:
+            payment_method_map[int(row["sale_id"])] = row["payment_method"]
+
+    return payment_method_map
+
+
+def _build_sale_exchange_context(sale, is_mechanic_supply=False):
+    if is_mechanic_supply:
+        return {
+            "report_label": "Mechanic Supply",
+            "exchange_number": "",
+            "exchange_link_label": "",
+            "exchange_role": "",
+        }
+
+    replacement_exchange_number = sale.get("replacement_exchange_number") or ""
+    original_exchange_number = sale.get("original_exchange_number") or ""
+    if replacement_exchange_number:
+        original_sales_number = sale.get("exchange_original_sales_number") or "original sale"
+        return {
+            "report_label": "Exchange/Replacement",
+            "exchange_number": replacement_exchange_number,
+            "exchange_link_label": f"Replaces OR {original_sales_number}",
+            "exchange_reason": sale.get("replacement_exchange_reason") or "",
+            "exchange_role": "replacement",
+        }
+    if original_exchange_number:
+        replacement_sales_number = sale.get("exchange_replacement_sales_number") or "replacement sale"
+        return {
+            "report_label": "Item Swap Original",
+            "exchange_number": original_exchange_number,
+            "exchange_link_label": f"Replacement: {replacement_sales_number}",
+            "exchange_reason": sale.get("original_exchange_reason") or "",
+            "exchange_role": "original",
+        }
+
+    return {
+        "report_label": "Sale",
+        "exchange_number": "",
+        "exchange_link_label": "",
+        "exchange_reason": "",
+        "exchange_role": "",
+    }
+
+
+def _clean_sale_notes_for_report(notes, reason=None):
+    cleaned_notes = str(notes or "").strip()
+    cleaned_reason = str(reason or "").strip()
+    if cleaned_notes and cleaned_reason:
+        reason_marker = f"Reason: {cleaned_reason}"
+        cleaned_notes = cleaned_notes.replace(reason_marker, "").strip()
+        cleaned_notes = cleaned_notes.rstrip(".;| ").strip()
+    return cleaned_notes
 
 
 def _get_non_cash_floating_metrics(conn, start_date, end_date):
@@ -1408,14 +1490,23 @@ def get_sales_report_by_date(report_date):
             m.name            AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
-            se.exchange_number,
-            se.original_sale_id
+            se_replacement.exchange_number AS replacement_exchange_number,
+            se_replacement.reason AS replacement_exchange_reason,
+            se_replacement.original_sale_id AS exchange_original_sale_id,
+            original_sale.sales_number AS exchange_original_sales_number,
+            se_original.exchange_number AS original_exchange_number,
+            se_original.reason AS original_exchange_reason,
+            se_original.replacement_sale_id AS exchange_replacement_sale_id,
+            replacement_sale.sales_number AS exchange_replacement_sales_number
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
+        LEFT JOIN sale_exchanges se_replacement ON se_replacement.replacement_sale_id = s.id
+        LEFT JOIN sales original_sale ON original_sale.id = se_replacement.original_sale_id
+        LEFT JOIN sale_exchanges se_original ON se_original.original_sale_id = s.id
+        LEFT JOIN sales replacement_sale ON replacement_sale.id = se_original.replacement_sale_id
         WHERE DATE(s.transaction_date) = %s
           AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date DESC, s.id DESC
@@ -1603,6 +1694,7 @@ def get_sales_report_by_date(report_date):
             sale_products = items_by_sale.get(sale_id, [])
             sale_services = services_by_sale.get(sale_id, [])
             sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
+            exchange_context = _build_sale_exchange_context(sale, is_mechanic_supply)
             bundle_product_cost = round(
                 sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
@@ -1632,13 +1724,12 @@ def get_sales_report_by_date(report_date):
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
                 "payment_method": sale_payment_map.get(sale["id"], "-"),
-                "notes": sale["notes"] or "",
+                "notes": _clean_sale_notes_for_report(sale["notes"], exchange_context.get("exchange_reason")),
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,
                 "services": sale_services,
                 "bundles": sale_bundles,
-                "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
-                "exchange_number": sale["exchange_number"] or "",
+                **exchange_context,
                 "transaction_class": transaction_class,
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
             }
@@ -1753,14 +1844,23 @@ def get_sales_report_by_range(start_date, end_date):
             m.name            AS mechanic_name,
             m.commission_rate,
             COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup,
-            se.exchange_number,
-            se.original_sale_id
+            se_replacement.exchange_number AS replacement_exchange_number,
+            se_replacement.reason AS replacement_exchange_reason,
+            se_replacement.original_sale_id AS exchange_original_sale_id,
+            original_sale.sales_number AS exchange_original_sales_number,
+            se_original.exchange_number AS original_exchange_number,
+            se_original.reason AS original_exchange_reason,
+            se_original.replacement_sale_id AS exchange_replacement_sale_id,
+            replacement_sale.sales_number AS exchange_replacement_sales_number
         FROM sales s
         LEFT JOIN mechanics m        ON m.id = s.mechanic_id
         LEFT JOIN mechanic_quota_topup_overrides mqto
             ON mqto.mechanic_id = s.mechanic_id
            AND mqto.quota_date = DATE(s.transaction_date)
-        LEFT JOIN sale_exchanges se  ON se.replacement_sale_id = s.id
+        LEFT JOIN sale_exchanges se_replacement ON se_replacement.replacement_sale_id = s.id
+        LEFT JOIN sales original_sale ON original_sale.id = se_replacement.original_sale_id
+        LEFT JOIN sale_exchanges se_original ON se_original.original_sale_id = s.id
+        LEFT JOIN sales replacement_sale ON replacement_sale.id = se_original.replacement_sale_id
         WHERE DATE(s.transaction_date) BETWEEN %s AND %s
           AND COALESCE(s.is_voided, FALSE) = FALSE
         ORDER BY s.transaction_date DESC, s.id DESC
@@ -1948,6 +2048,7 @@ def get_sales_report_by_range(start_date, end_date):
             sale_products = items_by_sale.get(sale_id, [])
             sale_services = services_by_sale.get(sale_id, [])
             sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
+            exchange_context = _build_sale_exchange_context(sale, is_mechanic_supply)
             bundle_product_cost = round(
                 sum(_num(bundle.get("included_items_cost_total")) for bundle in sale_bundles),
                 2,
@@ -1977,13 +2078,12 @@ def get_sales_report_by_range(start_date, end_date):
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
                 "payment_method": sale_payment_map.get(sale["id"], "-"),
-                "notes": sale["notes"] or "",
+                "notes": _clean_sale_notes_for_report(sale["notes"], exchange_context.get("exchange_reason")),
                 "transaction_date": format_date(sale["transaction_date"]),
                 "products": sale_products,
                 "services": sale_services,
                 "bundles": sale_bundles,
-                "report_label": "Mechanic Supply" if is_mechanic_supply else ("Exchange/Replacement" if sale["exchange_number"] else "Sale"),
-                "exchange_number": sale["exchange_number"] or "",
+                **exchange_context,
                 "transaction_class": transaction_class,
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
             }

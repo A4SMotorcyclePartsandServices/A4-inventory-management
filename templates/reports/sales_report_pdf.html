@@ -74,6 +74,18 @@
         .line-meta { font-size: 12px; color: #444; padding-left: 4px; margin-top: 2px; }
         .discount-tag { color: #c1121f; font-weight: 700; }
         .strikethrough { text-decoration: line-through; color: #999; }
+        .exchange-link-note {
+            margin-top: 4px;
+            padding: 4px 5px;
+            border-left: 3px solid #b91c1c;
+            background: #fff1f2;
+            color: #7f1d1d;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.35;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
 
         .services-cell {
             margin-top: 9px;
@@ -119,6 +131,14 @@
             margin-top: 6px;
             font-size: 12px;
             color: red;
+            font-weight: bold;
+            line-height: 1.45;
+            white-space: pre-wrap;
+        }
+        .reason-cell {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #7f1d1d;
             font-weight: bold;
             line-height: 1.45;
             white-space: pre-wrap;
@@ -598,6 +618,11 @@
                         {% if sale.exchange_number %} · {{ sale.exchange_number }}{% endif %}
                     </div>
                     {% endif %}
+                    {% if sale.exchange_link_label %}
+                    <div class="exchange-link-note">
+                        {{ sale.exchange_link_label }}
+                    </div>
+                    {% endif %}
                     {% if is_range %}
                     <div style="font-size: 11px; color: #666; font-weight: 400; margin-top: 3px;">
                         {{ sale.transaction_date }}
@@ -715,7 +740,9 @@
                 </td>
                 <td>
                     {% if sale.transaction_class != 'MECHANIC_SUPPLY' %}
-                    {{ sale.payment_method }}
+                        {% for payment_method in (sale.payment_method or '-').split(' + ') %}
+                            <div>{{ payment_method }}</div>
+                        {% endfor %}
                     {% endif %}
                     <div style="margin-top: 5px;">
                         <span class="badge {{ 'badge-unresolved' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'badge-paid' }}">
@@ -724,6 +751,9 @@
                     </div>
                         {% if sale.notes %}
                             <div class="notes-cell">Notes: {{ sale.notes }}</div>
+                        {% endif %}
+                        {% if sale.exchange_reason %}
+                            <div class="reason-cell">Reason: {{ sale.exchange_reason }}</div>
                         {% endif %}
                 </td>
                 <td style="font-weight: 700; font-size: 14px;">
@@ -1080,6 +1110,9 @@
                     <span style="font-size: 11px; color: #aaa;"> · {{ refund.refund_date }}</span>
                     {% if refund.reason %}
                     <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Reason: {{ refund.reason }}</div>
+                    {% endif %}
+                    {% if refund.notes %}
+                    <div style="font-size: 11px; color: #721c24; margin-top: 2px;">Notes: {{ refund.notes }}</div>
                     {% endif %}
                     {% if refund["items"] %}
                     <div style="font-size: 11px; color: #555; margin-top: 3px;">
