@@ -101,6 +101,12 @@
         white-space: normal;
         overflow-wrap: anywhere;
     }
+    .highlight {
+        background: rgba(193, 18, 31, 0.28);
+        padding: 0 2px;
+        border-radius: 3px;
+        color: #ffaaaa;
+    }
     .status-detail-hint {
         margin-top: 0.35rem;
         font-size: 0.78rem;
@@ -125,10 +131,18 @@
 
 <div class="row justify-content-center mb-3">
     <div class="col-md-6">
-        <div class="input-group">
+        <form class="input-group" method="get" action="{{ url_for('low_stock') }}">
             <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-search"></i></span>
-            <input type="text" id="inventorySearch" class="form-control" placeholder="Search for items...">
-        </div>
+            <input type="text" id="inventorySearch" name="q" class="form-control" value="{{ search_query or '' }}" placeholder="Search for items...">
+            <button type="submit" class="btn btn-outline-secondary">
+                <i class="bi bi-search"></i>
+            </button>
+            {% if search_query %}
+            <a href="{{ url_for('low_stock') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </form>
     </div>
 </div>
 
@@ -203,18 +217,18 @@
     </table>
     <div class="pagination-panel">
         <div class="pagination-summary">
-            Showing {{ low_stock_page.start_index }}-{{ low_stock_page.end_index }} of {{ low_stock_page.total_count }} low stock items
+            Showing {{ low_stock_page.start_index }}-{{ low_stock_page.end_index }} of {{ low_stock_page.total_count }} low stock items{% if search_query %} matching "{{ search_query }}"{% endif %}
         </div>
         <div class="pagination-nav">
             <a
-                href="{{ url_for('low_stock', page=low_stock_page.prev_page) }}"
+                href="{{ url_for('low_stock', page=low_stock_page.prev_page, q=search_query) }}"
                 class="btn btn-outline-secondary btn-sm {% if not low_stock_page.has_prev %}disabled{% endif %}"
                 {% if not low_stock_page.has_prev %}aria-disabled="true"{% endif %}>
                 <i class="bi bi-chevron-left"></i> Previous
             </a>
             <span class="small text-light">Page {{ low_stock_page.page }} of {{ low_stock_page.total_pages }}</span>
             <a
-                href="{{ url_for('low_stock', page=low_stock_page.next_page) }}"
+                href="{{ url_for('low_stock', page=low_stock_page.next_page, q=search_query) }}"
                 class="btn btn-outline-secondary btn-sm {% if not low_stock_page.has_next %}disabled{% endif %}"
                 {% if not low_stock_page.has_next %}aria-disabled="true"{% endif %}>
                 Next <i class="bi bi-chevron-right"></i>
@@ -222,9 +236,15 @@
         </div>
     </div>
     {% else %}
+    {% if search_query %}
+    <div class="alert alert-secondary text-center bg-dark text-light border-secondary">
+        <i class="bi bi-search"></i> No low stock items found for "{{ search_query }}".
+    </div>
+    {% else %}
     <div class="alert alert-success text-center bg-dark text-success border-success">
         <i class="bi bi-check-circle-fill"></i> 🎉 All items are well-stocked!
     </div>
+    {% endif %}
     {% endif %}
 </div>
 
@@ -276,14 +296,54 @@
 
 <script>
 const highlightItemId = Number('{{ highlight_item_id or 0 }}');
+const lowStockSearchQuery = {{ (search_query or '')|tojson }};
 
-document.getElementById('inventorySearch').addEventListener('keyup', function() {
-    let filter = this.value.toLowerCase();
-    let rows = document.querySelectorAll('#lowStockTable tbody tr, #debugRestockTableBody tr');
-    rows.forEach(row => {
-        let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
-        row.style.display = itemName.includes(filter) ? "" : "none";
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightText(element, tokens) {
+    if (!element) return;
+    const original = element.dataset.original ?? element.textContent ?? "";
+    const cleanedTokens = Array.from(new Set(
+        (tokens || [])
+            .map(token => String(token || "").trim())
+            .filter(Boolean)
+    ));
+
+    if (!cleanedTokens.length) {
+        element.textContent = original;
+        return;
+    }
+
+    const regex = new RegExp(`(${cleanedTokens.map(escapeRegExp).join("|")})`, "gi");
+    let lastIndex = 0;
+    let highlighted = "";
+
+    original.replace(regex, (match, _group, offset) => {
+        highlighted += escapeHtml(original.slice(lastIndex, offset));
+        highlighted += `<span class="highlight">${escapeHtml(match)}</span>`;
+        lastIndex = offset + match.length;
+        return match;
     });
+
+    highlighted += escapeHtml(original.slice(lastIndex));
+    element.innerHTML = highlighted;
+}
+
+const highlightTokens = lowStockSearchQuery.toLowerCase().split(" ").filter(token => token.length >= 2);
+document.querySelectorAll('#lowStockTable tbody tr').forEach(row => {
+    highlightText(row.querySelector('.item-name-primary'), highlightTokens);
+    highlightText(row.querySelector('.item-name-description'), highlightTokens);
 });
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -316,15 +376,6 @@ function renderDebugBadge(flagged) {
     return flagged
         ? '<span class="badge bg-warning text-dark">YES</span>'
         : '<span class="badge bg-secondary">NO</span>';
-}
-
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 function renderDebugCell(value) {

@@ -197,7 +197,27 @@ def get_dead_stock(days=60):
     return rows
 
 
-def get_dead_stock_page(page=1, per_page=30, *, days=60, rows=None):
+def _matches_dead_stock_search(item, search_query):
+    normalized_query = str(search_query or "").strip().lower()
+    if not normalized_query:
+        return True
+
+    searchable_values = [
+        item.get("name"),
+        item.get("description"),
+        item.get("last_sold_display"),
+    ]
+    searchable_text = " ".join(str(value or "") for value in searchable_values).lower()
+
+    if not item.get("last_sold_at"):
+        searchable_text += " never actively sold never sold"
+    else:
+        searchable_text += " inactive"
+
+    return all(word in searchable_text for word in normalized_query.split())
+
+
+def get_dead_stock_page(page=1, per_page=30, *, days=60, rows=None, search_query=None):
     try:
         safe_page = max(1, int(page or 1))
     except (TypeError, ValueError):
@@ -209,6 +229,10 @@ def get_dead_stock_page(page=1, per_page=30, *, days=60, rows=None):
         safe_per_page = 30
 
     source_rows = rows if rows is not None else get_dead_stock(days=days)
+    query_value = str(search_query or "").strip()
+    if query_value:
+        source_rows = [item for item in source_rows if _matches_dead_stock_search(item, query_value)]
+
     total_count = len(source_rows)
     total_pages = max(1, (total_count + safe_per_page - 1) // safe_per_page)
     safe_page = min(safe_page, total_pages)
@@ -231,7 +255,35 @@ def get_dead_stock_page(page=1, per_page=30, *, days=60, rows=None):
     }
 
 
-def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None):
+def _matches_low_stock_search(item, search_query):
+    normalized_query = str(search_query or "").strip().lower()
+    if not normalized_query:
+        return True
+
+    searchable_values = [
+        item.get("name"),
+        item.get("description"),
+        item.get("category"),
+        item.get("restock_status"),
+        item.get("restock_basis"),
+    ]
+    searchable_text = " ".join(str(value or "") for value in searchable_values).lower()
+
+    if item.get("is_watchlist"):
+        searchable_text += " watchlist learning"
+    if item.get("incoming_po_covers_restock"):
+        searchable_text += " incoming stock"
+    if item.get("restock_status") == "critical":
+        searchable_text += " critical out of stock"
+    if item.get("restock_status") == "warning":
+        searchable_text += " reorder soon"
+    if item.get("restock_status") == "healthy":
+        searchable_text += " healthy"
+
+    return all(word in searchable_text for word in normalized_query.split())
+
+
+def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None, search_query=None):
     try:
         safe_page = max(1, int(page or 1))
     except (TypeError, ValueError):
@@ -243,6 +295,10 @@ def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=Non
         safe_per_page = 75
 
     source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=include_watchlist)
+    query_value = str(search_query or "").strip()
+    if query_value:
+        source_rows = [item for item in source_rows if _matches_low_stock_search(item, query_value)]
+
     total_count = len(source_rows)
     total_pages = max(1, (total_count + safe_per_page - 1) // safe_per_page)
     safe_page = min(safe_page, total_pages)

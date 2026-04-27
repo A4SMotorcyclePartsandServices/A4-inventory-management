@@ -489,11 +489,13 @@ def dead_stock():
     except ValueError:
         page = 1
 
-    dead_stock_page = get_dead_stock_page(page=page, per_page=30)
+    search_query = (request.args.get("q") or "").strip()
+    dead_stock_page = get_dead_stock_page(page=page, per_page=30, search_query=search_query)
     return render_template(
         "dead_stock.html",
         dead_items=dead_stock_page["items"],
         dead_stock_page=dead_stock_page,
+        search_query=search_query,
     )
 
 
@@ -504,6 +506,7 @@ def low_stock():
     Items at or below reorder level.
     """
     page_raw = (request.args.get("page") or "").strip()
+    search_query = (request.args.get("q") or "").strip()
     item_id_raw = (request.args.get("item_id") or "").strip()
     highlight_item_id = None
     if item_id_raw:
@@ -514,7 +517,7 @@ def low_stock():
 
     low_stock_rows = get_low_stock_items(include_watchlist=True)
 
-    if highlight_item_id and not page_raw:
+    if highlight_item_id and not page_raw and not search_query:
         resolved_page = get_low_stock_page_for_item(
             highlight_item_id,
             per_page=75,
@@ -532,6 +535,7 @@ def low_stock():
         per_page=75,
         include_watchlist=True,
         rows=low_stock_rows,
+        search_query=search_query,
     )
     debug_mode = False
     debug_total_count = 0
@@ -544,6 +548,7 @@ def low_stock():
         "low_stock.html",
         low_stock_items=low_stock_page["items"],
         low_stock_page=low_stock_page,
+        search_query=search_query,
         highlight_item_id=highlight_item_id,
         debug_mode=debug_mode,
         debug_items=debug_result["items"],

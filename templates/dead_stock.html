@@ -71,6 +71,12 @@
         white-space: normal;
         overflow-wrap: anywhere;
     }
+    .highlight {
+        background: rgba(193, 18, 31, 0.28);
+        padding: 0 2px;
+        border-radius: 3px;
+        color: #ffaaaa;
+    }
 </style>
 {% endblock %}
 
@@ -81,10 +87,18 @@
 
 <div class="row justify-content-center mb-3">
     <div class="col-md-6">
-        <div class="input-group">
+        <form class="input-group" method="get" action="{{ url_for('dead_stock') }}">
             <span class="input-group-text bg-dark border-secondary text-white"><i class="bi bi-search"></i></span>
-            <input type="text" id="inventorySearch" class="form-control" placeholder="Search for items...">
-        </div>
+            <input type="text" id="inventorySearch" name="q" class="form-control" value="{{ search_query or '' }}" placeholder="Search for items...">
+            <button type="submit" class="btn btn-outline-secondary">
+                <i class="bi bi-search"></i>
+            </button>
+            {% if search_query %}
+            <a href="{{ url_for('dead_stock') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </form>
     </div>
 </div>
 
@@ -125,8 +139,12 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="3" class="py-4 text-success">
-                        <i class="bi bi-check-circle"></i> No dead stock found! Everything is moving.
+                    <td colspan="3" class="py-4 {% if search_query %}text-secondary{% else %}text-success{% endif %}">
+                        {% if search_query %}
+                            <i class="bi bi-search"></i> No dead stock found for "{{ search_query }}".
+                        {% else %}
+                            <i class="bi bi-check-circle"></i> No dead stock found! Everything is moving.
+                        {% endif %}
                     </td>
                 </tr>
             {% endif %}
@@ -135,18 +153,18 @@
     {% if dead_stock_page %}
     <div class="pagination-panel">
         <div class="pagination-summary">
-            Showing {{ dead_stock_page.start_index }}-{{ dead_stock_page.end_index }} of {{ dead_stock_page.total_count }} dead stock items
+            Showing {{ dead_stock_page.start_index }}-{{ dead_stock_page.end_index }} of {{ dead_stock_page.total_count }} dead stock items{% if search_query %} matching "{{ search_query }}"{% endif %}
         </div>
         <div class="pagination-nav">
             <a
-                href="{{ url_for('dead_stock', page=dead_stock_page.prev_page) }}"
+                href="{{ url_for('dead_stock', page=dead_stock_page.prev_page, q=search_query) }}"
                 class="btn btn-outline-secondary btn-sm {% if not dead_stock_page.has_prev %}disabled{% endif %}"
                 {% if not dead_stock_page.has_prev %}aria-disabled="true"{% endif %}>
                 <i class="bi bi-chevron-left"></i> Previous
             </a>
             <span class="small text-light">Page {{ dead_stock_page.page }} of {{ dead_stock_page.total_pages }}</span>
             <a
-                href="{{ url_for('dead_stock', page=dead_stock_page.next_page) }}"
+                href="{{ url_for('dead_stock', page=dead_stock_page.next_page, q=search_query) }}"
                 class="btn btn-outline-secondary btn-sm {% if not dead_stock_page.has_next %}disabled{% endif %}"
                 {% if not dead_stock_page.has_next %}aria-disabled="true"{% endif %}>
                 Next <i class="bi bi-chevron-right"></i>
@@ -159,18 +177,55 @@
 
 {% block scripts %}
 <script>
-document.getElementById('inventorySearch').addEventListener('keyup', function() {
-    let filter = this.value.toLowerCase();
-    let rows = document.querySelectorAll('table tbody tr');
+const deadStockSearchInput = document.getElementById('inventorySearch');
+const deadStockSearchQuery = {{ (search_query or '')|tojson }};
 
-    rows.forEach(row => {
-        let itemName = row.querySelector('td:first-child').textContent.toLowerCase();
-        if (itemName.includes(filter)) {
-            row.style.display = "";
-        } else {
-            row.style.display = "none";
-        }
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightText(element, tokens) {
+    if (!element) return;
+    const original = element.dataset.original ?? element.textContent ?? "";
+    const cleanedTokens = Array.from(new Set(
+        (tokens || [])
+            .map(token => String(token || "").trim())
+            .filter(Boolean)
+    ));
+
+    if (!cleanedTokens.length) {
+        element.textContent = original;
+        return;
+    }
+
+    const regex = new RegExp(`(${cleanedTokens.map(escapeRegExp).join("|")})`, "gi");
+    let lastIndex = 0;
+    let highlighted = "";
+
+    original.replace(regex, (match, _group, offset) => {
+        highlighted += escapeHtml(original.slice(lastIndex, offset));
+        highlighted += `<span class="highlight">${escapeHtml(match)}</span>`;
+        lastIndex = offset + match.length;
+        return match;
     });
+
+    highlighted += escapeHtml(original.slice(lastIndex));
+    element.innerHTML = highlighted;
+}
+
+const highlightTokens = deadStockSearchQuery.toLowerCase().split(" ").filter(token => token.length >= 2);
+document.querySelectorAll('tbody tr').forEach(row => {
+    highlightText(row.querySelector('.item-name-primary'), highlightTokens);
+    highlightText(row.querySelector('.item-name-description'), highlightTokens);
 });
 </script>
 {% endblock %}
