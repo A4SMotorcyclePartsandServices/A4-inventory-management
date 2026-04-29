@@ -65,7 +65,7 @@ Hardening applied so far:
   receive page now restores after refresh / interruption and warns on resumed stale-tab return
   successful receive confirm now clears and disables draft persistence before redirect
 - `templates/base.html`
-  raised shared flash z-index so warnings / errors are not hidden behind modals during fragile flows
+  raised shared flash z-index so warnings / errors are not hidden behind modals during fragile flows.
 
 What these changes are trying to solve:
 - Prefer atomic server-side operations over long client-side chains.
