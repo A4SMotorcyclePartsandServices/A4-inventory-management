@@ -882,10 +882,43 @@ def server_error(e):
 # ============================================================
 # App runner
 # ============================================================
-def open_browser():
-    webbrowser.open("http://127.0.0.1:5000")
+def open_browser(port):
+    webbrowser.open(f"http://127.0.0.1:{port}")
+
+
+def _local_reloader_files():
+    watch_extensions = {".py", ".html", ".css", ".js"}
+    ignored_dirs = {".git", ".venv", "__pycache__", "build", "dist", "tmp"}
+    watched_files = []
+
+    for root, dirs, files in os.walk(os.path.dirname(__file__)):
+        dirs[:] = [name for name in dirs if name not in ignored_dirs]
+        for filename in files:
+            if os.path.splitext(filename)[1].lower() in watch_extensions:
+                watched_files.append(os.path.join(root, filename))
+
+    return watched_files
+
 
 if __name__ == "__main__":
-    threading.Timer(1.5, open_browser).start()
-    app.run(port=5000)
+    host = os.environ.get("APP_HOST", "127.0.0.1")
+    port = int(os.environ.get("APP_PORT", "5000"))
+    debug = _env_flag("FLASK_DEBUG", default=not _is_production_environment())
+    use_reloader = debug
+
+    app.config["TEMPLATES_AUTO_RELOAD"] = debug
+    if debug:
+        app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+    if not use_reloader or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        threading.Timer(1.5, open_browser, args=(port,)).start()
+
+    print(f"Starting local Flask server: debug={debug}, reloader={use_reloader}, url=http://{host}:{port}")
+    app.run(
+        host=host,
+        port=port,
+        debug=debug,
+        use_reloader=use_reloader,
+        extra_files=_local_reloader_files() if use_reloader else None,
+    )
 

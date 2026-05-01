@@ -1186,6 +1186,7 @@ const HISTORY_PAYABLE_TOTAL = {{ history_total_count|int }};
 const PAYABLE_PAGE_URL_PARAMS = new URLSearchParams(window.location.search);
 const TARGET_PAYABLE_ID = PAYABLE_PAGE_URL_PARAMS.get('payable_id') || '';
 const TARGET_CHEQUE_ID = PAYABLE_PAGE_URL_PARAMS.get('cheque_id') || '';
+const TARGET_PAYMENT_REF = PAYABLE_PAGE_URL_PARAMS.get('payment_ref') || '';
 
 function formatPayableCurrency(amount) {
     const parsed = Number(amount || 0);
@@ -1230,7 +1231,7 @@ function renderChequeHistoryRow(cheque) {
         : '';
 
     return `
-        <div class="cheque-row" data-cheque-row data-cheque-id="${escapeHtml(String(cheque.id || ''))}">
+        <div class="cheque-row" data-cheque-row data-cheque-id="${escapeHtml(String(cheque.id || ''))}" data-cheque-no="${escapeHtml(cheque.cheque_no_raw || cheque.cheque_no || '')}">
             <div class="cheque-row-head">
                 <div>
                     <div class="payable-title"><span class="payable-cheque-number">Cheque #${escapeHtml(cheque.cheque_no || '-')}</span> • ${escapeHtml(formatPayableCurrency(cheque.cheque_amount))}</div>
@@ -1278,7 +1279,7 @@ function renderCashPaymentHistoryRow(payment) {
         : '';
 
     return `
-        <div class="cheque-row" data-cash-payment-row data-cash-payment-id="${escapeHtml(String(payment.id || ''))}">
+        <div class="cheque-row" data-cash-payment-row data-cash-payment-id="${escapeHtml(String(payment.id || ''))}" data-payment-ref="${escapeHtml(payment.payment_ref_raw || payment.payment_ref || '')}">
             <div class="cheque-row-head">
                 <div>
                     <div class="payable-title"><span class="payable-cheque-number">Payment ${escapeHtml(payment.payment_ref || '-')}</span> • ${escapeHtml(formatPayableCurrency(payment.amount))}</div>
@@ -1574,36 +1575,171 @@ async function expandPayableHistory(button) {
     }
 }
 
-async function focusNotificationTarget() {
-    if (!TARGET_PAYABLE_ID) {
+function normalizePaymentRef(value) {
+    return String(value || '').trim().toLowerCase();
+}
+
+function closeExpandedPayableHistories() {
+    document.querySelectorAll('[data-history-toggle][aria-expanded="true"]').forEach((button) => {
+        button.setAttribute('aria-expanded', 'false');
+        button.innerHTML = '<i class="bi bi-chevron-down me-1"></i> View payment history';
+        button.parentElement?.querySelector('[data-history-panel]')?.classList.add('d-none');
+    });
+
+    document.querySelectorAll('[data-other-history-wrap]:not(.d-none)').forEach((wrapper) => {
+        wrapper.classList.add('d-none');
+        const toggle = wrapper.parentElement?.querySelector('[data-other-history-toggle]');
+        if (toggle) {
+            toggle.innerHTML = `<i class="bi bi-clock-history me-1"></i> Show paid / cleared / older history (${wrapper.querySelectorAll('.cheque-row').length})`;
+        }
+    });
+}
+
+function waitForCollapseShown(collapseEl) {
+    if (!collapseEl || collapseEl.classList.contains('show')) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+        collapseEl.addEventListener('shown.bs.collapse', resolve, { once: true });
+    });
+}
+
+function closeNonTargetMonthCollapses(targetEl) {
+    const targetMonthCollapse = targetEl?.closest('#panel-payables-history .collapse');
+    document.querySelectorAll('#panel-payables-history .collapse.show').forEach((collapseEl) => {
+        if (collapseEl !== targetMonthCollapse && window.bootstrap?.Collapse) {
+            bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }).hide();
+        }
+    });
+}
+
+async function revealTargetMonth(targetEl) {
+    const monthCollapse = targetEl?.closest('#panel-payables-history .collapse');
+    closeNonTargetMonthCollapses(targetEl);
+
+    if (!monthCollapse || monthCollapse.classList.contains('show') || !window.bootstrap?.Collapse) {
         return;
     }
 
-    const payableCard = document.querySelector(`[data-payable-card][data-payable-id="${CSS.escape(TARGET_PAYABLE_ID)}"]`);
+    const shownPromise = waitForCollapseShown(monthCollapse);
+    bootstrap.Collapse.getOrCreateInstance(monthCollapse, { toggle: false }).show();
+    await shownPromise;
+}
+
+async function revealTargetPaymentRow(row) {
+    await revealTargetMonth(row);
+
+    const hiddenOtherWrap = row?.closest('[data-other-history-wrap]');
+    if (!hiddenOtherWrap) {
+        return;
+    }
+
+    hiddenOtherWrap.classList.remove('d-none');
+    const toggle = hiddenOtherWrap.parentElement?.querySelector('[data-other-history-toggle]');
+    if (toggle) {
+        toggle.innerHTML = '<i class="bi bi-clock-history me-1"></i> Hide paid / cleared / older history';
+    }
+}
+
+async function revealTargetPayableCard(card) {
+    await revealTargetMonth(card);
+}
+
+function findTargetPaymentRow(panel) {
+    if (!panel) {
+        return null;
+    }
+
+    if (TARGET_CHEQUE_ID) {
+        const byId = panel.querySelector(`[data-cheque-row][data-cheque-id="${CSS.escape(TARGET_CHEQUE_ID)}"]`);
+        if (byId) {
+            return byId;
+        }
+    }
+
+    const targetRef = normalizePaymentRef(TARGET_PAYMENT_REF);
+    if (!targetRef) {
+        return null;
+    }
+
+    return Array.from(panel.querySelectorAll('[data-cheque-row], [data-cash-payment-row]')).find((row) => (
+        normalizePaymentRef(row.getAttribute('data-cheque-no')) === targetRef
+        || normalizePaymentRef(row.getAttribute('data-payment-ref')) === targetRef
+    )) || null;
+}
+
+function clearPayableTargetParamsFromUrl() {
+    if (!TARGET_PAYABLE_ID && !TARGET_PAYMENT_REF) {
+        return;
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('payable_id');
+    nextUrl.searchParams.delete('cheque_id');
+    nextUrl.searchParams.delete('payment_ref');
+    if (TARGET_PAYMENT_REF && nextUrl.searchParams.get('q') === TARGET_PAYMENT_REF) {
+        nextUrl.searchParams.delete('q');
+    }
+    window.history.replaceState({}, document.title, nextUrl.pathname + nextUrl.search + nextUrl.hash);
+}
+
+function findTargetPayableCard() {
+    if (TARGET_PAYABLE_ID) {
+        const byId = document.querySelector(`[data-payable-card][data-payable-id="${CSS.escape(TARGET_PAYABLE_ID)}"]`);
+        if (byId) {
+            return byId;
+        }
+    }
+
+    if (!TARGET_PAYMENT_REF) {
+        return null;
+    }
+
+    const cards = Array.from(document.querySelectorAll('[data-payable-card]'));
+    return cards.length === 1 ? cards[0] : null;
+}
+
+async function focusNotificationTarget(options = {}) {
+    if (!TARGET_PAYABLE_ID && !TARGET_PAYMENT_REF) {
+        return;
+    }
+    clearPayableTargetParamsFromUrl();
+
+    let payableCard = findTargetPayableCard();
+    if (!payableCard && typeof options.loadHistoryTab === 'function') {
+        await options.loadHistoryTab();
+        payableCard = findTargetPayableCard();
+    }
+
     if (!payableCard) {
         return;
     }
 
+    const historyButton = payableCard.querySelector('[data-history-toggle]');
+    closeExpandedPayableHistories();
+
+    await revealTargetPayableCard(payableCard);
     payableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     highlightPayableTarget(payableCard);
 
-    if (!TARGET_CHEQUE_ID) {
+    if (!TARGET_CHEQUE_ID && !TARGET_PAYMENT_REF) {
         return;
     }
 
-    const historyButton = payableCard.querySelector('[data-history-toggle]');
     if (!historyButton) {
         return;
     }
 
     const panel = await expandPayableHistory(historyButton);
-    const chequeRow = panel?.querySelector(`[data-cheque-row][data-cheque-id="${CSS.escape(TARGET_CHEQUE_ID)}"]`);
-    if (!chequeRow) {
+    const paymentRow = findTargetPaymentRow(panel);
+    if (!paymentRow) {
         return;
     }
 
-    chequeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    highlightPayableTarget(chequeRow);
+    await revealTargetPaymentRow(paymentRow);
+    paymentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightPayableTarget(paymentRow);
 }
 
 function syncChequeStatusFormState(form) {
@@ -1723,7 +1859,14 @@ document.addEventListener('DOMContentLoaded', function () {
         loadPayablesHistory();
     }
 
-    focusNotificationTarget();
+    focusNotificationTarget({
+        loadHistoryTab: async () => {
+            setActivePayablesTab('history');
+            await loadPayablesHistory();
+            const monthBodies = document.querySelectorAll('[data-payables-history-month-body]');
+            await Promise.all(Array.from(monthBodies).map(loadPayablesHistoryMonthIfNeeded));
+        },
+    });
 
     if (rangeInput && startHidden && endHidden && typeof flatpickr === 'function') {
         flatpickr(rangeInput, {

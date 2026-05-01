@@ -428,6 +428,52 @@
         flex: 0 0 auto;
     }
 
+    #payables-audit-table {
+        table-layout: fixed;
+        min-width: 1120px;
+    }
+
+    #payables-audit-table .payables-audit-event-cell {
+        min-width: 190px;
+    }
+
+    #payables-audit-table .payables-audit-event-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        max-width: 100%;
+        white-space: normal;
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    #payables-audit-table .payables-audit-payee-cell {
+        overflow: hidden;
+    }
+
+    #payables-audit-table .payables-audit-payee-name {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: help;
+    }
+
+    #payables-audit-table tbody tr:hover .payables-audit-payee-cell {
+        overflow: visible;
+        background: #1a1d26 !important;
+        position: relative;
+        z-index: 10;
+    }
+
+    #payables-audit-table tbody tr:hover .payables-audit-payee-name {
+        white-space: normal;
+        word-break: break-word;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
     #sales-admin-body tr.sale-row-voided {
         background: rgba(148, 163, 184, 0.08);
     }
@@ -2231,6 +2277,8 @@
                     <option value="MANUAL_PAYABLE_CREATED">Payable Created (Manual)</option>
                     <option value="CHEQUE_ISSUED">Cheque Issued</option>
                     <option value="CHEQUE_STATUS_UPDATED">Cheque Status Updated</option>
+                    <option value="CASH_PAYMENT_ISSUED">Cash Payment Issued</option>
+                    <option value="CASH_PAYMENT_STATUS_UPDATED">Cash Payment Status Updated</option>
                 </select>
 
                 <select id="payables-audit-source-filter" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 160px;">
@@ -2283,14 +2331,14 @@
                         <th style="width: 13%;">Date & Time</th>
                         <th style="width: 16%;">Payee / Vendor</th>
                         <th style="width: 10%;">Source</th>
-                        <th style="width: 13%;">Event</th>
+                        <th style="width: 17%;">Event</th>
                         <th style="width: 20%;">Reference</th>
                         <th style="width: 11%;" class="text-end">Amount</th>
-                        <th style="width: 17%;">Staff</th>
+                        <th style="width: 13%;">Staff</th>
                     </tr>
                 </thead>
                 <tbody id="payables-audit-body">
-                    <tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -4583,9 +4631,17 @@ function viewItemEditDetails(rowId) {
         ? row.change_preview.map(line => `<div class="small text-white-50 mb-2">${escapeHtml(line)}</div>`).join('')
         : '<span class="text-muted">-</span>';
 
+    const itemNameHtml = row.item_id
+        ? `
+            <a href="/transaction/items/edit/${encodeURIComponent(row.item_id)}" class="link-light text-decoration-none">
+                <i class="bi bi-box-arrow-up-right me-1 text-primary"></i>${escapeHtml(row.item_name || '-')}
+            </a>
+        `
+        : escapeHtml(row.item_name || '-');
+
     body.innerHTML = `
         <div class="mb-3">
-            <div class="fw-bold text-white fs-5">${escapeHtml(row.item_name || '-')}</div>
+            <div class="fw-bold text-white fs-5">${itemNameHtml}</div>
             <div class="small text-white-50">Item ID: ${row.item_id || '-'} • ${escapeHtml(row.changed_at || '-')}</div>
         </div>
         <div class="row g-3">
@@ -4720,9 +4776,46 @@ function payablesAuditChangePage(direction) {
     loadPayablesAudit();
 }
 
+function buildPayablesAuditPoLink(data) {
+    if (!data?.po_id || !data?.po_number_snapshot) {
+        return escapeHtml(data?.po_number_snapshot || '-');
+    }
+
+    const href = `/transaction/orders/list?po_id=${encodeURIComponent(data.po_id)}&open_po=1`;
+    return `
+        <a href="${href}" class="link-warning fw-bold text-decoration-none">
+            <i class="bi bi-box-arrow-up-right me-1"></i>${escapeHtml(data.po_number_snapshot)}
+        </a>
+    `;
+}
+
+function buildPayablesAuditPaymentLink(data) {
+    const paymentRef = String(data?.cheque_no_snapshot || '').trim();
+    if (!paymentRef) {
+        return escapeHtml(paymentRef || '-');
+    }
+
+    const params = new URLSearchParams({
+        q: paymentRef,
+        payment_ref: paymentRef,
+    });
+    if (data?.payable_id) {
+        params.set('payable_id', String(data.payable_id));
+    }
+    if (data.cheque_id) {
+        params.set('cheque_id', String(data.cheque_id));
+    }
+
+    return `
+        <a href="/transaction/payables?${params.toString()}" class="link-info fw-bold text-decoration-none">
+            <i class="bi bi-box-arrow-up-right me-1"></i>${escapeHtml(paymentRef)}
+        </a>
+    `;
+}
+
 function loadPayablesAudit() {
     const tbody = document.getElementById('payables-audit-body');
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4"><i class="bi bi-hourglass-split me-1"></i> Loading...</td></tr>';
 
     const params = [`page=${payablesAuditPage}`];
     if (payablesAuditStartDate) params.push(`start_date=${encodeURIComponent(payablesAuditStartDate)}`);
@@ -4768,20 +4861,22 @@ function renderPayablesAudit(data) {
     }
 
     if (!data.rows || data.rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">No records found.</td></tr>';
         return;
     }
 
     const sourceBadge = {
-        'PO_DELIVERY': '<span class="badge bg-info text-dark">PO Delivery</span>',
-        'MANUAL': '<span class="badge bg-secondary">Manual</span>',
+        'PO_DELIVERY': '<span class="badge bg-info text-dark payables-audit-event-badge">PO Delivery</span>',
+        'MANUAL': '<span class="badge bg-secondary payables-audit-event-badge">Manual</span>',
     };
 
     const eventBadge = {
-        'PO_PAYABLE_CREATED': '<span class="badge bg-primary">Payable Created</span>',
-        'MANUAL_PAYABLE_CREATED': '<span class="badge bg-primary">Payable Created</span>',
-        'CHEQUE_ISSUED': '<span class="badge bg-success">Cheque Issued</span>',
-        'CHEQUE_STATUS_UPDATED': '<span class="badge bg-warning text-dark">Status Updated</span>',
+        'PO_PAYABLE_CREATED': '<span class="badge bg-primary payables-audit-event-badge">Payable Created</span>',
+        'MANUAL_PAYABLE_CREATED': '<span class="badge bg-primary payables-audit-event-badge">Payable Created</span>',
+        'CHEQUE_ISSUED': '<span class="badge bg-success payables-audit-event-badge">Cheque Issued</span>',
+        'CHEQUE_STATUS_UPDATED': '<span class="badge bg-warning text-dark payables-audit-event-badge">Cheque Status Updated</span>',
+        'CASH_PAYMENT_ISSUED': '<span class="badge bg-success payables-audit-event-badge">Cash Payment Issued</span>',
+        'CASH_PAYMENT_STATUS_UPDATED': '<span class="badge bg-warning text-dark payables-audit-event-badge">Cash Payment Status Updated</span>',
     };
     payablesAuditRowsById = {};
     (data.rows || []).forEach((row) => {
@@ -4796,11 +4891,11 @@ function renderPayablesAudit(data) {
         return `
             <tr>
                 <td class="text-white-50 small">${escapeHtml(log.created_at || '-')}</td>
-                <td>
-                    <div class="fw-bold text-white">${escapeHtml(log.payee_name_snapshot || '-')}</div>
+                <td class="payables-audit-payee-cell">
+                    <div class="fw-bold text-white payables-audit-payee-name" title="${escapeHtml(log.payee_name_snapshot || '-')}">${escapeHtml(log.payee_name_snapshot || '-')}</div>
                 </td>
-                <td>${sourceBadge[log.source_type] || `<span class="badge bg-dark border border-secondary">${escapeHtml(log.source_label || log.source_type || '-')}</span>`}</td>
-                <td>${eventBadge[log.event_type] || `<span class="badge bg-dark border border-secondary">${escapeHtml(log.event_label || log.event_type || '-')}</span>`}</td>
+                <td>${sourceBadge[log.source_type] || `<span class="badge bg-dark border border-secondary payables-audit-event-badge">${escapeHtml(log.source_label || log.source_type || '-')}</span>`}</td>
+                <td class="payables-audit-event-cell">${eventBadge[log.event_type] || `<span class="badge bg-dark border border-secondary payables-audit-event-badge">${escapeHtml(log.event_label || log.event_type || '-')}</span>`}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-warning border-0"
                         style="max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
@@ -4825,6 +4920,8 @@ function viewPayablesAuditDetails(auditId) {
     const statusText = data.old_status && data.new_status
         ? `${escapeHtml(data.old_status)} -> ${escapeHtml(data.new_status)}`
         : (data.new_status ? escapeHtml(data.new_status) : '-');
+    const poReferenceMarkup = buildPayablesAuditPoLink(data);
+    const paymentReferenceMarkup = buildPayablesAuditPaymentLink(data);
 
     body.innerHTML = `
         <div class="row g-3">
@@ -4854,11 +4951,11 @@ function viewPayablesAuditDetails(auditId) {
             </div>
             <div class="col-md-6">
                 <div class="small text-white-50 mb-1">PO Number</div>
-                <div class="fw-bold">${escapeHtml(data.po_number_snapshot || '-')}</div>
+                <div>${poReferenceMarkup}</div>
             </div>
             <div class="col-md-6">
                 <div class="small text-white-50 mb-1">Cheque Number</div>
-                <div class="fw-bold">${escapeHtml(data.cheque_no_snapshot || '-')}</div>
+                <div>${paymentReferenceMarkup}</div>
             </div>
             <div class="col-12">
                 <div class="small text-white-50 mb-1">Status</div>
@@ -4884,6 +4981,8 @@ function openPayablesAuditDetails(auditId) {
     const statusText = data.old_status && data.new_status
         ? `${escapeHtml(data.old_status)} -> ${escapeHtml(data.new_status)}`
         : (data.new_status ? escapeHtml(data.new_status) : '-');
+    const poReferenceMarkup = buildPayablesAuditPoLink(data);
+    const paymentReferenceMarkup = buildPayablesAuditPaymentLink(data);
 
     body.innerHTML = `
         <div class="mb-3">
@@ -4911,9 +5010,9 @@ function openPayablesAuditDetails(auditId) {
                 <i class="bi bi-link-45deg me-1"></i> Linked Reference
             </div>
             <div class="small text-white-50 mb-1">PO Number</div>
-            <div class="fw-bold mb-2">${escapeHtml(data.po_number_snapshot || '-')}</div>
+            <div class="mb-2">${poReferenceMarkup}</div>
             <div class="small text-white-50 mb-1">Cheque Number</div>
-            <div class="fw-bold text-info mb-0">${escapeHtml(data.cheque_no_snapshot || '-')}</div>
+            <div class="mb-0">${paymentReferenceMarkup}</div>
         </div>
 
         <div class="border border-secondary rounded p-3">
