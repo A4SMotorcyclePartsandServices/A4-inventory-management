@@ -36,6 +36,7 @@ from routes.auth_route import auth_bp
 from routes.admin_audit_route import admin_audit_bp
 from routes.users_panel_route import users_panel_bp
 from routes.password_reset_route import password_reset_bp
+from routes.owner_route import owner_bp
 from auth.utils import ensure_authenticated_user, admin_required, login_required
 from services.inventory_service import attach_restock_recommendation, get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
@@ -297,6 +298,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(admin_audit_bp)
 app.register_blueprint(users_panel_bp)
 app.register_blueprint(password_reset_bp)
+app.register_blueprint(owner_bp)
 app.register_blueprint(transaction_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(debt_bp)
@@ -903,6 +905,7 @@ def _local_reloader_files():
 if __name__ == "__main__":
     host = os.environ.get("APP_HOST", "127.0.0.1")
     port = int(os.environ.get("APP_PORT", "5000"))
+    reloader_interval = int(os.environ.get("APP_RELOADER_INTERVAL", "30"))
     debug = _env_flag("FLASK_DEBUG", default=not _is_production_environment())
     use_reloader = debug
 
@@ -913,12 +916,17 @@ if __name__ == "__main__":
     if not use_reloader or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         threading.Timer(1.5, open_browser, args=(port,)).start()
 
-    print(f"Starting local Flask server: debug={debug}, reloader={use_reloader}, url=http://{host}:{port}")
+    print(
+        "Starting local Flask server: "
+        f"debug={debug}, reloader={use_reloader}, "
+        f"reloader_interval={reloader_interval}s, url=http://{host}:{port}"
+    )
     app.run(
         host=host,
         port=port,
         debug=debug,
         use_reloader=use_reloader,
+        reloader_interval=reloader_interval,
         extra_files=_local_reloader_files() if use_reloader else None,
     )
 

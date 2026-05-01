@@ -6,11 +6,12 @@ Status:
 
 - Re-checked against the current route set in `app.py`, `auth/utils.py`, and all files under `routes/`.
 - The previous 2026-03-13 snapshot was outdated.
-- The app now effectively has 4 access levels:
+- The app now effectively has 5 access levels:
   - `public`
   - authenticated (`staff` and `admin`)
   - stocktake-approved (`admin` or staff with active stocktake access)
   - `admin` only
+  - owner-only (`admin` user IDs listed in `OWNER_USER_IDS`)
 
 ### Public Routes
 
@@ -233,6 +234,12 @@ Stocktake export admin route:
 
 - `/stocktake/<session_id>/csv`
 
+### Owner-Only Routes
+
+These routes require an authenticated admin whose user ID is listed in the `OWNER_USER_IDS` environment variable.
+
+- `/owner/admin-password-resets`
+
 ### Enforcement Notes
 
 - Global authentication is enforced in [app.py](/C:/Dev/a4_inventory_system/app.py) for every route except:
@@ -244,7 +251,7 @@ Stocktake export admin route:
   - `/logout`
   - notification APIs
   - `static`
-- `@admin_required` and `@login_required` are defined in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
+- `@admin_required`, `@owner_required`, and `@login_required` are defined in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
 - Stocktake routes use a separate gate, `@stocktake_access_required`, also in [auth/utils.py](/C:/Dev/a4_inventory_system/auth/utils.py).
 - The shared `users.html` page lives under the `users_panel` blueprint in [routes/users_panel_route.py](/C:/Dev/a4_inventory_system/routes/users_panel_route.py) and is available to all logged-in users.
 - The shared Services tab under `users.html` now has mixed permissions:

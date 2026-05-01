@@ -1,3 +1,4 @@
+import os
 import time
 from functools import wraps
 
@@ -141,6 +142,30 @@ def get_current_user():
     return dict(user) if user else None
 
 
+def _owner_user_ids():
+    raw_value = os.environ.get("OWNER_USER_IDS", "")
+    owner_ids = set()
+    for item in raw_value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            owner_ids.add(int(item))
+        except ValueError:
+            continue
+    return owner_ids
+
+
+def is_owner_user(user):
+    if not user or user.get("role") != "admin":
+        return False
+    try:
+        user_id = int(user.get("id"))
+    except (TypeError, ValueError):
+        return False
+    return user_id in _owner_user_ids()
+
+
 def ensure_authenticated_user():
     user_id = session.get("user_id")
     auth_session_token = session.get(AUTH_SESSION_TOKEN_KEY)
@@ -213,6 +238,30 @@ def admin_required(f):
         if user["role"] != "admin":
             _auth_log(
                 "admin_required_forbidden",
+                resolved_user_id=user.get("id"),
+                resolved_role=user.get("role"),
+            )
+            abort(403)
+
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def owner_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            _auth_log("owner_required_missing_session")
+            return redirect(url_for("auth.login"))
+
+        user = getattr(g, "current_user", None) or ensure_authenticated_user()
+        if not user:
+            _auth_log("owner_required_user_resolution_failed")
+            return redirect(url_for("auth.login"))
+
+        if not is_owner_user(user):
+            _auth_log(
+                "owner_required_forbidden",
                 resolved_user_id=user.get("id"),
                 resolved_role=user.get("role"),
             )
