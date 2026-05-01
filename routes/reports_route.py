@@ -416,6 +416,8 @@ def _build_cash_out_report_sections(groups):
             section_key = "payables"
         elif normalized in reversals:
             section_key = "reversals"
+        elif "(related to shop)" in normalized:
+            section_key = "operating"
         elif normalized in transfers:
             section_key = "transfers"
         else:
