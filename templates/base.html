@@ -1589,7 +1589,7 @@
 
                 {% if session.get('role') == 'admin' %}
                 <div class="nav-group admin-section">
-                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'sales-analytics' in request.path or 'items-analytics' in request.path or request.path == url_for('admin_audit.audit_dashboard') or request.path == url_for('void_sales.void_sales_page') %}true{% else %}false{% endif %}">
+                    <button type="button" class="nav-group-toggle" aria-expanded="{% if 'sales-analytics' in request.path or 'items-analytics' in request.path or request.path == url_for('admin_audit.audit_dashboard') or request.path == url_for('void_sales.void_sales_page') or request.path == url_for('owner.admin_password_resets') %}true{% else %}false{% endif %}">
                         <span class="nav-group-title">Admin</span>
                         <i class="bi bi-chevron-down nav-group-caret"></i>
                     </button>
@@ -1608,6 +1608,12 @@
                         class="{% if request.path == url_for('admin_audit.audit_dashboard') %}active-link{% endif %}">
                             <i class="bi bi-shield-lock-fill"></i> Admin Panel
                         </a>
+                        {% if current_user_is_owner %}
+                        <a href="{{ url_for('owner.admin_password_resets') }}"
+                        class="{% if request.path == url_for('owner.admin_password_resets') %}active-link{% endif %}">
+                            <i class="bi bi-key-fill"></i> Owner Resets
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}

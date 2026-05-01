@@ -37,7 +37,7 @@ from routes.admin_audit_route import admin_audit_bp
 from routes.users_panel_route import users_panel_bp
 from routes.password_reset_route import password_reset_bp
 from routes.owner_route import owner_bp
-from auth.utils import ensure_authenticated_user, admin_required, login_required
+from auth.utils import ensure_authenticated_user, admin_required, is_owner_user, login_required
 from services.inventory_service import attach_restock_recommendation, get_items_with_stock, search_items_with_stock
 from services.transactions_service import add_transaction
 from services.analytics_service import (
@@ -284,6 +284,7 @@ def inject_globals():
     return {
         "current_date": today_local().isoformat(),
         "current_user": current_user,
+        "current_user_is_owner": is_owner_user(current_user),
         "stocktake_access_state": get_stocktake_access_state(
             current_user.get("id") if current_user else None,
             user_role=current_user.get("role") if current_user else None,

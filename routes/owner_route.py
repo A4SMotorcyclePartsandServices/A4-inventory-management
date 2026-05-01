@@ -49,15 +49,17 @@ def admin_password_resets():
                 admin_note[:200],
             )
             if generated_password or show_temporary_password:
-                flash(
-                    f"Temporary password for {result['username']}: {temporary_password}",
-                    "success",
-                )
+                session["owner_reset_alert"] = {
+                    "username": result["username"],
+                    "temporary_password": temporary_password,
+                    "shows_password": True,
+                }
             else:
-                flash(
-                    f"Temporary password set for {result['username']}. They must change it after signing in.",
-                    "success",
-                )
+                session["owner_reset_alert"] = {
+                    "username": result["username"],
+                    "temporary_password": "",
+                    "shows_password": False,
+                }
         except ValueError as exc:
             flash(str(exc), "danger")
         except Exception as exc:
@@ -68,4 +70,5 @@ def admin_password_resets():
     return render_template(
         "owner/admin_password_resets.html",
         admin_users=list_admin_reset_targets(),
+        owner_reset_alert=session.pop("owner_reset_alert", None),
     )
