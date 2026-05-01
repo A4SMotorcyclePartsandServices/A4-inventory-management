@@ -1004,7 +1004,7 @@
     {% set shop_expense = data.total_shop_expense or ((data.total_cash_ledger_expense or 0) + (data.total_mechanic_payout_expense or 0) + (data.total_mechanic_supply_expense or 0)) %}
     {% set total_profit_result = data.total_profit_with_shop_share if data.total_profit_with_shop_share is not none else (product_profit + service_revenue - shop_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
-    {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
+    {% set product_result_label = 'Net Loss' if profit_is_loss else 'Net Income' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
     {% set product_result_prefix = '− ' if profit_is_loss else '' %}
     <div class="report-section profit-spotlight">
