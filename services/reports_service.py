@@ -11,12 +11,9 @@ MECHANIC_QUOTA = 625.0
 MECHANIC_PAYOUT_CAP = 500.0
 EXCLUDED_PROFIT_CARD_CASH_OUT_SYSTEM_KEYS = {
     "cash_out_mechanic_payout",
-    "cash_out_to_ewallet",
 }
 EXCLUDED_PROFIT_CARD_CASH_OUT_LABELS = {
     normalize_cash_category_label("Mechanic Payout"),
-    normalize_cash_category_label("Mechanic Supply"),
-    normalize_cash_category_label("To Gcash/E-Wallet Account (Related to shop)"),
     normalize_cash_category_label("To Gcash/E-wallet account (non-related to shop)"),
     normalize_cash_category_label("Bank Deposit"),
     normalize_cash_category_label("Others (non-related to shop)"),
@@ -33,6 +30,13 @@ def _bool_flag(value, default=True):
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_exchange_sale_row(sale):
+    return bool(
+        str(sale.get("replacement_exchange_number") or "").strip()
+        or str(sale.get("original_exchange_number") or "").strip()
+    )
 
 
 def _get_profit_card_cash_ledger_expense(conn, start_date, end_date):
@@ -1734,7 +1738,7 @@ def get_sales_report_by_date(report_date):
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
             }
             paid_sales.append(sale_payload)
-            if not is_mechanic_supply:
+            if not is_mechanic_supply and not exchange_context.get("exchange_role"):
                 financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
                 total_gross += total_amount
@@ -1742,7 +1746,11 @@ def get_sales_report_by_date(report_date):
                 total_product_profit += sale_product_profit
 
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
-        [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
+        [
+            sale for sale in sales_rows
+            if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"
+            and not _is_exchange_sale_row(sale)
+        ],
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
@@ -1771,12 +1779,20 @@ def get_sales_report_by_date(report_date):
         sum(_num(sale.get("total_amount")) for sale in mechanic_supply_sales),
         2,
     )
+    total_mechanic_payout_expense = round(
+        totals["total_mech_cut"] + totals["total_shop_topup"],
+        2,
+    )
+    total_shop_expense = round(
+        total_cash_ledger_expense
+        + total_mechanic_payout_expense
+        + total_mechanic_supply_expense,
+        2,
+    )
     total_profit_with_shop_share = round(
         total_product_profit
-        + totals["total_shop_commission"]
-        - totals["total_shop_topup"]
-        - total_mechanic_supply_expense
-        - total_cash_ledger_expense,
+        + total_service_revenue
+        - total_shop_expense,
         2,
     )
 
@@ -1789,6 +1805,8 @@ def get_sales_report_by_date(report_date):
         "items_summary": items_summary,
         "total_gross": round(total_gross, 2),
         "total_mechanic_supply_expense": total_mechanic_supply_expense,
+        "total_mechanic_payout_expense": total_mechanic_payout_expense,
+        "total_shop_expense": total_shop_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
         "total_cash_ledger_expense": total_cash_ledger_expense,
@@ -1803,7 +1821,7 @@ def get_sales_report_by_date(report_date):
         ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
-        "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
+        "total_product_revenue": round(total_gross - total_service_revenue, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),
         "total_profit_with_shop_share": total_profit_with_shop_share,
@@ -2088,7 +2106,7 @@ def get_sales_report_by_range(start_date, end_date):
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
             }
             paid_sales.append(sale_payload)
-            if not is_mechanic_supply:
+            if not is_mechanic_supply and not exchange_context.get("exchange_role"):
                 financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
                 total_gross += total_amount
@@ -2096,7 +2114,11 @@ def get_sales_report_by_range(start_date, end_date):
                 total_product_profit += sale_product_profit
 
     mechanic_summary, totals, quota_failures = _calculate_range_mechanic_rollups(
-        [sale for sale in sales_rows if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"],
+        [
+            sale for sale in sales_rows
+            if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"
+            and not _is_exchange_sale_row(sale)
+        ],
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
@@ -2124,12 +2146,20 @@ def get_sales_report_by_range(start_date, end_date):
         sum(_num(sale.get("total_amount")) for sale in mechanic_supply_sales),
         2,
     )
+    total_mechanic_payout_expense = round(
+        totals["total_mech_cut"] + totals["total_shop_topup"],
+        2,
+    )
+    total_shop_expense = round(
+        total_cash_ledger_expense
+        + total_mechanic_payout_expense
+        + total_mechanic_supply_expense,
+        2,
+    )
     total_profit_with_shop_share = round(
         total_product_profit
-        + totals["total_shop_commission"]
-        - totals["total_shop_topup"]
-        - total_mechanic_supply_expense
-        - total_cash_ledger_expense,
+        + total_service_revenue
+        - total_shop_expense,
         2,
     )
 
@@ -2142,6 +2172,8 @@ def get_sales_report_by_range(start_date, end_date):
         "items_summary": items_summary,
         "total_gross": round(total_gross, 2),
         "total_mechanic_supply_expense": total_mechanic_supply_expense,
+        "total_mechanic_payout_expense": total_mechanic_payout_expense,
+        "total_shop_expense": total_shop_expense,
         "total_mech_cut": totals["total_mech_cut"],
         "total_shop_topup": totals["total_shop_topup"],
         "total_cash_ledger_expense": total_cash_ledger_expense,
@@ -2156,7 +2188,7 @@ def get_sales_report_by_range(start_date, end_date):
         ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
-        "total_product_revenue": round(total_gross - total_service_revenue - total_refunds, 2),
+        "total_product_revenue": round(total_gross - total_service_revenue, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),
         "total_profit_with_shop_share": total_profit_with_shop_share,

@@ -1108,3 +1108,175 @@ Database cleanup
 - delete affected receipt batches
 - recompute `po_items.quantity_received`
 - recompute affected PO `status` and `received_at`
+
+## Profit Card Report
+2026-05-01
+
+Purpose
+- This note documents the sales report PDF, sales summary PDF, and sales analytics profit card calculation after the April 2026 audit cleanup.
+- The client wanted the visible `Expenses` card to match what they identify operationally as shop expenses for the report period.
+- For the April 6 to April 30 live-system audit, that target number was:
+- `P 103,795.00`
+
+Final client-facing formula
+- The profit card now uses:
+- `Product Revenue - Product Cost + Service Revenue - Expenses = Gross Income`
+- In code, this is still stored in the existing `total_profit_with_shop_share` field for compatibility with templates.
+
+Why the formula changed
+- The previous formula was:
+- `Product Profit + Shop Share - Quota Top-up - Mechanic Supply - Expenses = Gross Income`
+- That formula was mathematically clean, but it made the visible `Expenses` card smaller than the client's expense audit because mechanic payout was intentionally excluded.
+- The client expects the `Expenses` card to represent the shop's identified expenses for the period, including mechanic payout.
+- To avoid double counting, once mechanic payout is represented inside `Expenses`, the formula must use full `Service Revenue` instead of `Shop Share`.
+
+Current Expenses definition
+- `Expenses` on the profit card is now a consolidated shop expense value:
+- `cash ledger/payable shop expenses + calculated mechanic payout + calculated mechanic supply`
+
+Components
+- `total_cash_ledger_expense`
+- cash ledger/payable expenses included by `_get_profit_card_cash_ledger_expense`
+- includes related shop GCash/e-wallet transfer
+- excludes non-shop items such as bank deposit and non-related shop categories
+- still excludes `Mechanic Payout`, because mechanic payout is added separately as a calculated value
+- `total_mechanic_payout_expense`
+- calculated as `total_mech_cut + total_shop_topup`
+- this matches the full mechanic payout obligation, including quota top-up
+- it is calculation-backed so profit does not depend on staff encoding the mechanic payout cash-out by end of day
+- `total_mechanic_supply_expense`
+- calculated from paid `MECHANIC_SUPPLY` transactions in the selected period
+
+April 6 to April 30 audit reconciliation
+- Original live expense card was `P 55,578.00`.
+- After including related GCash and mechanic supply logic, the audit expectation was:
+- `P 55,578.00 + P 48,217.00 = P 103,795.00`
+- Missing `P 48,217.00` was explained by:
+- `P 47,744.00` mechanic payout
+- `P 179.00` related shop GCash/e-wallet cash-out
+- `P 294.00` mechanic supply
+- `P 47,744.00 + P 179.00 + P 294.00 = P 48,217.00`
+
+Double-counting warning
+- Do not add raw `Mechanic Payout` cash ledger rows directly into the profit formula while also using `Shop Share`.
+- `Shop Share` already excludes the mechanic's earned cut.
+- The raw mechanic payout cash-out also includes quota top-up.
+- Mixing `Shop Share` with raw mechanic payout expenses causes double counting.
+- The current approach avoids this by using:
+- full `Service Revenue`
+- one consolidated `Expenses` value
+
+Exchange/refund rule
+- Exchange-linked sales are excluded from the profit-card product revenue/cost/profit inputs.
+- Refunds are excluded from the profit-card formula.
+- Refunds can still appear elsewhere in the report for cash/reporting visibility.
+- This was done so the profit card does not drift from the sales report PDF when exchanges/refunds are present.
+
+Important implementation files
+- `services/reports_service.py`
+- source of truth for sales report PDF and sales summary PDF calculations
+- builds `total_shop_expense`, `total_mechanic_payout_expense`, and `total_mechanic_supply_expense`
+- excludes exchange-linked sales from profit-card financial totals
+- `templates/reports/sales_report_pdf.html`
+- displays the profit card formula as product revenue, cost, service revenue, and expenses
+- `templates/reports/sales_summary_pdf.html`
+- same display logic as the full sales report PDF
+- `routes/reports_route.py`
+- adds calculated `Mechanic Supply` into the cash ledger breakdown section and total cash out display
+- `services/sales_analytics_service.py`
+- mirrors the report formula for the web analytics page
+- must stay aligned with `services/reports_service.py`
+- `templates/sales_analytics.html`
+- mirrors the same client-facing formula on the analytics page
+
+Known gotcha: report vs analytics drift
+- The analytics page originally showed a different number even after the visible formula matched.
+- Root cause: analytics used a separate SQL aggregate that still included exchange-linked sales.
+- Fix: analytics now excludes sales that appear in `sale_exchanges` as either original or replacement sales.
+- If report and analytics diverge again, compare the inputs first:
+- product revenue
+- product cost
+- service revenue
+- expenses
+- Do not assume the formula is the problem.
+
+Known gotcha: timezone/date bucketing
+- Cash ledger totals can differ depending on database session timezone when using `DATE(created_at)`.
+- The app sets the database session timezone through `db/database.py`.
+- Ad hoc SQL run outside the app should also set the same timezone before comparing date ranges.
+- If a future audit number is off by entries near midnight, check timezone bucketing before changing formulas.
+
+Cash ledger breakdown behavior
+- The cash ledger section in the sales report now adds `Mechanic Supply` as a calculated breakdown row.
+- This is not necessarily a manual cash ledger entry.
+- It comes from `data.total_mechanic_supply_expense`.
+- The section's `Total Cash Out & Expenses` is increased by the same amount so the breakdown reconciles visually.
+- The cash ledger total label was changed to `Total Cash Out, Refunds & Reversals` because that section can include more than true shop expenses.
+- The breakdown is grouped into:
+- operating expenses
+- payables
+- refunds, exchanges & voids
+- transfers & non-shop movements
+
+Void sale behavior
+- Voided sales are not shop expenses and are not included in the profit card `Expenses` formula.
+- The void sale tool marks the sale as voided and restores inventory.
+- It does not create a manual `cash_entries` row.
+- The cash ledger service may show a synthetic `CASH_OUT` row categorized as `Voided Sale` when a voided sale originally had a physical cash payment.
+- This synthetic row is for drawer/cash reconciliation only.
+- It can affect the sales report cash ledger section and cash-on-hand display.
+- It should not affect:
+- profit card `Expenses`
+- `total_shop_expense`
+- gross income calculation
+- If a cash sale is made in one report period and voided in another, the cash ledger section follows the void date while the profit card excludes voided sales from sales/profit inputs.
+
+Recommendation for future cleanup
+- Create one shared profit calculation module instead of maintaining parallel report and analytics calculations.
+- Suggested module:
+- `services/profit_report_service.py`
+- It should expose one function such as:
+- `build_profit_card_snapshot(start_date, end_date)`
+- That function should return:
+- product revenue
+- product cost
+- product profit
+- service revenue
+- cash ledger/payable shop expenses
+- calculated mechanic payout expense
+- calculated mechanic supply expense
+- total shop expense
+- gross income
+- exchange/refund diagnostics
+
+Recommendation: add diagnostics
+- Add an admin-only diagnostic block or debug endpoint that shows the expense composition:
+- cash ledger/payables
+- mechanic payout calculated
+- mechanic supply calculated
+- total expenses
+- encoded mechanic payout cash-outs
+- payout difference
+- This would make future client audits much faster.
+
+Recommendation: add tests
+- Add regression tests for the profit card with fixtures covering:
+- normal product sale
+- service sale with mechanic payout
+- quota top-up
+- mechanic supply
+- related shop GCash/e-wallet transfer
+- bank deposit / non-shop exclusions
+- exchange replacement/original sale
+- refund
+- payable paid by cash
+- cleared cheque
+- The most important assertion:
+- reports and analytics must produce the same profit-card inputs for the same date range.
+
+Recommendation: label the accounting basis clearly
+- The current card is client-facing and expense-oriented, not pure cash-basis accounting.
+- Mechanic payout is calculated, not dependent on the staff encoding a cash-out entry.
+- Keep wording such as:
+- `Shop expenses for the selected period, including cash ledger/payables, calculated mechanic payout, and mechanic supply.`
+- This helps explain why the card can include mechanic payout even if a payout cash-out was encoded late.

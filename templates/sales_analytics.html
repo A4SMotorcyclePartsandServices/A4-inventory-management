@@ -824,11 +824,9 @@
 
 <div class="row g-3 mb-3">
     {% set product_profit = analytics.summary.product_profit or 0 %}
-    {% set shop_share_profit = analytics.summary.shop_share_profit or 0 %}
-    {% set shop_topup_expense = analytics.summary.total_shop_topup or 0 %}
-    {% set mechanic_supply_expense = analytics.summary.total_mechanic_supply_expense or 0 %}
-    {% set cash_ledger_expense = analytics.summary.total_cash_ledger_expense or 0 %}
-    {% set total_profit_result = analytics.summary.profit_with_shop_share or (product_profit + shop_share_profit - shop_topup_expense - mechanic_supply_expense - cash_ledger_expense) %}
+    {% set service_revenue = analytics.summary.service_revenue or 0 %}
+    {% set shop_expense = analytics.summary.total_shop_expense or ((analytics.summary.total_cash_ledger_expense or 0) + (analytics.summary.total_mechanic_payout_expense or 0) + (analytics.summary.total_mechanic_supply_expense or 0)) %}
+    {% set total_profit_result = analytics.summary.profit_with_shop_share if analytics.summary.profit_with_shop_share is not none else (product_profit + service_revenue - shop_expense) %}
     {% set profit_is_loss = total_profit_result < 0 %}
     {% set product_result_label = 'Loss' if profit_is_loss else 'Gross Income' %}
     {% set product_result_display = (total_profit_result * -1) if profit_is_loss else total_profit_result %}
@@ -840,20 +838,16 @@
                     <div class="profit-spotlight-title">Profit Analysis</div>
                     <div class="profit-main-meta">
                         <span class="dot"></span>
-                        Product profit plus shop share, less quota top-up, mechanic supply, and expenses
+                        Product profit plus service revenue, less shop expenses
                     </div>
                     <div class="profit-spotlight-status {{ 'loss' if profit_is_loss else 'profit' }}">{{ '− ' if profit_is_loss else '' }}{{ product_result_label }}</div>
                     <div class="profit-spotlight-value">{{ product_result_prefix }}PHP {{ "{:,.2f}".format(product_result_display) }}</div>
                     <div class="profit-spotlight-formula">
                         Revenue (PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }})
                         - Cost (PHP {{ "{:,.2f}".format(analytics.summary.product_cost) }})
-                        + Shop Share (PHP {{ "{:,.2f}".format(shop_share_profit) }})
-                        - Quota Top-up (PHP {{ "{:,.2f}".format(shop_topup_expense) }})
-                        {% if mechanic_supply_expense > 0 %}
-                        - Mechanic Supply (PHP {{ "{:,.2f}".format(mechanic_supply_expense) }})
-                        {% endif %}
-                        {% if cash_ledger_expense > 0 %}
-                        - Expenses (PHP {{ "{:,.2f}".format(cash_ledger_expense) }})
+                        + Service Revenue (PHP {{ "{:,.2f}".format(service_revenue) }})
+                        {% if shop_expense > 0 %}
+                        - Expenses (PHP {{ "{:,.2f}".format(shop_expense) }})
                         {% endif %}
                         = {{ product_result_prefix }}{{ product_result_label }} PHP {{ "{:,.2f}".format(product_result_display) }}
                     </div>
@@ -875,24 +869,10 @@
                         <span class="profit-breakdown-label">Services</span>
                         <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(analytics.summary.service_revenue) }}</span>
                     </div>
-                    <div class="profit-breakdown-row">
-                        <span class="profit-breakdown-label">Shop Share</span>
-                        <span class="profit-breakdown-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</span>
-                    </div>
-                    <div class="profit-breakdown-row">
-                        <span class="profit-breakdown-label">Quota Top-up</span>
-                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</span>
-                    </div>
-                    {% if mechanic_supply_expense > 0 %}
-                    <div class="profit-breakdown-row">
-                        <span class="profit-breakdown-label">Mechanic Supply</span>
-                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</span>
-                    </div>
-                    {% endif %}
-                    {% if cash_ledger_expense > 0 %}
+                    {% if shop_expense > 0 %}
                     <div class="profit-breakdown-row">
                         <span class="profit-breakdown-label">Expenses</span>
-                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(cash_ledger_expense) }}</span>
+                        <span class="profit-breakdown-value cost">PHP {{ "{:,.2f}".format(shop_expense) }}</span>
                     </div>
                     {% endif %}
                 </div>
@@ -901,7 +881,7 @@
                 <div class="profit-metric revenue">
                     <div class="profit-metric-label">Product Sales</div>
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.product_revenue) }}</div>
-                    <div class="profit-metric-sub">Includes standalone items plus bundle item portions - item refunds.</div>
+                    <div class="profit-metric-sub">Includes standalone items plus bundle item portions.</div>
                 </div>
                 <div class="profit-metric cost">
                     <div class="profit-metric-label">Product Cost</div>
@@ -913,28 +893,11 @@
                     <div class="profit-metric-value">PHP {{ "{:,.2f}".format(analytics.summary.service_revenue) }}</div>
                     <div class="profit-metric-sub">Gross of all paid standalone services plus bundle service and shop-share portions.</div>
                 </div>
-                <div class="profit-metric revenue">
-                    <div class="profit-metric-label">Shop Share</div>
-                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_share_profit) }}</div>
-                    <div class="profit-metric-sub">Includes shop earnings from services, bundles, and collected service debt portions.</div>
-                </div>
-                <div class="profit-metric cost">
-                    <div class="profit-metric-label">Quota Top-up</div>
-                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_topup_expense) }}</div>
-                    <div class="profit-metric-sub">Mechanic quota shortfall covered by the shop for the selected report period.</div>
-                </div>
-                {% if mechanic_supply_expense > 0 %}
-                <div class="profit-metric cost">
-                    <div class="profit-metric-label">Mechanic Supply</div>
-                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(mechanic_supply_expense) }}</div>
-                    <div class="profit-metric-sub">Mechanic supply stock-outs treated as shop expense for the selected report period.</div>
-                </div>
-                {% endif %}
-                {% if cash_ledger_expense > 0 %}
+                {% if shop_expense > 0 %}
                 <div class="profit-metric cost">
                     <div class="profit-metric-label">Expenses</div>
-                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(cash_ledger_expense) }}</div>
-                    <div class="profit-metric-sub">Shop-related cash ledger expenses plus any cheques cleared during the selected report period.</div>
+                    <div class="profit-metric-value">PHP {{ "{:,.2f}".format(shop_expense) }}</div>
+                    <div class="profit-metric-sub">Shop expenses for the selected period, including cash ledger/payables, calculated mechanic payout, and mechanic supply.</div>
                 </div>
                 {% endif %}
                 <div class="profit-metric revenue">

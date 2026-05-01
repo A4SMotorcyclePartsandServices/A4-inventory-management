@@ -301,6 +301,8 @@ def _build_sales_report_context():
             "items_summary": [],
             "total_gross": 0.0,
             "total_mechanic_supply_expense": 0.0,
+            "total_mechanic_payout_expense": 0.0,
+            "total_shop_expense": 0.0,
             "total_mech_cut": 0.0,
             "total_shop_topup": 0.0,
             "total_cash_ledger_expense": 0.0,
@@ -322,6 +324,22 @@ def _build_sales_report_context():
             "total_mech_cut_from_paid": 0.0,
             "total_mech_cut_from_debt": 0.0,
         }
+
+    mechanic_supply_expense = round(float(data.get("total_mechanic_supply_expense") or 0), 2)
+    if mechanic_supply_expense > 0:
+        cash_data["cash_out_groups"] = sorted(
+            list(cash_data.get("cash_out_groups") or []) + [{
+                "category": "Mechanic Supply",
+                "entry_count": len(data.get("mechanic_supply_sales") or []),
+                "total_amount": mechanic_supply_expense,
+            }],
+            key=lambda group: group["category"].lower(),
+        )
+        cash_data["total_out"] = round(float(cash_data.get("total_out") or 0) + mechanic_supply_expense, 2)
+
+    cash_data["cash_out_group_sections"] = _build_cash_out_report_sections(
+        cash_data.get("cash_out_groups") or []
+    )
 
     return {
         "report_date": date_label,
@@ -357,6 +375,63 @@ def _build_cash_out_report_groups(entries):
         group["total_amount"] = round(group["total_amount"] + float(entry.get("amount") or 0), 2)
 
     return sorted(grouped.values(), key=lambda group: group["category"].lower())
+
+
+def _build_cash_out_report_sections(groups):
+    section_defs = [
+        ("Operating expenses", "operating"),
+        ("Payables", "payables"),
+        ("Refunds, exchanges & voids", "reversals"),
+        ("Transfers & non-shop movements", "transfers"),
+    ]
+    sections = {
+        key: {
+            "label": label,
+            "groups": [],
+            "total_amount": 0.0,
+        }
+        for label, key in section_defs
+    }
+
+    payables = {
+        "payable paid by cash",
+        "cheque cleared (via bank)",
+    }
+    reversals = {
+        "sale refund",
+        "exchange/refund",
+        "voided sale",
+    }
+    transfers = {
+        "bank deposit",
+        "others (non-related to shop)",
+        "to gcash/e-wallet account (related to shop)",
+        "to gcash/e-wallet account (non-related to shop)",
+    }
+
+    for group in groups or []:
+        category = str(group.get("category") or "").strip()
+        normalized = " ".join(category.lower().split())
+        if normalized in payables:
+            section_key = "payables"
+        elif normalized in reversals:
+            section_key = "reversals"
+        elif normalized in transfers:
+            section_key = "transfers"
+        else:
+            section_key = "operating"
+
+        section = sections[section_key]
+        amount = round(float(group.get("total_amount") or 0), 2)
+        section["groups"].append(group)
+        section["total_amount"] = round(section["total_amount"] + amount, 2)
+
+    ordered_sections = []
+    for _, key in section_defs:
+        section = sections[key]
+        if section["groups"]:
+            ordered_sections.append(section)
+    return ordered_sections
 
 
 @reports_bp.route("/reports/sales-receipt/<int:sale_id>")
