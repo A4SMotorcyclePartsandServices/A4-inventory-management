@@ -150,6 +150,57 @@ def _build_sale_payment_summary_map(conn, sale_ids):
 
     return payment_method_map
 
+def _build_sale_payment_detail_map(conn, sale_ids):
+    """
+    Returns per-sale payment breakdown as a list of {method, amount} dicts.
+    Only populated when a sale used more than one payment method.
+    Falls back to an empty list for single-method sales (display handled by
+    the existing payment_method string in that case).
+    """
+    normalized_sale_ids = [int(sid) for sid in (sale_ids or []) if sid is not None]
+    if not normalized_sale_ids:
+        return {}
+
+    rows = conn.execute(
+        """
+        SELECT
+            sp.sale_id,
+            COALESCE(pm.name, 'Payment') AS payment_method,
+            sp.amount
+        FROM sale_payments sp
+        LEFT JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        WHERE sp.sale_id = ANY(%s)
+        ORDER BY sp.sale_id ASC, sp.sequence_no ASC, sp.id ASC
+        """,
+        (normalized_sale_ids,),
+    ).fetchall()
+
+    # Aggregate amounts per method per sale (handles split rows for same method)
+    grouped = {}
+    order_tracker = {}
+    for row in rows:
+        sale_id = int(row["sale_id"])
+        method = str(row["payment_method"] or "Payment").strip() or "Payment"
+        amount = float(row["amount"] or 0)
+        if sale_id not in grouped:
+            grouped[sale_id] = {}
+            order_tracker[sale_id] = []
+        if method not in grouped[sale_id]:
+            grouped[sale_id][method] = 0.0
+            order_tracker[sale_id].append(method)
+        grouped[sale_id][method] = round(grouped[sale_id][method] + amount, 2)
+
+    result = {}
+    for sale_id, methods in grouped.items():
+        # Only bother storing breakdown when multiple methods were used
+        if len(methods) > 1:
+            result[sale_id] = [
+                {"method": name, "amount": methods[name]}
+                for name in order_tracker[sale_id]
+            ]
+        else:
+            result[sale_id] = []
+    return result
 
 def _build_sale_exchange_context(sale, is_mechanic_supply=False):
     if is_mechanic_supply:
@@ -1518,6 +1569,7 @@ def get_sales_report_by_date(report_date):
 
     all_unresolved = get_all_unresolved_sales(conn)
     sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
+    sale_payment_detail_map = _build_sale_payment_detail_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -1736,6 +1788,8 @@ def get_sales_report_by_date(report_date):
                 **exchange_context,
                 "transaction_class": transaction_class,
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
+                "payment_method": sale_payment_map.get(sale["id"], "-"),
+                "payment_breakdown": sale_payment_detail_map.get(sale["id"], []),
             }
             paid_sales.append(sale_payload)
             if not is_mechanic_supply and not exchange_context.get("exchange_role"):
@@ -1886,6 +1940,7 @@ def get_sales_report_by_range(start_date, end_date):
 
     all_unresolved = get_all_unresolved_sales(conn)
     sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
+    sale_payment_detail_map = _build_sale_payment_detail_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -2104,6 +2159,8 @@ def get_sales_report_by_range(start_date, end_date):
                 **exchange_context,
                 "transaction_class": transaction_class,
                 "exclude_from_calculations": 1 if is_mechanic_supply else 0,
+                "payment_method": sale_payment_map.get(sale["id"], "-"),
+                "payment_breakdown": sale_payment_detail_map.get(sale["id"], []),
             }
             paid_sales.append(sale_payload)
             if not is_mechanic_supply and not exchange_context.get("exchange_role"):

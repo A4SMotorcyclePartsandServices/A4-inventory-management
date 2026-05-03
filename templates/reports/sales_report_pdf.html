@@ -759,21 +759,30 @@
                 </td>
                 <td>
                     {% if sale.transaction_class != 'MECHANIC_SUPPLY' %}
-                        {% for payment_method in (sale.payment_method or '-').split(' + ') %}
-                            <div>{{ payment_method }}</div>
-                        {% endfor %}
+                        {% if sale.payment_breakdown %}
+                            {% for entry in sale.payment_breakdown %}
+                                <div style="display: flex; justify-content: space-between; gap: 8px;">
+                                    <span>{{ entry.method }}</span>
+                                    <span style="white-space: nowrap;">P {{ "%.2f"|format(entry.amount) }}</span>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            {% for payment_method in (sale.payment_method or '-').split(' + ') %}
+                                <div>{{ payment_method }}</div>
+                            {% endfor %}
+                        {% endif %}
                     {% endif %}
                     <div style="margin-top: 5px;">
                         <span class="badge {{ 'badge-unresolved' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'badge-paid' }}">
                             {{ 'Expense' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'Paid' }}
                         </span>
                     </div>
-                        {% if sale.notes %}
-                            <div class="notes-cell">Notes: {{ sale.notes }}</div>
-                        {% endif %}
-                        {% if sale.exchange_reason %}
-                            <div class="reason-cell">Reason: {{ sale.exchange_reason }}</div>
-                        {% endif %}
+                    {% if sale.notes %}
+                        <div class="notes-cell">Notes: {{ sale.notes }}</div>
+                    {% endif %}
+                    {% if sale.exchange_reason %}
+                        <div class="reason-cell">Reason: {{ sale.exchange_reason }}</div>
+                    {% endif %}
                 </td>
                 <td style="font-weight: 700; font-size: 14px;">
                     P {{ "%.2f"|format(sale.total_amount) }}
