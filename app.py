@@ -906,9 +906,9 @@ def _local_reloader_files():
 if __name__ == "__main__":
     host = os.environ.get("APP_HOST", "127.0.0.1")
     port = int(os.environ.get("APP_PORT", "5000"))
-    reloader_interval = int(os.environ.get("APP_RELOADER_INTERVAL", "30"))
+    reloader_interval = int(os.environ.get("APP_RELOADER_INTERVAL", "600"))
     debug = _env_flag("FLASK_DEBUG", default=not _is_production_environment())
-    use_reloader = debug
+    use_reloader = False
 
     app.config["TEMPLATES_AUTO_RELOAD"] = debug
     if debug:
@@ -925,8 +925,8 @@ if __name__ == "__main__":
     app.run(
         host=host,
         port=port,
-        debug=debug,
-        use_reloader=use_reloader,
+        debug=True,
+        use_reloader=False,
         reloader_interval=reloader_interval,
         extra_files=_local_reloader_files() if use_reloader else None,
     )

@@ -5,6 +5,7 @@ from auth.utils import login_required
 from auth.utils import admin_required
 from services.cash_service import (
     get_cash_summary,
+    get_cash_summary_for_range,
     get_cash_entries,
     get_cash_entry_count,
     get_cash_entries_for_report,
@@ -312,6 +313,11 @@ def cash_ledger():
     offset = (page - 1) * LEDGER_PAGE_SIZE
 
     summary = get_cash_summary(branch_id=branch_id)
+    range_summary = get_cash_summary_for_range(        # ← add this
+        start_date=start_date,
+        end_date=end_date,
+        branch_id=branch_id,
+    )
     category_choices = get_cash_category_choices()
     entries = get_cash_entries(
         branch_id=branch_id,
@@ -348,6 +354,7 @@ def cash_ledger():
     return render_template(
         "cash/cash_ledger.html",
         summary=summary,
+        range_summary=range_summary,
         entries=entries,
         page=page,
         total_entries=total_entries,
@@ -445,6 +452,12 @@ def cash_ledger_api():
         end_date=end_date,
         ledger_view=ledger_view,
     )
+    
+    range_summary = get_cash_summary_for_range(
+        start_date=start_date,
+        end_date=end_date,
+        branch_id=branch_id,
+    )
 
     start_entry = offset + 1 if total_entries else 0
     end_entry = offset + len(entries)
@@ -456,6 +469,8 @@ def cash_ledger_api():
         "total_entries": total_entries,
         "start_entry": start_entry,
         "end_entry": end_entry,
+        "range_total_in": range_summary["total_in"],
+        "range_total_out": range_summary["total_out"],
         "selected_view": ledger_view,
         "selected_type": entry_type,
         "selected_start_date": start_date,

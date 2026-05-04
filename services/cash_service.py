@@ -1066,6 +1066,47 @@ def get_cash_summary(branch_id=1):
         'floating_total': floating_total,
     }
 
+def get_cash_summary_for_range(start_date=None, end_date=None, branch_id=1):
+    """
+    Cash In / Cash Out totals scoped to a date range.
+    Used to power the summary cards so they match the active ledger filter.
+    Cash On Hand and Floating Money are intentionally excluded — those are
+    always cumulative and live in get_cash_summary().
+    """
+    conn = get_db()
+    try:
+        sales_rows             = _get_sales_cash(conn, branch_id, start_date, end_date)
+        debt_rows              = _get_debt_cash_payments(conn, branch_id, start_date, end_date)
+        refund_rows            = _get_sale_refunds_cash(conn, branch_id, start_date, end_date)
+        void_rows              = _get_sale_voids_cash(conn, branch_id, start_date, end_date)
+        manual_rows            = _get_manual_entries(conn, branch_id, start_date, end_date, deleted_state='active')
+        paid_payable_cash_rows = _get_paid_payable_cash_payments(conn, start_date, end_date)
+    finally:
+        conn.close()
+
+    total_in  = 0.0
+    total_out = 0.0
+
+    for row in sales_rows:
+        total_in += _money(row['amount'])
+    for row in debt_rows:
+        total_in += _money(row['amount'])
+    for row in refund_rows:
+        total_out += _money(row['amount'])
+    for row in void_rows:
+        total_out += _money(row['amount'])
+    for row in manual_rows:
+        if row['entry_type'] == 'CASH_IN':
+            total_in  += _money(row['amount'])
+        else:
+            total_out += _money(row['amount'])
+    for row in paid_payable_cash_rows:
+        total_out += _money(row['amount'])
+
+    return {
+        'total_in':  round(total_in,  2),
+        'total_out': round(total_out, 2),
+    }
 
 def get_cash_balance_as_of(date_to, branch_id=1):
     """
