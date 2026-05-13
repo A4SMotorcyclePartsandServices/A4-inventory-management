@@ -1678,13 +1678,13 @@ def build_payables_report_context(start_date=None, end_date=None):
             FROM payable_cheques pc
             JOIN payables p ON p.id = pc.payable_id
             WHERE (
-                pc.cheque_date BETWEEN %s AND %s
+                pc.due_date BETWEEN %s AND %s
                 OR (
                     pc.status = %s
                     AND DATE(pc.updated_at) BETWEEN %s AND %s
                 )
             )
-            ORDER BY ABS(pc.cheque_date - %s) ASC, pc.cheque_date ASC, pc.id ASC
+            ORDER BY pc.due_date ASC, pc.id ASC
             """,
             (
                 start_value,
@@ -1692,7 +1692,6 @@ def build_payables_report_context(start_date=None, end_date=None):
                 CHEQUE_STATUS_CLEARED,
                 start_value,
                 end_value,
-                today_value.isoformat(),
             ),
         ).fetchall()
         cash_rows = conn.execute(
@@ -1719,7 +1718,7 @@ def build_payables_report_context(start_date=None, end_date=None):
                     AND DATE(pcp.updated_at) BETWEEN %s AND %s
                 )
             )
-            ORDER BY ABS(pcp.payment_due_date - %s) ASC, pcp.payment_due_date ASC, pcp.id ASC
+            ORDER BY pcp.payment_due_date ASC, pcp.id ASC
             """,
             (
                 start_value,
@@ -1727,7 +1726,6 @@ def build_payables_report_context(start_date=None, end_date=None):
                 CASH_PAYMENT_STATUS_PAID,
                 start_value,
                 end_value,
-                today_value.isoformat(),
             ),
         ).fetchall()
     finally:
@@ -1741,7 +1739,8 @@ def build_payables_report_context(start_date=None, end_date=None):
         items.append({
             "id": int(row["id"]),
             "cheque_no": row["cheque_no"] or "-",
-            "cheque_date": format_date(row["cheque_date"]),
+            "cheque_date": format_date(row["due_date"]),
+            "sort_due_date": row["due_date"].isoformat() if row["due_date"] else "",
             "cleared_at": (
                 format_date(row["updated_at"], show_time=True)
                 if str(row["status"] or "").strip().upper() == CHEQUE_STATUS_CLEARED
@@ -1765,6 +1764,7 @@ def build_payables_report_context(start_date=None, end_date=None):
             "id": int(row["id"]),
             "cheque_no": row["payment_ref"] or "-",
             "cheque_date": format_date(row["payment_due_date"]),
+            "sort_due_date": row["payment_due_date"].isoformat() if row["payment_due_date"] else "",
             "cleared_at": (
                 format_date(row["updated_at"], show_time=True)
                 if str(row["status"] or "").strip().upper() == CASH_PAYMENT_STATUS_PAID
@@ -1781,7 +1781,7 @@ def build_payables_report_context(start_date=None, end_date=None):
             "payment_type": "CASH",
         })
 
-    items.sort(key=lambda item: (item["cheque_date"] or "", item["payment_type"], item["id"]))
+    items.sort(key=lambda item: (item["sort_due_date"] or "", item["payment_type"], item["id"]))
 
     return {
         "report_title": "Payables Payment Report",

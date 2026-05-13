@@ -6,7 +6,7 @@ from utils.formatters import format_date
 from utils.timezone import now_local_naive, today_local
 
 
-STOCKTAKE_WARNING_DAYS = 30
+STOCKTAKE_WARNING_DAYS = 90
 RESTOCK_VARIANCE_ALERT_DAYS = 30
 RESTOCK_MANUAL_STOCK_REVIEW_DAYS = 30
 RESTOCK_FAST_LOOKBACK_DAYS = 30
