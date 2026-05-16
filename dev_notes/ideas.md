@@ -445,3 +445,30 @@ Applied:
   - Learn lead time per vendor + item, not just per vendor
   - Keep current self-correcting behavior, but require multiple received POs before trusting the new vendor for lead time
   - Use vendor lead time only as a hint, and cap how much it can change at once
+
+## OR No. Uniqueness
+
+Problem:
+The OUT sale flow can currently store two active sales with the same OR number if the same sale is submitted again with a different idempotency key. Idempotency should handle retries, but OR number uniqueness is still a useful business-level safety net.
+
+Suggested direction:
+Make OR numbers unique for active, non-voided sales.
+
+Preferred database shape:
+- Add a partial unique index on normalized `sales.sales_number`.
+- Ignore null / blank OR numbers.
+- Exclude voided sales so a voided duplicate does not block the real active sale.
+
+Example shape:
+```sql
+CREATE UNIQUE INDEX ...
+ON sales (LOWER(TRIM(sales_number)))
+WHERE sales_number IS NOT NULL
+  AND TRIM(sales_number) <> ''
+  AND COALESCE(is_voided, FALSE) = FALSE;
+```
+
+Before implementing:
+- Check prod for existing active duplicate OR numbers.
+- Confirm there is no legitimate workflow where two active sales should share one OR number.
+- Add a friendly validation error on sale save if the OR number is already active.

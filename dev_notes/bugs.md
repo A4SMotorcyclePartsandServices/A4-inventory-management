@@ -323,11 +323,3 @@ Discussion / future reference:
   allow stock-in for over-received box items, require a note, but do not auto-update `items.cost_per_piece` until billing intent is confirmed.
 - Suggested audit / note message:
   "Box over-receive detected. Stock accepted, but cost-per-piece should be reviewed because excess boxes may be bonus stock or separately billable."
-
-## Audit Trail
-
-- Audit tab PO logic may not correctly reflect partial arrivals
-
-## Audit Tab
-
-- PO modal has inconsistent design and status. does not reflect real status. right now a PO that is for revision is marked as for approval

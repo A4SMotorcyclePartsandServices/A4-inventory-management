@@ -2723,6 +2723,12 @@ function renderSaleReviewModal(draft) {
 
 function openSaleReviewModal(draft) {
     pendingSaleDraft = draft;
+    const confirmBtn = document.getElementById('confirm-sale-submit-btn');
+    if (confirmBtn) {
+        delete confirmBtn.dataset.submitting;
+        delete confirmBtn.dataset.idempotencyKey;
+        confirmBtn.disabled = false;
+    }
     renderSaleReviewModal(draft);
     saleReviewModal?.show();
 }
@@ -5571,7 +5577,11 @@ async function saveTransaction(draft, submitGuard) {
 
         if (!res.ok) {
             showAlert(result.message);
-            submitGuard.reset();
+            const keepRetryKey = res.status >= 500 || (
+                res.status === 409
+                && /already being processed/i.test(String(result.message || ''))
+            );
+            submitGuard.reset({ preserveIdempotencyKey: keepRetryKey });
             return;
         }
 
@@ -5615,7 +5625,7 @@ async function saveTransaction(draft, submitGuard) {
             showAlert(err.message || 'Submission failed. Please try again.', 'danger');
         }
         if (!salePersisted) {
-            submitGuard.reset();
+            submitGuard.reset({ preserveIdempotencyKey: true });
         }
     }
 }

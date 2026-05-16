@@ -55,12 +55,15 @@
                 button.disabled = true;
             },
 
-            reset() {
+            reset(options) {
+                const resetOptions = options || {};
                 if (!button) {
                     return;
                 }
                 delete button.dataset.submitting;
-                delete button.dataset.idempotencyKey;
+                if (!resetOptions.preserveIdempotencyKey) {
+                    delete button.dataset.idempotencyKey;
+                }
                 button.disabled = false;
                 button.innerHTML = idleHtml;
             },
