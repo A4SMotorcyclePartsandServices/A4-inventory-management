@@ -536,7 +536,7 @@
             <tbody>
                 <tr>
                     <td>Item Sales</td>
-                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_product_revenue or 0) }}</span></td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.transaction_item_sales if data.transaction_item_sales is not none else (data.total_product_revenue or 0)) }}</span></td>
                 </tr>
                 <tr>
                     <td>Product Cost</td>

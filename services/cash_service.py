@@ -2063,9 +2063,6 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
 
     unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows, paid_payable_cash_rows)
 
-    # Reverse to oldest-first for PDF reading order
-    unified.reverse()
-
     total_in  = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_IN')
     total_out = sum(r['amount'] for r in unified if r['entry_type'] == 'CASH_OUT')
     ending_cash_on_hand = None

@@ -396,18 +396,9 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
 
 
 def _summarize_items_for_profit(paid_sales, refunds=None):
-    refunded_sale_item_ids = {
-        int(item.get("sale_item_id"))
-        for refund in refunds or []
-        for item in refund.get("items") or []
-        if item.get("sale_item_id") is not None
-    }
     items_summary = {}
     for sale in paid_sales:
         for item in sale["products"]:
-            sale_item_id = item.get("sale_item_id")
-            if sale_item_id is not None and int(sale_item_id) in refunded_sale_item_ids:
-                continue
             key = item["item_name"]
             if key not in items_summary:
                 items_summary[key] = {
@@ -472,6 +463,17 @@ def _summarize_items_for_profit(paid_sales, refunds=None):
             1 if row.get("row_type") == "refund" else 0,
             row.get("row_note") or "",
         ),
+    )
+
+
+def _sum_positive_item_sales(summary_rows):
+    return round(
+        sum(
+            _num(row.get("total"))
+            for row in summary_rows or []
+            if row.get("row_type") != "refund"
+        ),
+        2,
     )
 
 
@@ -1840,6 +1842,7 @@ def get_sales_report_by_date(report_date):
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
     items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
+    transaction_item_sales = _sum_positive_item_sales(items_summary)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -1880,8 +1883,9 @@ def get_sales_report_by_date(report_date):
         "total_shop_topup": totals["total_shop_topup"],
         "total_cash_ledger_expense": total_cash_ledger_expense,
         "net_revenue": round(
-            total_gross
+            transaction_item_sales
             - total_refunds
+            + total_service_revenue
             - total_mechanic_supply_expense
             - totals["total_mech_cut"]
             - totals["total_shop_topup"]
@@ -1890,6 +1894,7 @@ def get_sales_report_by_date(report_date):
         ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
+        "transaction_item_sales": transaction_item_sales,
         "total_product_revenue": round(total_gross - total_service_revenue, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),
@@ -2216,6 +2221,7 @@ def get_sales_report_by_range(start_date, end_date):
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
     items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
+    transaction_item_sales = _sum_positive_item_sales(items_summary)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -2256,8 +2262,9 @@ def get_sales_report_by_range(start_date, end_date):
         "total_shop_topup": totals["total_shop_topup"],
         "total_cash_ledger_expense": total_cash_ledger_expense,
         "net_revenue": round(
-            total_gross
+            transaction_item_sales
             - total_refunds
+            + total_service_revenue
             - total_mechanic_supply_expense
             - totals["total_mech_cut"]
             - totals["total_shop_topup"]
@@ -2266,6 +2273,7 @@ def get_sales_report_by_range(start_date, end_date):
         ),
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
+        "transaction_item_sales": transaction_item_sales,
         "total_product_revenue": round(total_gross - total_service_revenue, 2),
         "total_product_cost": round(total_product_cost, 2),
         "total_product_profit": round(total_product_profit, 2),

@@ -936,7 +936,7 @@
                     <div class="fin-rows">
                     <div class="fin-row">
                         <span class="label">Item Sales</span>
-                        <span class="value">P {{ "%.2f"|format(data.total_product_revenue) }}</span>
+                        <span class="value">P {{ "%.2f"|format(data.transaction_item_sales if data.transaction_item_sales is not none else data.total_product_revenue) }}</span>
                     </div>
                     {% if data.total_refunds > 0 %}
                     <div class="fin-row" style="color: #721c24;">
