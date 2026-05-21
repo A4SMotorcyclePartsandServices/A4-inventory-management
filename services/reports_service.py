@@ -396,9 +396,18 @@ def _get_non_cash_floating_metrics(conn, start_date, end_date):
 
 
 def _summarize_items_for_profit(paid_sales, refunds=None):
+    refunded_sale_item_ids = {
+        int(item.get("sale_item_id"))
+        for refund in refunds or []
+        for item in refund.get("items") or []
+        if item.get("sale_item_id") is not None
+    }
     items_summary = {}
     for sale in paid_sales:
         for item in sale["products"]:
+            sale_item_id = item.get("sale_item_id")
+            if sale_item_id is not None and int(sale_item_id) in refunded_sale_item_ids:
+                continue
             key = item["item_name"]
             if key not in items_summary:
                 items_summary[key] = {
@@ -1647,6 +1656,7 @@ def get_sales_report_by_date(report_date):
     if paid_sale_ids:
         items_rows = conn.execute("""
             SELECT
+                si.id AS sale_item_id,
                 si.sale_id,
                 i.name AS item_name,
                 si.quantity,
@@ -1675,6 +1685,7 @@ def get_sales_report_by_date(report_date):
         refund_item_rows = conn.execute("""
             SELECT
                 sri.refund_id,
+                sri.sale_item_id,
                 i.name AS item_name,
                 sri.quantity,
                 sri.unit_price,
@@ -1686,6 +1697,7 @@ def get_sales_report_by_date(report_date):
         """, (refund_ids,)).fetchall()
         for row in refund_item_rows:
             refund_items_by_id.setdefault(row["refund_id"], []).append({
+                "sale_item_id": row["sale_item_id"],
                 "item_name": row["item_name"],
                 "quantity": int(row["quantity"] or 0),
                 "unit_price": round(_num(row["unit_price"]), 2),
@@ -1729,6 +1741,7 @@ def get_sales_report_by_date(report_date):
 
     paid_sales = []
     financial_paid_sales = []
+    item_summary_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
     total_product_cost = 0.0
@@ -1792,7 +1805,9 @@ def get_sales_report_by_date(report_date):
                 "payment_breakdown": sale_payment_detail_map.get(sale["id"], []),
             }
             paid_sales.append(sale_payload)
-            if not is_mechanic_supply and not exchange_context.get("exchange_role"):
+            if not is_mechanic_supply:
+                item_summary_paid_sales.append(sale_payload)
+            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
                 financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
                 total_gross += total_amount
@@ -1824,7 +1839,7 @@ def get_sales_report_by_date(report_date):
         paid_sales,
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
-    items_summary = _summarize_items_for_profit(financial_paid_sales, refunds=refunds)
+    items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -2018,6 +2033,7 @@ def get_sales_report_by_range(start_date, end_date):
     if paid_sale_ids:
         items_rows = conn.execute("""
             SELECT
+                si.id AS sale_item_id,
                 si.sale_id,
                 i.name AS item_name,
                 si.quantity,
@@ -2046,6 +2062,7 @@ def get_sales_report_by_range(start_date, end_date):
         refund_item_rows = conn.execute("""
             SELECT
                 sri.refund_id,
+                sri.sale_item_id,
                 i.name AS item_name,
                 sri.quantity,
                 sri.unit_price,
@@ -2057,6 +2074,7 @@ def get_sales_report_by_range(start_date, end_date):
         """, (refund_ids,)).fetchall()
         for row in refund_item_rows:
             refund_items_by_id.setdefault(row["refund_id"], []).append({
+                "sale_item_id": row["sale_item_id"],
                 "item_name": row["item_name"],
                 "quantity": int(row["quantity"] or 0),
                 "unit_price": round(_num(row["unit_price"]), 2),
@@ -2100,6 +2118,7 @@ def get_sales_report_by_range(start_date, end_date):
 
     paid_sales = []
     financial_paid_sales = []
+    item_summary_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
     total_product_cost = 0.0
@@ -2163,7 +2182,9 @@ def get_sales_report_by_range(start_date, end_date):
                 "payment_breakdown": sale_payment_detail_map.get(sale["id"], []),
             }
             paid_sales.append(sale_payload)
-            if not is_mechanic_supply and not exchange_context.get("exchange_role"):
+            if not is_mechanic_supply:
+                item_summary_paid_sales.append(sale_payload)
+            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
                 financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
                 total_gross += total_amount
@@ -2194,7 +2215,7 @@ def get_sales_report_by_range(start_date, end_date):
         paid_sales,
         key=lambda sale: 1 if sale.get("transaction_class") == "MECHANIC_SUPPLY" else 0,
     )
-    items_summary = _summarize_items_for_profit(financial_paid_sales, refunds=refunds)
+    items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]

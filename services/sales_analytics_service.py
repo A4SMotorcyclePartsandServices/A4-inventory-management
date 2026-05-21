@@ -412,7 +412,6 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
               SELECT 1
               FROM sale_exchanges se
               WHERE se.original_sale_id = s.id
-                 OR se.replacement_sale_id = s.id
           )
         ) scoped_sales
         """,
@@ -432,6 +431,11 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
               AND COALESCE(s.is_voided, FALSE) = FALSE
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM sale_refund_items sri
+                  WHERE sri.sale_item_id = si.id
+              )
 
             UNION ALL
 
@@ -567,7 +571,6 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
               SELECT 1
               FROM sale_exchanges se
               WHERE se.original_sale_id = s.id
-                 OR se.replacement_sale_id = s.id
           )
         ORDER BY s.transaction_date ASC
         """,
@@ -708,6 +711,11 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
               AND s.status = 'Paid'
               AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
               AND COALESCE(s.is_voided, FALSE) = FALSE
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM sale_refund_items sri
+                  WHERE sri.sale_item_id = si.id
+              )
             GROUP BY i.id, i.name, i.description, i.category
 
             UNION ALL
