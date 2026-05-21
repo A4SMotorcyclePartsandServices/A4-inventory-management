@@ -189,8 +189,10 @@ app.config["SESSION_COOKIE_SECURE"] = _env_flag(
     "SESSION_COOKIE_SECURE",
     default=_is_production_environment(),
 )
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
-    hours=int(os.environ.get("SESSION_LIFETIME_HOURS", 12))
+SESSION_LIFETIME_HOURS = int(os.environ.get("SESSION_LIFETIME_HOURS", 12))
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=SESSION_LIFETIME_HOURS)
+app.config["WTF_CSRF_TIME_LIMIT"] = int(
+    os.environ.get("WTF_CSRF_TIME_LIMIT_SECONDS", SESSION_LIFETIME_HOURS * 60 * 60)
 )
 app.config["MAX_CONTENT_LENGTH"] = int(os.environ.get("MAX_CONTENT_LENGTH_MB", 16)) * 1024 * 1024
 app.config["PREFERRED_URL_SCHEME"] = "https" if _is_production_environment() else "http"
@@ -856,6 +858,12 @@ def handle_csrf_error(e):
         flash("You have been logged out. Please sign in again.", "info")
         return _apply_no_store(redirect(url_for("auth.login")))
     _log_access_denied_event("csrf_error", e)
+    if request.path.startswith("/api/") or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "status": "error",
+            "message": "Your page security token expired. Refresh the page and try again.",
+            "code": "csrf_expired",
+        }), 400
     if request.path == "/login" and request.method == "POST":
         flash("Your login page expired. Please sign in again.", "warning")
         return _apply_no_store(redirect(url_for("auth.login")))
