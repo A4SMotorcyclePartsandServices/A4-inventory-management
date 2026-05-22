@@ -755,14 +755,14 @@
 <div class="row g-3 mb-3">
     <div class="col-md-6 col-xl-3">
         <div class="kpi-card kpi-card--revenue-soft">
-            <div class="kpi-label">Gross Sales</div>
+            <div class="kpi-label">Net Sales</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.gross_sales) }}</div>
             <div class="kpi-note">{{ analytics.summary.paid_transactions }} paid sale{{ '' if analytics.summary.paid_transactions == 1 else 's' }} contributed to realized sales.</div>
         </div>
     </div>
     <div class="col-md-6 col-xl-3">
         <div class="kpi-card kpi-card--revenue-primary">
-            <div class="kpi-label">Net Sales</div>
+            <div class="kpi-label">Gross Sales</div>
             <div class="kpi-value">PHP {{ "{:,.2f}".format(analytics.summary.net_sales) }}</div>
             <div class="kpi-note">Paid sales + debt collected - refunds</div>
         </div>

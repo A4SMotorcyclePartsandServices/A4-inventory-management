@@ -307,6 +307,7 @@ def _build_sales_report_context():
             "total_shop_topup": 0.0,
             "total_cash_ledger_expense": 0.0,
             "net_revenue": 0.0,
+            "total_items_sold_net": 0.0,
             "total_product_revenue": 0.0,
             "total_product_cost": 0.0,
             "total_product_profit": 0.0,

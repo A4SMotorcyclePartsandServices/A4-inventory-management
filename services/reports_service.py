@@ -450,8 +450,8 @@ def _summarize_items_for_profit(paid_sales, refunds=None):
                 "item_name": item.get("item_name") or "Unknown Item",
                 "quantity": -int(item.get("quantity") or 0),
                 "total": -round(_num(item.get("line_total")), 2),
-                "cost_total": 0.0,
-                "profit_total": 0.0,
+                "cost_total": -round(_num(item.get("cost_total")), 2),
+                "profit_total": -round(_num(item.get("profit_total")), 2),
                 "row_type": "refund",
                 "row_note": row_note,
             })
@@ -473,6 +473,13 @@ def _sum_positive_item_sales(summary_rows):
             for row in summary_rows or []
             if row.get("row_type") != "refund"
         ),
+        2,
+    )
+
+
+def _sum_item_summary_amount(summary_rows, attribute):
+    return round(
+        sum(_num(row.get(attribute)) for row in summary_rows or []),
         2,
     )
 
@@ -1691,9 +1698,12 @@ def get_sales_report_by_date(report_date):
                 i.name AS item_name,
                 sri.quantity,
                 sri.unit_price,
-                sri.line_total
+                sri.line_total,
+                (sri.quantity * si.cost_per_piece_snapshot) AS cost_total,
+                (sri.line_total - (sri.quantity * si.cost_per_piece_snapshot)) AS profit_total
             FROM sale_refund_items sri
             JOIN items i ON i.id = sri.item_id
+            LEFT JOIN sales_items si ON si.id = sri.sale_item_id
             WHERE sri.refund_id = ANY(%s)
             ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
         """, (refund_ids,)).fetchall()
@@ -1704,6 +1714,8 @@ def get_sales_report_by_date(report_date):
                 "quantity": int(row["quantity"] or 0),
                 "unit_price": round(_num(row["unit_price"]), 2),
                 "line_total": round(_num(row["line_total"]), 2),
+                "cost_total": round(_num(row["cost_total"]), 2),
+                "profit_total": round(_num(row["profit_total"]), 2),
             })
 
     non_cash_metrics = _get_non_cash_floating_metrics(conn, report_date, report_date)
@@ -1843,6 +1855,9 @@ def get_sales_report_by_date(report_date):
     )
     items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
     transaction_item_sales = _sum_positive_item_sales(items_summary)
+    total_items_sold_net = _sum_item_summary_amount(items_summary, "total")
+    total_items_sold_cost = _sum_item_summary_amount(items_summary, "cost_total")
+    total_items_sold_profit = _sum_item_summary_amount(items_summary, "profit_total")
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -1862,7 +1877,7 @@ def get_sales_report_by_date(report_date):
         2,
     )
     total_profit_with_shop_share = round(
-        total_product_profit
+        total_items_sold_profit
         + total_service_revenue
         - total_shop_expense,
         2,
@@ -1895,9 +1910,10 @@ def get_sales_report_by_date(report_date):
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
         "transaction_item_sales": transaction_item_sales,
-        "total_product_revenue": round(total_gross - total_service_revenue, 2),
-        "total_product_cost": round(total_product_cost, 2),
-        "total_product_profit": round(total_product_profit, 2),
+        "total_items_sold_net": total_items_sold_net,
+        "total_product_revenue": total_items_sold_net,
+        "total_product_cost": total_items_sold_cost,
+        "total_product_profit": total_items_sold_profit,
         "total_profit_with_shop_share": total_profit_with_shop_share,
         "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
         "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],
@@ -2071,9 +2087,12 @@ def get_sales_report_by_range(start_date, end_date):
                 i.name AS item_name,
                 sri.quantity,
                 sri.unit_price,
-                sri.line_total
+                sri.line_total,
+                (sri.quantity * si.cost_per_piece_snapshot) AS cost_total,
+                (sri.line_total - (sri.quantity * si.cost_per_piece_snapshot)) AS profit_total
             FROM sale_refund_items sri
             JOIN items i ON i.id = sri.item_id
+            LEFT JOIN sales_items si ON si.id = sri.sale_item_id
             WHERE sri.refund_id = ANY(%s)
             ORDER BY sri.refund_id ASC, i.name ASC, sri.id ASC
         """, (refund_ids,)).fetchall()
@@ -2084,6 +2103,8 @@ def get_sales_report_by_range(start_date, end_date):
                 "quantity": int(row["quantity"] or 0),
                 "unit_price": round(_num(row["unit_price"]), 2),
                 "line_total": round(_num(row["line_total"]), 2),
+                "cost_total": round(_num(row["cost_total"]), 2),
+                "profit_total": round(_num(row["profit_total"]), 2),
             })
 
     non_cash_metrics = _get_non_cash_floating_metrics(conn, start_date, end_date)
@@ -2222,6 +2243,9 @@ def get_sales_report_by_range(start_date, end_date):
     )
     items_summary = _summarize_items_for_profit(item_summary_paid_sales, refunds=refunds)
     transaction_item_sales = _sum_positive_item_sales(items_summary)
+    total_items_sold_net = _sum_item_summary_amount(items_summary, "total")
+    total_items_sold_cost = _sum_item_summary_amount(items_summary, "cost_total")
+    total_items_sold_profit = _sum_item_summary_amount(items_summary, "profit_total")
     mechanic_supply_sales = [
         sale for sale in paid_sales if sale.get("transaction_class") == "MECHANIC_SUPPLY"
     ]
@@ -2241,7 +2265,7 @@ def get_sales_report_by_range(start_date, end_date):
         2,
     )
     total_profit_with_shop_share = round(
-        total_product_profit
+        total_items_sold_profit
         + total_service_revenue
         - total_shop_expense,
         2,
@@ -2274,9 +2298,10 @@ def get_sales_report_by_range(start_date, end_date):
         "total_shop_commission": totals["total_shop_commission"],
         "total_service_revenue": round(total_service_revenue, 2),
         "transaction_item_sales": transaction_item_sales,
-        "total_product_revenue": round(total_gross - total_service_revenue, 2),
-        "total_product_cost": round(total_product_cost, 2),
-        "total_product_profit": round(total_product_profit, 2),
+        "total_items_sold_net": total_items_sold_net,
+        "total_product_revenue": total_items_sold_net,
+        "total_product_cost": total_items_sold_cost,
+        "total_product_profit": total_items_sold_profit,
         "total_profit_with_shop_share": total_profit_with_shop_share,
         "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
         "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],

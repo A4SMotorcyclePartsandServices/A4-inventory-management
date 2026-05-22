@@ -823,7 +823,7 @@
 
                 <div class="items-total">
                     <span class="label">TOTAL</span>
-                    <span class="value">P {{ "%.2f"|format(data.items_summary | sum(attribute='total')) }}</span>
+                    <span class="value">P {{ "%.2f"|format(data.total_items_sold_net if data.total_items_sold_net is not none else (data.items_summary | sum(attribute='total'))) }}</span>
                 </div>
 
                 {% else %}

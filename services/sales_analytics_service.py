@@ -3,11 +3,7 @@ from datetime import datetime, timedelta
 from db.database import get_db
 from utils.cash_categories import normalize_cash_category_label
 from services.reports_service import (
-    _calculate_range_mechanic_rollups,
-    _get_debt_payout_allocations,
-    _get_profit_card_cash_ledger_expense,
-    _load_bundles_by_sale,
-    _load_services_by_sale,
+    get_sales_report_by_range,
 )
 
 
@@ -21,6 +17,12 @@ EXPENSE_BREAKDOWN_EXCLUDED_LABELS = {
 
 def _num(value):
     return float(value or 0)
+
+
+def _report_profit_value(report_data, key):
+    if not isinstance(report_data, dict):
+        return 0.0
+    return round(_num(report_data.get(key)), 2)
 
 
 def _get_non_cash_floating_metrics(conn, start_date, end_date):
@@ -170,81 +172,6 @@ def _normalize_top_items_limit(value, default=10, max_value=50):
     return max(1, min(limit, max_value))
 
 
-def _get_total_shop_topup(conn, start_date, end_date):
-    sales_rows = conn.execute(
-        """
-        SELECT
-            s.id,
-            s.transaction_date,
-            s.status,
-            m.id AS mechanic_id,
-            m.name AS mechanic_name,
-            m.commission_rate,
-            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
-        FROM sales s
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        LEFT JOIN mechanic_quota_topup_overrides mqto
-          ON mqto.mechanic_id = s.mechanic_id
-         AND mqto.quota_date = DATE(s.transaction_date)
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND COALESCE(s.is_voided, FALSE) = FALSE
-        ORDER BY s.transaction_date ASC
-        """,
-        (start_date, end_date),
-    ).fetchall()
-
-    debt_collected_rows = conn.execute(
-        """
-        SELECT
-            dp.sale_id,
-            dp.paid_at,
-            s.mechanic_id,
-            m.name AS mechanic_name,
-            m.commission_rate,
-            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
-        FROM debt_payments dp
-        JOIN sales s ON s.id = dp.sale_id
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        LEFT JOIN mechanic_quota_topup_overrides mqto
-          ON mqto.mechanic_id = s.mechanic_id
-         AND mqto.quota_date = DATE(dp.paid_at)
-        WHERE DATE(dp.paid_at) BETWEEN %s AND %s
-          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND COALESCE(s.is_voided, FALSE) = FALSE
-        ORDER BY dp.paid_at ASC
-        """,
-        (start_date, end_date),
-    ).fetchall()
-
-    paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
-    services_by_sale = _load_services_by_sale(conn, paid_sale_ids)
-    bundles_by_sale = _load_bundles_by_sale(conn, paid_sale_ids)
-    debt_payout_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
-
-    _, totals, _ = _calculate_range_mechanic_rollups(
-        sales_rows,
-        debt_payout_rows,
-        services_by_sale,
-        bundles_by_sale,
-    )
-    return round(_num(totals["total_shop_topup"]), 2)
-
-
-def _get_total_mechanic_supply_expense(conn, start_date, end_date):
-    row = conn.execute(
-        """
-        SELECT COALESCE(SUM(s.total_amount), 0) AS total_mechanic_supply_expense
-        FROM sales s
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND s.status = 'Paid'
-          AND COALESCE(s.transaction_class, 'NEW_SALE') = 'MECHANIC_SUPPLY'
-        """,
-        (start_date, end_date),
-    ).fetchone()
-    return round(_num(row["total_mechanic_supply_expense"] if row else 0), 2)
-
-
 def _get_expense_breakdown(conn, start_date, end_date):
     rows = conn.execute(
         """
@@ -275,6 +202,7 @@ def _get_expense_breakdown(conn, start_date, end_date):
 
 
 def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_items_category=None):
+    report_profit_data = get_sales_report_by_range(start_date, end_date)
     conn = get_db()
     top_items_limit = _normalize_top_items_limit(top_items_limit)
     requested_top_items_category = str(top_items_category or "").strip()
@@ -336,88 +264,6 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         (start_date, end_date),
     ).fetchone()
 
-    product_service_row = conn.execute(
-        """
-        SELECT
-            COALESCE(SUM(items_total + bundle_product_revenue), 0) AS product_revenue,
-            COALESCE(SUM(item_cost_total + bundle_product_cost), 0) AS product_cost,
-            COALESCE(SUM(item_profit_total + bundle_product_profit), 0) AS product_profit,
-            COALESCE(SUM(services_total + bundle_service_total + bundle_shop_total), 0) AS service_revenue,
-            COALESCE(SUM(service_shop_share), 0) AS shop_share_profit
-        FROM (
-            SELECT
-                s.id,
-                COALESCE(si.items_total, 0) AS items_total,
-                COALESCE(si.item_cost_total, 0) AS item_cost_total,
-                COALESCE(si.item_profit_total, 0) AS item_profit_total,
-                COALESCE(ss.services_total, 0) AS services_total,
-                COALESCE(ss.service_shop_share_total, 0) AS service_shop_share_total,
-                COALESCE(sb.bundle_product_revenue, 0) AS bundle_product_revenue,
-                COALESCE(sb.bundle_product_cost, 0) AS bundle_product_cost,
-                COALESCE(sb.bundle_product_profit, 0) AS bundle_product_profit,
-                COALESCE(sb.bundle_service_total, 0) AS bundle_service_total,
-                COALESCE(sb.bundle_shop_total, 0) AS bundle_shop_total,
-                COALESCE(ss.service_shop_share_total, 0) + COALESCE(sb.bundle_shop_total, 0) AS service_shop_share
-            FROM sales s
-            LEFT JOIN (
-                SELECT
-                    sale_id,
-                    SUM(quantity * final_unit_price) AS items_total,
-                    SUM(quantity * cost_per_piece_snapshot) AS item_cost_total,
-                    SUM(quantity * (final_unit_price - cost_per_piece_snapshot)) AS item_profit_total
-                FROM sales_items
-                GROUP BY sale_id
-            ) si ON si.sale_id = s.id
-            LEFT JOIN (
-                SELECT
-                    ss.sale_id,
-                    SUM(ss.price) AS services_total,
-                    SUM(
-                        ss.price - (ss.price * COALESCE(m.commission_rate, 0))
-                    ) AS service_shop_share_total
-                FROM sales_services ss
-                LEFT JOIN mechanics m ON m.id = ss.mechanic_id
-                GROUP BY ss.sale_id
-            ) ss ON ss.sale_id = s.id
-            LEFT JOIN (
-                SELECT
-                    sb.sale_id,
-                    SUM(COALESCE(sb.item_value_reference_snapshot, 0)) AS bundle_product_revenue,
-                    SUM(
-                        CASE
-                            WHEN COALESCE(sbi.is_included, 0) = 1
-                            THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
-                            ELSE 0
-                        END
-                    ) AS bundle_product_cost,
-                    SUM(COALESCE(sb.item_value_reference_snapshot, 0))
-                    - SUM(
-                        CASE
-                            WHEN COALESCE(sbi.is_included, 0) = 1
-                            THEN COALESCE(sbi.quantity, 0) * COALESCE(sbi.cost_per_piece_snapshot, 0)
-                            ELSE 0
-                        END
-                    ) AS bundle_product_profit,
-                    SUM(COALESCE(sb.mechanic_share_snapshot, 0)) AS bundle_service_total,
-                    SUM(COALESCE(sb.shop_share_snapshot, 0)) AS bundle_shop_total
-                FROM sales_bundles sb
-                LEFT JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
-                GROUP BY sb.sale_id
-            ) sb ON sb.sale_id = s.id
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND s.status = 'Paid'
-          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND COALESCE(s.is_voided, FALSE) = FALSE
-          AND NOT EXISTS (
-              SELECT 1
-              FROM sale_exchanges se
-              WHERE se.original_sale_id = s.id
-          )
-        ) scoped_sales
-        """,
-        (start_date, end_date),
-    ).fetchone()
-
     item_quantity_row = conn.execute(
         """
         SELECT
@@ -459,138 +305,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         (start_date, end_date, start_date, end_date),
     ).fetchone()
 
-    debt_service_shop_row = conn.execute(
-        """
-        WITH sale_service_totals AS (
-            SELECT
-                ss.sale_id,
-                ss.mechanic_id,
-                SUM(ss.price) AS mechanic_service_total
-            FROM sales_services ss
-            WHERE ss.mechanic_id IS NOT NULL
-            GROUP BY ss.sale_id, ss.mechanic_id
-        ),
-        sale_service_totals_by_sale AS (
-            SELECT
-                sale_id,
-                SUM(mechanic_service_total) AS total_service_total
-            FROM sale_service_totals
-            GROUP BY sale_id
-        ),
-        debt_allocations AS (
-            SELECT
-                dp.id AS debt_payment_id,
-                dp.sale_id,
-                dp.service_portion,
-                sst.mechanic_id,
-                COALESCE(m.commission_rate, 0) AS commission_rate,
-                ROUND(
-                    CASE
-                        WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
-                        ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
-                    END,
-                    2
-                ) AS allocated_service_portion,
-                ROW_NUMBER() OVER (
-                    PARTITION BY dp.id, dp.sale_id
-                    ORDER BY sst.mechanic_id ASC
-                ) AS allocation_index,
-                COUNT(*) OVER (
-                    PARTITION BY dp.id, dp.sale_id
-                ) AS allocation_count,
-                SUM(
-                    ROUND(
-                        CASE
-                            WHEN COALESCE(st.total_service_total, 0) <= 0 THEN 0
-                            ELSE (dp.service_portion * sst.mechanic_service_total / st.total_service_total)
-                        END,
-                        2
-                    )
-                ) OVER (
-                    PARTITION BY dp.id, dp.sale_id
-                    ORDER BY sst.mechanic_id ASC
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-                ) AS prior_allocated_total
-            FROM debt_payments dp
-            JOIN sales s ON s.id = dp.sale_id
-            JOIN sale_service_totals sst
-              ON sst.sale_id = dp.sale_id
-            JOIN sale_service_totals_by_sale st
-              ON st.sale_id = dp.sale_id
-            LEFT JOIN mechanics m
-              ON m.id = sst.mechanic_id
-            WHERE DATE(dp.paid_at) BETWEEN %s AND %s
-              AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-              AND COALESCE(s.is_voided, FALSE) = FALSE
-        )
-        SELECT
-            COALESCE(SUM(
-                allocation_service_portion
-                - (allocation_service_portion * commission_rate)
-            ), 0) AS debt_shop_share
-        FROM (
-            SELECT
-                commission_rate,
-                GREATEST(
-                    0,
-                    CASE
-                        WHEN allocation_index = allocation_count THEN
-                            ROUND(
-                                COALESCE(service_portion, 0)
-                                - COALESCE(prior_allocated_total, 0),
-                                2
-                            )
-                        ELSE COALESCE(allocated_service_portion, 0)
-                    END
-                ) AS allocation_service_portion
-            FROM debt_allocations
-        ) allocated_rows
-        """,
-        (start_date, end_date),
-    ).fetchone()
-
-    mechanic_rollup_sales_rows = conn.execute(
-        """
-        SELECT
-            s.id,
-            s.transaction_date,
-            s.status,
-            m.id AS mechanic_id,
-            m.name AS mechanic_name,
-            m.commission_rate,
-            COALESCE(mqto.applies_quota_topup, 1) AS applies_quota_topup
-        FROM sales s
-        LEFT JOIN mechanics m ON m.id = s.mechanic_id
-        LEFT JOIN mechanic_quota_topup_overrides mqto
-          ON mqto.mechanic_id = s.mechanic_id
-         AND mqto.quota_date = DATE(s.transaction_date)
-        WHERE DATE(s.transaction_date) BETWEEN %s AND %s
-          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
-          AND COALESCE(s.is_voided, FALSE) = FALSE
-          AND NOT EXISTS (
-              SELECT 1
-              FROM sale_exchanges se
-              WHERE se.original_sale_id = s.id
-          )
-        ORDER BY s.transaction_date ASC
-        """,
-        (start_date, end_date),
-    ).fetchall()
-    mechanic_rollup_paid_sale_ids = [row["id"] for row in mechanic_rollup_sales_rows if row["status"] == "Paid"]
-    mechanic_rollup_services_by_sale = _load_services_by_sale(conn, mechanic_rollup_paid_sale_ids)
-    mechanic_rollup_bundles_by_sale = _load_bundles_by_sale(conn, mechanic_rollup_paid_sale_ids)
-    mechanic_rollup_debt_rows = _get_debt_payout_allocations(conn, start_date=start_date, end_date=end_date)
-    _, mechanic_rollup_totals, _ = _calculate_range_mechanic_rollups(
-        mechanic_rollup_sales_rows,
-        mechanic_rollup_debt_rows,
-        mechanic_rollup_services_by_sale,
-        mechanic_rollup_bundles_by_sale,
-    )
-
     total_non_cash_floating = _get_non_cash_floating_metrics(conn, start_date, end_date)
-    total_shop_topup = round(_num(mechanic_rollup_totals["total_shop_topup"]), 2)
-    total_mechanic_supply_expense = _get_total_mechanic_supply_expense(conn, start_date, end_date)
-    total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, start_date, end_date)
     expense_breakdown = _get_expense_breakdown(conn, start_date, end_date)
 
     status_rows = conn.execute(
@@ -892,12 +607,15 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
     total_refunds = round(_num(refund_row["total_refunds"]), 2)
     total_debt_collected = round(_num(debt_row["total_debt_collected"]), 2)
     net_sales = round(gross_sales + total_debt_collected - total_refunds, 2)
-    net_product_revenue = round(_num(product_service_row["product_revenue"]), 2)
+    net_product_revenue = _report_profit_value(report_profit_data, "total_product_revenue")
+    product_cost = _report_profit_value(report_profit_data, "total_product_cost")
+    product_profit = _report_profit_value(report_profit_data, "total_product_profit")
+    service_revenue = _report_profit_value(report_profit_data, "total_service_revenue")
     paid_transactions = int(summary_row["paid_transactions"] or 0)
     average_sale_value = round(gross_sales / paid_transactions, 2) if paid_transactions else 0.0
     total_items_sold = int(round(_num(item_quantity_row["total_items_sold"])))
     average_item_cost_sold = round(
-        _num(product_service_row["product_cost"]) / total_items_sold,
+        product_cost / total_items_sold,
         2,
     ) if total_items_sold else 0.0
 
@@ -950,23 +668,13 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
         for row in payment_method_rows
     ]
 
-    shop_share_profit = round(_num(mechanic_rollup_totals["total_shop_commission"]), 2)
-    total_mechanic_payout_expense = round(
-        _num(mechanic_rollup_totals["total_mech_cut"]) + total_shop_topup,
-        2,
-    )
-    total_shop_expense = round(
-        total_cash_ledger_expense
-        + total_mechanic_payout_expense
-        + total_mechanic_supply_expense,
-        2,
-    )
-    profit_with_shop_share = round(
-        _num(product_service_row["product_profit"])
-        + _num(product_service_row["service_revenue"])
-        - total_shop_expense,
-        2,
-    )
+    shop_share_profit = _report_profit_value(report_profit_data, "total_shop_commission")
+    total_shop_topup = _report_profit_value(report_profit_data, "total_shop_topup")
+    total_mechanic_supply_expense = _report_profit_value(report_profit_data, "total_mechanic_supply_expense")
+    total_mechanic_payout_expense = _report_profit_value(report_profit_data, "total_mechanic_payout_expense")
+    total_cash_ledger_expense = _report_profit_value(report_profit_data, "total_cash_ledger_expense")
+    total_shop_expense = _report_profit_value(report_profit_data, "total_shop_expense")
+    profit_with_shop_share = _report_profit_value(report_profit_data, "total_profit_with_shop_share")
 
     return {
         "summary": {
@@ -984,8 +692,8 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "partial_sales_amount": round(_num(summary_row["partial_sales_amount"]), 2),
             "unresolved_sales_amount": round(_num(summary_row["unresolved_sales_amount"]), 2),
             "product_revenue": net_product_revenue,
-            "product_cost": round(_num(product_service_row["product_cost"]), 2),
-            "product_profit": round(_num(product_service_row["product_profit"]), 2),
+            "product_cost": product_cost,
+            "product_profit": product_profit,
             "shop_share_profit": shop_share_profit,
             "total_shop_topup": total_shop_topup,
             "total_mechanic_supply_expense": total_mechanic_supply_expense,
@@ -993,7 +701,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
             "total_cash_ledger_expense": total_cash_ledger_expense,
             "total_shop_expense": total_shop_expense,
             "profit_with_shop_share": profit_with_shop_share,
-            "service_revenue": round(_num(product_service_row["service_revenue"]), 2),
+            "service_revenue": service_revenue,
             "total_non_cash_floating": total_non_cash_floating,
         },
         "charts": {
@@ -1016,7 +724,7 @@ def get_sales_analytics_snapshot(start_date, end_date, top_items_limit=10, top_i
                 "labels": ["Items", "Services"],
                 "amounts": [
                     net_product_revenue,
-                    round(_num(product_service_row["service_revenue"]), 2),
+                    service_revenue,
                 ],
             },
             "expense_breakdown": {
