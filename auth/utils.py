@@ -6,6 +6,7 @@ from flask import abort, current_app, flash, g, request, session, redirect, url_
 
 from db.database import get_db
 from services.auth_session_service import AUTH_SESSION_TOKEN_KEY, validate_auth_session
+from services.staff_access_service import get_staff_access_state
 
 _LOGIN_WINDOW_SECONDS = 15 * 60
 _LOGIN_MAX_ATTEMPTS = 5
@@ -192,6 +193,21 @@ def ensure_authenticated_user():
         )
         session.clear()
         flash("Your account has been deactivated.", "danger")
+        return None
+
+    access_state = get_staff_access_state(
+        user["id"],
+        user_role=user["role"],
+    )
+    if not access_state["allowed"]:
+        _auth_log(
+            "staff_access_schedule_blocked",
+            resolved_user_id=user.get("id"),
+            resolved_role=user.get("role"),
+            reason=access_state.get("reason"),
+        )
+        session.clear()
+        flash(access_state.get("reason") or "Your account is outside its allowed access schedule.", "warning")
         return None
 
     previous_role = session.get("role")

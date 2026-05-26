@@ -235,6 +235,159 @@
     border-radius: 50px;
     }
 
+    .staff-access-days {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(34px, 1fr));
+        gap: 0.25rem;
+    }
+
+    .staff-access-day {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.2rem;
+        min-height: 30px;
+        border: 1px solid #333;
+        border-radius: 6px;
+        background: #141414;
+        color: #ccc;
+        font-size: 0.68rem;
+        font-weight: 700;
+    }
+
+    .staff-access-overrides {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .staff-access-summary {
+        display: flex;
+        min-width: 170px;
+        min-height: 62px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.25rem;
+        text-align: center;
+    }
+
+    .staff-access-meta {
+        color: #c7d0dd;
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .staff-access-extra {
+        max-height: 0;
+        overflow: hidden;
+        color: #b8c3d3;
+        font-size: 0.76rem;
+        line-height: 1.25;
+        opacity: 0;
+        white-space: normal;
+        transition: max-height 0.18s ease, opacity 0.18s ease, margin-top 0.18s ease;
+    }
+
+    .users-audit-row:hover .staff-access-extra {
+        max-height: 72px;
+        margin-top: 0.15rem;
+        opacity: 1;
+    }
+
+    .staff-access-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 6px;
+        line-height: 1;
+    }
+
+    .staff-access-icon-btn i {
+        font-size: 1rem;
+    }
+
+    .staff-access-cell {
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .users-audit-table .text-white-50,
+    .users-audit-table .text-muted {
+        color: #aeb8c7 !important;
+    }
+
+    #staffAccessModal .form-label,
+    #staffAccessModal .small.text-white-50 {
+        color: #b9c3d0 !important;
+        font-weight: 700;
+    }
+
+    #staffAccessModal .form-control,
+    #staffAccessModal .form-select {
+        background-color: #111521;
+        border-color: #252b38;
+        color: #f3f6fb;
+    }
+
+    #staffAccessModal .form-control::placeholder {
+        color: #6f7888;
+    }
+
+    #staffAccessModal .form-control:focus,
+    #staffAccessModal .form-select:focus {
+        background-color: #111521;
+        border-color: #4cc9f0;
+        color: #f3f6fb;
+        box-shadow: 0 0 0 0.18rem rgba(76, 201, 240, 0.18);
+    }
+
+    #staffAccessModal .staff-access-override-grid {
+        display: grid;
+        grid-template-columns: minmax(190px, 0.9fr) minmax(140px, 0.7fr) minmax(280px, 1.35fr) minmax(120px, 0.55fr);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    #staffAccessModal .staff-access-override-grid .form-control {
+        min-width: 0;
+    }
+
+    #staffAccessModal .staff-access-time-stack {
+        display: grid;
+        gap: 0.6rem;
+    }
+
+    #staffAccessModal .staff-access-time-stack .form-control {
+        width: 100%;
+    }
+
+    #staffAccessModal .staff-access-reason-input {
+        min-height: 92px;
+        resize: vertical;
+    }
+
+    #staffAccessModal .staff-access-add-wrap {
+        padding-right: 0.25rem;
+        padding-top: 2rem;
+    }
+
+    #staffAccessModal .staff-access-empty {
+        color: #d9e2f0;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+        #staffAccessModal .staff-access-override-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     /* Debt accordion row hover */
     .debt-parent-row:hover {
         background: rgba(193, 18, 31, 0.08) !important;
@@ -1553,7 +1706,7 @@
         </div>
 
         <div class="table-responsive">
-            <table class="table table-dark table-striped align-middle">
+            <table class="table table-dark table-striped align-middle users-audit-table">
                 <thead>
                     <tr>
                         <th>Username</th>
@@ -1561,12 +1714,13 @@
                         <th>Role</th>
                         <th>Created At</th>
                         <th>Created By</th>
+                        <th>Access Schedule</th>
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
-                    <tr>
+                    <tr class="users-audit-row">
                         <td class="fw-bold">{{ user.username }}</td>
                         <td class="text-white-50">{{ user.phone_no or '---' }}</td>
                         <td>
@@ -1582,6 +1736,47 @@
                                 <i class="bi bi-person-badge"></i> {{ user.creator_name }}
                             {% else %}
                                 <span class="text-muted small">System</span>
+                            {% endif %}
+                        </td>
+                        <td class="staff-access-cell">
+                            {% if user.role == 'admin' %}
+                                <div class="staff-access-summary">
+                                    <span class="badge bg-danger">Admin</span>
+                                    <div class="staff-access-meta">Bypass enabled</div>
+                                    <div class="staff-access-extra">Admin accounts bypass staff access schedules.</div>
+                                </div>
+                            {% else %}
+                                {% set access = user.access_schedule %}
+                                {% set state = access.state %}
+                                {% set weekday_labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+                                <div class="staff-access-summary">
+                                    {% if state.allowed %}
+                                        <span class="badge bg-success">Allowed now</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Blocked now</span>
+                                    {% endif %}
+                                    <div class="staff-access-meta">{{ access.work_start_time }}-{{ access.work_end_time }} PHT</div>
+                                    <button
+                                        type="button"
+                                        class="btn btn-sm btn-outline-info staff-access-icon-btn"
+                                        title="Edit access schedule"
+                                        aria-label="Edit access schedule for {{ user.username }}"
+                                        onclick="openStaffAccessModal(this)"
+                                        data-username="{{ user.username }}"
+                                        data-schedule-url="{{ url_for('admin_audit.update_user_access_schedule', user_id=user.id) }}"
+                                        data-override-url="{{ url_for('admin_audit.create_user_access_override', user_id=user.id) }}"
+                                        data-delete-override-url-base="{{ url_for('admin_audit.delete_user_access_override', override_id=0) }}"
+                                        data-enabled="{{ access.schedule_enabled }}"
+                                        data-start="{{ access.work_start_time or '08:00' }}"
+                                        data-end="{{ access.work_end_time or '18:00' }}"
+                                        data-off-days='{{ access.off_days | tojson }}'
+                                        data-overrides='{{ access.overrides | tojson }}'>
+                                        <i class="bi bi-calendar-week"></i>
+                                    </button>
+                                    <div class="staff-access-extra">
+                                        Day-Off: {{ access.off_day_labels | join(', ') if access.off_day_labels else 'None' }}
+                                    </div>
+                                </div>
                             {% endif %}
                         </td>
                         <td class="text-center">
@@ -1609,6 +1804,92 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="staffAccessModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark border-secondary text-white audit-modal-content">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-info">
+                        <i class="bi bi-clock-history me-2"></i><span id="staffAccessModalTitle">Staff Access Schedule</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="staffAccessScheduleForm" method="POST" class="mb-4">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label text-white-50">Schedule enforcement</label>
+                                <select name="schedule_enabled" id="staffAccessEnabled" class="form-select">
+                                    <option value="1">On</option>
+                                    <option value="0">Off</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-white-50">Allowed from</label>
+                                <input name="work_start_time" id="staffAccessStart" type="time" class="form-control" value="08:00">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-white-50">Allowed until</label>
+                                <input name="work_end_time" id="staffAccessEnd" type="time" class="form-control" value="18:00">
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="small text-white-50 mb-2">Blocked full-day off days</div>
+                            <div class="staff-access-days">
+                                {% set staff_access_weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+                                {% for day in range(7) %}
+                                    <label class="staff-access-day">
+                                        <input class="form-check-input m-0 staff-access-off-day-input" type="checkbox" name="off_days" value="{{ day }}">
+                                        {{ staff_access_weekdays[day] }}
+                                    </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-3">
+                            <button type="submit" class="btn btn-info text-dark fw-semibold">
+                                <i class="bi bi-check2-circle me-1"></i>Save Schedule
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="border-secondary">
+
+                    <form id="staffAccessOverrideForm" method="POST" class="staff-access-override-grid">
+                        <div>
+                            <label class="form-label text-white-50">Extra shift date</label>
+                            <input name="override_date" type="date" class="form-control" required>
+                        </div>
+                        <div class="staff-access-time-stack">
+                            <div>
+                                <label class="form-label text-white-50">From</label>
+                                <input name="allow_start_time" id="staffAccessOverrideStart" type="time" class="form-control" value="08:00" required>
+                            </div>
+                            <div>
+                                <label class="form-label text-white-50">To</label>
+                                <input name="allow_end_time" id="staffAccessOverrideEnd" type="time" class="form-control" value="18:00" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label text-white-50">Reason</label>
+                            <textarea name="reason" class="form-control staff-access-reason-input" maxlength="300" placeholder="Extra shift"></textarea>
+                        </div>
+                        <div class="staff-access-add-wrap">
+                            <button type="submit" class="btn btn-outline-warning w-100">
+                                <i class="bi bi-plus-circle me-1"></i>Add
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="mt-4">
+                        <div class="small text-white-50 mb-2">Upcoming overrides</div>
+                        <div id="staffAccessOverrideList" class="staff-access-overrides"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2826,6 +3107,57 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
+function openStaffAccessModal(button) {
+    const modalEl = document.getElementById('staffAccessModal');
+    const scheduleForm = document.getElementById('staffAccessScheduleForm');
+    const overrideForm = document.getElementById('staffAccessOverrideForm');
+    const title = document.getElementById('staffAccessModalTitle');
+    const enabled = document.getElementById('staffAccessEnabled');
+    const start = document.getElementById('staffAccessStart');
+    const end = document.getElementById('staffAccessEnd');
+    const overrideStart = document.getElementById('staffAccessOverrideStart');
+    const overrideEnd = document.getElementById('staffAccessOverrideEnd');
+    const overrideList = document.getElementById('staffAccessOverrideList');
+
+    const username = button.dataset.username || 'Staff';
+    const offDays = JSON.parse(button.dataset.offDays || '[]');
+    const overrides = JSON.parse(button.dataset.overrides || '[]');
+
+    title.textContent = `${username} Access Schedule`;
+    scheduleForm.action = button.dataset.scheduleUrl || '#';
+    overrideForm.action = button.dataset.overrideUrl || '#';
+    enabled.value = String(button.dataset.enabled || '1');
+    start.value = button.dataset.start || '08:00';
+    end.value = button.dataset.end || '18:00';
+    overrideStart.value = start.value;
+    overrideEnd.value = end.value;
+
+    modalEl.querySelectorAll('.staff-access-off-day-input').forEach(input => {
+        input.checked = offDays.includes(Number(input.value));
+    });
+
+    overrideList.innerHTML = '';
+    if (!overrides.length) {
+        overrideList.innerHTML = '<div class="staff-access-empty">No upcoming overrides.</div>';
+    } else {
+        overrides.forEach(override => {
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center justify-content-between gap-2 rounded border border-secondary px-3 py-2';
+            const reason = override.reason ? ` · ${escapeHtml(override.reason)}` : '';
+            const displayDate = override.override_date_display || override.override_date;
+            row.innerHTML = `
+                <div class="small text-white-50">${escapeHtml(displayDate)} · ${escapeHtml(override.allow_start_time)}-${escapeHtml(override.allow_end_time)}${reason}</div>
+                <form action="${button.dataset.deleteOverrideUrlBase.replace('/0', `/${encodeURIComponent(override.id)}`)}" method="POST">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Remove</button>
+                </form>
+            `;
+            overrideList.appendChild(row);
+        });
+    }
+
+    new bootstrap.Modal(modalEl).show();
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')

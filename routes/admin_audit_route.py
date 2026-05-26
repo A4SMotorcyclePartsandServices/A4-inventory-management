@@ -15,6 +15,11 @@ from services.password_reset_service import (
     complete_password_reset_request,
     reject_password_reset_request,
 )
+from services.staff_access_service import (
+    create_staff_access_override,
+    delete_staff_access_override,
+    update_staff_access_schedule,
+)
 from services.stocktake_access_service import (
     approve_stocktake_access_request,
     reject_stocktake_access_request,
@@ -108,6 +113,58 @@ def toggle_user(user_id):
     else:
         flash(f"User {result['username']} has been activated.", "success")
 
+    return redirect(url_for("admin_audit.audit_dashboard", tab="users-tab"))
+
+
+@admin_audit_bp.route("/users/access-schedule/<int:user_id>", methods=["POST"])
+@admin_required
+def update_user_access_schedule(user_id):
+    try:
+        result = update_staff_access_schedule(
+            user_id,
+            schedule_enabled=request.form.get("schedule_enabled") == "1",
+            work_start_time=request.form.get("work_start_time"),
+            work_end_time=request.form.get("work_end_time"),
+            off_days=request.form.getlist("off_days"),
+        )
+        flash(f"Access schedule updated for {result['username']}.", "success")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error updating access schedule: {str(exc)}", "danger")
+    return redirect(url_for("admin_audit.audit_dashboard", tab="users-tab"))
+
+
+@admin_audit_bp.route("/users/access-override/<int:user_id>", methods=["POST"])
+@admin_required
+def create_user_access_override(user_id):
+    try:
+        result = create_staff_access_override(
+            user_id,
+            override_date=request.form.get("override_date"),
+            allow_start_time=request.form.get("allow_start_time"),
+            allow_end_time=request.form.get("allow_end_time"),
+            reason=request.form.get("reason"),
+            created_by=session.get("user_id"),
+        )
+        flash(f"Extra-shift override added for {result['username']}.", "success")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error adding access override: {str(exc)}", "danger")
+    return redirect(url_for("admin_audit.audit_dashboard", tab="users-tab"))
+
+
+@admin_audit_bp.route("/users/access-override/delete/<int:override_id>", methods=["POST"])
+@admin_required
+def delete_user_access_override(override_id):
+    try:
+        result = delete_staff_access_override(override_id)
+        flash(f"Extra-shift override removed for {result['username']}.", "warning")
+    except ValueError as exc:
+        flash(str(exc), "danger")
+    except Exception as exc:
+        flash(f"Error removing access override: {str(exc)}", "danger")
     return redirect(url_for("admin_audit.audit_dashboard", tab="users-tab"))
 
 

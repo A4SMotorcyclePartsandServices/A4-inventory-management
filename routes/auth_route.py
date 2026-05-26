@@ -22,6 +22,7 @@ from services.auth_session_service import (
     revoke_auth_session,
 )
 from services.auth_service import authenticate_user
+from services.staff_access_service import get_staff_access_state
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -138,6 +139,14 @@ def login():
 
         if user["is_active"] == 0:
             flash("Your account has been disabled. Please contact an administrator.", "warning")
+            return redirect(url_for("auth.login"))
+
+        access_state = get_staff_access_state(
+            user["id"],
+            user_role=user["role"],
+        )
+        if not access_state["allowed"]:
+            flash(access_state.get("reason") or "Your account is outside its allowed access schedule.", "warning")
             return redirect(url_for("auth.login"))
 
         try:

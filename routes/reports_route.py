@@ -18,7 +18,7 @@ from services.reports_service import (
 from services.transactions_service import get_purchase_order_export_data, get_sale_refund_context
 from services.cash_service import get_cash_entries_for_report, get_cash_summary
 from services.payables_service import get_cleared_cheque_entries_for_report
-from services.inventory_service import attach_restock_recommendation
+from services.inventory_service import DEMAND_OUT_REASONS, attach_restock_recommendation
 from utils.formatters import format_date
 from utils.timezone import now_local, today_local
 
@@ -723,7 +723,12 @@ def export_inventory_snapshot():
                          ELSE 0 END
                 ) AS current_stock,
                 SUM(
-                    CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END
+                    CASE
+                        WHEN transaction_type = 'OUT'
+                         AND change_reason = ANY(%s)
+                        THEN quantity
+                        ELSE 0
+                    END
                 ) AS total_sold
             FROM inventory_transactions
             GROUP BY item_id
@@ -731,23 +736,66 @@ def export_inventory_snapshot():
         LEFT JOIN (
             SELECT
                 item_id,
-                SUM(COALESCE(final_unit_price, 0) * quantity) AS total_revenue
-            FROM sales_items
+                SUM(total_revenue) AS total_revenue
+            FROM (
+                SELECT
+                    si.item_id,
+                    SUM(COALESCE(si.final_unit_price, 0) * COALESCE(si.quantity, 0)) AS total_revenue
+                FROM sales_items si
+                JOIN sales s ON s.id = si.sale_id
+                WHERE s.status = 'Paid'
+                  AND COALESCE(s.is_voided, FALSE) = FALSE
+                  AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                GROUP BY si.item_id
+
+                UNION ALL
+
+                SELECT
+                    sbi.item_id,
+                    SUM(
+                        CASE
+                            WHEN COALESCE(bundle_totals.bundle_reference_total, 0) > 0
+                            THEN COALESCE(sb.item_value_reference_snapshot, 0)
+                                 * (
+                                     (COALESCE(sbi.selling_price_snapshot, 0) * COALESCE(sbi.quantity, 0))
+                                     / bundle_totals.bundle_reference_total
+                                 )
+                            ELSE 0
+                        END
+                    ) AS total_revenue
+                FROM sales_bundles sb
+                JOIN sales s ON s.id = sb.sale_id
+                JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
+                LEFT JOIN (
+                    SELECT
+                        sales_bundle_id,
+                        SUM(COALESCE(selling_price_snapshot, 0) * COALESCE(quantity, 0)) AS bundle_reference_total
+                    FROM sales_bundle_items
+                    GROUP BY sales_bundle_id
+                ) bundle_totals ON bundle_totals.sales_bundle_id = sb.id
+                WHERE s.status = 'Paid'
+                  AND COALESCE(s.is_voided, FALSE) = FALSE
+                  AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                  AND sbi.item_id IS NOT NULL
+                GROUP BY sbi.item_id
+            ) revenue_rows
             GROUP BY item_id
         ) AS sale_totals ON i.id = sale_totals.item_id
         ORDER BY i.name ASC
-    """).fetchall()
+    """, (list(DEMAND_OUT_REASONS),)).fetchall()
     conn.close()
 
     output = io.StringIO()
     writer = csv.writer(output)
+    all_item_revenue = round(sum(row["total_revenue"] or 0 for row in rows), 2)
 
     writer.writerow([
         "Item ID", "Item Name", "Category",
-        "Selling Price (A4S)", "Current Stock", "Total Units Sold (All-Time)", "Revenue"
+        "Selling Price (A4S)", "Current Stock", "Total Units Sold (All-Time Customer Sales)",
+        "Item Revenue", "All Item Revenue"
     ])
 
-    for row in rows:
+    for index, row in enumerate(rows):
         writer.writerow([
             row["id"],
             row["name"],
@@ -756,6 +804,7 @@ def export_inventory_snapshot():
             row["current_stock"],
             row["total_sold"],
             round(row["total_revenue"] or 0, 2),
+            all_item_revenue if index == 0 else "",
         ])
 
     timestamp = now_local().strftime("%Y%m%d_%H%M%S")

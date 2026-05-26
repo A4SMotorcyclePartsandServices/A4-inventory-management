@@ -6,6 +6,7 @@ from services.cash_service import get_cash_category_admin_records
 from services.password_reset_service import list_password_reset_requests
 from services.payables_service import get_payables_audit_log
 from services.sales_admin_service import get_sales_paginated
+from services.staff_access_service import attach_staff_access_admin_data
 from services.stocktake_access_service import list_stocktake_access_requests
 from utils.formatters import format_date
 
@@ -33,6 +34,7 @@ def get_audit_dashboard_context(active_tab="users-tab"):
         {**dict(user), "created_at": format_date(user["created_at"], show_time=True)}
         for user in users
     ]
+    attach_staff_access_admin_data(formatted_users)
 
     return {
         "users": formatted_users,

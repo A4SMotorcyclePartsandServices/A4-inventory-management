@@ -129,10 +129,11 @@ def create_staff_user(username, password, phone_no, created_by):
     conn = get_db()
     try:
         now = now_local_str()
-        conn.execute(
+        row = conn.execute(
             """
             INSERT INTO users (username, password_hash, phone_no, role, created_at, created_by)
             VALUES (%s, %s, %s, 'staff', %s, %s)
+            RETURNING id
             """,
             (
                 normalized_username,
@@ -141,6 +142,14 @@ def create_staff_user(username, password, phone_no, created_by):
                 now,
                 created_by,
             ),
+        ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO staff_access_schedules (user_id)
+            VALUES (%s)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            (row["id"],),
         )
         conn.commit()
     finally:

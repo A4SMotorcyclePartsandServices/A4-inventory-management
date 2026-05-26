@@ -180,6 +180,52 @@ def init_db():
     ON auth_sessions (user_id, revoked_at, expires_at DESC)
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS staff_access_schedules (
+        user_id             INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        schedule_enabled    INTEGER NOT NULL DEFAULT 1,
+        work_start_time     TIME NOT NULL DEFAULT '08:00',
+        work_end_time       TIME NOT NULL DEFAULT '18:00',
+        timezone_name       TEXT NOT NULL DEFAULT 'Asia/Manila',
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("ALTER TABLE staff_access_schedules ADD COLUMN IF NOT EXISTS schedule_enabled INTEGER NOT NULL DEFAULT 1")
+    cur.execute("ALTER TABLE staff_access_schedules ADD COLUMN IF NOT EXISTS work_start_time TIME NOT NULL DEFAULT '08:00'")
+    cur.execute("ALTER TABLE staff_access_schedules ADD COLUMN IF NOT EXISTS work_end_time TIME NOT NULL DEFAULT '18:00'")
+    cur.execute("ALTER TABLE staff_access_schedules ADD COLUMN IF NOT EXISTS timezone_name TEXT NOT NULL DEFAULT 'Asia/Manila'")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS staff_access_off_days (
+        id          SERIAL PRIMARY KEY,
+        user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        weekday     INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (user_id, weekday)
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_access_off_days_user ON staff_access_off_days(user_id)")
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS staff_access_overrides (
+        id                  SERIAL PRIMARY KEY,
+        user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        override_date       DATE NOT NULL,
+        allow_start_time    TIME NOT NULL DEFAULT '08:00',
+        allow_end_time      TIME NOT NULL DEFAULT '18:00',
+        reason              TEXT,
+        created_by          INTEGER REFERENCES users(id),
+        created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_staff_access_overrides_user_date ON staff_access_overrides(user_id, override_date DESC)")
+    cur.execute("""
+        INSERT INTO staff_access_schedules (user_id)
+        SELECT id
+        FROM users
+        WHERE role = 'staff'
+        ON CONFLICT (user_id) DO NOTHING
+    """)
+
     # 2. MECHANICS TABLE
     cur.execute("""
     CREATE TABLE IF NOT EXISTS mechanics (
