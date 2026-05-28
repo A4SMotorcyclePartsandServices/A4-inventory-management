@@ -4563,8 +4563,20 @@ def get_po_details_for_api(po_id, snapshot_at=None, change_reason=None, transact
                 )
                 if matched_receipt:
                     received_at_value = format_date(matched_receipt.get("received_at"), show_time=True)
+                    movement_item_ids = {
+                        int(row["item_id"])
+                        for row in movement_rows
+                        if (
+                            (not snapshot_reason or str(row["change_reason"] or "").strip().upper() == snapshot_reason)
+                            and int(row["quantity"] or 0) > 0
+                        )
+                    }
                     for item in matched_receipt.get("items", []):
-                        if snapshot_reason and snapshot_reason == "PARTIAL_ARRIVAL" and int(item.get("quantity_received") or 0) <= 0:
+                        try:
+                            receipt_item_id = int(item.get("item_id"))
+                        except (TypeError, ValueError):
+                            receipt_item_id = None
+                        if movement_item_ids and receipt_item_id not in movement_item_ids:
                             continue
                         total_amount += float(item.get("line_total") or 0)
                         snapshot_items.append({

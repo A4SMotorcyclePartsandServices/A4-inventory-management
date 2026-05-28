@@ -366,11 +366,13 @@ function failReceiveValidation(firstErrorField) {
 }
 
 const RECEIVE_MAX_INPUT = 999999;
+const RECEIVE_REVIEW_DELAY_SECONDS = 7;
 const RECEIVE_DRAFT_KEY = `po_receive_draft:${window.location.pathname}:{{ po.id }}`;
 let isRestoringReceiveDraft = false;
 let receiveDraftPersistenceDisabled = false;
 let receivePageHiddenAt = null;
 let initialReceiveDraftSignature = '';
+let receiveReviewAcknowledgedSignature = '';
 
 function getStoredReceiveDraft() {
     try {
@@ -451,6 +453,115 @@ function flushReceiveDraftPersist() {
     persistReceiveDraft();
 }
 
+function resetReceiveReviewAcknowledgement() {
+    receiveReviewAcknowledgedSignature = '';
+}
+
+function collectReceivePayload() {
+    const rows = document.querySelectorAll('.item-row');
+    const items = [];
+    let firstErrorField = null;
+
+    function markError(field, message) {
+        flagReceiveError(field, message);
+        if (!firstErrorField) {
+            firstErrorField = field;
+        }
+    }
+
+    rows.forEach(row => {
+        const itemId = row.getAttribute('data-item-id');
+        const remaining = parseInt(row.dataset.remaining, 10);
+        const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
+        const unitCost = parseFloat(row.dataset.unitCost || '0') || 0;
+        const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
+        const stockQtyInput = row.querySelector('.stock-qty-input');
+        const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
+
+        if (qtyReceived > remaining) {
+            markError(row.querySelector('.qty-input'), 'Received quantity cannot exceed the pending PO quantity.');
+            return;
+        }
+
+        if (purchaseMode === 'BOX' && qtyReceived > 0 && stockQtyReceived <= 0) {
+            markError(stockQtyInput, 'Counted pieces are required for boxes/plastic received today.');
+            return;
+        }
+
+        if (qtyReceived > 0 && unitCost <= 0) {
+            markError(row.querySelector('.qty-input'), 'Unit cost is required before receiving this item.');
+            return;
+        }
+
+        items.push({
+            item_id: itemId,
+            qty_received: qtyReceived,
+            stock_quantity_received: purchaseMode === 'BOX' ? stockQtyReceived : qtyReceived
+        });
+    });
+
+    return { items, firstErrorField };
+}
+
+function getReceivePayloadSignature(items) {
+    return JSON.stringify(items || []);
+}
+
+async function showReceiveReviewReminder() {
+    if (window.Swal?.fire) {
+        let secondsRemaining = RECEIVE_REVIEW_DELAY_SECONDS;
+        const result = await window.Swal.fire({
+            title: 'Double-check entry receipt',
+            html: `
+                <div class="text-start">
+                    <p class="mb-3">Please review the received quantities and counted pieces before adding this delivery to stock.</p>
+                    <div class="alert alert-warning mb-0 py-2">
+                        You can continue after <strong><span id="receive-review-countdown">${secondsRemaining}</span> seconds</strong>.
+                    </div>
+                </div>
+            `,
+            icon: 'warning',
+            confirmButtonText: 'I checked the receipt',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            background: '#1c1f26',
+            color: '#f5f5f5',
+            confirmButtonColor: '#c1121f',
+            didOpen: () => {
+                const confirmButton = window.Swal.getConfirmButton();
+                const countdown = document.getElementById('receive-review-countdown');
+                if (confirmButton) {
+                    confirmButton.disabled = true;
+                }
+
+                const timerId = window.setInterval(() => {
+                    secondsRemaining -= 1;
+                    if (countdown) {
+                        countdown.textContent = String(Math.max(secondsRemaining, 0));
+                    }
+                    if (secondsRemaining <= 0) {
+                        window.clearInterval(timerId);
+                        if (confirmButton) {
+                            confirmButton.disabled = false;
+                            confirmButton.focus();
+                        }
+                    }
+                }, 1000);
+            },
+            customClass: {
+                popup: 'a4-swal-popup',
+                title: 'a4-swal-title',
+                htmlContainer: 'a4-swal-text',
+                confirmButton: 'a4-swal-confirm',
+            },
+        });
+        return Boolean(result.isConfirmed);
+    }
+
+    window.alert('Please double-check the entry receipt before submitting again.');
+    return true;
+}
+
 function restoreReceiveDraft(options = {}) {
     const { reason = 'reload' } = options;
     const snapshot = getStoredReceiveDraft();
@@ -517,6 +628,7 @@ function sanitizeReceiveInput(input) {
 
 function syncReceiveRow(input) {
     clearReceiveValidation();
+    resetReceiveReviewAcknowledgement();
     const row = input.closest('.item-row');
     const remaining = parseInt(row.dataset.remaining, 10);
     let qty = sanitizeReceiveInput(input);
@@ -573,52 +685,23 @@ async function submitReception() {
         idleHtml: submitBtn?.innerHTML || 'Confirm and Add to Stock',
         loadingHtml: '<span class="spinner-border spinner-border-sm me-2"></span>Saving...',
     });
-    const rows = document.querySelectorAll('.item-row');
-    const items = [];
-    let firstErrorField = null;
 
     clearReceiveValidation();
 
-    function markError(field, message) {
-        flagReceiveError(field, message);
-        if (!firstErrorField) {
-            firstErrorField = field;
-        }
-    }
-
-    rows.forEach(row => {
-        const itemId = row.getAttribute('data-item-id');
-        const remaining = parseInt(row.dataset.remaining, 10);
-        const purchaseMode = String(row.dataset.purchaseMode || 'PIECE').toUpperCase();
-        const unitCost = parseFloat(row.dataset.unitCost || '0') || 0;
-        const qtyReceived = sanitizeReceiveInput(row.querySelector('.qty-input'));
-        const stockQtyInput = row.querySelector('.stock-qty-input');
-        const stockQtyReceived = sanitizeReceiveInput(stockQtyInput);
-
-        if (qtyReceived > remaining) {
-            markError(row.querySelector('.qty-input'), 'Received quantity cannot exceed the pending PO quantity.');
-            return;
-        }
-
-        if (purchaseMode === 'BOX' && qtyReceived > 0 && stockQtyReceived <= 0) {
-            markError(stockQtyInput, 'Counted pieces are required for boxes/plastic received today.');
-            return;
-        }
-
-        if (qtyReceived > 0 && unitCost <= 0) {
-            markError(row.querySelector('.qty-input'), 'Unit cost is required before receiving this item.');
-            return;
-        }
-
-        items.push({
-            item_id: itemId,
-            qty_received: qtyReceived,
-            stock_quantity_received: purchaseMode === 'BOX' ? stockQtyReceived : qtyReceived
-        });
-    });
+    const { items, firstErrorField } = collectReceivePayload();
 
     if (firstErrorField) {
         failReceiveValidation(firstErrorField);
+        return;
+    }
+
+    const receivePayloadSignature = getReceivePayloadSignature(items);
+    if (receiveReviewAcknowledgedSignature !== receivePayloadSignature) {
+        const acknowledged = await showReceiveReviewReminder();
+        if (acknowledged) {
+            receiveReviewAcknowledgedSignature = receivePayloadSignature;
+            showToastFlash('Receipt review noted. Press Confirm and Add to Stock again to save.', 'info');
+        }
         return;
     }
 
@@ -688,6 +771,7 @@ window.addEventListener('beforeunload', flushReceiveDraftPersist);
 document.querySelectorAll('.qty-input').forEach(input => {
     input.addEventListener('input', () => {
         clearReceiveValidation();
+        resetReceiveReviewAcknowledgement();
         updateReceivePreview(input.closest('.item-row'));
     });
 });
@@ -696,6 +780,7 @@ document.querySelectorAll('.stock-qty-input').forEach(input => {
     input.setAttribute('max', String(RECEIVE_MAX_INPUT));
     input.addEventListener('input', () => {
         clearReceiveValidation();
+        resetReceiveReviewAcknowledgement();
         updateReceivePreview(input.closest('.item-row'));
         scheduleReceiveDraftPersist();
     });
