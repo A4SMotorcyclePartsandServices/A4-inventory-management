@@ -211,13 +211,41 @@
         word-break: break-word;
     }
     .order-stock-box-pending {
-        color: #ffc107;
-        font-size: 0.78rem;
+        color: #111827;
+        background: linear-gradient(135deg, #fde047, #f59e0b);
+        border: 1px solid rgba(253, 224, 71, 0.75);
+        border-radius: 999px;
+        box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18), 0 10px 24px rgba(245, 158, 11, 0.16);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        font-size: 0.72rem;
         font-weight: 700;
         line-height: 1.2;
+        max-width: 100%;
+        min-height: 28px;
+        padding: 5px 9px;
         white-space: normal;
         word-break: break-word;
-        margin-top: 2px;
+        text-transform: uppercase;
+    }
+    .order-stock-box-pending i {
+        font-size: 0.72rem;
+        flex: 0 0 auto;
+    }
+    .order-stock-empty {
+        color: #7c8492;
+        border: 1px dashed rgba(148, 163, 184, 0.22);
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        line-height: 1.2;
+        min-height: 28px;
+        padding: 5px 9px;
+        white-space: normal;
     }
     .order-line-total {
         color: #f9fafb;
@@ -1356,11 +1384,11 @@ function renderTable() {
         const pendingPieceQty = Number(item.pending_stock || 0);
         const stockStatusHtml = purchaseMode === 'BOX'
             ? (pendingBoxQty > 0
-                ? `<div class="order-stock-box-pending">+${escapeHtml(String(pendingBoxQty))} box(es) incoming</div>`
-                : `<div style="color: #666; font-size: 0.78rem;">no box PO pending</div>`)
+                ? `<div class="order-stock-box-pending"><i class="fas fa-truck-loading"></i><span>+${escapeHtml(String(pendingBoxQty))} box incoming</span></div>`
+                : `<div class="order-stock-empty">No box PO pending</div>`)
             : (pendingPieceQty > 0
-                ? `<div style="color: #ffc107; font-size: 0.78rem;">+${escapeHtml(String(pendingPieceQty))} incoming</div>`
-                : `<div style="color: #666; font-size: 0.78rem;">no incoming</div>`);
+                ? `<div class="order-stock-box-pending"><i class="fas fa-truck-loading"></i><span>+${escapeHtml(String(pendingPieceQty))} incoming</span></div>`
+                : `<div class="order-stock-empty">No incoming</div>`);
         const lineTotal = getLineTotal(item);
         const modeHint = purchaseMode === 'BOX'
             ? 'By box/plastic. Cost below is for 1 box/plastic.'

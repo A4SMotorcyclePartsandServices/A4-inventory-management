@@ -1788,6 +1788,20 @@ def _derive_refund_state(total_refunded, remaining_qty):
     return "Partially Refunded"
 
 
+def _derive_refund_display_state(total_refunded, remaining_qty, status=None, cutoff_date=None, today=None):
+    state = _derive_refund_state(total_refunded, remaining_qty)
+    if state == "Fully Refunded":
+        return state
+    if (
+        status == "Paid"
+        and int(remaining_qty or 0) > 0
+        and cutoff_date is not None
+        and (today or today_local()) > cutoff_date
+    ):
+        return "Refund Expired"
+    return state
+
+
 def _get_cash_payment_method_id(conn):
     row = conn.execute(
         """
@@ -2384,9 +2398,12 @@ def get_sale_refund_context(sale_id):
         "total_amount": round(float(sale_data["total_amount"] or 0), 2),
         "total_refunded": total_refunded,
         "net_amount": round(float(sale_data["total_amount"] or 0) - total_refunded, 2),
-        "refund_state": _derive_refund_state(
+        "refund_state": _derive_refund_display_state(
             total_refunded,
             sum(item["refundable_quantity"] for item in refundable_items),
+            status=sale_data["status"],
+            cutoff_date=cutoff_date,
+            today=today,
         ),
         "can_refund": can_refund,
         "refund_block_reason": refund_block_reason,
@@ -2421,7 +2438,13 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
         if search_text:
             like = f"%{search_text}%"
             digit_only_search = "".join(ch for ch in search_text if ch.isdigit())
+            use_digit_date_search = (
+                len(digit_only_search) >= 2
+                and re.fullmatch(r"[\d\s./-]+", search_text) is not None
+            )
             normalized_date_search = search_text.replace("-", "/").replace(".", "/")
+            compact_item_search = re.sub(r"[^A-Za-z0-9]", "", search_text).lower()
+            compact_item_patterns = [f"%{compact_item_search}%"] if compact_item_search else []
             conditions.append(
                 """
                 (
@@ -2430,16 +2453,41 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
                     OR EXISTS (
                         SELECT 1
                         FROM sales_items si_search
-                        JOIN items i_search ON i_search.id = si_search.item_id
+                        LEFT JOIN items i_search ON i_search.id = si_search.item_id
                         WHERE si_search.sale_id = s.id
-                          AND i_search.name ILIKE %s
+                          AND (
+                              COALESCE(i_search.name, '') ILIKE %s
+                              OR (
+                                  %s <> '{}'
+                                  AND regexp_replace(LOWER(COALESCE(i_search.name, '')), '[^a-z0-9]', '', 'g') LIKE ANY(%s)
+                              )
+                          )
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM sales_bundles sb_search
+                        JOIN sales_bundle_items sbi_search ON sbi_search.sales_bundle_id = sb_search.id
+                        LEFT JOIN items i_bundle_search ON i_bundle_search.id = sbi_search.item_id
+                        WHERE sb_search.sale_id = s.id
+                          AND (
+                              COALESCE(sbi_search.item_name_snapshot, '') ILIKE %s
+                              OR COALESCE(i_bundle_search.name, '') ILIKE %s
+                              OR (
+                                  %s <> '{}'
+                                  AND regexp_replace(LOWER(COALESCE(sbi_search.item_name_snapshot, '')), '[^a-z0-9]', '', 'g') LIKE ANY(%s)
+                              )
+                              OR (
+                                  %s <> '{}'
+                                  AND regexp_replace(LOWER(COALESCE(i_bundle_search.name, '')), '[^a-z0-9]', '', 'g') LIKE ANY(%s)
+                              )
+                          )
                     )
                     OR to_char(s.transaction_date, 'YYYY-MM-DD') ILIKE %s
                     OR to_char(s.transaction_date, 'MM/DD/YYYY') ILIKE %s
                     OR to_char(s.transaction_date, 'Mon DD, YYYY') ILIKE %s
                     OR to_char(s.transaction_date, 'Month DD, YYYY') ILIKE %s
                     OR (
-                        %s <> ''
+                        %s = TRUE
                         AND regexp_replace(to_char(s.transaction_date, 'MMDDYYYY'), '[^0-9]', '', 'g') LIKE %s
                     )
                 )
@@ -2449,11 +2497,19 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
                 like,
                 like,
                 like,
+                compact_item_patterns,
+                compact_item_patterns,
+                like,
+                like,
+                compact_item_patterns,
+                compact_item_patterns,
+                compact_item_patterns,
+                compact_item_patterns,
                 f"%{normalized_date_search}%",
                 f"%{normalized_date_search}%",
                 like,
                 like,
-                digit_only_search,
+                use_digit_date_search,
                 f"%{digit_only_search}%",
             ])
 
@@ -2545,7 +2601,13 @@ def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=5
             "refund_cutoff_display": format_date(cutoff_date.isoformat()) if cutoff_date else None,
             "has_refundable_items": int(row["remaining_qty"] or 0) > 0,
             "can_refund": can_refund,
-            "refund_state": _derive_refund_state(row["refunded_amount"], row["remaining_qty"]),
+            "refund_state": _derive_refund_display_state(
+                row["refunded_amount"],
+                row["remaining_qty"],
+                status=row["status"],
+                cutoff_date=cutoff_date,
+                today=today,
+            ),
             "is_exchange_replacement": bool(row["exchange_number"]),
             "exchange_number": row["exchange_number"] or "",
             "original_sales_number": row["original_sales_number"] or "",

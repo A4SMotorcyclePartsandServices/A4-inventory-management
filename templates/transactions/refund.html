@@ -282,6 +282,12 @@
         border: 1px solid rgba(255,107,107,0.28);
     }
 
+    .refund-state.expired {
+        background: rgba(255,193,7,0.12);
+        color: #ffd166;
+        border: 1px solid rgba(255,193,7,0.35);
+    }
+
     .refund-detail-card {
         min-height: 760px;
     }
@@ -1012,6 +1018,7 @@ function failRefundValidation(firstErrorField) {
 }
 
 function refundStateClass(state) {
+    if (state === 'Refund Expired') return 'expired';
     if (state === 'Fully Refunded') return 'full';
     if (state === 'Partially Refunded') return 'partial';
     return 'none';

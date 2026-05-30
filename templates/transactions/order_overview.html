@@ -539,6 +539,34 @@
         color: var(--text-primary);
     }
 
+    .modal-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .modal-section-heading .modal-meta-label {
+        margin-bottom: 0;
+    }
+
+    .modal-item-count-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 28px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(96, 165, 250, 0.36);
+        background: rgba(59, 130, 246, 0.12);
+        color: #bfdbfe;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
     .table-po-items {
         --bs-table-hover-bg: rgba(255,255,255,0.03);
         --bs-table-hover-color: var(--text-primary);
@@ -1486,7 +1514,13 @@
                 </div>
 
                 <div class="mb-4">
-                    <span class="modal-meta-label">Items</span>
+                    <div class="modal-section-heading">
+                        <span class="modal-meta-label">Items</span>
+                        <span id="modalItemCount" class="modal-item-count-pill">
+                            <i class="bi bi-box"></i>
+                            <span>0 items</span>
+                        </span>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-po-items mb-0">
                             <thead>
@@ -2052,6 +2086,11 @@ async function openOrderDetails(poId) {
         document.getElementById('modalDate').innerText = data.po.created_at || '-';
         document.getElementById('modalApprovalStatus').innerText = formatApprovalStatus(data.approval?.status);
         document.getElementById('modalApprovalNotes').innerText = data.po.notes || 'None';
+        const itemCount = (data.items || []).length;
+        document.getElementById('modalItemCount').innerHTML = `
+            <i class="bi bi-box"></i>
+            <span>${escapeHtml(itemCount === 1 ? '1 item' : `${itemCount} items`)}</span>
+        `;
         document.getElementById('exportPoCsvBtn').href = `/export/purchase-order/${poId}/csv`;
         document.getElementById('exportPoPdfBtn').href = `/reports/purchase-order/${poId}`;
         const reviewPageBtn = document.getElementById('reviewPageBtn');

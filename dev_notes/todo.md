@@ -33,6 +33,7 @@
   - 100+
 
 ## Dashboard
+
 - [X] ~~*Dashboard page*~~ [2026-03-30]
 
 ## Security / Deployment
@@ -41,6 +42,7 @@
 - [ ] Prepare env vars before deployment
 
 ## Variance Page
+
 - [X] ~~*CSV import for count sheets*~~ [2026-03-25]
 - [X] ~~*Batch count entry for faster physical inventory encoding*~~ [2026-03-25]
 - [X] ~~*Warn user if live stock changed after draft session started*~~ [2026-03-25]
@@ -48,8 +50,8 @@
 - [X] ~~*Printable stocktake reports / PDF polish*~~ [2026-03-25]
 - [X] ~~*Filters by category and vendor for stocktake item selection*~~ [2026-03-25]
 
-
 ## Live Test Changes
+
 - [X] ~~*change out page from percentage based to peso based*~~ [2026-04-06]
 - [X] ~~*Quick sale move up to 500 copy the new sale format, add in a mechanic and payment method. basically a redundant version of new sale but with a hard cap of 500 pesos*~~ [2026-04-06]
 - [X] ~~*bug at user panel. blocked creation of mechanic when user tried to create it*~~ [2026-04-06]
@@ -88,33 +90,40 @@
 - [ ] Continue larger validation cleanup later: admin/user/payables/stocktake forms and any remaining page-specific required-field handling should move toward the shared inline + toast helper pattern.
 
 ## Bug check in refund search
-- [ ] YTX7L-BS-OD
-- [ ] DOMINO 3-WAY SWITCH
-- [ ] YTXL5L-BS OD
-- [ ] problem is when i search these items, it shows a lot of results
+
+- [X] ~~*YTX7L-BS-OD*~~ [2026-05-30]
+- [X] ~~*DOMINO 3-WAY SWITCH*~~ [2026-05-30]
+- [X] ~~*YTXL5L-BS OD*~~ [2026-05-30]
+- [X] ~~*problem is when i search these items, it shows a lot of results and the item searched is not in the OR anyways*~~ [2026-05-30]
 
 ## Low Stock Order
+
 - [ ] need csv
 - [ ] arrange items, critical, then reorder soon, verify/restock, incoming stock, watchlist
 - [ ] counter on items that are critical, then reorder soon
 
 ## Analytics Fast moving items page
+
 - [ ] new column named current stock shows current stock
 - [ ] printable pdf and csv with the same rows and columns
 
 ## PO page additional
-- [ ] make incoming more readable and obvious
-- [ ] PO page PO modal show how many items are in that PO
 
-## Stocktake PDF 
+- [X] ~~*make incoming more readable and obvious*~~ [2026-05-30]
+- [X] ~~*PO page PO modal show how many items are in that PO*~~ [2026-05-30]
+
+## Stocktake PDF
+
 - [ ] have an option to arrange both pdf and csv in date and time or alphabetized
 
-## Items page CSV and PDF 
+## Items page CSV and PDF
+
 - [ ] add new column named total items sold (as of date chosen in range)
 - [ ] need a date range picker
-- [ ] for users, when generating csv hide total items sold column, vendor price column, cost per piece column, 
+- [ ] for users, when generating csv hide total items sold column, vendor price column, cost per piece column,
 - [ ] add category before csv generation
 
 ## Items Analytics Sales History section
+
 - [ ] change the range to specific plus the current setup
 - [ ] Item name, current stock, items sold, revenue use selling price,
