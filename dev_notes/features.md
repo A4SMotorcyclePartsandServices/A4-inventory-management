@@ -56,3 +56,6 @@ Possible **Mobile Lite App** for power outages with admin login approval
 ## Debt System
 
 - Possible only one debt statement per customer. make it running balance of all debts instead of having multiple debt account statements
+
+## Cash ledger page idea
+- separate concerns of cash on hand and bank deposit. problem is right now for all transactions all of them affects the cash on hand. client is suggesting a way to have a sort of separate counter for bank deposits and movements

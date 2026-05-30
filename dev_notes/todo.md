@@ -86,3 +86,35 @@
 ## Validation
 
 - [ ] Continue larger validation cleanup later: admin/user/payables/stocktake forms and any remaining page-specific required-field handling should move toward the shared inline + toast helper pattern.
+
+## Bug check in refund search
+- [ ] YTX7L-BS-OD
+- [ ] DOMINO 3-WAY SWITCH
+- [ ] YTXL5L-BS OD
+- [ ] problem is when i search these items, it shows a lot of results
+
+## Low Stock Order
+- [ ] need csv
+- [ ] arrange items, critical, then reorder soon, verify/restock, incoming stock, watchlist
+- [ ] counter on items that are critical, then reorder soon
+
+## Analytics Fast moving items page
+- [ ] new column named current stock shows current stock
+- [ ] printable pdf and csv with the same rows and columns
+
+## PO page additional
+- [ ] make incoming more readable and obvious
+- [ ] PO page PO modal show how many items are in that PO
+
+## Stocktake PDF 
+- [ ] have an option to arrange both pdf and csv in date and time or alphabetized
+
+## Items page CSV and PDF 
+- [ ] add new column named total items sold (as of date chosen in range)
+- [ ] need a date range picker
+- [ ] for users, when generating csv hide total items sold column, vendor price column, cost per piece column, 
+- [ ] add category before csv generation
+
+## Items Analytics Sales History section
+- [ ] change the range to specific plus the current setup
+- [ ] Item name, current stock, items sold, revenue use selling price,
