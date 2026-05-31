@@ -46,6 +46,8 @@ from services.analytics_service import (
     get_dead_stock,
     get_dead_stock_page,
     get_low_stock_items,
+    get_low_stock_filter_chips,
+    get_low_stock_export_rows,
     get_low_stock_page,
     get_low_stock_page_for_item,
     get_low_stock_summary,
@@ -512,6 +514,7 @@ def low_stock():
     """
     page_raw = (request.args.get("page") or "").strip()
     search_query = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status_filter") or "").strip()
     item_id_raw = (request.args.get("item_id") or "").strip()
     highlight_item_id = None
     if item_id_raw:
@@ -541,6 +544,16 @@ def low_stock():
         include_watchlist=True,
         rows=low_stock_rows,
         search_query=search_query,
+        status_filter=status_filter,
+    )
+    low_stock_filter_chips = get_low_stock_filter_chips(
+        rows=low_stock_rows,
+        search_query=search_query,
+        active_filter=status_filter,
+    )
+    active_status_filter = next(
+        (chip["key"] for chip in low_stock_filter_chips if chip.get("active")),
+        "",
     )
     debug_mode = False
     debug_total_count = 0
@@ -553,6 +566,8 @@ def low_stock():
         "low_stock.html",
         low_stock_items=low_stock_page["items"],
         low_stock_page=low_stock_page,
+        low_stock_filter_chips=low_stock_filter_chips,
+        active_status_filter=active_status_filter,
         search_query=search_query,
         highlight_item_id=highlight_item_id,
         debug_mode=debug_mode,
@@ -566,6 +581,71 @@ def low_stock():
 def low_stock_summary_api():
     limit_raw = (request.args.get("limit") or "8").strip()
     return jsonify(get_low_stock_summary(limit=limit_raw))
+
+
+def _get_low_stock_display_status(item):
+    if item.get("is_watchlist"):
+        return "WATCHLIST"
+    if item.get("restock_basis") == "recovering_manual_stock_history_review":
+        return "VERIFY STOCK HISTORY"
+    if item.get("restock_basis") == "recovering_recent_variance_loss_zero_stock":
+        return "VERIFY / RESTOCK"
+    if item.get("incoming_po_covers_restock"):
+        return "INCOMING STOCK"
+    if item.get("restock_status") == "critical":
+        return "OUT OF STOCK" if float(item.get("current_stock") or 0) <= 0 else "CRITICAL"
+    if item.get("restock_status") == "warning":
+        return "REORDER SOON"
+    return "HEALTHY"
+
+
+@app.route("/export/low-stock")
+@login_required
+def export_low_stock_csv():
+    search_query = (request.args.get("q") or "").strip()
+    status_filter = (request.args.get("status_filter") or "").strip()
+    rows = get_low_stock_export_rows(
+        include_watchlist=True,
+        search_query=search_query,
+        status_filter=status_filter,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Item ID",
+        "Item Name",
+        "Description",
+        "Category",
+        "Current Stock",
+        "Suggested Restock Point",
+        "Status",
+        "Incoming POs",
+    ])
+
+    for item in rows:
+        incoming_pos = ", ".join(
+            str(po.get("po_number") or "")
+            for po in item.get("incoming_pos") or []
+            if po.get("po_number")
+        )
+        writer.writerow([
+            item.get("id") or "",
+            _safe_csv_cell(item.get("name") or ""),
+            _safe_csv_cell(item.get("description") or ""),
+            _safe_csv_cell(item.get("category") or ""),
+            item.get("current_stock") or 0,
+            item.get("suggested_restock_point") or 0,
+            _get_low_stock_display_status(item),
+            _safe_csv_cell(incoming_pos),
+        ])
+
+    timestamp = today_local().strftime("%Y%m%d")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=low_stock_export_{timestamp}.csv"},
+    )
 
 
 @app.route("/api/restock-debug")

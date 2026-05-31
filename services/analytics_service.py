@@ -11,6 +11,15 @@ from services.inventory_service import (
 
 LOW_STOCK_CACHE_TTL_SECONDS = 20
 _low_stock_cache = {}
+LOW_STOCK_FILTER_DEFINITIONS = [
+    {"key": "out_of_stock", "label": "Out of Stock"},
+    {"key": "critical", "label": "Critical"},
+    {"key": "reorder_soon", "label": "Reorder Soon"},
+    {"key": "verify_restock", "label": "Verify / Restock"},
+    {"key": "incoming_stock", "label": "Incoming Stock"},
+    {"key": "watchlist", "label": "Watchlist"},
+]
+LOW_STOCK_FILTER_KEYS = {item["key"] for item in LOW_STOCK_FILTER_DEFINITIONS}
 
 
 def _restock_status_rank(status):
@@ -29,6 +38,23 @@ def _restock_confidence_rank(confidence):
     if confidence == "low":
         return 1
     return 2
+
+
+def _low_stock_display_order_rank(item):
+    if item.get("is_watchlist"):
+        return 4
+    if item.get("restock_basis") in {
+        "recovering_manual_stock_history_review",
+        "recovering_recent_variance_loss_zero_stock",
+    }:
+        return 2
+    if item.get("incoming_po_covers_restock"):
+        return 3
+    if item.get("restock_status") == "critical":
+        return 0
+    if item.get("restock_status") == "warning":
+        return 1
+    return 5
 
 
 def _copy_low_stock_rows(rows):
@@ -55,9 +81,9 @@ def _compute_low_stock_items(include_watchlist=False):
         ]
         rows.sort(
             key=lambda item: (
-                _restock_confidence_rank(item.get("restock_confidence")),
-                _restock_status_rank(item.get("restock_status")),
+                _low_stock_display_order_rank(item),
                 float(item.get("current_stock") or 0),
+                _restock_confidence_rank(item.get("restock_confidence")),
                 item.get("name") or "",
             )
         )
@@ -283,7 +309,83 @@ def _matches_low_stock_search(item, search_query):
     return all(word in searchable_text for word in normalized_query.split())
 
 
-def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None, search_query=None):
+def _matches_low_stock_filter(item, status_filter):
+    is_review_item = item.get("restock_basis") in {
+        "recovering_manual_stock_history_review",
+        "recovering_recent_variance_loss_zero_stock",
+    }
+
+    if status_filter == "out_of_stock":
+        return (
+            item.get("restock_status") == "critical"
+            and float(item.get("current_stock") or 0) <= 0
+            and not item.get("is_watchlist")
+            and not item.get("incoming_po_covers_restock")
+            and not is_review_item
+        )
+    if status_filter == "watchlist":
+        return bool(item.get("is_watchlist"))
+    if status_filter == "verify_restock":
+        return is_review_item
+    if status_filter == "incoming_stock":
+        return bool(item.get("incoming_po_covers_restock"))
+    if status_filter == "critical":
+        return (
+            item.get("restock_status") == "critical"
+            and float(item.get("current_stock") or 0) > 0
+            and not item.get("is_watchlist")
+            and not item.get("incoming_po_covers_restock")
+            and not is_review_item
+        )
+    if status_filter == "reorder_soon":
+        return (
+            item.get("restock_status") == "warning"
+            and not item.get("is_watchlist")
+            and not item.get("incoming_po_covers_restock")
+            and not is_review_item
+        )
+    return True
+
+
+def _normalize_low_stock_filter(status_filter):
+    normalized_filter = str(status_filter or "").strip().lower()
+    if normalized_filter in LOW_STOCK_FILTER_KEYS:
+        return normalized_filter
+    return ""
+
+
+def get_low_stock_filter_chips(rows=None, *, search_query=None, active_filter=None):
+    source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=True)
+    query_value = str(search_query or "").strip()
+    if query_value:
+        source_rows = [item for item in source_rows if _matches_low_stock_search(item, query_value)]
+
+    normalized_active_filter = _normalize_low_stock_filter(active_filter)
+    chips = []
+    for filter_definition in LOW_STOCK_FILTER_DEFINITIONS:
+        filter_key = filter_definition["key"]
+        chips.append(
+            {
+                **filter_definition,
+                "count": sum(1 for item in source_rows if _matches_low_stock_filter(item, filter_key)),
+                "active": filter_key == normalized_active_filter,
+            }
+        )
+    return chips
+
+
+def get_low_stock_export_rows(*, include_watchlist=True, rows=None, search_query=None, status_filter=None):
+    source_rows = rows if rows is not None else get_low_stock_items(include_watchlist=include_watchlist)
+    query_value = str(search_query or "").strip()
+    if query_value:
+        source_rows = [item for item in source_rows if _matches_low_stock_search(item, query_value)]
+    normalized_status_filter = _normalize_low_stock_filter(status_filter)
+    if normalized_status_filter:
+        source_rows = [item for item in source_rows if _matches_low_stock_filter(item, normalized_status_filter)]
+    return _copy_low_stock_rows(source_rows)
+
+
+def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=None, search_query=None, status_filter=None):
     try:
         safe_page = max(1, int(page or 1))
     except (TypeError, ValueError):
@@ -298,6 +400,9 @@ def get_low_stock_page(page=1, per_page=75, *, include_watchlist=False, rows=Non
     query_value = str(search_query or "").strip()
     if query_value:
         source_rows = [item for item in source_rows if _matches_low_stock_search(item, query_value)]
+    normalized_status_filter = _normalize_low_stock_filter(status_filter)
+    if normalized_status_filter:
+        source_rows = [item for item in source_rows if _matches_low_stock_filter(item, normalized_status_filter)]
 
     total_count = len(source_rows)
     total_pages = max(1, (total_count + safe_per_page - 1) // safe_per_page)

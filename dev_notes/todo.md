@@ -98,9 +98,9 @@
 
 ## Low Stock Order
 
-- [ ] need csv
-- [ ] arrange items, critical, then reorder soon, verify/restock, incoming stock, watchlist
-- [ ] counter on items that are critical, then reorder soon
+- [X] ~~*need csv*~~ [2026-05-31]
+- [X] ~~*arrange items, critical, then reorder soon, verify/restock, incoming stock, watchlist*~~ [2026-05-31]
+- [X] ~~*counter on items that are critical, then reorder soon*~~ [2026-05-31]
 
 ## Analytics Fast moving items page
 
