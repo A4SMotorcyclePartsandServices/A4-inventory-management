@@ -104,8 +104,8 @@
 
 ## Analytics Fast moving items page
 
-- [ ] new column named current stock shows current stock
-- [ ] printable pdf and csv with the same rows and columns
+- [X] ~~*new column named current stock shows current stock*~~ [2026-05-31]
+- [X] ~~*printable pdf and csv with the same rows and columns*~~ [2026-05-31]
 
 ## PO page additional
 
@@ -114,7 +114,7 @@
 
 ## Stocktake PDF
 
-- [ ] have an option to arrange both pdf and csv in date and time or alphabetized
+- [X] ~~*have an option to arrange both pdf and csv in date and time or alphabetized*~~ [2026-05-31]
 
 ## Items page CSV and PDF
 

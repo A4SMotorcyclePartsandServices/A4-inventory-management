@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }}</title>
+    <style>
+        @page { size: A4; margin: 14mm; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #171717;
+            background: #ffffff;
+            font-size: 12px;
+        }
+
+        .print-bar {
+            text-align: center;
+            padding: 14px;
+            margin-bottom: 18px;
+            background: #1f2937;
+        }
+
+        .print-btn {
+            border: 0;
+            border-radius: 6px;
+            background: #c1121f;
+            color: #ffffff;
+            padding: 9px 22px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            border-bottom: 3px solid #c1121f;
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+        }
+
+        .header img {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+        }
+
+        .brand {
+            color: #c1121f;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 18px;
+        }
+
+        .subtitle {
+            color: #555;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        .report-heading {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .generated {
+            color: #666;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .filter-card {
+            border: 1px solid #d7d7d7;
+            border-radius: 8px;
+            padding: 10px 11px;
+            background: #f8fafc;
+        }
+
+        .filter-label {
+            display: block;
+            color: #666;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 800;
+            margin-bottom: 3px;
+        }
+
+        .filter-value {
+            font-weight: 800;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th,
+        td {
+            border: 1px solid #d7d7d7;
+            padding: 8px 7px;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #f3f4f6;
+            color: #991b1b;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-size: 10px;
+            text-align: center;
+        }
+
+        td {
+            text-align: center;
+        }
+
+        .item-cell {
+            text-align: left;
+        }
+
+        .item-name {
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .item-description {
+            margin-top: 3px;
+            color: #666;
+            font-size: 11px;
+            line-height: 1.35;
+        }
+
+        .number {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .strong {
+            font-weight: 800;
+        }
+
+        .empty {
+            color: #666;
+            text-align: center;
+            padding: 18px 8px;
+        }
+
+        @media print {
+            .print-bar { display: none; }
+            thead { display: table-header-group; }
+            tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="print-bar">
+        <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    </div>
+
+    <div class="header">
+        <img src="{{ url_for('static', filename='media/logo.png') }}" alt="A4S Logo">
+        <div>
+            <div class="brand">A4S Motorcycle Shop & Services</div>
+            <div class="subtitle">{{ report_subtitle }}</div>
+        </div>
+    </div>
+
+    <div class="report-heading">
+        <div>
+            <h1>{{ report_title }}</h1>
+        </div>
+        <div class="generated">Generated: {{ generated_at }}</div>
+    </div>
+
+    <div class="filter-grid">
+        {% for label, value in filters.items() %}
+        <div class="filter-card">
+            <span class="filter-label">{{ label }}</span>
+            <div class="filter-value">{{ value }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                {% for column in columns %}
+                <th>{{ column.get('label') }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                {% for column in columns %}
+                    {% set value = row.get(column.get('key')) %}
+                    {% if column.get('type') == "item" %}
+                    <td class="item-cell">
+                        <div class="item-name">{{ value or '-' }}</div>
+                        {% if row.get("description") %}
+                        <div class="item-description">{{ row.get("description") }}</div>
+                        {% endif %}
+                    </td>
+                    {% elif column.get('type') == "money" %}
+                    <td class="{{ column.get('class') or '' }}">PHP {{ "{:,.2f}".format(value or 0) }}</td>
+                    {% else %}
+                    <td class="{{ column.get('class') or '' }}">{{ value if value not in [none, ""] else "-" }}</td>
+                    {% endif %}
+                {% endfor %}
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="{{ columns|length }}" class="empty">{{ empty_message }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

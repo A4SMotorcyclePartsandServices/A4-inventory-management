@@ -40,6 +40,35 @@
         font-weight: 700;
     }
 
+    .panel-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.3rem;
+    }
+
+    .export-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .export-actions .btn {
+        width: 34px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .export-actions .btn i {
+        font-size: 1.05rem;
+    }
+
     .panel-meta {
         color: var(--text-muted);
         font-size: 0.82rem;
@@ -139,7 +168,27 @@
 </div>
 
 <div class="panel-card">
-    <h3>Top items</h3>
+    <div class="panel-title-row">
+        <h3>Top items</h3>
+        <div class="export-actions">
+            <a
+                href="{{ url_for('export_fastmoving_top_items_csv', top_items_category=top_items_category, top_items_limit=top_items_limit) }}"
+                class="btn btn-sm btn-outline-success"
+                title="Export top items CSV"
+                aria-label="Export top items CSV">
+                <i class="bi bi-filetype-csv"></i>
+            </a>
+            <a
+                href="{{ url_for('export_fastmoving_top_items_pdf', top_items_category=top_items_category, top_items_limit=top_items_limit) }}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-sm btn-outline-danger"
+                title="Open top items PDF"
+                aria-label="Open top items PDF">
+                <i class="bi bi-filetype-pdf"></i>
+            </a>
+        </div>
+    </div>
     <div class="panel-meta">Fast-moving inventory based only on customer and bundle sales from the last 30 days.</div>
 
     <form method="GET" action="/analytics" class="table-filter-form">
@@ -171,6 +220,7 @@
                 <tr>
                     <th>Item</th>
                     <th>Category</th>
+                    <th>Current Stock</th>
                     <th>Total Sold</th>
                 </tr>
             </thead>
@@ -185,12 +235,13 @@
                             {% endif %}
                         </td>
                         <td>{{ item.category or '-' }}</td>
+                        <td>{{ item.current_stock }}</td>
                         <td class="fw-bold text-danger">{{ item.total_sold_last_30_days }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="3" class="empty-table">No sales recorded in the last 30 days for this filter.</td>
+                        <td colspan="4" class="empty-table">No sales recorded in the last 30 days for this filter.</td>
                     </tr>
                 {% endif %}
             </tbody>

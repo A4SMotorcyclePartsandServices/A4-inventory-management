@@ -33,6 +33,13 @@ from utils.timezone import now_local, today_local
 stocktake_bp = Blueprint("stocktake", __name__)
 
 
+def _get_stocktake_overall_sort_by():
+    sort_by = (request.args.get("sort_by") or "date_time").strip().lower()
+    if sort_by not in {"date_time", "alphabetical"}:
+        return "date_time"
+    return sort_by
+
+
 def _begin_json_idempotent_request(scope, data):
     user_id = session.get("user_id")
     idempotency_key = extract_idempotency_key(request)
@@ -496,6 +503,7 @@ def stocktake_overall_report():
 
     start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
     end_date = (request.args.get("end_date") or today.isoformat()).strip()
+    sort_by = _get_stocktake_overall_sort_by()
 
     try:
         start_obj = date.fromisoformat(start_date)
@@ -510,6 +518,7 @@ def stocktake_overall_report():
     report_data = get_stocktake_overall_report(
         start_obj.isoformat(),
         end_obj.isoformat(),
+        sort_by=sort_by,
     )
 
     filename = f"stocktake-overall-{report_data['start_date']}-to-{report_data['end_date']}.html"
@@ -531,6 +540,7 @@ def stocktake_overall_csv():
 
     start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
     end_date = (request.args.get("end_date") or today.isoformat()).strip()
+    sort_by = _get_stocktake_overall_sort_by()
 
     try:
         start_obj = date.fromisoformat(start_date)
@@ -545,6 +555,7 @@ def stocktake_overall_csv():
     report_data = get_stocktake_overall_report(
         start_obj.isoformat(),
         end_obj.isoformat(),
+        sort_by=sort_by,
     )
     summary = report_data.get("summary", {})
 
@@ -554,6 +565,7 @@ def stocktake_overall_csv():
     writer.writerow(["Metric", "Value"])
     writer.writerow(["Start Date", report_data["start_date"]])
     writer.writerow(["End Date", report_data["end_date"]])
+    writer.writerow(["Arranged By", report_data["sort_label"]])
     writer.writerow(["Sessions Included", summary.get("session_count", 0)])
     writer.writerow(["Completed Sessions", report_data["session_status_counts"].get("completed", 0)])
     writer.writerow(["Ongoing Sessions", report_data["session_status_counts"].get("ongoing", 0)])

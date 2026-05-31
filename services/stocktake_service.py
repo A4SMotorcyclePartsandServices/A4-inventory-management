@@ -315,7 +315,17 @@ def get_recent_stocktake_activity(window_days=STOCKTAKE_WARNING_DAYS):
         conn.close()
 
 
-def get_stocktake_overall_report(start_date, end_date):
+def get_stocktake_overall_report(start_date, end_date, sort_by="date_time"):
+    normalized_sort_by = str(sort_by or "date_time").strip().lower()
+    if normalized_sort_by not in {"date_time", "alphabetical"}:
+        normalized_sort_by = "date_time"
+
+    item_order_clause = (
+        "i.name ASC, i.category ASC NULLS LAST, ss.created_at DESC, ss.id DESC, si.id DESC"
+        if normalized_sort_by == "alphabetical"
+        else "ss.created_at DESC, ss.id DESC, si.id DESC"
+    )
+
     conn = get_db()
     try:
         summary_row = conn.execute(
@@ -386,7 +396,7 @@ def get_stocktake_overall_report(start_date, end_date):
         ).fetchall()
 
         item_rows = conn.execute(
-            """
+            f"""
             SELECT
                 si.*,
                 i.name,
@@ -404,7 +414,7 @@ def get_stocktake_overall_report(start_date, end_date):
             JOIN items i ON i.id = si.item_id
             WHERE DATE(ss.created_at) BETWEEN %s AND %s
               AND ss.status IN (%s, %s)
-            ORDER BY ss.created_at DESC, ss.id DESC, si.id DESC
+            ORDER BY {item_order_clause}
             """,
             (start_date, end_date, STOCKTAKE_STATUS_DRAFT, STOCKTAKE_STATUS_CONFIRMED),
         ).fetchall()
@@ -434,6 +444,8 @@ def get_stocktake_overall_report(start_date, end_date):
         return {
             "start_date": start_date,
             "end_date": end_date,
+            "sort_by": normalized_sort_by,
+            "sort_label": "Alphabetically" if normalized_sort_by == "alphabetical" else "Date and time",
             "date_range_display": f"{format_date(start_date)} to {format_date(end_date)}",
             "summary": {
                 "session_count": session_status_counts["completed"] + session_status_counts["ongoing"],

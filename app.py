@@ -19,7 +19,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 import webbrowser
 import threading
-from utils.timezone import configure_process_timezone, today_local
+from utils.timezone import configure_process_timezone, now_local, today_local
 
 configure_process_timezone()
 
@@ -42,7 +42,6 @@ from services.inventory_service import attach_restock_recommendation, get_items_
 from services.transactions_service import add_transaction
 from services.analytics_service import (
     get_dashboard_stats,
-    get_hot_items,
     get_dead_stock,
     get_dead_stock_page,
     get_low_stock_items,
@@ -54,6 +53,7 @@ from services.analytics_service import (
     get_restock_debug_items,
 )
 from services.sales_analytics_service import get_sales_analytics_snapshot
+from services.top_items_service import get_hot_items, get_sales_top_items
 from services.stocktake_access_service import get_stocktake_access_state
 from services.auth_session_service import AUTH_SESSION_TOKEN_KEY, revoke_auth_session
 
@@ -80,6 +80,7 @@ from routes.vendor_route import vendor_bp
 from routes.payables_route import payables_bp
 from routes.stocktake_route import stocktake_bp
 from routes.void_sales_route import void_sales_bp
+from utils.formatters import format_date
 
 
 # ============================================================
@@ -481,6 +482,189 @@ def sales_analytics():
         end_date=end_date,
         top_items_limit=analytics_data["filters"]["top_items_limit"],
         top_items_category=analytics_data["filters"]["top_items_category"],
+    )
+
+
+def _parse_sales_analytics_filters():
+    today = today_local()
+    default_start = today - timedelta(days=29)
+
+    start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
+    end_date = (request.args.get("end_date") or today.isoformat()).strip()
+
+    try:
+        start_obj = date.fromisoformat(start_date)
+        end_obj = date.fromisoformat(end_date)
+    except ValueError:
+        start_obj = default_start
+        end_obj = today
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    try:
+        top_items_limit = int((request.args.get("top_items_limit") or "10").strip())
+    except ValueError:
+        top_items_limit = 10
+
+    return {
+        "start_date": start_obj.isoformat(),
+        "end_date": end_obj.isoformat(),
+        "top_items_limit": top_items_limit,
+        "top_items_category": (request.args.get("top_items_category") or "").strip(),
+    }
+
+
+def _parse_fastmoving_filters():
+    try:
+        selected_limit = int((request.args.get("top_items_limit") or "10").strip())
+    except ValueError:
+        selected_limit = 10
+    return {
+        "top_items_limit": selected_limit,
+        "top_items_category": (request.args.get("top_items_category") or "").strip(),
+    }
+
+
+def _sales_analytics_date_range_label(filters):
+    return f"{format_date(filters['start_date'])} to {format_date(filters['end_date'])}"
+
+
+@app.route("/analytics/top-items/csv")
+@login_required
+def export_fastmoving_top_items_csv():
+    filters = _parse_fastmoving_filters()
+    hot_items_data = get_hot_items(
+        limit=filters["top_items_limit"],
+        category=filters["top_items_category"],
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Item", "Description", "Category", "Current Stock", "Total Sold"])
+    for item in hot_items_data["items"]:
+        writer.writerow([
+            _safe_csv_cell(item.get("name") or ""),
+            _safe_csv_cell(item.get("description") or ""),
+            _safe_csv_cell(item.get("category") or ""),
+            item.get("current_stock") or 0,
+            item.get("total_sold_last_30_days") or 0,
+        ])
+
+    timestamp = today_local().strftime("%Y%m%d")
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hot_moving_items_{timestamp}.csv"},
+    )
+
+
+@app.route("/analytics/top-items/pdf")
+@login_required
+def export_fastmoving_top_items_pdf():
+    filters = _parse_fastmoving_filters()
+    hot_items_data = get_hot_items(
+        limit=filters["top_items_limit"],
+        category=filters["top_items_category"],
+    )
+    filename = f"hot-moving-items-{today_local().strftime('%Y%m%d')}.html"
+    return Response(
+        render_template(
+            "reports/fastmoving_pdf.html",
+            report_title="Hot Moving Items",
+            report_subtitle="Customer demand for the last 30 days, ranked by quantity sold.",
+            generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
+            filters={
+                "Date Range": "Last 30 days",
+                "Category": hot_items_data["selected_category"] or "All Categories",
+                "Limit": f"Top {hot_items_data['selected_limit']}",
+            },
+            columns=[
+                {"key": "name", "label": "Item", "type": "item"},
+                {"key": "category", "label": "Category"},
+                {"key": "current_stock", "label": "Current Stock", "class": "number"},
+                {"key": "total_sold_last_30_days", "label": "Total Sold", "class": "number strong"},
+            ],
+            rows=hot_items_data["items"],
+            empty_message="No sales recorded in the last 30 days for this filter.",
+        ),
+        headers={"Content-Disposition": f"inline; filename={filename}"},
+    )
+
+
+@app.route("/sales-analytics/top-items/csv")
+@admin_required
+def export_sales_analytics_top_items_csv():
+    filters = _parse_sales_analytics_filters()
+    date_range_label = _sales_analytics_date_range_label(filters)
+    top_items_data = get_sales_top_items(
+        filters["start_date"],
+        filters["end_date"],
+        limit=filters["top_items_limit"],
+        category=filters["top_items_category"],
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date Range", date_range_label])
+    writer.writerow(["Category", top_items_data["selected_category"] or "All Categories"])
+    writer.writerow(["Limit", f"Top {top_items_data['selected_limit']}"])
+    writer.writerow([])
+    writer.writerow(["Item", "Description", "Category", "Current Stock", "Qty", "Revenue", "Profit"])
+    for item in top_items_data["items"]:
+        writer.writerow([
+            _safe_csv_cell(item.get("name") or ""),
+            _safe_csv_cell(item.get("description") or ""),
+            _safe_csv_cell(item.get("category") or ""),
+            item.get("current_stock") or 0,
+            item.get("quantity_sold") or 0,
+            item.get("total_revenue") or 0,
+            item.get("total_profit") or 0,
+        ])
+
+    filename = f"sales_top_items_{filters['start_date']}_to_{filters['end_date']}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.route("/sales-analytics/top-items/pdf")
+@admin_required
+def export_sales_analytics_top_items_pdf():
+    filters = _parse_sales_analytics_filters()
+    date_range_label = _sales_analytics_date_range_label(filters)
+    top_items_data = get_sales_top_items(
+        filters["start_date"],
+        filters["end_date"],
+        limit=filters["top_items_limit"],
+        category=filters["top_items_category"],
+    )
+    filename = f"sales-top-items-{filters['start_date']}-to-{filters['end_date']}.html"
+    return Response(
+        render_template(
+            "reports/fastmoving_pdf.html",
+            report_title="Sales Analytics Top Items",
+            report_subtitle="Paid item sales for the selected date range, sorted by quantity sold.",
+            generated_at=now_local().strftime("%b %d, %Y %I:%M %p"),
+            filters={
+                "Date Range": date_range_label,
+                "Category": top_items_data["selected_category"] or "All Categories",
+                "Limit": f"Top {top_items_data['selected_limit']}",
+            },
+            columns=[
+                {"key": "name", "label": "Item", "type": "item"},
+                {"key": "category", "label": "Category"},
+                {"key": "current_stock", "label": "Current Stock", "class": "number"},
+                {"key": "quantity_sold", "label": "Qty", "class": "number strong"},
+                {"key": "total_revenue", "label": "Revenue", "type": "money", "class": "number"},
+                {"key": "total_profit", "label": "Profit", "type": "money", "class": "number"},
+            ],
+            rows=top_items_data["items"],
+            empty_message="No paid item sales matched this range and category filter.",
+        ),
+        headers={"Content-Disposition": f"inline; filename={filename}"},
     )
 
 

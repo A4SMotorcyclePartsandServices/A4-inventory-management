@@ -176,6 +176,35 @@
         font-weight: 700;
     }
 
+    .panel-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.3rem;
+    }
+
+    .export-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .export-actions .btn {
+        width: 34px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .export-actions .btn i {
+        font-size: 1.05rem;
+    }
+
     .panel-meta {
         color: var(--text-muted);
         font-size: 0.82rem;
@@ -697,7 +726,7 @@
         }
 
         .table-responsive > .table {
-            min-width: 620px;
+            min-width: 700px;
         }
     }
 </style>
@@ -974,7 +1003,27 @@
 
 <div class="performance-grid" id="top-items-section">
     <div class="panel-card top-items-card">
-            <h3>Top items</h3>
+            <div class="panel-title-row">
+                <h3>Top items</h3>
+                <div class="export-actions">
+                    <a
+                        href="{{ url_for('export_sales_analytics_top_items_csv', start_date=start_date, end_date=end_date, top_items_category=top_items_category, top_items_limit=top_items_limit) }}"
+                        class="btn btn-sm btn-outline-success"
+                        title="Export top items CSV"
+                        aria-label="Export top items CSV">
+                        <i class="bi bi-filetype-csv"></i>
+                    </a>
+                    <a
+                        href="{{ url_for('export_sales_analytics_top_items_pdf', start_date=start_date, end_date=end_date, top_items_category=top_items_category, top_items_limit=top_items_limit) }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="btn btn-sm btn-outline-danger"
+                        title="Open top items PDF"
+                        aria-label="Open top items PDF">
+                        <i class="bi bi-filetype-pdf"></i>
+                    </a>
+                </div>
+            </div>
             <div class="panel-meta">Paid item sales sorted by quantity sold. You can show up to the top 50 and narrow the list by item category.</div>
             <form method="GET" action="/sales-analytics#top-items-section" class="table-filter-form">
                 <input type="hidden" name="start_date" value="{{ start_date }}">
@@ -1006,6 +1055,7 @@
                         <tr>
                             <th>Item</th>
                             <th>Category</th>
+                            <th>Current Stock</th>
                             <th>Qty</th>
                             <th>Revenue</th>
                             <th>Profit</th>
@@ -1022,6 +1072,7 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ row.category or '-' }}</td>
+                                <td>{{ row.current_stock }}</td>
                                 <td>{{ row.quantity_sold }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
                                 <td>PHP {{ "{:,.2f}".format(row.total_profit) }}</td>
@@ -1029,7 +1080,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="5" class="empty-table">No paid item sales matched this range and category filter.</td>
+                                <td colspan="6" class="empty-table">No paid item sales matched this range and category filter.</td>
                             </tr>
                         {% endif %}
                     </tbody>

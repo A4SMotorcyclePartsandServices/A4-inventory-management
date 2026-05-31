@@ -432,6 +432,22 @@
                         <input type="hidden" name="start_date" id="stocktake-overall-csv-start-hidden">
                         <input type="hidden" name="end_date" id="stocktake-overall-csv-end-hidden">
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Arrange Data</label>
+                        <input type="hidden" name="sort_by" value="date_time" id="stocktake-overall-csv-sort-hidden">
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                data-sort-target="stocktake-overall-csv-sort-hidden"
+                                id="stocktake-overall-csv-sort-alpha"
+                            >
+                            <label class="form-check-label" for="stocktake-overall-csv-sort-alpha">
+                                Arrange alphabetically by item name
+                            </label>
+                        </div>
+                        <div class="form-text text-white-50">Leave unchecked to arrange by date and time.</div>
+                    </div>
                     <p class="text small mb-0">This CSV aggregates stocktake sessions created within the selected date range.</p>
                 </div>
                 <div class="modal-footer border-top-0">
@@ -471,6 +487,22 @@
                         </div>
                         <input type="hidden" name="start_date" id="stocktake-overall-start-hidden">
                         <input type="hidden" name="end_date" id="stocktake-overall-end-hidden">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-white-50 small">Arrange Data</label>
+                        <input type="hidden" name="sort_by" value="date_time" id="stocktake-overall-report-sort-hidden">
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                data-sort-target="stocktake-overall-report-sort-hidden"
+                                id="stocktake-overall-report-sort-alpha"
+                            >
+                            <label class="form-check-label" for="stocktake-overall-report-sort-alpha">
+                                Arrange alphabetically by item name
+                            </label>
+                        </div>
+                        <div class="form-text text-white-50">Leave unchecked to arrange by date and time.</div>
                     </div>
                     <p class="text small mb-0">This report aggregates stocktake sessions created within the selected date range.</p>
                 </div>
@@ -563,6 +595,22 @@ document.addEventListener('DOMContentLoaded', function () {
         'stocktake-overall-start-hidden',
         'stocktake-overall-end-hidden'
     );
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-sort-target]').forEach((checkbox) => {
+        const hidden = document.getElementById(checkbox.dataset.sortTarget);
+        if (!hidden) {
+            return;
+        }
+
+        const syncSortValue = () => {
+            hidden.value = checkbox.checked ? 'alphabetical' : 'date_time';
+        };
+
+        checkbox.addEventListener('change', syncSortValue);
+        syncSortValue();
+    });
 });
 </script>
 {% endblock %}
