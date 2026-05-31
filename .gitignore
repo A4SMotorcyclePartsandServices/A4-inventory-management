@@ -11,6 +11,10 @@ venv/
 node_modules/
 npm-debug.log*
 
+# Build artifacts
+build/
+dist/
+
 # Database & Local Data
 *.db
 *.csv
