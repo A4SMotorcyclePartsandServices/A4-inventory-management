@@ -431,6 +431,7 @@
                         </div>
                         <input type="hidden" name="start_date" id="stocktake-overall-csv-start-hidden">
                         <input type="hidden" name="end_date" id="stocktake-overall-csv-end-hidden">
+                        <div class="d-flex flex-wrap gap-2 mt-2" data-stocktake-quick-dates data-range-input="stocktake-overall-csv-date-range" data-start-input="stocktake-overall-csv-start-hidden" data-end-input="stocktake-overall-csv-end-hidden"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label text-white-50 small">Arrange Data</label>
@@ -487,6 +488,7 @@
                         </div>
                         <input type="hidden" name="start_date" id="stocktake-overall-start-hidden">
                         <input type="hidden" name="end_date" id="stocktake-overall-end-hidden">
+                        <div class="d-flex flex-wrap gap-2 mt-2" data-stocktake-quick-dates data-range-input="stocktake-overall-date-range" data-start-input="stocktake-overall-start-hidden" data-end-input="stocktake-overall-end-hidden"></div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label text-white-50 small">Arrange Data</label>
@@ -585,6 +587,72 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     };
 
+    const setOverallQuickRange = (rangeInput, startHidden, endHidden, startDate, endDate) => {
+        const startValue = fmt(startDate);
+        const endValue = fmt(endDate);
+        startHidden.value = startValue;
+        endHidden.value = endValue;
+
+        if (rangeInput?._flatpickr) {
+            rangeInput._flatpickr.setDate([startValue, endValue], true);
+        } else if (rangeInput) {
+            rangeInput.value = `${startValue} to ${endValue}`;
+        }
+    };
+
+    const buildOverallQuickDates = (container) => {
+        const rangeInput = document.getElementById(container.dataset.rangeInput);
+        const startHidden = document.getElementById(container.dataset.startInput);
+        const endHidden = document.getElementById(container.dataset.endInput);
+        if (!rangeInput || !startHidden || !endHidden) {
+            return;
+        }
+
+        const quickRanges = [
+            {
+                label: 'This Month',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), now.getMonth(), 1), now];
+                },
+            },
+            {
+                label: 'Last Month',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0)];
+                },
+            },
+            {
+                label: 'This Year',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), 0, 1), now];
+                },
+            },
+            {
+                label: String(new Date().getFullYear() - 1),
+                range: () => {
+                    const year = new Date().getFullYear() - 1;
+                    return [new Date(year, 0, 1), new Date(year, 11, 31)];
+                },
+            },
+        ];
+
+        container.replaceChildren();
+        quickRanges.forEach(({ label, range }) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-outline-info rounded-pill py-1 px-2';
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                const [startDate, endDate] = range();
+                setOverallQuickRange(rangeInput, startHidden, endHidden, startDate, endDate);
+            });
+            container.appendChild(button);
+        });
+    };
+
     initOverallRangePicker(
         'stocktake-overall-csv-date-range',
         'stocktake-overall-csv-start-hidden',
@@ -595,6 +663,8 @@ document.addEventListener('DOMContentLoaded', function () {
         'stocktake-overall-start-hidden',
         'stocktake-overall-end-hidden'
     );
+
+    document.querySelectorAll('[data-stocktake-quick-dates]').forEach(buildOverallQuickDates);
 });
 
 document.addEventListener('DOMContentLoaded', function () {

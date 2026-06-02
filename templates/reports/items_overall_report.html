@@ -95,6 +95,12 @@
             color: #555;
         }
 
+        .sold-scope {
+            font-size: 12px;
+            color: #333;
+            font-weight: 700;
+        }
+
         .summary-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -256,7 +262,10 @@
                 Inventory Master List
             {% endif %}
         </div>
-        <div class="generated-note">Generated: {{ report["generated_at"] }}</div>
+        <div>
+            <div class="sold-scope">Items sold: {{ report["sold_date_scope"] }}</div>
+            <div class="generated-note">Generated: {{ report["generated_at"] }}</div>
+        </div>
     </div>
 
     <div class="summary-grid">
@@ -286,13 +295,14 @@
     <table>
         <thead>
             <tr>
-                <th width="29%">Item / Description</th>
-                <th width="17%">Category / Vendor</th>
-                <th width="10%" class="cell-center">Pack Size</th>
-                <th width="11%" class="cell-right">Vendor Price</th>
-                <th width="11%" class="cell-right">Cost / Piece</th>
-                <th width="11%" class="cell-right">Selling Price</th>
-                <th width="11%" class="cell-center">Stock</th>
+                <th width="27%">Item / Description</th>
+                <th width="15%">Category / Vendor</th>
+                <th width="9%" class="cell-center">Pack Size</th>
+                <th width="10%" class="cell-right">Vendor Price</th>
+                <th width="10%" class="cell-right">Cost / Piece</th>
+                <th width="10%" class="cell-right">Selling Price</th>
+                <th width="9%" class="cell-center">Stock</th>
+                <th width="10%" class="cell-center">Total Items Sold</th>
             </tr>
         </thead>
         <tbody>
@@ -318,6 +328,7 @@
                     <span class="stock-badge{% if item.should_restock %} low{% endif %}">{{ item.current_stock or 0 }}</span>
                     <div class="cell-submeta">Reorder: {{ item.reorder_level or 0 }}</div>
                 </td>
+                <td class="cell-center">{{ item.total_sold or 0 }}</td>
             </tr>
             {% endfor %}
         </tbody>

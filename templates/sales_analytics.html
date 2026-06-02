@@ -56,9 +56,17 @@
 
     .range-form {
         display: grid;
-        grid-template-columns: minmax(240px, 300px) auto;
-        gap: 0.75rem;
-        align-items: end;
+        grid-template-columns: minmax(280px, 380px);
+        gap: 0.7rem;
+        align-items: start;
+        justify-content: end;
+    }
+
+    .range-form .btn[type="submit"] {
+        justify-self: stretch;
+        width: 100%;
+        min-height: 40px;
+        padding-inline: 1rem;
     }
 
     .range-chip {
@@ -75,6 +83,30 @@
         font-weight: 800;
         margin-bottom: 0.6rem;
         border: 1px solid rgba(230, 57, 70, 0.22);
+    }
+
+    .range-quick-dates {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.55rem;
+    }
+
+    .range-quick-date-btn {
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #9edcf1;
+        border-radius: 999px;
+        padding: 0.28rem 0.65rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .range-quick-date-btn:hover {
+        border-color: rgba(103, 194, 228, 0.58);
+        background: rgba(103, 194, 228, 0.16);
+        color: #e7f9ff;
     }
 
     .kpi-card {
@@ -766,6 +798,7 @@
             >
             <input type="hidden" name="start_date" id="sales-analytics-start" value="{{ start_date }}">
             <input type="hidden" name="end_date" id="sales-analytics-end" value="{{ end_date }}">
+            <div class="range-quick-dates" id="sales-analytics-quick-dates" aria-label="Quick date ranges"></div>
         </div>
         <button type="submit" class="btn btn-primary">
             <i class="bi bi-funnel me-1"></i> Apply Range
@@ -1056,7 +1089,7 @@
                             <th>Item</th>
                             <th>Category</th>
                             <th>Current Stock</th>
-                            <th>Qty</th>
+                            <th>Qty Sold</th>
                             <th>Revenue</th>
                             <th>Profit</th>
                         </tr>
@@ -1460,9 +1493,75 @@ document.addEventListener('DOMContentLoaded', function () {
     const rangeInput = document.getElementById('sales-analytics-range');
     const startHidden = document.getElementById('sales-analytics-start');
     const endHidden = document.getElementById('sales-analytics-end');
+    const quickDatesContainer = document.getElementById('sales-analytics-quick-dates');
 
     if (!rangeInput || !startHidden || !endHidden || typeof flatpickr !== 'function') {
         return;
+    }
+
+    const fmt = (value) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const setQuickDateRange = (startDate, endDate) => {
+        const startValue = fmt(startDate);
+        const endValue = fmt(endDate);
+        startHidden.value = startValue;
+        endHidden.value = endValue;
+        if (rangeInput._flatpickr) {
+            rangeInput._flatpickr.setDate([startValue, endValue], true);
+        } else {
+            rangeInput.value = `${startValue} to ${endValue}`;
+        }
+    };
+
+    const quickRanges = [
+        {
+            label: 'This Month',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), now.getMonth(), 1), now];
+            },
+        },
+        {
+            label: 'Last Month',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0)];
+            },
+        },
+        {
+            label: 'This Year',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), 0, 1), now];
+            },
+        },
+        {
+            label: String(new Date().getFullYear() - 1),
+            range: () => {
+                const year = new Date().getFullYear() - 1;
+                return [new Date(year, 0, 1), new Date(year, 11, 31)];
+            },
+        },
+    ];
+
+    if (quickDatesContainer) {
+        quickDatesContainer.replaceChildren();
+        quickRanges.forEach(({ label, range }) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'range-quick-date-btn';
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                const [startDate, endDate] = range();
+                setQuickDateRange(startDate, endDate);
+            });
+            quickDatesContainer.appendChild(button);
+        });
     }
 
     flatpickr(rangeInput, {
@@ -1473,13 +1572,6 @@ document.addEventListener('DOMContentLoaded', function () {
         allowInput: false,
         defaultDate: [startHidden.value, endHidden.value],
         onChange: function(selectedDates) {
-            const fmt = (value) => {
-                const year = value.getFullYear();
-                const month = String(value.getMonth() + 1).padStart(2, '0');
-                const day = String(value.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
-
             if (selectedDates.length === 1) {
                 startHidden.value = fmt(selectedDates[0]);
                 endHidden.value = fmt(selectedDates[0]);

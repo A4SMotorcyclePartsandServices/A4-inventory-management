@@ -265,6 +265,15 @@ function Remove-OldDumpFiles {
     return $removedCount
 }
 
+function Get-LocalPythonPath {
+    $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+    if (Test-Path -LiteralPath $venvPython) {
+        return $venvPython
+    }
+
+    return Get-CommandPath -Name "python.exe"
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $resolvedEnvFile = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
     $EnvFile
@@ -321,6 +330,7 @@ $pgDump = Get-CommandPath -Name "pg_dump.exe"
 $pgRestore = Get-CommandPath -Name "pg_restore.exe"
 $dropDb = Get-CommandPath -Name "dropdb.exe"
 $createDb = Get-CommandPath -Name "createdb.exe"
+$python = Get-LocalPythonPath
 
 if ($ProdDatabaseUrl) {
     Write-Step "Using production database URL provided directly"
@@ -457,6 +467,17 @@ $restoreArgs += @(
 )
 Invoke-Checked -FilePath $pgRestore -Arguments $restoreArgs -EnvironmentOverrides @{
     PGPASSWORD = $localPassword
+}
+
+Write-Step "Creating local staff account"
+$seedStaffScript = Join-Path $PSScriptRoot "seed_local_staff_user.py"
+Invoke-Checked -FilePath $python -Arguments @($seedStaffScript) -EnvironmentOverrides @{
+    DB_HOST = $localHost
+    DB_PORT = $localPort
+    DB_NAME = $localDatabase
+    DB_USER = $localUser
+    DB_PASSWORD = $localPassword
+    LOCAL_REFRESH_ENV_FILE = $resolvedEnvFile
 }
 
 Write-Step "Refresh complete"

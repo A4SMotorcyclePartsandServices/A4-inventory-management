@@ -118,10 +118,10 @@
 
 ## Items page CSV and PDF
 
-- [ ] add new column named total items sold (as of date chosen in range)
-- [ ] need a date range picker
-- [ ] for users, when generating csv hide total items sold column, vendor price column, cost per piece column,
-- [ ] add category before csv generation
+- [X] ~~*add new column named total items sold (as of date chosen in range)*~~ [2026-06-02]
+- [X] ~~*need a date range picker*~~ [2026-06-02]
+- [X] ~~*for users, when generating csv hide total items sold column, vendor price column, cost per piece column,*~~ [2026-06-02]
+- [X] ~~*add category before csv generation*~~ [2026-06-02]
 
 ## Items Analytics Sales History section
 

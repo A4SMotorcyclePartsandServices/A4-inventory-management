@@ -467,6 +467,59 @@
         font-size: 0.8rem;
     }
 
+    .export-date-section {
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border-soft);
+    }
+
+    .export-date-label {
+        display: block;
+        color: var(--text-primary);
+        font-size: 0.82rem;
+        font-weight: 700;
+        margin-bottom: 7px;
+    }
+
+    .export-date-section .form-control {
+        background: #11151d;
+        border: 1px solid var(--border-soft);
+        color: var(--text-primary);
+        border-radius: 10px;
+        font-size: 0.86rem;
+    }
+
+    .export-date-section .form-control:focus {
+        background: #11151d;
+        border-color: var(--accent);
+        color: var(--text-primary);
+        box-shadow: 0 0 0 3px rgba(193, 18, 31, 0.15);
+    }
+
+    .export-quick-dates {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .export-quick-date-btn {
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #9edcf1;
+        border-radius: 999px;
+        padding: 5px 11px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        transition: all 0.15s ease;
+    }
+
+    .export-quick-date-btn:hover {
+        border-color: rgba(103, 194, 228, 0.58);
+        background: rgba(103, 194, 228, 0.16);
+        color: #e7f9ff;
+    }
+
     @media (max-width: 991.98px) {
         .admin-import-card {
             padding: 18px 18px 20px;
@@ -654,12 +707,12 @@
         <i class="bi bi-box me-2" style="color: var(--accent);"></i>Inventory <span>Items</span>
     </div>
     <div class="page-header-actions">
-        <a href="/export/items" class="export-btn">
+        <button type="button" class="export-btn" data-export-format="csv" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
             <i class="bi bi-filetype-csv"></i>
             <span>Export CSV</span>
-        </a>
+        </button>
         {% if session.get('role') == 'admin' %}
-        <button type="button" class="export-btn pdf-btn" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
+        <button type="button" class="export-btn pdf-btn" data-export-format="pdf" data-bs-toggle="modal" data-bs-target="#exportPdfModal">
             <i class="bi bi-filetype-pdf"></i>
             <span>Export PDF</span>
         </button>
@@ -733,18 +786,17 @@
     </div>
 </div>
 
-{% if session.get('role') == 'admin' %}
 <div class="modal fade pdf-filter-modal" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="exportPdfModalLabel">
-                    <i class="bi bi-file-earmark-pdf me-2" style="color: #ff8c96;"></i>Export PDF Report
+                    <i class="bi bi-file-earmark-pdf me-2" style="color: #ff8c96;" id="exportModalIcon"></i><span id="exportModalTitleText">Export PDF Report</span>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="pdf-filter-note">Choose any categories you want. If none are selected, the PDF will include the full item list.</div>
+                <div class="pdf-filter-note" id="exportModalNote">Choose any categories you want. If none are selected, the PDF will include the full item list.</div>
                 <div class="pdf-filter-grid">
                     <div class="pdf-filter-option form-check">
                         <input class="form-check-input pdf-category-checkbox" type="checkbox" value="Oil" id="pdfCategoryOil">
@@ -775,17 +827,38 @@
                         </label>
                     </div>
                 </div>
+                <div class="export-date-section">
+                    <div class="pdf-filter-note mb-2">
+                        Optional sold-date range. Leave both dates blank to count items sold across all time.
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="export-date-label" for="exportStartDate">Start date</label>
+                            <input type="date" class="form-control form-control-sm" id="exportStartDate">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="export-date-label" for="exportEndDate">End date</label>
+                            <input type="date" class="form-control form-control-sm" id="exportEndDate">
+                        </div>
+                    </div>
+                    <div class="export-quick-dates" aria-label="Quick date ranges">
+                        <button type="button" class="export-quick-date-btn" data-export-range="all">All Time</button>
+                        <button type="button" class="export-quick-date-btn" data-export-range="this-month">This Month</button>
+                        <button type="button" class="export-quick-date-btn" data-export-range="last-month">Last Month</button>
+                        <button type="button" class="export-quick-date-btn" data-export-range="this-year">This Year</button>
+                        <span id="exportLastCompletedYearButton"></span>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-danger btn-sm" id="confirmPdfExportBtn">
-                    <i class="bi bi-box-arrow-up-right me-1"></i>Open PDF
+                    <i class="bi bi-box-arrow-up-right me-1" id="exportModalConfirmIcon"></i><span id="exportModalConfirmText">Open PDF</span>
                 </button>
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
 {% endblock %}
 
@@ -802,6 +875,16 @@ const initialBadgeText = itemCountBadge ? itemCountBadge.textContent : "";
 const pdfCategoryCheckboxes = Array.from(document.querySelectorAll('.pdf-category-checkbox'));
 const confirmPdfExportBtn = document.getElementById('confirmPdfExportBtn');
 const exportPdfModalEl = document.getElementById('exportPdfModal');
+const exportModalIcon = document.getElementById('exportModalIcon');
+const exportModalTitleText = document.getElementById('exportModalTitleText');
+const exportModalNote = document.getElementById('exportModalNote');
+const exportModalConfirmIcon = document.getElementById('exportModalConfirmIcon');
+const exportModalConfirmText = document.getElementById('exportModalConfirmText');
+const exportStartDateInput = document.getElementById('exportStartDate');
+const exportEndDateInput = document.getElementById('exportEndDate');
+const exportQuickDatesContainer = document.querySelector('.export-quick-dates');
+const exportLastCompletedYearButton = document.getElementById('exportLastCompletedYearButton');
+let activeExportFormat = 'pdf';
 function escapeHtml(value) {
     return String(value ?? "")
         .replaceAll('&', '&amp;')
@@ -1076,14 +1159,135 @@ function getSelectedPdfCategories() {
         .map(checkbox => checkbox.value);
 }
 
+function formatDateInputValue(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function setExportDateRange(startDate, endDate) {
+    if (exportStartDateInput) {
+        exportStartDateInput.value = startDate ? formatDateInputValue(startDate) : '';
+    }
+    if (exportEndDateInput) {
+        exportEndDateInput.value = endDate ? formatDateInputValue(endDate) : '';
+    }
+}
+
+function setMonthExportDateRange(year, monthIndex) {
+    const firstDay = new Date(year, monthIndex, 1);
+    const lastDay = new Date(year, monthIndex + 1, 0);
+    setExportDateRange(firstDay, lastDay);
+}
+
+function setYearExportDateRange(year) {
+    setExportDateRange(new Date(year, 0, 1), new Date(year, 11, 31));
+}
+
+function renderLastCompletedYearButton() {
+    if (!exportLastCompletedYearButton) return;
+
+    const previousYear = new Date().getFullYear() - 1;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'export-quick-date-btn';
+    button.dataset.exportYear = String(previousYear);
+    button.textContent = String(previousYear);
+    exportLastCompletedYearButton.replaceChildren(button);
+}
+
+function buildCategoryExportUrl(baseUrl) {
+    const selectedCategories = getSelectedPdfCategories();
+    const params = new URLSearchParams();
+    selectedCategories.forEach(category => params.append('category', category));
+    const startDate = exportStartDateInput?.value || '';
+    const endDate = exportEndDateInput?.value || '';
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const queryString = params.toString();
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
+
+if (exportQuickDatesContainer) {
+    exportQuickDatesContainer.addEventListener('click', (event) => {
+        const button = event.target.closest('.export-quick-date-btn');
+        if (!button) return;
+
+        const now = new Date();
+        const range = button.dataset.exportRange;
+        if (range === 'all') {
+            setExportDateRange(null, null);
+            return;
+        }
+        if (range === 'this-month') {
+            setMonthExportDateRange(now.getFullYear(), now.getMonth());
+            return;
+        }
+        if (range === 'last-month') {
+            setMonthExportDateRange(now.getFullYear(), now.getMonth() - 1);
+            return;
+        }
+        if (range === 'this-year') {
+            setYearExportDateRange(now.getFullYear());
+            return;
+        }
+
+        const year = Number(button.dataset.exportYear);
+        if (year > 0) {
+            setYearExportDateRange(year);
+        }
+    });
+}
+
+renderLastCompletedYearButton();
+
+function configureExportModal(format) {
+    activeExportFormat = format === 'csv' ? 'csv' : 'pdf';
+    const isCsv = activeExportFormat === 'csv';
+
+    if (exportModalIcon) {
+        exportModalIcon.className = `bi ${isCsv ? 'bi-filetype-csv' : 'bi-file-earmark-pdf'} me-2`;
+        exportModalIcon.style.color = isCsv ? '#67c2e4' : '#ff8c96';
+    }
+    if (exportModalTitleText) {
+        exportModalTitleText.textContent = isCsv ? 'Export CSV' : 'Export PDF Report';
+    }
+    if (exportModalNote) {
+        exportModalNote.textContent = `Choose any categories you want. If none are selected, the ${isCsv ? 'CSV' : 'PDF'} will include the full item list. Date range only changes the Total Items Sold count.`;
+    }
+    if (exportModalConfirmIcon) {
+        exportModalConfirmIcon.className = `bi ${isCsv ? 'bi-download' : 'bi-box-arrow-up-right'} me-1`;
+    }
+    if (exportModalConfirmText) {
+        exportModalConfirmText.textContent = isCsv ? 'Download CSV' : 'Open PDF';
+    }
+    if (confirmPdfExportBtn) {
+        confirmPdfExportBtn.classList.toggle('btn-danger', !isCsv);
+        confirmPdfExportBtn.classList.toggle('btn-info', isCsv);
+    }
+}
+
+if (exportPdfModalEl) {
+    exportPdfModalEl.addEventListener('show.bs.modal', (event) => {
+        configureExportModal(event.relatedTarget?.dataset.exportFormat);
+    });
+}
+
 if (confirmPdfExportBtn) {
     confirmPdfExportBtn.addEventListener('click', () => {
-        const selectedCategories = getSelectedPdfCategories();
-        const params = new URLSearchParams();
-        selectedCategories.forEach(category => params.append('category', category));
-        const queryString = params.toString();
-        const reportUrl = queryString ? `/reports/items-overall?${queryString}` : '/reports/items-overall';
-        window.open(reportUrl, '_blank', 'noopener');
+        const startDate = exportStartDateInput?.value || '';
+        const endDate = exportEndDateInput?.value || '';
+        if (startDate && endDate && endDate < startDate) {
+            alert('End date cannot be before start date.');
+            return;
+        }
+
+        if (activeExportFormat === 'csv') {
+            window.location.href = buildCategoryExportUrl('/export/items');
+        } else {
+            window.open(buildCategoryExportUrl('/reports/items-overall'), '_blank', 'noopener');
+        }
 
         const modalInstance = bootstrap.Modal.getInstance(exportPdfModalEl);
         if (modalInstance) {

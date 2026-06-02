@@ -469,6 +469,33 @@ WHERE sales_number IS NOT NULL
 ```
 
 Before implementing:
+
 - Check prod for existing active duplicate OR numbers.
+
 - Confirm there is no legitimate workflow where two active sales should share one OR number.
 - Add a friendly validation error on sale save if the OR number is already active.
+
+## Future Date Shortcut Candidates
+
+Skipped for now:
+
+- `templates/users/audit.html`
+
+  - Several admin/audit tabs use date-range filters for investigation:
+    - sales admin
+    - debt summary
+    - audit trail
+    - item edit trail
+    - payables audit
+  - Dynamic year chips could be useful, but the page is already dense and filter-heavy.
+  - Better handled as a broader audit-filter UX pass instead of adding more controls piecemeal.
+
+- `templates/users/users.html`
+  - Contains similar admin/audit date-range filter logic in the older users panel.
+  - Same concern as `templates/users/audit.html`: useful later, but likely needs a coordinated audit-filter cleanup.
+
+- Loyalty period date fields in `templates/users/audit.html` and `templates/users/users.html`
+  - These are program setup/extension fields, not report date ranges.
+  - Quick year chips do not fit because the user is choosing business validity periods, not filtering existing report data.
+
+- Last year button followed by maybe 3 years for the chips at best?

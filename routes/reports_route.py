@@ -66,10 +66,23 @@ def _normalize_requested_item_categories(values):
     return normalized
 
 
-def _get_items_export_rows(selected_categories=None):
+def _get_items_sold_date_filter(start_date=None, end_date=None):
+    filters = []
+    params = []
+    if start_date:
+        filters.append("DATE(s.transaction_date) >= %s")
+        params.append(start_date)
+    if end_date:
+        filters.append("DATE(s.transaction_date) <= %s")
+        params.append(end_date)
+    return "".join(f" AND {condition}" for condition in filters), params
+
+
+def _get_items_export_rows(selected_categories=None, sold_start_date=None, sold_end_date=None):
+    sold_date_sql, sold_date_params = _get_items_sold_date_filter(sold_start_date, sold_end_date)
     conn = get_db()
     try:
-        rows = conn.execute("""
+        rows = conn.execute(f"""
             SELECT
                 i.id,
                 i.name,
@@ -82,7 +95,8 @@ def _get_items_export_rows(selected_categories=None):
                 i.markup,
                 i.reorder_level,
                 COALESCE(v.vendor_name, i.vendor) AS vendor_name,
-                COALESCE(inv.current_stock, 0) AS current_stock
+                COALESCE(inv.current_stock, 0) AS current_stock,
+                COALESCE(sold.total_sold, 0) AS total_sold
             FROM items i
             LEFT JOIN vendors v ON v.id = i.vendor_id
             LEFT JOIN (
@@ -98,8 +112,41 @@ def _get_items_export_rows(selected_categories=None):
                 FROM inventory_transactions
                 GROUP BY item_id
             ) AS inv ON inv.item_id = i.id
+            LEFT JOIN (
+                SELECT
+                    item_id,
+                    SUM(quantity) AS total_sold
+                FROM (
+                    SELECT
+                        si.item_id,
+                        SUM(COALESCE(si.quantity, 0)) AS quantity
+                    FROM sales_items si
+                    JOIN sales s ON s.id = si.sale_id
+                    WHERE s.status = 'Paid'
+                      AND COALESCE(s.is_voided, FALSE) = FALSE
+                      AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                      {sold_date_sql}
+                    GROUP BY si.item_id
+
+                    UNION ALL
+
+                    SELECT
+                        sbi.item_id,
+                        SUM(COALESCE(sbi.quantity, 0)) AS quantity
+                    FROM sales_bundles sb
+                    JOIN sales s ON s.id = sb.sale_id
+                    JOIN sales_bundle_items sbi ON sbi.sales_bundle_id = sb.id
+                    WHERE s.status = 'Paid'
+                      AND COALESCE(s.is_voided, FALSE) = FALSE
+                      AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+                      AND sbi.item_id IS NOT NULL
+                      {sold_date_sql}
+                    GROUP BY sbi.item_id
+                ) sold_rows
+                GROUP BY item_id
+            ) AS sold ON sold.item_id = i.id
             ORDER BY i.name ASC
-        """).fetchall()
+        """, tuple(sold_date_params + sold_date_params)).fetchall()
 
         items = [dict(row) for row in rows]
         attach_restock_recommendation(
@@ -148,6 +195,37 @@ def _get_validated_date_arg(param_name, *, flash_label):
         flash(f"{flash_label} must be a valid date in YYYY-MM-DD format.", "warning")
         return None
     return parsed
+
+
+def _get_optional_export_date_range():
+    start_raw = (request.args.get("start_date") or "").strip()
+    end_raw = (request.args.get("end_date") or "").strip()
+    start_date = _parse_strict_iso_date(start_raw) if start_raw else None
+    end_date = _parse_strict_iso_date(end_raw) if end_raw else None
+
+    if start_raw and start_date is None:
+        flash("Start date must be a valid date in YYYY-MM-DD format.", "warning")
+        return None, None, False
+    if end_raw and end_date is None:
+        flash("End date must be a valid date in YYYY-MM-DD format.", "warning")
+        return None, None, False
+    if start_date and end_date and end_date < start_date:
+        flash("End date cannot be before start date.", "warning")
+        return None, None, False
+
+    return start_date, end_date, True
+
+
+def _format_items_sold_date_scope(start_date=None, end_date=None):
+    if start_date and end_date:
+        if start_date == end_date:
+            return format_date(start_date.isoformat())
+        return f"{format_date(start_date.isoformat())} to {format_date(end_date.isoformat())}"
+    if start_date:
+        return f"From {format_date(start_date.isoformat())}"
+    if end_date:
+        return f"Until {format_date(end_date.isoformat())}"
+    return "All Time"
 
 
 def _loyalty_reward_label(program):
@@ -654,7 +732,11 @@ def mechanic_supply_report():
 @admin_required
 def items_overall_report():
     selected_categories = _normalize_requested_item_categories(request.args.getlist("category"))
-    items = _get_items_export_rows(selected_categories)
+    sold_start_date, sold_end_date, dates_are_valid = _get_optional_export_date_range()
+    if not dates_are_valid:
+        return redirect(url_for("index"))
+
+    items = _get_items_export_rows(selected_categories, sold_start_date, sold_end_date)
     total_stock = sum(int(item.get("current_stock") or 0) for item in items)
     low_stock_count = sum(1 for item in items if item.get("should_restock"))
     total_inventory_cost = round(
@@ -690,6 +772,7 @@ def items_overall_report():
             "potential_inventory_income": potential_inventory_income,
             "low_stock_count": low_stock_count,
             "selected_categories": selected_category_labels,
+            "sold_date_scope": _format_items_sold_date_scope(sold_start_date, sold_end_date),
         },
     )
 
@@ -824,7 +907,12 @@ def export_items_csv():
     Exports the current item catalog shown in the inventory page.
     Includes stored item fields plus computed current stock.
     """
-    rows = _get_items_export_rows()
+    selected_categories = _normalize_requested_item_categories(request.args.getlist("category"))
+    sold_start_date, sold_end_date, dates_are_valid = _get_optional_export_date_range()
+    if not dates_are_valid:
+        return redirect(url_for("index"))
+
+    rows = _get_items_export_rows(selected_categories, sold_start_date, sold_end_date)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -836,35 +924,37 @@ def export_items_csv():
         "Description",
         "Category",
         "Pack Size",
-        "Vendor Price",
-        "Cost Per Piece",
         "Selling Price",
         "Reorder Level",
         "Current Stock",
         "Vendor",
     ]
     if is_admin:
+        headers.insert(5, "Vendor Price")
+        headers.insert(6, "Cost Per Piece")
         headers.insert(8, "Markup (%)")
+        headers.insert(11, "Total Items Sold")
     writer.writerow(headers)
 
     for row in rows:
-        markup_value = row["markup"]
-        markup_percent = round(float(markup_value or 0) * 100, 2)
         csv_row = [
             row["id"],
             row["name"] or "",
             row["description"] or "",
             row["category"] or "",
             row["pack_size"] or "",
-            row["vendor_price"] or 0,
-            row["cost_per_piece"] or 0,
             row["a4s_selling_price"] or 0,
             row["reorder_level"] or 0,
             row["current_stock"] or 0,
             row["vendor_name"] or "",
         ]
         if is_admin:
+            markup_value = row["markup"]
+            markup_percent = round(float(markup_value or 0) * 100, 2)
+            csv_row.insert(5, row["vendor_price"] or 0)
+            csv_row.insert(6, row["cost_per_piece"] or 0)
             csv_row.insert(8, markup_percent)
+            csv_row.insert(11, row["total_sold"] or 0)
         writer.writerow(csv_row)
 
     timestamp = now_local().strftime("%Y%m%d_%H%M%S")

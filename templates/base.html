@@ -1879,6 +1879,7 @@
                         </div>
                         <input type="hidden" name="start_date" id="report-start-hidden">
                         <input type="hidden" name="end_date"   id="report-end-hidden">
+                        <div class="d-flex flex-wrap gap-2 mt-2" data-report-quick-dates data-range-input="#report-date-range" data-start-input="#report-start-hidden" data-end-input="#report-end-hidden"></div>
                     </div>
                     <p class="text small">The report will generate a PDF summary of all transactions, mechanic commissions, items sold, and sale refunds for the selected date range.</p>
                 </div>
@@ -1916,6 +1917,7 @@
                         </div>
                         <input type="hidden" name="start_date" id="summary-report-start-hidden">
                         <input type="hidden" name="end_date" id="summary-report-end-hidden">
+                        <div class="d-flex flex-wrap gap-2 mt-2" data-report-quick-dates data-range-input="#summary-report-date-range" data-start-input="#summary-report-start-hidden" data-end-input="#summary-report-end-hidden"></div>
                     </div>
                     <p class="text small">The summary report generates a shorter PDF with items sold, mechanic payouts, transaction details, and cash ledger totals for the selected date range.</p>
                 </div>
@@ -1953,6 +1955,7 @@
                         </div>
                         <input type="hidden" name="start_date" id="mechanic-supply-start-hidden">
                         <input type="hidden" name="end_date" id="mechanic-supply-end-hidden">
+                        <div class="d-flex flex-wrap gap-2 mt-2" data-report-quick-dates data-range-input="#mechanic-supply-date-range" data-start-input="#mechanic-supply-start-hidden" data-end-input="#mechanic-supply-end-hidden"></div>
                     </div>
                     <p class="text small">The report will generate a dedicated PDF of mechanic supply transactions, attributed mechanics, item revenue references, and item cost totals for the selected date range.</p>
                 </div>
@@ -3207,6 +3210,72 @@ document.addEventListener('DOMContentLoaded', function() {
 */
 
 document.addEventListener('DOMContentLoaded', function() {
+    const formatQuickDate = d => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const setReportQuickRange = (rangeInput, startField, endField, startDate, endDate) => {
+        const startValue = formatQuickDate(startDate);
+        const endValue = formatQuickDate(endDate);
+        startField.value = startValue;
+        endField.value = endValue;
+
+        if (rangeInput?._flatpickr) {
+            rangeInput._flatpickr.setDate([startValue, endValue], true);
+        } else if (rangeInput) {
+            rangeInput.value = `${startValue} to ${endValue}`;
+        }
+    };
+
+    const buildReportQuickRanges = (container, rangeInput, startField, endField) => {
+        const quickRanges = [
+            {
+                label: 'This Month',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), now.getMonth(), 1), now];
+                },
+            },
+            {
+                label: 'Last Month',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0)];
+                },
+            },
+            {
+                label: 'This Year',
+                range: () => {
+                    const now = new Date();
+                    return [new Date(now.getFullYear(), 0, 1), now];
+                },
+            },
+            {
+                label: String(new Date().getFullYear() - 1),
+                range: () => {
+                    const year = new Date().getFullYear() - 1;
+                    return [new Date(year, 0, 1), new Date(year, 11, 31)];
+                },
+            },
+        ];
+
+        container.replaceChildren();
+        quickRanges.forEach(({ label, range }) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-sm btn-outline-info rounded-pill py-1 px-2';
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                const [startDate, endDate] = range();
+                setReportQuickRange(rangeInput, startField, endField, startDate, endDate);
+            });
+            container.appendChild(button);
+        });
+    };
+
     const initializeReportRangePicker = (inputSelector, startSelector, endSelector) => {
         const input = document.querySelector(inputSelector);
         const startField = document.querySelector(startSelector);
@@ -3248,6 +3317,15 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeReportRangePicker('#report-date-range', '#report-start-hidden', '#report-end-hidden');
     initializeReportRangePicker('#summary-report-date-range', '#summary-report-start-hidden', '#summary-report-end-hidden');
     initializeReportRangePicker('#mechanic-supply-date-range', '#mechanic-supply-start-hidden', '#mechanic-supply-end-hidden');
+
+    document.querySelectorAll('[data-report-quick-dates]').forEach(container => {
+        const rangeInput = document.querySelector(container.dataset.rangeInput);
+        const startField = document.querySelector(container.dataset.startInput);
+        const endField = document.querySelector(container.dataset.endInput);
+        if (rangeInput && startField && endField) {
+            buildReportQuickRanges(container, rangeInput, startField, endField);
+        }
+    });
 });
 </script>
 
