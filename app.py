@@ -397,13 +397,45 @@ def items_analytics():
     """
     Inventory and item analytics overview.
     """
+    today = today_local()
+    default_start = today - timedelta(days=29)
+
+    start_date = (request.args.get("start_date") or default_start.isoformat()).strip()
+    end_date = (request.args.get("end_date") or today.isoformat()).strip()
+
+    try:
+        start_obj = date.fromisoformat(start_date)
+        end_obj = date.fromisoformat(end_date)
+    except ValueError:
+        start_obj = default_start
+        end_obj = today
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    start_date = start_obj.isoformat()
+    end_date = end_obj.isoformat()
+
+    try:
+        sales_history_limit = int((request.args.get("sales_history_limit") or "10").strip())
+    except ValueError:
+        sales_history_limit = 10
+    sales_history_limit = max(10, min(sales_history_limit, 50))
+    if sales_history_limit % 10 != 0:
+        sales_history_limit = 10
+
     (
         total_items,
         total_stock,
         low_stock_count,
         top_item,
         items
-    ) = get_dashboard_stats()
+    ) = get_dashboard_stats(start_date=start_date, end_date=end_date)
+    sales_history_data = get_sales_top_items(
+        start_date,
+        end_date,
+        limit=sales_history_limit,
+    )
 
     return render_template(
         "items_analytics.html",
@@ -411,7 +443,11 @@ def items_analytics():
         total_stock=total_stock,
         low_stock_count=low_stock_count,
         top_item=top_item,
-        items=items
+        items=items,
+        start_date=start_date,
+        end_date=end_date,
+        sales_history_items=sales_history_data["items"],
+        sales_history_limit=sales_history_limit,
     )
 
 

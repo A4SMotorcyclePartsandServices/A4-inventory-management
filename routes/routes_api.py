@@ -1,14 +1,42 @@
 from flask import Blueprint, request, jsonify
+from datetime import date, timedelta
 from db.database import get_db
 from auth.utils import admin_required, login_required
 from services.inventory_service import DEMAND_OUT_REASONS
+from utils.timezone import today_local
 
 dashboard_api = Blueprint("dashboard_api", __name__)
+
+
+def _parse_items_analytics_date_range():
+    today = today_local()
+    default_start = today - timedelta(days=29)
+
+    start_date = (request.args.get("start_date") or "").strip()
+    end_date = (request.args.get("end_date") or "").strip()
+
+    if start_date or end_date:
+        try:
+            start_obj = date.fromisoformat(start_date or end_date)
+            end_obj = date.fromisoformat(end_date or start_date)
+        except ValueError:
+            start_obj = default_start
+            end_obj = today
+    else:
+        days = request.args.get("days", default=30, type=int) or 30
+        days = max(1, min(days, 3660))
+        end_obj = today
+        start_obj = today - timedelta(days=days - 1)
+
+    if end_obj < start_obj:
+        start_obj, end_obj = end_obj, start_obj
+
+    return start_obj.isoformat(), end_obj.isoformat()
 
 @dashboard_api.route("/items-analytics/stock-movement")
 @admin_required
 def stock_movement():
-    days = request.args.get("days", default=30, type=int)
+    start_date, end_date = _parse_items_analytics_date_range()
 
     conn = get_db()
     rows = conn.execute("""
@@ -21,10 +49,10 @@ def stock_movement():
                 END
             ) AS net_change
         FROM inventory_transactions
-        WHERE transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
+        WHERE DATE(transaction_date) BETWEEN %s AND %s
         GROUP BY DATE(transaction_date)
         ORDER BY DATE(transaction_date)
-    """, (days,)).fetchall()
+    """, (start_date, end_date)).fetchall()
 
     conn.close()
 
@@ -37,7 +65,7 @@ def stock_movement():
 @admin_required
 def item_movement():
     item_id = request.args.get("item_id", type=int)
-    days = request.args.get("days", default=30, type=int)
+    start_date, end_date = _parse_items_analytics_date_range()
 
     conn = get_db()
 
@@ -52,10 +80,10 @@ def item_movement():
             ) AS net_change
         FROM inventory_transactions
         WHERE item_id = %s
-        AND transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
+        AND DATE(transaction_date) BETWEEN %s AND %s
         GROUP BY DATE(transaction_date)
         ORDER BY DATE(transaction_date)
-    """, (item_id, days)).fetchall()
+    """, (item_id, start_date, end_date)).fetchall()
 
     conn.close()
 
@@ -67,7 +95,7 @@ def item_movement():
 @dashboard_api.route("/items-analytics/top-items")
 @admin_required
 def top_items_chart():
-    days = request.args.get("days", default=30, type=int)
+    start_date, end_date = _parse_items_analytics_date_range()
     conn = get_db()
 
     rows = conn.execute("""
@@ -78,11 +106,11 @@ def top_items_chart():
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
         AND inventory_transactions.change_reason = ANY(%s)
-        AND inventory_transactions.transaction_date >= (NOW() - (%s * INTERVAL '1 day'))
+        AND DATE(inventory_transactions.transaction_date) BETWEEN %s AND %s
         GROUP BY items.id
         ORDER BY total_out DESC
         LIMIT 5
-    """, (list(DEMAND_OUT_REASONS), days)).fetchall()
+    """, (list(DEMAND_OUT_REASONS), start_date, end_date)).fetchall()
 
     conn.close()
 

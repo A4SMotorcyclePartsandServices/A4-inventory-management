@@ -109,7 +109,7 @@ def get_low_stock_items(*, include_watchlist=False, use_cache=True):
     }
     return _copy_low_stock_rows(rows)
 
-def get_dashboard_stats():
+def get_dashboard_stats(start_date=None, end_date=None):
     conn = get_db()
 
     total_items = conn.execute(
@@ -138,17 +138,23 @@ def get_dashboard_stats():
     attach_restock_recommendation(conn, inventory_items, item_id_key="id", category_key="category", current_stock_key="current_stock")
     low_stock_count = sum(1 for item in inventory_items if item.get("should_restock"))
 
-    top_item = conn.execute("""
+    top_item_params = []
+    top_item_date_clause = "AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')"
+    if start_date and end_date:
+        top_item_date_clause = "AND DATE(inventory_transactions.transaction_date) BETWEEN %s AND %s"
+        top_item_params = [start_date, end_date]
+
+    top_item = conn.execute(f"""
         SELECT items.name, SUM(inventory_transactions.quantity) AS total_sold
         FROM inventory_transactions
         JOIN items ON items.id = inventory_transactions.item_id
         WHERE inventory_transactions.transaction_type = 'OUT'
         AND inventory_transactions.change_reason = ANY(%s)
-        AND inventory_transactions.transaction_date >= (NOW() - INTERVAL '30 days')
+        {top_item_date_clause}
         GROUP BY items.id
         ORDER BY total_sold DESC
         LIMIT 1
-    """, (list(DEMAND_OUT_REASONS),)).fetchone()
+    """, [list(DEMAND_OUT_REASONS), *top_item_params]).fetchone()
 
     items = conn.execute("SELECT id, name FROM items").fetchall()
 

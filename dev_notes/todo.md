@@ -125,5 +125,5 @@
 
 ## Items Analytics Sales History section
 
-- [ ] change the range to specific plus the current setup
-- [ ] Item name, current stock, items sold, revenue use selling price,
+- [X] ~~*change the range to specific plus the current setup*~~ [2026-06-03]
+- [X] ~~*Item name, current stock, items sold, revenue use selling price,*~~ [2026-06-03]

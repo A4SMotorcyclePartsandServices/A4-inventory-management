@@ -22,6 +22,259 @@
     
     h3 { color: #e63946; margin-bottom: 1rem; font-size: 1.25rem; }
     label { color: #adb5bd; font-size: 0.9rem; }
+
+    .panel-card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .panel-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.85rem;
+    }
+
+    .panel-title-row h3 {
+        margin-bottom: 0.2rem;
+    }
+
+    .panel-meta {
+        color: #adb5bd;
+        font-size: 0.82rem;
+    }
+
+    .sales-history-filter {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .sales-history-filter .form-label {
+        margin: 0;
+        color: #adb5bd;
+        font-size: 0.76rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+    }
+
+    .sales-history-filter .form-select {
+        width: 130px;
+        height: 34px;
+        background-color: #141821;
+        border-color: #2f3746;
+        color: #f8f9fa;
+        font-weight: 700;
+    }
+
+    .sales-history-table {
+        margin-bottom: 0;
+        table-layout: fixed;
+    }
+
+    .sales-history-table th:nth-child(1) { width: 52%; }
+    .sales-history-table th:nth-child(2),
+    .sales-history-table th:nth-child(3),
+    .sales-history-table th:nth-child(4) { width: 16%; }
+
+    .sales-history-table thead th {
+        color: #e63946;
+        background: #151922;
+        border-color: #333;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .sales-history-table tbody td {
+        border-color: #333;
+        vertical-align: middle;
+    }
+
+    .sales-history-table .sales-history-item-cell {
+        cursor: help;
+        overflow: hidden;
+    }
+
+    .sales-history-table .sales-history-item-cell:hover {
+        white-space: normal !important;
+        word-break: break-word;
+        background: #1a1d26 !important;
+        z-index: 10;
+        position: relative;
+        overflow: visible;
+    }
+
+    .sales-history-table .item-name {
+        color: #f8f9fa;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sales-history-table .item-description {
+        margin-top: 0.25rem;
+        color: #adb5bd;
+        font-size: 0.82rem;
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sales-history-table .sales-history-item-cell:hover .item-name,
+    .sales-history-table .sales-history-item-cell:hover .item-description {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
+    .sales-history-table .number-cell {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .empty-table {
+        color: #adb5bd;
+        text-align: center;
+        padding: 1.25rem !important;
+    }
+
+    .analytics-controls {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+        gap: 1.5rem;
+        margin: -0.25rem 0 1.35rem;
+    }
+
+    .analytics-control-card {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        min-width: 0;
+    }
+
+    .range-form {
+        display: grid;
+        gap: 0.65rem;
+        min-width: 0;
+    }
+
+    .range-field {
+        display: grid;
+        gap: 0.55rem;
+        min-width: 0;
+    }
+
+    .range-input-row {
+        display: grid;
+        grid-template-columns: minmax(280px, 420px) minmax(140px, 180px);
+        gap: 0.65rem;
+        align-items: center;
+    }
+
+    .range-field .form-label {
+        grid-column: 1 / -1;
+        margin: 0;
+        font-size: 0.76rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 700;
+    }
+
+    .range-field .form-control {
+        height: 38px;
+        background-color: #141821;
+        border-color: #2f3746;
+        font-weight: 700;
+    }
+
+    .range-form .btn[type="submit"] {
+        min-height: 38px;
+        padding-inline: 1rem;
+        width: 100%;
+    }
+
+    .range-quick-dates {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin: 0;
+    }
+
+    .range-quick-date-btn {
+        border: 1px solid rgba(103, 194, 228, 0.35);
+        background: rgba(103, 194, 228, 0.08);
+        color: #9edcf1;
+        border-radius: 999px;
+        padding: 0.28rem 0.65rem;
+        font-size: 0.74rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .range-quick-date-btn:hover {
+        border-color: rgba(103, 194, 228, 0.58);
+        background: rgba(103, 194, 228, 0.16);
+        color: #e7f9ff;
+    }
+
+    .analytics-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        height: 100%;
+    }
+
+    .analytics-actions .btn {
+        min-height: 34px;
+        flex: 1 1 180px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 767.98px) {
+        .analytics-controls {
+            grid-template-columns: 1fr;
+            margin-top: 0;
+        }
+
+        .range-field {
+            grid-template-columns: 1fr;
+        }
+
+        .range-input-row {
+            grid-template-columns: 1fr;
+        }
+
+        .range-form .btn {
+            min-height: 44px;
+            width: 100%;
+        }
+
+        .analytics-actions {
+            flex-direction: column;
+        }
+
+        .analytics-actions .btn {
+            width: 100%;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -47,30 +300,40 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card p-3 shadow-sm" style="border-left-color: #4cc9f0;">
-            <label>Top Moving Item (30d)</label>
+            <label>Top Moving Item</label>
             <h2 class="mb-0 text-info" style="font-size: 1.2rem;">{{ top_item.name if top_item else "N/A" }}</h2>
         </div>
     </div>
 </div>
 
-<div class="row mb-4 align-items-end">
-    <div class="col-md-4">
-        <label for="range" class="form-label"><i class="bi bi-calendar3"></i> Global Time Range:</label>
-        <select id="range" class="form-select">
-            <option value="7">Last 7 Days</option>
-            <option value="30" selected>Last 30 Days</option>
-            <option value="90">Last 90 Days</option>
-        </select>
-    </div>
-    <div class="col-md-8 text-end">
+<div class="analytics-controls">
+    <form method="GET" action="/items-analytics" class="analytics-control-card range-form">
+        <div class="range-field">
+            <label for="items-analytics-range" class="form-label"><i class="bi bi-calendar3"></i> Global Time Range</label>
+            <div class="range-input-row">
+                <input
+                    type="text"
+                    id="items-analytics-range"
+                    class="form-control"
+                    value="{{ start_date }} to {{ end_date }}"
+                    placeholder="Select date range"
+                >
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-funnel me-1"></i> Apply Range
+                </button>
+            </div>
+            <input type="hidden" name="start_date" id="items-analytics-start" value="{{ start_date }}">
+            <input type="hidden" name="end_date" id="items-analytics-end" value="{{ end_date }}">
+            <input type="hidden" name="sales_history_limit" value="{{ sales_history_limit }}">
+            <div class="range-quick-dates" id="items-analytics-quick-dates" aria-label="Quick date ranges"></div>
+        </div>
+    </form>
+    <div class="analytics-control-card analytics-actions">
         <a href="/export/inventory-snapshot" class="btn btn-success btn-sm">
             <i class="bi bi-box-seam"></i> Export Items CSV
         </a>
-        <a href="/export/transactions" class="btn btn-danger btn-sm ms-2">
+        <a href="/export/transactions" class="btn btn-danger btn-sm">
             <i class="bi bi-download"></i> Export Transactions CSV
-        </a>
-        <a href="/" class="btn btn-outline-secondary btn-sm ms-2">
-            <i class="bi bi-arrow-left"></i> Back
         </a>
     </div>
 </div>
@@ -88,6 +351,63 @@
         <div class="chart-container">
             <canvas id="topItemsChart"></canvas>
         </div>
+    </div>
+</div>
+
+<div class="panel-card">
+    <div class="panel-title-row">
+        <div>
+            <h3><i class="bi bi-receipt-cutoff"></i> Sales History</h3>
+            <div class="panel-meta">Paid item sales within the selected global time range.</div>
+        </div>
+        <form method="GET" action="/items-analytics" class="sales-history-filter">
+            <input type="hidden" name="start_date" value="{{ start_date }}">
+            <input type="hidden" name="end_date" value="{{ end_date }}">
+            <label for="sales-history-limit" class="form-label">Show</label>
+            <select
+                id="sales-history-limit"
+                name="sales_history_limit"
+                class="form-select form-select-sm"
+                onchange="this.form.submit()"
+            >
+                {% for limit in [10, 20, 30, 40, 50] %}
+                <option value="{{ limit }}" {% if limit == sales_history_limit %}selected{% endif %}>Top {{ limit }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-dark table-striped align-middle sales-history-table">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th class="number-cell">Current Stock</th>
+                    <th class="number-cell">Items Sold</th>
+                    <th class="number-cell">Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if sales_history_items %}
+                    {% for row in sales_history_items %}
+                    <tr>
+                        <td class="sales-history-item-cell">
+                            <div class="item-name">{{ row.name }}</div>
+                            {% if row.description %}
+                            <div class="item-description">{{ row.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="number-cell">{{ row.current_stock }}</td>
+                        <td class="number-cell">{{ row.quantity_sold }}</td>
+                        <td class="number-cell">PHP {{ "{:,.2f}".format(row.total_revenue) }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4" class="empty-table">No paid item sales found for this date range.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -135,10 +455,21 @@ const chartOptions = {
 };
 
 let stockChart, itemChart, topItemsChart;
-let selectedDays = 30;
+let selectedItemId = "";
+const rangeInput = document.getElementById("items-analytics-range");
+const startHidden = document.getElementById("items-analytics-start");
+const endHidden = document.getElementById("items-analytics-end");
+const quickDatesContainer = document.getElementById("items-analytics-quick-dates");
 
-function loadChart(days) {
-    fetch(`/items-analytics/stock-movement?days=${days}`)
+function currentRangeParams() {
+    return new URLSearchParams({
+        start_date: startHidden?.value || "{{ start_date }}",
+        end_date: endHidden?.value || "{{ end_date }}",
+    }).toString();
+}
+
+function loadChart() {
+    fetch(`/items-analytics/stock-movement?${currentRangeParams()}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("stockChart").getContext("2d");
@@ -161,8 +492,8 @@ function loadChart(days) {
         });
 }
 
-function loadItemChart(itemId, days = 30) {
-    fetch(`/items-analytics/item-movement?item_id=${itemId}&days=${days}`)
+function loadItemChart(itemId) {
+    fetch(`/items-analytics/item-movement?item_id=${itemId}&${currentRangeParams()}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("itemChart").getContext("2d");
@@ -183,8 +514,8 @@ function loadItemChart(itemId, days = 30) {
         });
 }
 
-function loadTopItemsChart(days = 30) {
-    fetch(`/items-analytics/top-items?days=${days}`)
+function loadTopItemsChart() {
+    fetch(`/items-analytics/top-items?${currentRangeParams()}`)
         .then(res => res.json())
         .then(data => {
             const ctx = document.getElementById("topItemsChart").getContext("2d");
@@ -204,33 +535,116 @@ function loadTopItemsChart(days = 30) {
         });
 }
 
-document.getElementById("range").addEventListener("change", function() {
-    selectedDays = this.value;
-    loadChart(selectedDays);
-    loadTopItemsChart(selectedDays);
-    // Note: You'll need to handle updating itemChart here if an item is selected
-});
-
 document.getElementById("itemSearch").addEventListener("input", function () {
     const val = this.value;
     const opts = document.getElementById('itemOptions').options;
     for (let i = 0; i < opts.length; i++) {
         if (opts[i].value === val) {
-            const itemId = opts[i].getAttribute('data-id');
-            loadItemChart(itemId, selectedDays);
+            selectedItemId = opts[i].getAttribute('data-id');
+            loadItemChart(selectedItemId);
             break;
         }
     }
 });
 
+document.addEventListener('DOMContentLoaded', function () {
+    if (!rangeInput || !startHidden || !endHidden || typeof flatpickr !== 'function') {
+        return;
+    }
+
+    const fmt = (value) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const setQuickDateRange = (startDate, endDate) => {
+        const startValue = fmt(startDate);
+        const endValue = fmt(endDate);
+        startHidden.value = startValue;
+        endHidden.value = endValue;
+        if (rangeInput._flatpickr) {
+            rangeInput._flatpickr.setDate([startValue, endValue], true);
+        } else {
+            rangeInput.value = `${startValue} to ${endValue}`;
+        }
+    };
+
+    const quickRanges = [
+        {
+            label: 'This Month',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), now.getMonth(), 1), now];
+            },
+        },
+        {
+            label: 'Last Month',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), now.getMonth() - 1, 1), new Date(now.getFullYear(), now.getMonth(), 0)];
+            },
+        },
+        {
+            label: 'This Year',
+            range: () => {
+                const now = new Date();
+                return [new Date(now.getFullYear(), 0, 1), now];
+            },
+        },
+        {
+            label: String(new Date().getFullYear() - 1),
+            range: () => {
+                const year = new Date().getFullYear() - 1;
+                return [new Date(year, 0, 1), new Date(year, 11, 31)];
+            },
+        },
+    ];
+
+    if (quickDatesContainer) {
+        quickDatesContainer.replaceChildren();
+        quickRanges.forEach(({ label, range }) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'range-quick-date-btn';
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                const [startDate, endDate] = range();
+                setQuickDateRange(startDate, endDate);
+            });
+            quickDatesContainer.appendChild(button);
+        });
+    }
+
+    flatpickr(rangeInput, {
+        mode: 'range',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'M j, Y',
+        allowInput: false,
+        defaultDate: [startHidden.value, endHidden.value],
+        onChange: function(selectedDates) {
+            if (selectedDates.length === 1) {
+                startHidden.value = fmt(selectedDates[0]);
+                endHidden.value = fmt(selectedDates[0]);
+            } else if (selectedDates.length === 2) {
+                startHidden.value = fmt(selectedDates[0]);
+                endHidden.value = fmt(selectedDates[1]);
+            }
+        },
+    });
+});
+
 // Initial Load
-loadChart(30);
-loadTopItemsChart(30);
+loadChart();
+loadTopItemsChart();
 const firstItemId = "{{ items[0].id if items else '' }}";
 const firstItemName = "{{ items[0].name if items else '' }}";
 if (firstItemId) {
+    selectedItemId = firstItemId;
     document.getElementById("itemSearch").value = firstItemName;
-    loadItemChart(firstItemId, 30);
+    loadItemChart(firstItemId);
 }
 </script>
 {% endblock %}
