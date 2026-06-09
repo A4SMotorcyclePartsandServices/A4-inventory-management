@@ -745,6 +745,77 @@ def resubmit_request(approval_request_id, requester_id, metadata=None, notes=Non
             conn.close()
 
 
+def record_admin_approved_edit(approval_request_id, admin_user_id, metadata=None, notes=None, change_entries=None, external_conn=None):
+    metadata = _coerce_metadata(metadata) if metadata is not None else None
+    cleaned_notes = str(notes or "").strip()
+    cleaned_change_entries = []
+    for entry in change_entries or []:
+        change_scope = str(entry.get("change_scope") or "").strip().upper()
+        field_name = str(entry.get("field_name") or "").strip()
+        change_label = str(entry.get("change_label") or "").strip()
+        if change_scope not in {"HEADER", "ITEM"} or not field_name or not change_label:
+            raise ValueError("Invalid approved edit change entry.")
+        cleaned_change_entries.append(
+            {
+                "change_scope": change_scope,
+                "item_id": entry.get("item_id"),
+                "item_name": entry.get("item_name"),
+                "field_name": field_name,
+                "before_value": entry.get("before_value"),
+                "after_value": entry.get("after_value"),
+                "change_label": change_label,
+            }
+        )
+
+    conn = external_conn if external_conn else get_db()
+    try:
+        if not external_conn:
+            conn.execute("BEGIN")
+        row = _get_request_row(conn, approval_request_id)
+        if not row:
+            raise ValueError("Approval request not found.")
+        if row["status"] != "APPROVED":
+            raise ValueError("Only approved requests can be edited by admin.")
+
+        next_metadata = metadata if metadata is not None else (row["metadata"] or {})
+        now = _now()
+        conn.execute(
+            """
+            UPDATE approval_requests
+            SET last_submitted_at = %s,
+                current_revision_no = current_revision_no + 1,
+                metadata = %s
+            WHERE id = %s
+            """,
+            (now, _jsonb(next_metadata), approval_request_id),
+        )
+        action_id = _insert_action(
+            conn,
+            approval_request_id,
+            "EDITED_AFTER_APPROVAL",
+            admin_user_id,
+            "APPROVED",
+            "APPROVED",
+            cleaned_notes or None,
+        )
+        _insert_resubmission_changes(
+            conn,
+            approval_request_id=approval_request_id,
+            approval_action_id=action_id,
+            change_entries=cleaned_change_entries,
+        )
+        if not external_conn:
+            conn.commit()
+        return get_approval_request(approval_request_id, external_conn=conn)
+    except Exception:
+        if not external_conn:
+            conn.rollback()
+        raise
+    finally:
+        if not external_conn:
+            conn.close()
+
+
 def can_requester_edit_request(request_row, requester_id):
     if not request_row:
         return False

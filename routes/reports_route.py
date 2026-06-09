@@ -567,15 +567,20 @@ def purchase_order_report(po_id):
     for idx, row in enumerate(items, start=1):
         item = dict(row)
         qty_ordered = int(item.get("quantity_ordered") or 0)
+        qty_received = int(item.get("quantity_received") or 0)
         unit_cost = float(item.get("unit_cost") or 0)
+        remaining_qty = max(qty_ordered - qty_received, 0)
+        received_line_total = float(item.get("received_line_total") or 0)
+        subtotal = received_line_total + (remaining_qty * unit_cost) if received_line_total else qty_ordered * unit_cost
         report_data["items"].append({
             "item_no": idx,
             "name": item.get("name") or "",
             "quantity_ordered": qty_ordered,
-            "quantity_received": int(item.get("quantity_received") or 0),
+            "quantity_received": qty_received,
             "unit_cost": unit_cost,
             "purchase_mode": item.get("purchase_mode") or "PIECE",
-            "subtotal": qty_ordered * unit_cost,
+            "received_line_total": received_line_total,
+            "subtotal": subtotal,
         })
 
     rows_per_page = 18

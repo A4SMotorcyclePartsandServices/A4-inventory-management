@@ -926,7 +926,9 @@ def export_purchase_order_csv(po_id):
         qty_received = int(item.get("quantity_received") or 0)
         unit_cost = float(item.get("unit_cost") or 0)
         purchase_mode = str(item.get("purchase_mode") or "PIECE").strip().upper()
-        subtotal = qty_ordered * unit_cost
+        remaining_qty = max(qty_ordered - qty_received, 0)
+        received_line_total = float(item.get("received_line_total") or 0)
+        subtotal = received_line_total + (remaining_qty * unit_cost) if received_line_total else qty_ordered * unit_cost
         total_qty_ordered += qty_ordered
         total_qty_received += qty_received
         grand_total += subtotal

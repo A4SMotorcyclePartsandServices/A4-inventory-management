@@ -259,6 +259,14 @@
         white-space: normal;
     }
 
+    .review-item-description {
+        margin-top: 4px;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        line-height: 1.35;
+        white-space: normal;
+    }
+
     .purchase-mode-note {
         margin-top: 6px;
         font-size: 0.76rem;
@@ -705,6 +713,11 @@
                 <i class="bi bi-truck me-1"></i> Receive
             </a>
             {% endif %}
+            {% if permissions.can_admin_edit_approved or permissions.can_admin_edit_partial_cost %}
+            <a href="/transaction/order?po_id={{ po.id }}" class="btn btn-warning">
+                <i class="bi bi-pencil-square me-1"></i> Edit PO
+            </a>
+            {% endif %}
             {% if po.status == 'FOR_APPROVAL' and permissions.can_admin_approve %}
             <button type="button" class="btn btn-success" id="reviewApproveBtn">
                 <i class="bi bi-check2-circle me-1"></i> Approve PO
@@ -753,15 +766,18 @@
                     {% set ordered_qty = item.quantity_ordered or 0 %}
                     {% set delivered_qty = item.quantity_received or 0 %}
                     {% set unit_cost = item.unit_cost or 0 %}
-                    {% set ordered_total = ordered_qty * unit_cost %}
-                    {% set delivered_total = delivered_qty * unit_cost %}
                     {% set remaining_qty = ordered_qty - delivered_qty %}
                     {% set remaining_balance = remaining_qty * unit_cost %}
+                    {% set delivered_total = item.received_line_total if is_partial_delivery else delivered_qty * unit_cost %}
+                    {% set ordered_total = delivered_total + remaining_balance if is_partial_delivery else ordered_qty * unit_cost %}
                     {% set summary.delivered = summary.delivered + delivered_total %}
                     {% set summary.remaining = summary.remaining + remaining_balance %}
                     <tr>
                         <td>
                             {{ item.name }}
+                            {% if item.description %}
+                            <div class="review-item-description">{{ item.description }}</div>
+                            {% endif %}
                             <div class="purchase-mode-note">
                                 Ordered as {% if (item.purchase_mode or 'PIECE') == 'BOX' %}box-based{% else %}piece-based{% endif %}.
                             </div>

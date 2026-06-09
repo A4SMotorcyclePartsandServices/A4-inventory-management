@@ -2133,7 +2133,8 @@ async function openOrderDetails(poId) {
         const editBtn = document.getElementById('editBtn');
         const isAdminReadyToReceive = currentRole === 'admin' && currentPoStatus === 'PENDING';
         const isUserReadyToReceive = currentRole !== 'admin' && currentPoStatus === 'PENDING';
-        editBtn.style.display = data.permissions?.can_edit && !isUserReadyToReceive && !isAdminReadyToReceive ? 'inline-flex' : 'none';
+        const canUseAdminApprovedEdit = Boolean(data.permissions?.can_admin_edit_approved || data.permissions?.can_admin_edit_partial_cost);
+        editBtn.style.display = data.permissions?.can_edit && (canUseAdminApprovedEdit || (!isUserReadyToReceive && !isAdminReadyToReceive)) ? 'inline-flex' : 'none';
         editBtn.href = `/transaction/order?po_id=${poId}`;
 
         const cancelBtn = document.getElementById('cancelBtn');
@@ -2181,10 +2182,10 @@ async function openOrderDetails(poId) {
             const unitCost = Number(item.unit_cost || 0);
             const orderedQty = Number(item.quantity_ordered || 0);
             const deliveredQty = Number(item.quantity_received || 0);
-            const orderedSubtotal = orderedQty * unitCost;
-            const deliveredSubtotal = deliveredQty * unitCost;
             const remainingQty = Math.max(orderedQty - deliveredQty, 0);
             const remainingBalance = remainingQty * unitCost;
+            const deliveredSubtotal = isPartialDelivery ? Number(item.received_line_total || 0) : deliveredQty * unitCost;
+            const orderedSubtotal = isPartialDelivery ? deliveredSubtotal + remainingBalance : orderedQty * unitCost;
             const purchaseMode = String(item.purchase_mode || 'PIECE').toUpperCase();
             const orderedQtyLabel = formatOrderedUnitCount(orderedQty, purchaseMode);
             const deliveredQtyLabel = formatOrderedUnitCount(deliveredQty, purchaseMode);

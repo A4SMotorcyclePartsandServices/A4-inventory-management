@@ -12,6 +12,7 @@ from services.approval_service import (
     create_approval_request,
     get_approval_request_by_entity,
     get_approval_request_with_history,
+    record_admin_approved_edit,
     request_revisions,
     resubmit_request,
 )
@@ -3087,6 +3088,7 @@ def _get_po_items(conn, po_id):
                 FROM po_items other_pi
                 JOIN purchase_orders other_po ON other_po.id = other_pi.po_id
                 WHERE other_pi.item_id = pi.item_id
+                  AND other_pi.po_id <> pi.po_id
                   AND COALESCE(other_pi.purchase_mode, 'PIECE') = 'PIECE'
                   AND other_po.status IN ('PENDING', 'PARTIAL')
                   AND other_pi.quantity_ordered > other_pi.quantity_received
@@ -3097,10 +3099,18 @@ def _get_po_items(conn, po_id):
                 FROM po_items other_pi
                 JOIN purchase_orders other_po ON other_po.id = other_pi.po_id
                 WHERE other_pi.item_id = pi.item_id
+                  AND other_pi.po_id <> pi.po_id
                   AND COALESCE(other_pi.purchase_mode, 'PIECE') = 'BOX'
                   AND other_po.status IN ('PENDING', 'PARTIAL')
                   AND other_pi.quantity_ordered > other_pi.quantity_received
             ), 0) AS pending_box_quantity
+            ,
+            COALESCE((
+                SELECT SUM(pri.line_total)
+                FROM po_receipt_items pri
+                WHERE pri.po_id = pi.po_id
+                  AND pri.item_id = pi.item_id
+            ), 0) AS received_line_total
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
@@ -3220,6 +3230,33 @@ def _replace_po_items_and_order_transactions(conn, po_id, items, user_id, userna
         )
 
     return total_order_amount
+
+
+def _replace_po_order_transactions(conn, po_id, items, user_id, username, clean_time):
+    conn.execute(
+        """
+        DELETE FROM inventory_transactions
+        WHERE reference_type = 'PURCHASE_ORDER'
+          AND reference_id = %s
+          AND transaction_type = 'ORDER'
+        """,
+        (po_id,),
+    )
+
+    for item in items:
+        add_transaction(
+            item_id=item["item_id"],
+            quantity=item["qty"],
+            transaction_type='ORDER',
+            user_id=user_id,
+            user_name=username,
+            reference_id=po_id,
+            reference_type='PURCHASE_ORDER',
+            change_reason='ORDER_PLACEMENT',
+            unit_price=item["cost"],
+            transaction_date=clean_time,
+            external_conn=conn
+        )
 
 
 def _sync_po_item_vendors(conn, items, vendor_id):
@@ -3410,6 +3447,57 @@ def _build_po_change_entries(previous_po, previous_items, normalized_payload):
     return change_entries
 
 
+def _assert_same_po_header_for_admin_edit(po, normalized_payload):
+    if int(po["vendor_id"] or 0) != int(normalized_payload["vendor_id"] or 0):
+        raise ValueError("Approved PO admin edit cannot change the vendor.")
+
+    previous_notes = str(po["notes"] or "").strip()
+    next_notes = str(normalized_payload.get("notes") or "").strip()
+    if previous_notes != next_notes:
+        raise ValueError("Approved PO admin edit cannot change PO notes.")
+
+
+def _validate_admin_approved_po_items(current_items, normalized_items, *, allow_quantity_edit):
+    current_by_item = {int(item["item_id"]): item for item in current_items}
+    next_by_item = {int(item["item_id"]): item for item in normalized_items}
+    if set(current_by_item) != set(next_by_item):
+        raise ValueError("Approved PO admin edit cannot add or remove items.")
+
+    for item_id, current_item in current_by_item.items():
+        next_item = next_by_item[item_id]
+        current_mode = _normalize_po_purchase_mode(current_item.get("purchase_mode"))
+        next_mode = _normalize_po_purchase_mode(next_item.get("purchase_mode"))
+        if current_mode != next_mode:
+            raise ValueError("Approved PO admin edit cannot change purchase mode.")
+
+        current_received = int(current_item["quantity_received"] or 0)
+        current_ordered = int(current_item["quantity_ordered"] or 0)
+        next_ordered = int(next_item["qty"] or 0)
+        next_cost = float(next_item["cost"] or 0)
+
+        if next_cost <= 0:
+            raise ValueError("Unit cost must be greater than 0 for approved PO edits.")
+        if next_ordered < current_received:
+            raise ValueError("Ordered quantity cannot be lower than already received quantity.")
+        if not allow_quantity_edit and next_ordered != current_ordered:
+            raise ValueError("Partial delivery PO quantity cannot be changed.")
+        if current_received >= current_ordered and abs(float(current_item["unit_cost"] or 0) - next_cost) > 0.0001:
+            raise ValueError("Fully received PO item cost cannot be changed.")
+
+
+def _calculate_admin_po_total(current_items, normalized_items):
+    current_by_item = {int(item["item_id"]): item for item in current_items}
+    total = 0.0
+    for item in normalized_items:
+        current_item = current_by_item[int(item["item_id"])]
+        ordered_qty = int(item["qty"] or 0)
+        received_qty = int(current_item["quantity_received"] or 0)
+        remaining_qty = max(ordered_qty - received_qty, 0)
+        received_total = float(current_item["received_line_total"] or 0)
+        total += received_total + (remaining_qty * float(item["cost"] or 0))
+    return round(total, 2)
+
+
 def _serialize_po_permissions(po_row, approval_data, total_received, current_user_id, current_role):
     approval_status = (approval_data or {}).get("status")
     is_creator = int(po_row["created_by"] or 0) == int(current_user_id or 0)
@@ -3423,6 +3511,19 @@ def _serialize_po_permissions(po_row, approval_data, total_received, current_use
         and total_received == 0
         and approval_status in PO_EDITABLE_APPROVAL_STATUSES
     )
+    can_admin_edit_approved = (
+        is_admin
+        and approval_status == "APPROVED"
+        and po_status == "PENDING"
+        and total_received == 0
+    )
+    can_admin_edit_partial_cost = (
+        is_admin
+        and approval_status == "APPROVED"
+        and po_status == "PARTIAL"
+        and total_received > 0
+    )
+    can_edit = can_edit or can_admin_edit_approved or can_admin_edit_partial_cost
     can_receive = po_status in PO_RECEIVABLE_STATUSES
 
     if is_admin:
@@ -3437,6 +3538,8 @@ def _serialize_po_permissions(po_row, approval_data, total_received, current_use
 
     return {
         "can_edit": can_edit,
+        "can_admin_edit_approved": can_admin_edit_approved,
+        "can_admin_edit_partial_cost": can_admin_edit_partial_cost,
         "can_cancel": can_cancel,
         "can_receive": can_receive,
         "can_admin_approve": is_admin and not is_review_only and approval_status in {"PENDING", "REVISIONS_NEEDED"},
@@ -3773,7 +3876,13 @@ def get_purchase_order_export_data(po_id):
             pi.quantity_ordered,
             pi.quantity_received,
             pi.unit_cost,
-            COALESCE(pi.purchase_mode, 'PIECE') AS purchase_mode
+            COALESCE(pi.purchase_mode, 'PIECE') AS purchase_mode,
+            COALESCE((
+                SELECT SUM(pri.line_total)
+                FROM po_receipt_items pri
+                WHERE pri.po_id = pi.po_id
+                  AND pri.item_id = pi.item_id
+            ), 0) AS received_line_total
         FROM po_items pi
         JOIN items i ON pi.item_id = i.id
         WHERE pi.po_id = %s
@@ -3915,6 +4024,7 @@ def get_purchase_order_details(po_id, current_user_id=None, current_role=None):
                     "cost_per_piece": float(item["cost_per_piece"] or 0),
                     "current_stock": int(item["current_stock"] or 0),
                     "pending_stock": int(item["pending_stock"] or 0),
+                    "received_line_total": float(item["received_line_total"] or 0),
                     "purchase_mode": _normalize_po_purchase_mode(item.get("purchase_mode")),
                 }
                 for item in items
@@ -4005,13 +4115,97 @@ def update_purchase_order(po_id, data, user_id, username, user_role):
         approval = _get_po_approval(conn, po_id)
         if not approval:
             raise ValueError("Approval request not found for this purchase order.")
+
+        current_items = _get_po_items(conn, po_id)
+        role = str(user_role or "").strip().lower()
+        po_status = (po["status"] or "").upper()
+        approval_status = (approval["status"] or "").upper()
+        total_received = _total_received_quantity(current_items)
+
+        if role == "admin" and approval_status == "APPROVED" and po_status in {"PENDING", "PARTIAL"}:
+            if po_status == "PENDING" and total_received != 0:
+                raise ValueError("Approved PO quantity edits require no received quantities.")
+            if po_status == "PARTIAL" and total_received <= 0:
+                raise ValueError("Partial delivery PO edit requires existing received quantities.")
+
+            vendor_row = _get_active_vendor_by_id(conn, normalized["vendor_id"])
+            if not vendor_row:
+                raise ValueError("Selected vendor was not found or is inactive.")
+            normalized.update(_vendor_snapshot_from_row(vendor_row))
+            _assert_same_po_header_for_admin_edit(po, normalized)
+            _validate_admin_approved_po_items(
+                current_items=current_items,
+                normalized_items=normalized["items"],
+                allow_quantity_edit=(po_status == "PENDING"),
+            )
+
+            change_entries = _build_po_change_entries(po, current_items, normalized)
+            total_order_amount = _calculate_admin_po_total(current_items, normalized["items"])
+
+            if po_status == "PENDING":
+                _replace_po_items_and_order_transactions(
+                    conn=conn,
+                    po_id=po_id,
+                    items=normalized["items"],
+                    user_id=user_id,
+                    username=username,
+                    clean_time=clean_time,
+                )
+            else:
+                for item in normalized["items"]:
+                    conn.execute(
+                        """
+                        UPDATE po_items
+                        SET unit_cost = %s
+                        WHERE po_id = %s AND item_id = %s
+                        """,
+                        (item["cost"], po_id, item["item_id"]),
+                    )
+                _replace_po_order_transactions(
+                    conn=conn,
+                    po_id=po_id,
+                    items=normalized["items"],
+                    user_id=user_id,
+                    username=username,
+                    clean_time=clean_time,
+                )
+
+            conn.execute(
+                """
+                UPDATE purchase_orders
+                SET total_amount = %s
+                WHERE id = %s
+                """,
+                (total_order_amount, po_id),
+            )
+
+            refreshed_po = conn.execute(
+                """
+                SELECT id, po_number, vendor_id, vendor_name, notes, status, total_amount, created_by
+                FROM purchase_orders
+                WHERE id = %s
+                """,
+                (po_id,),
+            ).fetchone()
+            refreshed_items = _get_po_items(conn, po_id)
+            record_admin_approved_edit(
+                approval_request_id=approval["id"],
+                admin_user_id=user_id,
+                metadata=_build_po_approval_metadata(refreshed_po, refreshed_items),
+                notes="Approved purchase order edited by admin.",
+                change_entries=change_entries,
+                external_conn=conn,
+            )
+
+            conn.commit()
+            return get_purchase_order_details(po_id, current_user_id=user_id, current_role=user_role)
+
         if int(po["created_by"] or 0) != int(user_id):
             raise ValueError("Only the creator can edit this purchase order.")
 
-        current_items = _get_po_items(conn, po_id)
-        if _total_received_quantity(current_items) > 0 or (po["status"] or "").upper() in {"PARTIAL", "COMPLETED", "CANCELLED"}:
+        if total_received > 0 or po_status in {"PARTIAL", "COMPLETED", "CANCELLED"}:
             raise ValueError("This purchase order can no longer be edited.")
-        if approval["status"] not in PO_EDITABLE_APPROVAL_STATUSES:
+        if approval_status not in PO_EDITABLE_APPROVAL_STATUSES:
             raise ValueError("This purchase order is not currently editable.")
 
         vendor_row = _get_active_vendor_by_id(conn, normalized["vendor_id"])

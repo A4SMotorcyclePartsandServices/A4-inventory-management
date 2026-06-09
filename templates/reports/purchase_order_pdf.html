@@ -598,10 +598,10 @@
             {% set ordered_qty = item.quantity_ordered or 0 %}
             {% set delivered_qty = item.quantity_received or 0 %}
             {% set unit_cost = item.unit_cost or 0 %}
-            {% set ordered_total = item.subtotal or (ordered_qty * unit_cost) %}
-            {% set delivered_total = delivered_qty * unit_cost %}
             {% set remaining_qty = ordered_qty - delivered_qty %}
             {% set remaining_balance = remaining_qty * unit_cost %}
+            {% set delivered_total = item.received_line_total if is_partial_delivery else delivered_qty * unit_cost %}
+            {% set ordered_total = item.subtotal or (delivered_total + remaining_balance if is_partial_delivery else ordered_qty * unit_cost) %}
             {% set totals.delivered = totals.delivered + delivered_total %}
             {% set totals.remaining = totals.remaining + remaining_balance %}
             {% if is_partial_delivery %}

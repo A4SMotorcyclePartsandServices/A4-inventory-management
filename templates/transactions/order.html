@@ -677,6 +677,8 @@ let itemSearchAbortController = null;
 let isRestoringOrderDraft = false;
 let orderDraftPersistenceDisabled = false;
 let orderPageHiddenAt = null;
+let adminApprovedEditMode = false;
+let adminPartialCostOnlyMode = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const prefilledId = orderUrlParams.get('prefilled_id');
@@ -684,6 +686,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (editingPoId) {
         await loadExistingOrder(editingPoId);
+        if (adminApprovedEditMode) {
+            clearStoredOrderDraft();
+            return;
+        }
         await restoreOrderDraft();
         return;
     }
@@ -818,6 +824,8 @@ function getCurrentOrderItemsSnapshot() {
         current_stock: Number(item.current_stock || 0),
         pending_stock: Number(item.pending_stock || 0),
         pending_box_quantity: Number(item.pending_box_quantity || 0),
+        quantity_received: Number(item.quantity_received || 0),
+        received_line_total: Number(item.received_line_total || 0),
     }));
 }
 
@@ -880,6 +888,10 @@ function flushOrderDraftPersist() {
 }
 
 async function restoreOrderDraft(options = {}) {
+    if (adminApprovedEditMode) {
+        return false;
+    }
+
     const { reason = 'reload' } = options;
     const snapshot = getStoredOrderDraft();
     const state = snapshot?.state;
@@ -901,6 +913,8 @@ async function restoreOrderDraft(options = {}) {
                 current_stock: Number(item.current_stock || 0),
                 pending_stock: Number(item.pending_stock || 0),
                 pending_box_quantity: Number(item.pending_box_quantity || 0),
+                quantity_received: Number(item.quantity_received || 0),
+                received_line_total: Number(item.received_line_total || 0),
             }))
             : [];
 
@@ -1021,6 +1035,13 @@ function validateNewVendorFields(vendor) {
 }
 
 function renderVendorRecommendations() {
+    if (adminApprovedEditMode) {
+        vendorRecommendations.style.display = 'none';
+        vendorRecommendationsMeta.textContent = '';
+        vendorRecommendationChips.innerHTML = '';
+        return;
+    }
+
     const vendorName = vendorSelectedName.textContent.trim();
 
     if (!vendorSelect.value || vendorSelect.value === NEW_VENDOR_OPTION) {
@@ -1131,9 +1152,20 @@ async function loadExistingOrder(poId) {
             throw new Error('This purchase order is not editable anymore.');
         }
 
-        document.querySelector('h2.text-danger').innerHTML = '<i class="fas fa-file-invoice"></i> Edit Purchase Order';
+        adminApprovedEditMode = Boolean(data.permissions?.can_admin_edit_approved || data.permissions?.can_admin_edit_partial_cost);
+        adminPartialCostOnlyMode = Boolean(data.permissions?.can_admin_edit_partial_cost);
+        if (adminApprovedEditMode) {
+            orderDraftPersistenceDisabled = true;
+            clearStoredOrderDraft();
+        }
+
+        document.querySelector('h2.text-danger').innerHTML = adminApprovedEditMode
+            ? '<i class="fas fa-file-invoice"></i> Admin Edit Approved Purchase Order'
+            : '<i class="fas fa-file-invoice"></i> Edit Purchase Order';
         submitOrderBtn.innerHTML = '<i class="fas fa-save"></i> Update Purchase Order';
-        statusBadge.textContent = `Status: ${formatStatusLabel(data.po.status)}`;
+        statusBadge.textContent = adminPartialCostOnlyMode
+            ? `Status: ${formatStatusLabel(data.po.status)} - Cost only`
+            : `Status: ${formatStatusLabel(data.po.status)}`;
 
         if (data.po.vendor_id) {
             selectVendor({
@@ -1149,6 +1181,18 @@ async function loadExistingOrder(poId) {
         }
 
         notesInput.value = data.po.notes || '';
+        if (adminApprovedEditMode) {
+            vendorSelect.disabled = true;
+            clearVendorBtn.disabled = true;
+            clearVendorBtn.style.display = 'none';
+            notesInput.readOnly = true;
+            itemSearch.disabled = true;
+            itemSearch.placeholder = adminPartialCostOnlyMode
+                ? 'Partial delivery: only remaining unit costs can be edited'
+                : 'Approved PO: edit existing quantity and unit cost only';
+            searchResults.style.display = 'none';
+            vendorRecommendations.style.display = 'none';
+        }
         renderRevisionTracker(data.approval);
         orderItems = (data.items || []).map(item => ({
             id: item.item_id,
@@ -1160,7 +1204,9 @@ async function loadExistingOrder(poId) {
             default_piece_cost: item.cost_per_piece || item.unit_cost,
             current_stock: item.current_stock || 0,
             pending_stock: item.pending_stock || 0,
-            pending_box_quantity: item.pending_box_quantity || 0
+            pending_box_quantity: item.pending_box_quantity || 0,
+            quantity_received: item.quantity_received || 0,
+            received_line_total: item.received_line_total || 0
         }));
         renderTable();
     } catch (error) {
@@ -1174,6 +1220,10 @@ async function loadExistingOrder(poId) {
 }
 
 function handleVendorSelectionChange() {
+    if (adminApprovedEditMode) {
+        return;
+    }
+
     const selectedValue = vendorSelect.value;
     if (!selectedValue) {
         clearVendorSelection();
@@ -1264,6 +1314,11 @@ document.getElementById('saveNewVendorBtn').addEventListener('click', async () =
 });
 
 itemSearch.addEventListener('input', (e) => {
+    if (adminApprovedEditMode) {
+        searchResults.style.display = 'none';
+        return;
+    }
+
     const query = e.target.value.trim();
     clearTimeout(itemSearchDebounceTimer);
 
@@ -1344,6 +1399,11 @@ function saveDraftBeforeLeaving() {
 }
 
 function addItemToOrder(item) {
+    if (adminApprovedEditMode) {
+        showOrderAlert('Approved PO admin edit can only update existing lines.', 'warning');
+        return;
+    }
+
     if (orderItems.some(i => i.id === item.id)) {
         showOrderAlert('Item already in the list!', 'warning');
         return;
@@ -1396,6 +1456,13 @@ function renderTable() {
         const costHint = purchaseMode === 'BOX'
             ? 'Use cost of 1 box/plastic only.'
             : 'Use cost of 1 piece only.';
+        const receivedQty = Number(item.quantity_received || 0);
+        const orderedQty = Number(item.qty || 0);
+        const isFullyReceived = receivedQty >= orderedQty;
+        const modeDisabled = adminApprovedEditMode ? 'disabled' : '';
+        const qtyDisabled = adminPartialCostOnlyMode ? 'disabled' : '';
+        const costDisabled = adminPartialCostOnlyMode && isFullyReceived ? 'disabled' : '';
+        const removeDisabled = adminApprovedEditMode ? 'disabled title="Approved PO admin edit cannot remove items"' : '';
 
         return `
             <tr>
@@ -1423,7 +1490,7 @@ function renderTable() {
                         <div class="order-cell-label-placeholder">mode</div>
                         <div class="order-cell-main is-input">
                             <select class="form-select form-select-sm bg-dark text-white"
-                                onchange="updatePurchaseMode(${index}, this.value)">
+                                onchange="updatePurchaseMode(${index}, this.value)" ${modeDisabled}>
                                 <option value="PIECE" ${purchaseMode === 'PIECE' ? 'selected' : ''}>Piece</option>
                                 <option value="BOX" ${purchaseMode === 'BOX' ? 'selected' : ''}>Box/Plastic</option>
                             </select>
@@ -1436,7 +1503,7 @@ function renderTable() {
                         <div class="order-cell-label order-cell-label-single-line">${purchaseMode === 'BOX' ? 'Boxes' : 'Pieces'}</div>
                         <div class="order-cell-main is-input">
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
-                                value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)">
+                                value="${item.qty}" min="1" onchange="updateQty(${index}, this.value)" ${qtyDisabled}>
                         </div>
                         <div class="order-cell-hint-placeholder">helper</div>
                     </div>
@@ -1448,7 +1515,7 @@ function renderTable() {
                             <input type="number" class="form-control form-control-sm bg-dark text-white"
                                 value="${Number(item.cost || 0)}" step="0.01" min="0"
                                 placeholder="${purchaseMode === 'BOX' ? 'Enter box cost' : 'Enter piece cost'}"
-                                onchange="updateCost(${index}, this.value)">
+                                onchange="updateCost(${index}, this.value)" ${costDisabled}>
                         </div>
                         ${getBoxCostWarning(item)
                             ? `<div class="order-cost-warning" style="display:block;">${escapeHtml(getBoxCostWarning(item))}</div>`
@@ -1468,7 +1535,7 @@ function renderTable() {
                     <div class="order-cell-stack">
                         <div class="order-cell-label-placeholder">action</div>
                         <div class="order-cell-main">
-                            <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})">&times;</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeItem(${index})" ${removeDisabled}>&times;</button>
                         </div>
                         <div class="order-cell-hint-placeholder">helper</div>
                     </div>
@@ -1490,6 +1557,11 @@ function renderTable() {
 }
 
 function updateQty(index, val) {
+    if (adminPartialCostOnlyMode) {
+        renderTable();
+        return;
+    }
+
     orderItems[index].qty = parseInt(val, 10) || 1;
     renderTable();
     scheduleOrderDraftPersist();
@@ -1502,6 +1574,11 @@ function updateCost(index, val) {
 }
 
 function updatePurchaseMode(index, val) {
+    if (adminApprovedEditMode) {
+        renderTable();
+        return;
+    }
+
     orderItems[index].purchase_mode = normalizePurchaseMode(val);
     if (orderItems[index].purchase_mode === 'BOX') {
         orderItems[index].cost = 0;
@@ -1512,6 +1589,11 @@ function updatePurchaseMode(index, val) {
     scheduleOrderDraftPersist();
 }
 function removeItem(index) {
+    if (adminApprovedEditMode) {
+        showOrderAlert('Approved PO admin edit cannot remove items.', 'warning');
+        return;
+    }
+
     orderItems.splice(index, 1);
     renderTable();
     renderVendorRecommendations();
