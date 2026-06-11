@@ -12,6 +12,7 @@ Target: Railway soft deployment tomorrow for internal testing, with planned clie
 - Done: login throttling is now database-backed with 5-day cleanup.
 - Done: the main DOM/XSS hotspots were reduced to low residual risk in [SECURITY_AUDIT.md](/c:/Dev/a4_inventory_system/SECURITY_AUDIT.md).
 - Done: Railway-compatible app startup is ready through [run_waitress.py](/c:/Dev/a4_inventory_system/run_waitress.py).
+- Done: Python runtime is pinned through [.python-version](/c:/Dev/a4_inventory_system/.python-version) so Railway/Nixpacks does not drift to an unavailable latest patch.
 
 ### Tomorrow Soft Deploy
 
