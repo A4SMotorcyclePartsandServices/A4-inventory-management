@@ -1651,6 +1651,28 @@ def add_cash_entry(
                 raise ValueError("Mechanic payout date cannot be in the future.")
             payout_for_date = payout_date_obj.isoformat()
             ledger_created_at = datetime.combine(payout_date_obj, now_local_naive().time())
+
+            from services.reports_service import get_mechanic_payouts_for_date
+
+            expected_payouts = get_mechanic_payouts_for_date(payout_for_date)
+            expected_payout = next(
+                (
+                    payout
+                    for payout in expected_payouts
+                    if int(payout.get("mechanic_id") or 0) == normalized_reference_id
+                ),
+                None,
+            )
+            if not expected_payout:
+                raise ValueError("No calculated mechanic payout was found for this mechanic and date.")
+
+            expected_amount = round(float(expected_payout.get("total_payout") or 0), 2)
+            if round(float(amount), 2) != expected_amount:
+                mechanic_name = expected_payout.get("mechanic_name") or "this mechanic"
+                raise ValueError(
+                    f"Mechanic payout for {mechanic_name} on {payout_for_date} must match "
+                    f"the calculated amount of {expected_amount:,.2f}."
+                )
         else:
             payout_for_date = None
             ledger_created_at = None

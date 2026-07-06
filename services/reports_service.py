@@ -1365,6 +1365,7 @@ def get_mechanic_payouts_for_dates(report_dates):
            AND mqto.quota_date = DATE(s.transaction_date)
         WHERE DATE(s.transaction_date) = ANY(%s::date[])
           AND s.mechanic_id IS NOT NULL
+          AND COALESCE(s.is_voided, FALSE) = FALSE
     """, (normalized_dates,)).fetchall()
 
     debt_collected_rows = _get_debt_payout_allocations(conn, report_dates=normalized_dates)
