@@ -222,6 +222,14 @@
         .cash-summary-breakdown-row:last-child {
             border-bottom: none;
         }
+        .cash-summary-breakdown.floating {
+            background: #f7fbfe;
+            border-top-color: #b8d4e8;
+        }
+        .cash-summary-breakdown.floating .cash-summary-breakdown-row {
+            color: #315b73;
+            border-bottom-color: #cfe0eb;
+        }
 
         .profit-spotlight {
             border: 1px solid #cfe3d4;
@@ -677,6 +685,20 @@
             <div class="cash-summary-row">
                 <span>Total Floating Money (Digital Payments)</span>
                 <span class="currency">P {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
+            </div>
+            {% if cash_data.floating_breakdown %}
+            <div class="cash-summary-breakdown floating">
+                {% for group in cash_data.floating_breakdown %}
+                <div class="cash-summary-breakdown-row">
+                    <span>&#8627; {{ group.category }}</span>
+                    <span class="currency">P {{ "%.2f"|format(group.amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="cash-summary-row" style="color: #6b4e16;">
+                <span>Others</span>
+                <span class="currency">P {{ "%.2f"|format(cash_data.other_payment_total or 0) }}</span>
             </div>
             <div class="cash-summary-row total">
                 <span>Cash On Hand as of {{ cash_balance_label }}</span>

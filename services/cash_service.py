@@ -587,6 +587,59 @@ def _get_non_cash_debt_payments(conn, date_from=None, date_to=None):
     return conn.execute(query, params).fetchall()
 
 
+def _get_pending_float_breakdown(
+    conn,
+    pending_sale_rows,
+    pending_debt_payment_rows,
+    manual_float_rows,
+    claimed_sale_ids,
+    claimed_debt_payment_ids,
+    claimed_manual_float_ids,
+):
+    """Return the current unclaimed floating money split by payment category."""
+    amounts = {category: 0.0 for category in FLOATING_PAYMENT_CATEGORIES}
+    pending_sale_ids = [
+        int(row['sale_id'])
+        for row in pending_sale_rows
+        if int(row['sale_id']) not in claimed_sale_ids
+    ]
+
+    if pending_sale_ids:
+        rows = conn.execute(
+            """
+            SELECT pm.category, SUM(sp.amount) AS amount
+            FROM sale_payments sp
+            JOIN payment_methods pm ON pm.id = sp.payment_method_id
+            WHERE sp.sale_id = ANY(%s)
+              AND pm.category = ANY(%s)
+            GROUP BY pm.category
+            """,
+            (pending_sale_ids, list(FLOATING_PAYMENT_CATEGORIES)),
+        ).fetchall()
+        for row in rows:
+            amounts[row['category']] += _money(row['amount'])
+
+    for row in pending_debt_payment_rows:
+        if int(row['debt_payment_id']) in claimed_debt_payment_ids:
+            continue
+        category = row['payment_method_category']
+        if category in amounts:
+            amounts[category] += _money(row['amount'])
+
+    # Manual GCash float entries are online funds without a payment-method row.
+    for row in manual_float_rows:
+        if int(row['id']) not in claimed_manual_float_ids:
+            amounts['Online'] += _money(row['amount'])
+
+    return [
+        {
+            'category': 'Online Payments (Gcash, PayMaya, etc.)' if category == 'Online' else category,
+            'amount': round(amounts[category], 2),
+        }
+        for category in FLOATING_PAYMENT_CATEGORIES
+    ]
+
+
 def _get_active_float_claimed_sale_ids(conn, sale_ids, claimed_on_or_before=None):
     normalized_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
     if not normalized_ids:
@@ -670,6 +723,31 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
 
     query += " GROUP BY s.id, s.sales_number, s.customer_name, s.transaction_date, u.username, se.exchange_number ORDER BY s.transaction_date ASC, s.id ASC"
     return conn.execute(query, params).fetchall()
+
+
+def _get_other_payment_total(conn, date_from=None, date_to=None):
+    """Informational total for paid sale lines using the Others category."""
+    params = []
+    query = """
+        SELECT COALESCE(SUM(sp.amount), 0) AS amount
+        FROM sale_payments sp
+        JOIN sales s ON s.id = sp.sale_id
+        JOIN payment_methods pm ON pm.id = sp.payment_method_id
+        WHERE pm.category = 'Others'
+          AND s.status = 'Paid'
+          AND COALESCE(s.transaction_class, 'NEW_SALE') <> 'MECHANIC_SUPPLY'
+          AND COALESCE(s.is_voided, FALSE) = FALSE
+    """
+
+    if date_from:
+        query += " AND DATE(s.transaction_date) >= %s"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(s.transaction_date) <= %s"
+        params.append(date_to)
+
+    row = conn.execute(query, params).fetchone()
+    return _money(row['amount'] if row else 0)
 
 
 def _get_sale_voids_cash(conn, branch_id=1, date_from=None, date_to=None):
@@ -1021,6 +1099,15 @@ def get_cash_summary(branch_id=1):
         conn,
         [row['id'] for row in manual_gcash_rows],
     )
+    floating_breakdown = _get_pending_float_breakdown(
+        conn,
+        pending_float_rows,
+        pending_float_debt_rows,
+        manual_gcash_rows,
+        claimed_float_ids,
+        claimed_float_debt_ids,
+        claimed_manual_gcash_ids,
+    )
     conn.close()
 
     total_in  = 0.0
@@ -1064,6 +1151,7 @@ def get_cash_summary(branch_id=1):
         'total_out':    total_out,
         'cash_on_hand': round(total_in - total_out, 2),
         'floating_total': floating_total,
+        'floating_breakdown': floating_breakdown,
     }
 
 def get_cash_summary_for_range(start_date=None, end_date=None, branch_id=1):
@@ -2081,6 +2169,7 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
         entry_type=entry_type,
         deleted_state=deleted_state,
     )
+    other_payment_total = _get_other_payment_total(conn, date_from, date_to)
     conn.close()
 
     unified = _build_unified(sales_rows, debt_rows, refund_rows, void_rows, manual_rows, paid_payable_cash_rows)
@@ -2097,6 +2186,7 @@ def get_cash_entries_for_report(date_from, date_to, branch_id=1, entry_type=None
         'total_out':    round(total_out, 2),
         'cash_on_hand': round(total_in - total_out, 2),
         'ending_cash_on_hand': ending_cash_on_hand,
+        'other_payment_total': other_payment_total,
     }
 
 

@@ -460,6 +460,14 @@
         .cash-summary-breakdown-row:last-child {
             border-bottom: none;
         }
+        .cash-summary-breakdown.floating {
+            background: #f7fbfe;
+            border-top-color: #b8d4e8;
+        }
+        .cash-summary-breakdown.floating .cash-summary-breakdown-row {
+            color: #315b73;
+            border-bottom-color: #cfe0eb;
+        }
         .cash-on-hand-bar {
             background: #e6f0f6;
             color: #18354b;
@@ -1219,6 +1227,11 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <div style="padding: 14px 12px; font-size: 12px; color: #888; text-align: center;">
+            No physical cash movements recorded for this period.
+        </div>
+        {% endif %}
 
         <div class="cash-totals">
             <div class="cash-summary-row" style="color: #155724;">
@@ -1251,17 +1264,25 @@
                 <span>Total Floating Money (Digital Payments)</span>
                 <span>P {{ "%.2f"|format(cash_data.floating_total or 0) }}</span>
             </div>
+            {% if cash_data.floating_breakdown %}
+            <div class="cash-summary-breakdown floating">
+                {% for group in cash_data.floating_breakdown %}
+                <div class="cash-summary-breakdown-row">
+                    <span>&#8627; {{ group.category }}</span>
+                    <span>P {{ "%.2f"|format(group.amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <div class="cash-summary-row" style="color: #6b4e16;">
+                <span>Others</span>
+                <span>P {{ "%.2f"|format(cash_data.other_payment_total or 0) }}</span>
+            </div>
             <div class="cash-on-hand-bar">
                 <span>CASH ON HAND AS OF {{ cash_balance_label }}</span>
                 <span>P {{ "%.2f"|format(cash_data.ending_cash_on_hand or 0) }}</span>
             </div>
         </div>
-
-        {% else %}
-        <div style="padding: 14px 12px; font-size: 12px; color: #888; text-align: center;">
-            No cash movements recorded for this period.
-        </div>
-        {% endif %}
 
     </div>
 

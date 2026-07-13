@@ -364,6 +364,7 @@ def _build_sales_report_context():
             reverse=True,
         )
     cash_data["floating_total"] = cash_summary.get("floating_total", 0.0)
+    cash_data["floating_breakdown"] = cash_summary.get("floating_breakdown", [])
     cash_data["cash_out_groups"] = _timed_report_step(
         "cash_out_groups",
         _build_cash_out_report_groups,
