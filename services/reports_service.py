@@ -32,11 +32,13 @@ def _bool_flag(value, default=True):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _is_exchange_sale_row(sale):
-    return bool(
-        str(sale.get("replacement_exchange_number") or "").strip()
-        or str(sale.get("original_exchange_number") or "").strip()
-    )
+def _get_mechanic_payout_sales(sales_rows):
+    """Keep service-bearing exchange sales while excluding mechanic supplies."""
+    return [
+        sale
+        for sale in sales_rows
+        if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"
+    ]
 
 
 def _get_profit_card_cash_ledger_expense(conn, start_date, end_date):
@@ -1755,7 +1757,6 @@ def get_sales_report_by_date(report_date):
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales = []
-    financial_paid_sales = []
     item_summary_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
@@ -1822,26 +1823,25 @@ def get_sales_report_by_date(report_date):
             paid_sales.append(sale_payload)
             if not is_mechanic_supply:
                 item_summary_paid_sales.append(sale_payload)
-            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
-                financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
+            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
                 total_gross += total_amount
                 total_product_cost += sale_product_cost
                 total_product_profit += sale_product_profit
 
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
-        [
-            sale for sale in sales_rows
-            if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"
-            and not _is_exchange_sale_row(sale)
-        ],
+        _get_mechanic_payout_sales(sales_rows),
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
     total_bundle_shop_share = round(
-        sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
+        sum(
+            _num(sale.get("bundle_shop_total"))
+            for sale in paid_sales
+            if sale.get("transaction_class") != "MECHANIC_SUPPLY"
+        ),
         2,
     )
     total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, report_date, report_date)
@@ -2144,7 +2144,6 @@ def get_sales_report_by_range(start_date, end_date):
     total_refunds = round(sum(r["refund_amount"] for r in refunds), 2)
 
     paid_sales = []
-    financial_paid_sales = []
     item_summary_paid_sales = []
     total_gross = 0.0
     total_service_revenue = 0.0
@@ -2211,25 +2210,24 @@ def get_sales_report_by_range(start_date, end_date):
             paid_sales.append(sale_payload)
             if not is_mechanic_supply:
                 item_summary_paid_sales.append(sale_payload)
-            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
-                financial_paid_sales.append(sale_payload)
                 total_service_revenue += service_revenue_total
+            if not is_mechanic_supply and exchange_context.get("exchange_role") != "original":
                 total_gross += total_amount
                 total_product_cost += sale_product_cost
                 total_product_profit += sale_product_profit
 
     mechanic_summary, totals, quota_failures = _calculate_range_mechanic_rollups(
-        [
-            sale for sale in sales_rows
-            if (sale.get("transaction_class") or "NEW_SALE") != "MECHANIC_SUPPLY"
-            and not _is_exchange_sale_row(sale)
-        ],
+        _get_mechanic_payout_sales(sales_rows),
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
     )
     total_bundle_shop_share = round(
-        sum(_num(sale.get("bundle_shop_total")) for sale in financial_paid_sales),
+        sum(
+            _num(sale.get("bundle_shop_total"))
+            for sale in paid_sales
+            if sale.get("transaction_class") != "MECHANIC_SUPPLY"
+        ),
         2,
     )
     total_cash_ledger_expense = _get_profit_card_cash_ledger_expense(conn, start_date, end_date)
