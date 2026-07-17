@@ -14,6 +14,7 @@ from services.transactions_service import (
     get_bundle_sale_config,
     get_transaction_out_context,
     process_manual_stock_in,
+    active_sales_number_exists,
     record_sale,
     record_sale_refund,
     search_sales_for_refund,
@@ -508,6 +509,16 @@ def refund_sale_search_api():
             limit=limit,
         )
         return jsonify({"rows": rows})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@transaction_bp.route("/api/sales/or-exists")
+@login_required
+def sale_or_exists_api():
+    try:
+        sales_number = (request.args.get("q") or "").strip()
+        return jsonify({"exists": active_sales_number_exists(sales_number) if sales_number else False})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

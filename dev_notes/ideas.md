@@ -448,18 +448,60 @@ Applied:
 
 ## OR No. Uniqueness
 
-Problem:
-The OUT sale flow can currently store two active sales with the same OR number if the same sale is submitted again with a different idempotency key. Idempotency should handle retries, but OR number uniqueness is still a useful business-level safety net.
+### Current implementation
 
-Suggested direction:
-Make OR numbers unique for active, non-voided sales.
+The immediate bleeding has been stopped without changing historical data or adding a database constraint.
 
-Preferred database shape:
-- Add a partial unique index on normalized `sales.sales_number`.
-- Ignore null / blank OR numbers.
-- Exclude voided sales so a voided duplicate does not block the real active sale.
+- Existing duplicate OR records are grandfathered and remain unchanged.
+- New regular and quick sales are rejected when the submitted OR number is already used by any active, non-voided sale.
+- OR comparison is case-insensitive and ignores surrounding spaces.
+- An OR becomes reusable only after all sales using that OR have been voided.
+- Mechanic-supply transactions are unaffected because they do not normally use an OR number.
+- The OUT page performs a debounced exact-match lookup while the OR is being entered and shows the yellow warning `OR number already exists`.
+- The live warning is only a convenience. The backend repeats the validation during sale creation and remains the authoritative safeguard.
+- The existing idempotency protection still handles normal retry/double-submit behavior.
 
-Example shape:
+Backend rejection message:
+
+> OR No. [number] is already used by an active sale. Search for that OR and resolve the existing active sale, or use a different OR number.
+
+### Production snapshot findings
+
+The July 17, 2026 production snapshot showed that duplicate OR use was already widespread:
+
+- 1,526 active sales had nonblank OR numbers.
+- 158 OR numbers were duplicated.
+- Those duplicate groups covered 468 active sales, about 31% of active sales with nonblank OR numbers.
+- 72 duplicated ORs occurred among regular sales.
+- 73 duplicated ORs occurred among quick sales.
+- 88 duplicate groups mixed regular and quick sales.
+- 110 duplicate groups involved different customers.
+
+This pattern is not consistent with retry duplicates alone. It suggests OR reuse has been part of the shop's operating workflow, particularly for quick sales. The business rule still needs confirmation: does every quick sale receive its own official OR, or are multiple quick sales intentionally recorded under one OR?
+
+Example `0049995`:
+
+- Sale `1537` was voided, so it no longer reserves the OR.
+- Active quick sale `1538` still uses `0049995`.
+- Active re-entered sale `1540` also uses `0049995`.
+- A new sale using `0049995` is now blocked because active matching sales still exist.
+
+### Historical data behavior
+
+The current application-level safeguard does not merge, rename, void, or delete previous sales. All existing duplicates and their related records remain intact.
+
+Related refunds, payments, items, loyalty records, and exchanges use `sale_id`, rather than the OR text, as their database relationship. Renaming an old OR would therefore preserve those links technically, but it could make reports, audit references, ledger descriptions, and physical receipt matching inconsistent. Historical OR numbers should not be renamed automatically.
+
+### Remaining concurrency limitation
+
+The current implementation checks for an existing OR before inserting the new sale. Because there is no database unique constraint, two genuinely simultaneous requests could both pass the lookup before either insert commits.
+
+This risk is accepted temporarily because the shop normally uses one program instance and concurrent submissions are rare. A database constraint remains the final safeguard if concurrent operation becomes more common.
+
+### Why the database index is deferred
+
+The preferred final database shape is still a partial unique index on the normalized OR number:
+
 ```sql
 CREATE UNIQUE INDEX ...
 ON sales (LOWER(TRIM(sales_number)))
@@ -468,12 +510,27 @@ WHERE sales_number IS NOT NULL
   AND COALESCE(is_voided, FALSE) = FALSE;
 ```
 
-Before implementing:
+A unique index does not automatically fix previous data. Adding it now would fail because the existing 158 active duplicate groups violate the rule, potentially causing deployment/schema initialization to fail.
 
-- Check prod for existing active duplicate OR numbers.
+Before adding the index, choose one of these migration policies:
 
-- Confirm there is no legitimate workflow where two active sales should share one OR number.
-- Add a friendly validation error on sale save if the OR number is already active.
+1. Review and clean up every active duplicate deliberately.
+2. Preserve historical duplicates and introduce a more involved forward-only database enforcement design.
+3. Enforce database uniqueness only for regular sales.
+4. Change quick sales to use an automatically generated internal reference instead of an official OR number.
+
+### Recommended future direction
+
+If every transaction is supposed to have a unique physical OR:
+
+1. Produce a duplicate-OR review report.
+2. Have the business identify which historical rows are correct.
+3. Correct, void, or re-reference conflicts deliberately.
+4. Retain the current friendly frontend and backend validation.
+5. Add the normalized partial unique index as the final concurrency safeguard.
+6. Test regular sales, quick sales, void-and-re-entry, exchanges, and simultaneous submissions.
+
+If quick sales do not receive individual official receipts, consider enforcing unique ORs only for regular sales and assigning quick sales their own generated internal reference. Preserve existing historical records until the business rule and cleanup plan are confirmed.
 
 ## Future Date Shortcut Candidates
 

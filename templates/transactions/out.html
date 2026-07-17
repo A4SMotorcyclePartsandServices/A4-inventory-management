@@ -1404,6 +1404,9 @@
                 OR No # <span class="req" id="sales-number-required">*</span>
             </label>
             <input type="text" class="form-control border-warn" id="sales-number" placeholder="e.g. 4052">
+            <div class="text-warning small mt-1" id="sales-number-duplicate-warning" style="display:none;" aria-live="polite">
+                OR number already exists
+            </div>
         </div>
 
         <!-- CUSTOMER -->
@@ -2043,6 +2046,49 @@ function debouncePerElement(element, func, delay) {
     clearTimeout(element._debounceTimer);
     element._debounceTimer = setTimeout(() => func(element), delay);
 }
+
+let salesNumberDuplicateCheckController = null;
+
+function setSalesNumberDuplicateWarning(visible) {
+    const warning = document.getElementById('sales-number-duplicate-warning');
+    if (warning) warning.style.display = visible ? 'block' : 'none';
+}
+
+async function checkSalesNumberDuplicate() {
+    const input = document.getElementById('sales-number');
+    const salesNumber = input?.value.trim() || '';
+    if (!salesNumber || isMechanicSupplyMode()) {
+        salesNumberDuplicateCheckController?.abort();
+        salesNumberDuplicateCheckController = null;
+        setSalesNumberDuplicateWarning(false);
+        return;
+    }
+
+    salesNumberDuplicateCheckController?.abort();
+    const controller = new AbortController();
+    salesNumberDuplicateCheckController = controller;
+
+    try {
+        const response = await fetch(`/api/sales/or-exists?q=${encodeURIComponent(salesNumber)}`, {
+            signal: controller.signal,
+        });
+        if (!response.ok) throw new Error('Failed to check OR number.');
+
+        const result = await response.json();
+        if ((input?.value.trim() || '') !== salesNumber) return;
+        setSalesNumberDuplicateWarning(Boolean(result.exists));
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            setSalesNumberDuplicateWarning(false);
+        }
+    } finally {
+        if (salesNumberDuplicateCheckController === controller) {
+            salesNumberDuplicateCheckController = null;
+        }
+    }
+}
+
+const scheduleSalesNumberDuplicateCheck = debounce(checkSalesNumberDuplicate, 350);
 
 async function fetchItemSearchResults(query, options = {}) {
     const { signal } = options;
@@ -3027,6 +3073,7 @@ function setSaleMode(mode) {
     const salesNumberInput = document.getElementById('sales-number');
     if (isMechanicSupply) {
         salesNumberInput.value = '';
+        setSalesNumberDuplicateWarning(false);
     } else {
         salesNumberLabel.innerHTML = 'OR No # <span class="req" id="sales-number-required">*</span>';
         salesNumberInput.placeholder = 'e.g. 4052';
@@ -4939,7 +4986,10 @@ async function restoreSalePageState(options = {}) {
         pendingSaleDraft = null;
 
         const salesNumberInput = document.getElementById('sales-number');
-        if (salesNumberInput) salesNumberInput.value = state.sales_number || '';
+        if (salesNumberInput) {
+            salesNumberInput.value = state.sales_number || '';
+            scheduleSalesNumberDuplicateCheck();
+        }
         const transDateInput = document.getElementById('trans-date');
         if (transDateInput && state.transaction_date) {
             transDateInput.value = state.transaction_date;
@@ -5646,6 +5696,12 @@ document.getElementById('confirm-sale-submit-btn').addEventListener('click', asy
     }
 
     await saveTransaction(pendingSaleDraft, submitGuard);
+});
+
+document.getElementById('sales-number').addEventListener('input', function () {
+    salesNumberDuplicateCheckController?.abort();
+    setSalesNumberDuplicateWarning(false);
+    scheduleSalesNumberDuplicateCheck();
 });
 </script>
 {% endblock %}

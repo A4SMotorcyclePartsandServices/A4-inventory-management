@@ -1062,6 +1062,32 @@ def process_manual_stock_in(item_id, qty_int, unit_price, notes, change_reason, 
 
 # Single source of truth for all OUT sale saves, including quick sales,
 # regular sales, mechanic supply, services, and bundle-aware sales.
+def _get_active_sale_by_sales_number(conn, sales_number):
+    normalized_sales_number = str(sales_number or "").strip()
+    if not normalized_sales_number:
+        return None
+
+    return conn.execute(
+        """
+        SELECT id, sales_number, customer_name, transaction_date
+        FROM sales
+        WHERE LOWER(BTRIM(sales_number)) = LOWER(BTRIM(%s))
+          AND COALESCE(is_voided, FALSE) = FALSE
+        ORDER BY transaction_date DESC, id DESC
+        LIMIT 1
+        """,
+        (normalized_sales_number,),
+    ).fetchone()
+
+
+def active_sales_number_exists(sales_number):
+    conn = get_db()
+    try:
+        return _get_active_sale_by_sales_number(conn, sales_number) is not None
+    finally:
+        conn.close()
+
+
 def record_sale(data, user_id, username):
     """
     Records a full sale that may contain standalone items, services,
@@ -1122,6 +1148,14 @@ def record_sale(data, user_id, username):
 
     conn = get_db()
     try:
+        if not mechanic_supply and raw_sales_number:
+            existing_sale = _get_active_sale_by_sales_number(conn, raw_sales_number)
+            if existing_sale:
+                raise ValueError(
+                    f"OR No. {raw_sales_number} is already used by an active sale. "
+                    "Search for that OR and resolve the existing active sale, or use a different OR number."
+                )
+
         mechanic_catalog = {}
         if selected_mechanic_ids:
             mechanic_rows = conn.execute(
@@ -2377,7 +2411,10 @@ def get_sale_refund_context(sale_id):
 
     can_refund = True
     refund_block_reason = ""
-    if sale_data["status"] != "Paid":
+    if sale_data["is_voided"]:
+        can_refund = False
+        refund_block_reason = "Voided sales cannot be refunded."
+    elif sale_data["status"] != "Paid":
         can_refund = False
         refund_block_reason = "Only fully paid sales can be refunded."
     elif not refundable_items:
@@ -2432,7 +2469,7 @@ def get_sale_refund_context(sale_id):
 def search_sales_for_refund(query=None, days=None, has_refundable=False, limit=50):
     conn = get_db()
     try:
-        conditions = []
+        conditions = ["COALESCE(s.is_voided, FALSE) = FALSE"]
         params = []
 
         search_text = str(query or "").strip()
@@ -2640,7 +2677,15 @@ def record_sale_refund(sale_id, data, user_id, username):
 
         sale = conn.execute(
             """
-            SELECT id, sales_number, customer_name, customer_id, vehicle_id, status, transaction_date
+            SELECT
+                id,
+                sales_number,
+                customer_name,
+                customer_id,
+                vehicle_id,
+                status,
+                transaction_date,
+                COALESCE(is_voided, FALSE) AS is_voided
             FROM sales
             WHERE id = %s
             """,
@@ -2648,6 +2693,8 @@ def record_sale_refund(sale_id, data, user_id, username):
         ).fetchone()
         if not sale:
             raise ValueError("Sale not found.")
+        if sale["is_voided"]:
+            raise ValueError("Voided sales cannot be refunded.")
         if sale["status"] != "Paid":
             raise ValueError("Only fully paid sales can be refunded.")
 
