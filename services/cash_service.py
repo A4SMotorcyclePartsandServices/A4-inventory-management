@@ -27,6 +27,19 @@ PHYSICAL_CASH_CATEGORIES = ('Cash',)
 FLOATING_PAYMENT_CATEGORIES = ('Bank', 'Online')
 
 
+# A malformed workstation clock can put a sale after its own void. In that
+# specific case, keep the cash-in and reversal together on the void date so a
+# future report cannot recognize cash that was already reversed in the past.
+_SALE_CASH_EFFECTIVE_DATE_SQL = """
+    CASE
+        WHEN COALESCE(s.is_voided, FALSE) = TRUE
+         AND s.voided_at < s.transaction_date
+        THEN s.voided_at
+        ELSE s.transaction_date
+    END
+""".strip()
+
+
 def _money(value):
     """Normalize DB numeric/decimal values to float for calculations and JSON."""
     return round(float(value or 0), 2)
@@ -695,13 +708,13 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     """
     params = [list(PHYSICAL_CASH_CATEGORIES)]
 
-    query = """
+    query = f"""
         SELECT
             s.id AS reference_id,
             s.sales_number,
             s.customer_name,
             SUM(sp.amount) AS amount,
-            s.transaction_date AS created_at,
+            {_SALE_CASH_EFFECTIVE_DATE_SQL} AS created_at,
             u.username AS recorded_by,
             se.exchange_number
         FROM sale_payments sp
@@ -715,13 +728,13 @@ def _get_sales_cash(conn, branch_id=1, date_from=None, date_to=None):
     """
 
     if date_from:
-        query += " AND DATE(s.transaction_date) >= %s"
+        query += f" AND DATE({_SALE_CASH_EFFECTIVE_DATE_SQL}) >= %s"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(s.transaction_date) <= %s"
+        query += f" AND DATE({_SALE_CASH_EFFECTIVE_DATE_SQL}) <= %s"
         params.append(date_to)
 
-    query += " GROUP BY s.id, s.sales_number, s.customer_name, s.transaction_date, u.username, se.exchange_number ORDER BY s.transaction_date ASC, s.id ASC"
+    query += f" GROUP BY s.id, s.sales_number, s.customer_name, {_SALE_CASH_EFFECTIVE_DATE_SQL}, u.username, se.exchange_number ORDER BY created_at ASC, s.id ASC"
     return conn.execute(query, params).fetchall()
 
 

@@ -4,7 +4,13 @@ import json
 import re
 from psycopg2 import errors as pg_errors
 from utils.formatters import format_date
-from utils.timezone import now_local, now_local_naive, now_local_str, today_local
+from utils.timezone import (
+    get_app_timezone_name,
+    now_local,
+    now_local_naive,
+    now_local_str,
+    today_local,
+)
 from services.loyalty_service import log_stamps_for_sale
 from services.approval_service import (
     approve_request,
@@ -37,6 +43,46 @@ MANUAL_STOCK_IN_REASON_LABELS = {
     MANUAL_STOCK_IN_REASON_LATE_ENCODING: "Late encoding/missed stock",
     MANUAL_STOCK_IN_REASON_PARTS_PURCHASE: "Parts purchase",
 }
+SALE_FUTURE_TIME_TOLERANCE = timedelta(minutes=5)
+
+
+def _is_truthy(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_sale_transaction_time(data, now_obj=None):
+    """Return a Philippine-local wall time for a sale submission."""
+    current_time = now_obj or now_local()
+    manually_changed = _is_truthy(
+        (data or {}).get("transaction_date_manually_changed")
+    )
+
+    if not manually_changed:
+        return current_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    raw_value = str((data or {}).get("transaction_date") or "").strip()
+    if not raw_value:
+        raise ValueError("Select a valid transaction date and time.")
+
+    try:
+        selected_time = datetime.fromisoformat(raw_value.replace("T", " "))
+    except ValueError as exc:
+        raise ValueError("Select a valid transaction date and time.") from exc
+
+    if selected_time.tzinfo is None:
+        selected_time = selected_time.replace(tzinfo=current_time.tzinfo)
+    else:
+        selected_time = selected_time.astimezone(current_time.tzinfo)
+
+    if selected_time > current_time + SALE_FUTURE_TIME_TOLERANCE:
+        raise ValueError(
+            "The transaction date is ahead of Philippine system time. "
+            "Check this computer's date and time, then try again."
+        )
+
+    return selected_time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _build_where_clause(conditions):
@@ -818,12 +864,15 @@ def get_transaction_out_context():
 
     conn.close()
 
+    server_now = now_local()
     return {
         "payment_methods": payment_methods,
         "mechanics": [dict(row) for row in mechanics],
         "cash_pm_id": cash_pm["id"] if cash_pm else None,
         "debt_pm_id": debt_pm["id"] if debt_pm else None,
         "others_pm_id": others_pm["id"] if others_pm else None,
+        "sale_server_now_iso": server_now.isoformat(timespec="seconds"),
+        "sale_business_timezone": get_app_timezone_name(),
     }
 
 
@@ -1129,6 +1178,8 @@ def record_sale(data, user_id, username):
     if requested_transaction_class == "NEW_SALE" and raw_customer_id in ("", None):
         raise ValueError("New Sale requires an existing customer. Select a customer from the list or add the customer first.")
 
+    clean_time = _resolve_sale_transaction_time(data)
+
     def _coerce_optional_mechanic_id(raw_value, field_label):
         if raw_value in ("", None):
             return None
@@ -1179,18 +1230,6 @@ def record_sale(data, user_id, username):
         )
         payment_method_id = payment_context["primary_payment_method_id"]
         sale_status = payment_context["sale_status"]
-
-        now_obj = now_local()
-        raw_date = data.get("transaction_date")
-        current_minute = now_obj.strftime("%Y-%m-%d %H:%M")
-        if raw_date:
-            clean_time = raw_date.replace("T", " ")
-            if clean_time[:16] == current_minute:
-                clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
-            elif len(clean_time) == 16:
-                clean_time += ":00"
-        else:
-            clean_time = now_obj.strftime("%Y-%m-%d %H:%M:%S")
 
         seen_item_ids = set()
         duplicate_item_ids = set()

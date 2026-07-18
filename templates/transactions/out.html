@@ -1390,6 +1390,10 @@
         <div class="col-md-4">
             <label class="form-label">Date / Time</label>
             <input type="datetime-local" class="form-control" id="trans-date">
+            <div class="alert alert-danger py-2 px-3 mt-2 mb-0 small" id="workstation-clock-warning" role="alert" style="display:none;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                This computer's clock differs from Philippine system time. Correct the computer date and time before saving a sale.
+            </div>
         </div>
 
         <!-- HANDLED BY -->
@@ -2305,6 +2309,11 @@ function flagError(el, message) {
    INITIALIZATION
 ========================================================= */
 let dateWasManuallyChanged = false;
+const SALE_SERVER_NOW_ISO = {{ sale_server_now_iso|tojson }};
+const SALE_BUSINESS_TIME_ZONE = {{ sale_business_timezone|tojson }};
+const SALE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
+const saleServerClockAtLoadMs = Date.parse(SALE_SERVER_NOW_ISO);
+const salePageLoadedMonotonicMs = performance.now();
 const QUICK_SALE_MAX_PRICE = 500;
 const DEFAULT_CASH_PAYMENT_ID = "{{ cash_pm_id }}";
 const DEFAULT_DEBT_PAYMENT_ID = "{{ debt_pm_id }}";
@@ -3141,6 +3150,8 @@ function setSaleMode(mode) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     setDefaultTransactionDate();
+    updateWorkstationClockWarning();
+    window.setInterval(updateWorkstationClockWarning, 30000);
 
     document.getElementById('trans-date').addEventListener('change', () => {
         dateWasManuallyChanged = true;
@@ -3453,9 +3464,48 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function setDefaultTransactionDate() {
     const dateInput = document.getElementById('trans-date');
-    const now = new Date();
-    const offset = now.getTimezoneOffset() * 60000;
-    dateInput.value = new Date(now - offset).toISOString().slice(0, 16);
+    dateInput.value = formatSaleBusinessDateTime(getEstimatedSaleServerNow(), false);
+}
+
+function getEstimatedSaleServerNow() {
+    const elapsedMs = performance.now() - salePageLoadedMonotonicMs;
+    return new Date(saleServerClockAtLoadMs + elapsedMs);
+}
+
+function formatSaleBusinessDateTime(value, includeSeconds = true) {
+    const options = {
+        timeZone: SALE_BUSINESS_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    };
+    if (includeSeconds) options.second = '2-digit';
+
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', options)
+            .formatToParts(value)
+            .filter(part => part.type !== 'literal')
+            .map(part => [part.type, part.value])
+    );
+    const seconds = includeSeconds ? `:${parts.second}` : '';
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}${seconds}`;
+}
+
+function workstationClockDiffersFromServer() {
+    if (!Number.isFinite(saleServerClockAtLoadMs)) return true;
+    return Math.abs(Date.now() - getEstimatedSaleServerNow().getTime()) > SALE_CLOCK_TOLERANCE_MS;
+}
+
+function updateWorkstationClockWarning() {
+    const hasMismatch = workstationClockDiffersFromServer();
+    const warning = document.getElementById('workstation-clock-warning');
+    const dateInput = document.getElementById('trans-date');
+    if (warning) warning.style.display = hasMismatch ? 'block' : 'none';
+    if (dateInput) dateInput.classList.toggle('border-danger', hasMismatch);
+    return hasMismatch;
 }
 
 /* =========================================================
@@ -5234,6 +5284,12 @@ function buildSaleDraft() {
     clearFieldErrors();
     syncQuickCustomerName();
 
+    if (updateWorkstationClockWarning()) {
+        showAlert("This computer's date or time is incorrect. Correct it before saving a sale.", 'danger');
+        document.getElementById('trans-date')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return null;
+    }
+
     const quickSaleMode = isQuickSaleMode();
     const mechanicSupplyMode = isMechanicSupplyMode();
     const fullSaleMode = isFullSaleMode();
@@ -5531,9 +5587,7 @@ function buildSaleDraft() {
     if (dateWasManuallyChanged) {
         finalDate = document.getElementById('trans-date').value;
     } else {
-        const now = new Date();
-        const offset = now.getTimezoneOffset() * 60000;
-        finalDate = new Date(now - offset).toISOString().slice(0, 19);
+        finalDate = formatSaleBusinessDateTime(getEstimatedSaleServerNow());
     }
 
     const grandTotal = getGrandTotalValue();
@@ -5558,6 +5612,7 @@ function buildSaleDraft() {
         total_amount: grandTotal,
         notes: mechanicSupplyMode ? '' : document.getElementById('trans-notes').value,
         transaction_date: finalDate,
+        transaction_date_manually_changed: dateWasManuallyChanged,
         items: validItems.map(({ item_id, quantity, original_price, discount_amount, final_price }) => ({
             item_id,
             quantity,
