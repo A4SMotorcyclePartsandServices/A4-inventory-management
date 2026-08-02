@@ -1,3 +1,5 @@
+import json
+
 from db.database import get_db
 from utils.formatters import format_date
 
@@ -16,7 +18,42 @@ def _build_and_clause(conditions):
     return " AND " + " AND ".join(conditions)
 
 
-def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, has_discount=False):
+def _build_item_details(value):
+    """Normalize grouped audit item quantities for report/export presentation."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return []
+
+    grouped = {}
+    for item in value:
+        name = str((item or {}).get("name") or "").strip()
+        if not name:
+            continue
+        try:
+            quantity = float((item or {}).get("quantity") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        grouped[name] = grouped.get(name, 0) + quantity
+
+    details = []
+    for name, quantity in grouped.items():
+        display_quantity = int(quantity) if quantity.is_integer() else quantity
+        details.append({"name": name, "quantity": display_quantity})
+    return details
+
+
+def get_audit_trail(
+    page=1,
+    start_date=None,
+    end_date=None,
+    movement_type=None,
+    has_discount=False,
+    per_page=PER_PAGE,
+):
     """
     Paginated audit trail with optional filters.
 
@@ -28,10 +65,17 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
     NOTE (future branches): add branch_id filter here when ready.
     """
     conn = get_db()
+    is_unpaginated = per_page is None
     try:
         current_page = max(1, int(page or 1))
     except (TypeError, ValueError):
         current_page = 1
+
+    if not is_unpaginated:
+        try:
+            per_page = max(1, int(per_page))
+        except (TypeError, ValueError):
+            per_page = PER_PAGE
 
     inv_conditions = []
     inv_params = []
@@ -93,7 +137,11 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
             COALESCE(NULLIF(MAX(t.notes), ''), MAX(s.notes)) AS notes,
             s.sales_number,
             po.po_number,
-            STRING_AGG(i.name::text, ', ' ORDER BY i.name) AS items_summary
+            STRING_AGG(i.name::text, ', ' ORDER BY i.name) AS items_summary,
+            JSONB_AGG(
+                JSONB_BUILD_OBJECT('name', i.name, 'quantity', t.quantity)
+                ORDER BY i.name
+            ) AS item_quantities
         FROM inventory_transactions t
         JOIN items i ON t.item_id = i.id
         LEFT JOIN sales s
@@ -144,7 +192,8 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
                 FROM sales_services ss
                 JOIN services sv ON sv.id = ss.service_id
                 WHERE ss.sale_id = s.id
-            ), 'Service-only sale') AS items_summary
+            ), 'Service-only sale') AS items_summary,
+            NULL::jsonb AS item_quantities
         FROM sales s
         LEFT JOIN users u ON u.id = s.user_id
         WHERE NOT EXISTS (
@@ -161,16 +210,19 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         ) audit_rows
     """
     total = conn.execute(count_query, inv_params + sale_params).fetchone()[0]
-    total_pages = max(1, -(-total // PER_PAGE))
-    current_page = min(current_page, total_pages)
-    offset = (current_page - 1) * PER_PAGE
+    total_pages = 1 if is_unpaginated else max(1, -(-total // per_page))
+    current_page = 1 if is_unpaginated else min(current_page, total_pages)
 
     data_query = base_query + """
         ORDER BY transaction_date DESC
-        LIMIT %s OFFSET %s
     """
+    query_params = inv_params + sale_params
+    if not is_unpaginated:
+        offset = (current_page - 1) * per_page
+        data_query += " LIMIT %s OFFSET %s"
+        query_params += [per_page, offset]
 
-    rows = conn.execute(data_query, inv_params + sale_params + [PER_PAGE, offset]).fetchall()
+    rows = conn.execute(data_query, query_params).fetchall()
     conn.close()
 
     def _build_display_reference(row):
@@ -190,6 +242,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         {
             **dict(r),
             "display_reference": _build_display_reference(r),
+            "item_details": _build_item_details(r["item_quantities"]),
             "transaction_date_raw": r["transaction_date"].isoformat() if r["transaction_date"] else None,
             "transaction_date": format_date(r["transaction_date"], show_time=True),
         }
@@ -200,7 +253,7 @@ def get_audit_trail(page=1, start_date=None, end_date=None, movement_type=None, 
         "rows": formatted,
         "total": total,
         "page": current_page,
-        "per_page": PER_PAGE,
+        "per_page": total if is_unpaginated else per_page,
         "total_pages": total_pages,
     }
 

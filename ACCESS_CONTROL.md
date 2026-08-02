@@ -196,6 +196,8 @@ Analytics and debug:
 Admin user management and audit:
 
 - `/users/audit`
+- `/reports/audit-trail`
+- `/exports/audit-trail.csv`
 - `/users/toggle/<user_id>`
 - `/password-resets/<request_id>/complete`
 - `/password-resets/<request_id>/reject`

@@ -89,6 +89,21 @@ def get_audit_trail_page(page, start_date, end_date, movement_type, has_discount
     )
 
 
+def get_audit_trail_report(start_date, end_date, movement_type, has_discount):
+    """Return every matching audit row for the printable audit report."""
+    valid_types = {"IN", "OUT", "ORDER", None}
+    if movement_type not in valid_types:
+        raise ValueError("Invalid movement type")
+
+    return get_audit_trail(
+        start_date=start_date,
+        end_date=end_date,
+        movement_type=movement_type,
+        has_discount=has_discount,
+        per_page=None,
+    )
+
+
 def get_audit_sales_page(page, start_date, end_date, search, payment_status, has_discount):
     valid_statuses = {"Paid", "Partial", "Unresolved", None}
     if payment_status not in valid_statuses:
@@ -265,6 +280,7 @@ __all__ = [
     "_to_bool",
     "get_audit_dashboard_context",
     "get_audit_sales_page",
+    "get_audit_trail_report",
     "get_audit_trail_page",
     "get_item_edit_trail_page",
     "get_payables_audit_page",

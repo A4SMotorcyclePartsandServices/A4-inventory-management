@@ -2385,6 +2385,12 @@
                     <i class="bi bi-truck me-2"></i> Item Movement
                 </h6>
                 <span class="text-info small" id="audit-summary"></span>
+                <button type="button" class="btn btn-sm btn-success shadow-sm fw-semibold" onclick="exportAuditTrailCsv()" title="Export Audit Trail CSV">
+                    <i class="bi bi-filetype-csv me-1"></i> CSV
+                </button>
+                <button type="button" class="btn btn-sm btn-danger shadow-sm fw-semibold" onclick="generateAuditTrailReport()" title="Generate Audit Trail PDF report">
+                    <i class="bi bi-file-earmark-pdf-fill me-1"></i> PDF
+                </button>
             </div>
 
             <!-- Right: Filters -->
@@ -4599,6 +4605,25 @@ function auditChangePage(direction) {
     }
     auditPage += direction;
     loadAuditTrail();
+}
+
+function getAuditTrailReportQuery() {
+    const params = new URLSearchParams();
+    if (auditStartDate) params.set('start_date', auditStartDate);
+    if (auditEndDate) params.set('end_date', auditEndDate);
+    if (auditType) params.set('type', auditType);
+    if (auditHasDiscount) params.set('has_discount', '1');
+    return params.toString();
+}
+
+function generateAuditTrailReport() {
+    const query = getAuditTrailReportQuery();
+    window.open(`/reports/audit-trail${query ? `?${query}` : ''}`, '_blank', 'noopener');
+}
+
+function exportAuditTrailCsv() {
+    const query = getAuditTrailReportQuery();
+    window.location.assign(`/exports/audit-trail.csv${query ? `?${query}` : ''}`);
 }
 
 function loadAuditTrail() {

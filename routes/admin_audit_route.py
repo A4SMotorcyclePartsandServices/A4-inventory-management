@@ -1,4 +1,8 @@
-from flask import Blueprint, abort, jsonify, redirect, render_template, request, session, flash, url_for
+import csv
+import io
+from datetime import date
+
+from flask import Blueprint, Response, abort, jsonify, redirect, render_template, request, session, flash, url_for
 
 from auth.utils import admin_required, ensure_authenticated_user
 from services.admin_audit_service import (
@@ -6,6 +10,7 @@ from services.admin_audit_service import (
     get_audit_dashboard_context,
     get_audit_sales_page,
     get_audit_trail_page,
+    get_audit_trail_report,
     get_item_edit_trail_page,
     get_payables_audit_page,
     toggle_user_active_status,
@@ -27,6 +32,8 @@ from services.stocktake_access_service import (
 )
 from services.transactions_service import get_sale_refund_context
 from services.users_panel_service import get_item_details_payload, get_manual_in_details
+from utils.formatters import format_date
+from utils.timezone import now_local
 
 admin_audit_bp = Blueprint("admin_audit", __name__)
 
@@ -325,6 +332,115 @@ def audit_trail_api():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+def _get_audit_trail_report_filters():
+    start_date = request.args.get("start_date") or None
+    end_date = request.args.get("end_date") or None
+    movement_type = request.args.get("type") or None
+    has_discount = _to_bool(request.args.get("has_discount"))
+
+    for value in (start_date, end_date):
+        if value:
+            date.fromisoformat(value)
+    if start_date and end_date and start_date > end_date:
+        raise ValueError("Start date cannot be after end date.")
+
+    return start_date, end_date, movement_type, has_discount
+
+
+def _build_audit_trail_filter_label(start_date, end_date, movement_type, has_discount):
+    filter_parts = []
+    if start_date and end_date:
+        filter_parts.append(f"{format_date(start_date)} to {format_date(end_date)}")
+    elif start_date:
+        filter_parts.append(f"From {format_date(start_date)}")
+    elif end_date:
+        filter_parts.append(f"Until {format_date(end_date)}")
+    else:
+        filter_parts.append("All dates")
+    filter_parts.append(f"{movement_type or 'All'} movements")
+    if has_discount:
+        filter_parts.append("Discounted sales only")
+    return " | ".join(filter_parts)
+
+
+def _get_audit_trail_report_data():
+    start_date, end_date, movement_type, has_discount = _get_audit_trail_report_filters()
+    data = get_audit_trail_report(
+        start_date=start_date,
+        end_date=end_date,
+        movement_type=movement_type,
+        has_discount=has_discount,
+    )
+    return data, _build_audit_trail_filter_label(
+        start_date,
+        end_date,
+        movement_type,
+        has_discount,
+    )
+
+
+@admin_audit_bp.route("/reports/audit-trail")
+def audit_trail_report():
+    try:
+        data, filter_label = _get_audit_trail_report_data()
+    except ValueError as exc:
+        return str(exc), 400
+
+    return render_template(
+        "reports/audit_trail_pdf.html",
+        rows=data["rows"],
+        total=data["total"],
+        filter_label=filter_label,
+        generated_at=format_date(now_local(), show_time=True),
+    )
+
+
+@admin_audit_bp.route("/exports/audit-trail.csv")
+def audit_trail_csv_export():
+    try:
+        data, _ = _get_audit_trail_report_data()
+    except ValueError as exc:
+        return str(exc), 400
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Date & Time",
+        "Item Summary",
+        "Movement",
+        "Reason",
+        "Quantity",
+        "Reference",
+        "Notes",
+        "Staff",
+    ])
+    for row in data["rows"]:
+        item_details = row.get("item_details") or []
+        item_summary = row.get("items_summary") or ""
+        if len(item_details) > 2:
+            item_summary = "\n".join(
+                f"{item['name']} - {item['quantity']} pcs"
+                for item in item_details
+            )
+        writer.writerow([
+            row.get("transaction_date") or "",
+            item_summary,
+            row.get("transaction_type") or "",
+            (row.get("change_reason") or "").replace("_", " "),
+            row.get("total_qty") or 0,
+            row.get("display_reference") or row.get("reference_id") or "",
+            row.get("notes") or "",
+            row.get("user_name") or "",
+        ])
+
+    filename = f"audit_trail_{now_local().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @admin_audit_bp.route("/api/audit/item-edits")
