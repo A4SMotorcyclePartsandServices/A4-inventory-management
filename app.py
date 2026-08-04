@@ -804,14 +804,14 @@ def low_stock_summary_api():
 
 
 def _get_low_stock_display_status(item):
-    if item.get("is_watchlist"):
-        return "WATCHLIST"
     if item.get("restock_basis") == "recovering_manual_stock_history_review":
         return "VERIFY STOCK HISTORY"
     if item.get("restock_basis") == "recovering_recent_variance_loss_zero_stock":
         return "VERIFY / RESTOCK"
     if item.get("incoming_po_covers_restock"):
         return "INCOMING STOCK"
+    if item.get("is_watchlist"):
+        return "WATCHLIST"
     if item.get("restock_status") == "critical":
         return "OUT OF STOCK" if float(item.get("current_stock") or 0) <= 0 else "CRITICAL"
     if item.get("restock_status") == "warning":

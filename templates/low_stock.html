@@ -259,16 +259,14 @@
                     {% if item.description %}
                     <div class="item-name-description">{{ item.description }}</div>
                     {% endif %}
-                    {% if item.is_watchlist %}
+                    {% if item.is_watchlist and not item.incoming_po_covers_restock %}
                         <span class="badge status-badge-learning ms-2">LEARNING</span>
                     {% endif %}
                 </td>
                 <td class="text-danger fw-bold">{{ item.current_stock }}</td>
                 <td>{{ item.suggested_restock_point or 0 }}</td>
                 <td>
-                    {% if item.is_watchlist %}
-                        <span class="badge status-badge-learning">WATCHLIST</span>
-                    {% elif item.restock_basis == 'recovering_manual_stock_history_review' %}
+                    {% if item.restock_basis == 'recovering_manual_stock_history_review' %}
                         <span class="badge status-badge-warning">VERIFY STOCK HISTORY</span>
                         <div class="status-detail-hint">
                             Temporary review flag. This returns to normal learning after cleaner stock updates and sales history build up.
@@ -291,6 +289,8 @@
                             {% endfor %}
                         </div>
                         {% endif %}
+                    {% elif item.is_watchlist %}
+                        <span class="badge status-badge-learning">WATCHLIST</span>
                     {% elif item.restock_status == 'critical' %}
                         <span class="badge status-badge-critical">
                             {% if item.current_stock <= 0 %}OUT OF STOCK{% else %}CRITICAL{% endif %}

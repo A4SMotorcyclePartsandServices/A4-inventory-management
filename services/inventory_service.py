@@ -592,7 +592,7 @@ def attach_restock_recommendation(conn, items, item_id_key="id", category_key="c
             item["restock_confidence"] = RESTOCK_CONFIDENCE_LOW
             incoming_po_quantity = int(item.get("incoming_po_quantity") or 0)
             if (
-                item["should_restock"]
+                (item["should_restock"] or item["is_watchlist"])
                 and suggested_restock_point > 0
                 and incoming_po_quantity >= suggested_restock_point
             ):

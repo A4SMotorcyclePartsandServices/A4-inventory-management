@@ -41,8 +41,6 @@ def _restock_confidence_rank(confidence):
 
 
 def _low_stock_display_order_rank(item):
-    if item.get("is_watchlist"):
-        return 4
     if item.get("restock_basis") in {
         "recovering_manual_stock_history_review",
         "recovering_recent_variance_loss_zero_stock",
@@ -50,6 +48,8 @@ def _low_stock_display_order_rank(item):
         return 2
     if item.get("incoming_po_covers_restock"):
         return 3
+    if item.get("is_watchlist"):
+        return 4
     if item.get("restock_status") == "critical":
         return 0
     if item.get("restock_status") == "warning":
@@ -274,7 +274,7 @@ def _matches_low_stock_filter(item, status_filter):
             and not is_review_item
         )
     if status_filter == "watchlist":
-        return bool(item.get("is_watchlist"))
+        return bool(item.get("is_watchlist")) and not item.get("incoming_po_covers_restock")
     if status_filter == "verify_restock":
         return is_review_item
     if status_filter == "incoming_stock":
