@@ -554,6 +554,12 @@
                     <td>Service Revenue</td>
                     <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_service_revenue or 0) }}</span></td>
                 </tr>
+                {% if data.total_receivables_created %}
+                <tr>
+                    <td>Receivables Created (From Debt)</td>
+                    <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_receivables_created) }}</span></td>
+                </tr>
+                {% endif %}
                 <tr>
                     <td>Shop Share</td>
                     <td class="text-right"><span class="currency">P {{ "%.2f"|format(data.total_shop_commission or 0) }}</span></td>

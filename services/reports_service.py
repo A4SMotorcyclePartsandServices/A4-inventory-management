@@ -204,6 +204,44 @@ def _build_sale_payment_detail_map(conn, sale_ids):
             result[sale_id] = []
     return result
 
+
+def _build_sale_receivable_map(conn, sale_ids):
+    """Return the amount put on Utang when each sale was originally recorded.
+
+    A sale's current ``status`` changes when the customer pays later, so it
+    cannot be used to decide whether the original report date had an Utang.
+    A pure Utang sale deliberately has no ``sale_payments`` row; its original
+    ``sales.payment_method_id`` is therefore the authoritative credit record.
+    """
+    normalized_sale_ids = [int(sale_id) for sale_id in (sale_ids or []) if sale_id is not None]
+    if not normalized_sale_ids:
+        return {}
+
+    rows = conn.execute(
+        """
+        SELECT
+            s.id AS sale_id,
+            CASE
+                WHEN original_pm.category = 'Debt' THEN s.total_amount
+                ELSE COALESCE(SUM(
+                    CASE WHEN split_pm.category = 'Debt' THEN sp.amount ELSE 0 END
+                ), 0)
+            END AS receivable_created
+        FROM sales s
+        LEFT JOIN payment_methods original_pm ON original_pm.id = s.payment_method_id
+        LEFT JOIN sale_payments sp ON sp.sale_id = s.id
+        LEFT JOIN payment_methods split_pm ON split_pm.id = sp.payment_method_id
+        WHERE s.id = ANY(%s)
+        GROUP BY s.id, s.total_amount, original_pm.category
+        """,
+        (normalized_sale_ids,),
+    ).fetchall()
+
+    return {
+        int(row["sale_id"]): round(_num(row["receivable_created"]), 2)
+        for row in rows
+    }
+
 def _build_sale_exchange_context(sale, is_mechanic_supply=False):
     if is_mechanic_supply:
         return {
@@ -999,7 +1037,13 @@ def _build_sale_mechanic_breakdown(sale, services=None, bundles=None):
 # PRIVATE HELPERS — shared by daily, range, and cash ledger panel
 # ─────────────────────────────────────────────
 
-def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale=None):
+def _build_mechanic_maps(
+    sales_rows,
+    debt_collected_rows,
+    services_by_sale,
+    bundles_by_sale=None,
+    report_paid_sale_ids=None,
+):
     """
     Builds mechanic_map (from paid sales) and debt_mechanic_map (from debt payments).
     Extracted so the identical logic isn't duplicated in daily vs range reports.
@@ -1010,6 +1054,7 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
     mechanic_map = {}
     debt_mechanic_map = {}
     bundles_by_sale = bundles_by_sale or {}
+    report_paid_sale_ids = set(report_paid_sale_ids) if report_paid_sale_ids is not None else None
 
     for sale in sales_rows:
         sale_id = sale["id"]
@@ -1046,7 +1091,12 @@ def _build_mechanic_maps(sales_rows, debt_collected_rows, services_by_sale, bund
             2,
         )
 
-        if sale["status"] == "Paid":
+        is_paid_for_report = (
+            int(sale["id"]) in report_paid_sale_ids
+            if report_paid_sale_ids is not None
+            else sale["status"] == "Paid"
+        )
+        if is_paid_for_report:
             for mechanic_id, mechanic_data in service_totals_by_mechanic.items():
                 if mechanic_id not in mechanic_map:
                     mechanic_map[mechanic_id] = {
@@ -1271,7 +1321,13 @@ def _sum_mechanic_totals(total_rows):
     return totals
 
 
-def _calculate_range_mechanic_rollups(sales_rows, debt_collected_rows, services_by_sale, bundles_by_sale):
+def _calculate_range_mechanic_rollups(
+    sales_rows,
+    debt_collected_rows,
+    services_by_sale,
+    bundles_by_sale,
+    report_paid_sale_ids=None,
+):
     sales_by_day = {}
     debt_by_day = {}
 
@@ -1295,6 +1351,7 @@ def _calculate_range_mechanic_rollups(sales_rows, debt_collected_rows, services_
                 debt_by_day.get(day, []),
                 services_by_sale,
                 bundles_by_sale,
+                report_paid_sale_ids,
             )
         )
         daily_summary_rows.extend(day_mechanic_summary)
@@ -1591,6 +1648,7 @@ def get_sales_report_by_date(report_date):
     all_unresolved = get_all_unresolved_sales(conn)
     sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
     sale_payment_detail_map = _build_sale_payment_detail_map(conn, [row["id"] for row in sales_rows])
+    sale_receivable_map = _build_sale_receivable_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -1658,14 +1716,13 @@ def get_sales_report_by_date(report_date):
         conn.close()
         return []
 
-    paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
     all_sale_ids = [row["id"] for row in sales_rows]
     items_by_sale = {}
     services_by_sale = {}
     bundles_by_sale = {}
     refund_items_by_id = {}
 
-    if paid_sale_ids:
+    if all_sale_ids:
         items_rows = conn.execute("""
             SELECT
                 si.id AS sale_item_id,
@@ -1684,7 +1741,7 @@ def get_sales_report_by_date(report_date):
             JOIN items i ON i.id = si.item_id
             WHERE si.sale_id = ANY(%s)
             ORDER BY si.sale_id, i.name
-        """, (paid_sale_ids,)).fetchall()
+        """, (all_sale_ids,)).fetchall()
         for row in items_rows:
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
@@ -1774,8 +1831,14 @@ def get_sales_report_by_date(report_date):
         bundle_product_revenue = round(sum(_num(bundle.get("item_value_reference_snapshot")) for bundle in sale_bundles), 2)
         services_total = round(standalone_services_total + bundle_service_total, 2)
         service_revenue_total = round(standalone_services_total + bundle_service_total + bundle_shop_total, 2)
-        if sale["status"] == "Paid":
+        # A product was sold when this transaction was recorded, not when a
+        # later Utang payment changes the sale's current status to Paid.
+        # Mechanic supplies retain their existing paid-only treatment.
+        include_in_sales_history = not is_mechanic_supply or sale["status"] == "Paid"
+        if include_in_sales_history:
             total_amount = _num(sale["total_amount"])
+            receivable_created = sale_receivable_map.get(sale_id, 0.0)
+            report_status = "Utang" if receivable_created > 0 else sale["status"]
             sale_products = items_by_sale.get(sale_id, [])
             sale_services = services_by_sale.get(sale_id, [])
             sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
@@ -1808,6 +1871,8 @@ def get_sales_report_by_date(report_date):
                 "product_profit_total": sale_product_profit,
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
+                "report_status": report_status,
+                "receivable_created": receivable_created,
                 "payment_method": sale_payment_map.get(sale["id"], "-"),
                 "notes": _clean_sale_notes_for_report(sale["notes"], exchange_context.get("exchange_reason")),
                 "transaction_date": format_date(sale["transaction_date"]),
@@ -1829,11 +1894,17 @@ def get_sales_report_by_date(report_date):
                 total_product_cost += sale_product_cost
                 total_product_profit += sale_product_profit
 
+    report_paid_sale_ids = {
+        int(sale["id"])
+        for sale in sales_rows
+        if sale["status"] == "Paid" and sale_receivable_map.get(sale["id"], 0.0) <= 0
+    }
     mechanic_map, debt_mechanic_map = _build_mechanic_maps(
         _get_mechanic_payout_sales(sales_rows),
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
+        report_paid_sale_ids,
     )
     mechanic_summary, totals = _calculate_mechanic_payouts(mechanic_map, debt_mechanic_map)
     total_bundle_shop_share = round(
@@ -1905,6 +1976,9 @@ def get_sales_report_by_date(report_date):
             - total_mechanic_supply_expense
             - totals["total_mech_cut"]
             - totals["total_shop_topup"]
+            # The report's Transaction Details total includes collections made
+            # that day. Debt collections are not new item sales, but they are
+            # still cash-in activity for this report date.
             + total_debt_collected,
             2,
         ),
@@ -1919,6 +1993,7 @@ def get_sales_report_by_date(report_date):
         "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
         "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],
         "total_non_cash_floating": non_cash_metrics["total_non_cash_floating"],
+        "total_receivables_created": round(sum(sale_receivable_map.values()), 2),
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],
@@ -1978,6 +2053,7 @@ def get_sales_report_by_range(start_date, end_date):
     all_unresolved = get_all_unresolved_sales(conn)
     sale_payment_map = _build_sale_payment_summary_map(conn, [row["id"] for row in sales_rows])
     sale_payment_detail_map = _build_sale_payment_detail_map(conn, [row["id"] for row in sales_rows])
+    sale_receivable_map = _build_sale_receivable_map(conn, [row["id"] for row in sales_rows])
 
     debt_collected_rows = conn.execute("""
         SELECT
@@ -2045,14 +2121,13 @@ def get_sales_report_by_range(start_date, end_date):
         conn.close()
         return []
 
-    paid_sale_ids = [row["id"] for row in sales_rows if row["status"] == "Paid"]
     all_sale_ids = [row["id"] for row in sales_rows]
     items_by_sale = {}
     services_by_sale = {}
     bundles_by_sale = {}
     refund_items_by_id = {}
 
-    if paid_sale_ids:
+    if all_sale_ids:
         items_rows = conn.execute("""
             SELECT
                 si.id AS sale_item_id,
@@ -2071,7 +2146,7 @@ def get_sales_report_by_range(start_date, end_date):
             JOIN items i ON i.id = si.item_id
             WHERE si.sale_id = ANY(%s)
             ORDER BY si.sale_id, i.name
-        """, (paid_sale_ids,)).fetchall()
+        """, (all_sale_ids,)).fetchall()
         for row in items_rows:
             items_by_sale.setdefault(row["sale_id"], []).append(dict(row))
 
@@ -2161,8 +2236,13 @@ def get_sales_report_by_range(start_date, end_date):
         bundle_product_revenue = round(sum(_num(bundle.get("item_value_reference_snapshot")) for bundle in sale_bundles), 2)
         services_total = round(standalone_services_total + bundle_service_total, 2)
         service_revenue_total = round(standalone_services_total + bundle_service_total + bundle_shop_total, 2)
-        if sale["status"] == "Paid":
+        # Preserve the sale date for Utang. A later collection is reported
+        # separately from debt_payments on its own paid_at date.
+        include_in_sales_history = not is_mechanic_supply or sale["status"] == "Paid"
+        if include_in_sales_history:
             total_amount = _num(sale["total_amount"])
+            receivable_created = sale_receivable_map.get(sale_id, 0.0)
+            report_status = "Utang" if receivable_created > 0 else sale["status"]
             sale_products = items_by_sale.get(sale_id, [])
             sale_services = services_by_sale.get(sale_id, [])
             sale_mechanic_breakdown = _build_sale_mechanic_breakdown(sale, sale_services, sale_bundles)
@@ -2195,6 +2275,8 @@ def get_sales_report_by_range(start_date, end_date):
                 "product_profit_total": sale_product_profit,
                 "total_amount": round(total_amount, 2),
                 "status": sale["status"],
+                "report_status": report_status,
+                "receivable_created": receivable_created,
                 "payment_method": sale_payment_map.get(sale["id"], "-"),
                 "notes": _clean_sale_notes_for_report(sale["notes"], exchange_context.get("exchange_reason")),
                 "transaction_date": format_date(sale["transaction_date"]),
@@ -2221,6 +2303,11 @@ def get_sales_report_by_range(start_date, end_date):
         debt_payout_rows,
         services_by_sale,
         bundles_by_sale,
+        {
+            int(sale["id"])
+            for sale in sales_rows
+            if sale["status"] == "Paid" and sale_receivable_map.get(sale["id"], 0.0) <= 0
+        },
     )
     total_bundle_shop_share = round(
         sum(
@@ -2291,6 +2378,8 @@ def get_sales_report_by_range(start_date, end_date):
             - total_mechanic_supply_expense
             - totals["total_mech_cut"]
             - totals["total_shop_topup"]
+            # Keep range reports consistent with the daily Transaction Details
+            # total: collections appear only as debt cash-in, never as items.
             + total_debt_collected,
             2,
         ),
@@ -2305,6 +2394,7 @@ def get_sales_report_by_range(start_date, end_date):
         "total_non_cash_sales": non_cash_metrics["total_non_cash_sales"],
         "total_non_cash_claimed": non_cash_metrics["total_non_cash_claimed"],
         "total_non_cash_floating": non_cash_metrics["total_non_cash_floating"],
+        "total_receivables_created": round(sum(sale_receivable_map.values()), 2),
         "debt_collected": debt_collected,
         "total_debt_collected": total_debt_collected,
         "total_mech_cut_from_paid": totals["total_mech_cut_from_paid"],

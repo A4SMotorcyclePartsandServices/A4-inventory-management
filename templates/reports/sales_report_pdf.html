@@ -781,10 +781,13 @@
                         {% endif %}
                     {% endif %}
                     <div style="margin-top: 5px;">
-                        <span class="badge {{ 'badge-unresolved' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'badge-paid' }}">
-                            {{ 'Expense' if sale.transaction_class == 'MECHANIC_SUPPLY' else 'Paid' }}
+                        <span class="badge {{ 'badge-unresolved' if sale.transaction_class == 'MECHANIC_SUPPLY' or sale.report_status != 'Paid' else 'badge-paid' }}">
+                            {{ 'Expense' if sale.transaction_class == 'MECHANIC_SUPPLY' else sale.report_status }}
                         </span>
                     </div>
+                    {% if sale.receivable_created > 0 %}
+                    <div class="notes-cell" style="color: #92400e; font-weight: 700;">Receivable created: P {{ "%.2f"|format(sale.receivable_created) }}</div>
+                    {% endif %}
                     {% if sale.notes %}
                         <div class="notes-cell">Notes: {{ sale.notes }}</div>
                     {% endif %}
@@ -956,6 +959,12 @@
                         <span class="label">Service Revenue</span>
                         <span class="value">P {{ "%.2f"|format(data.total_service_revenue) }}</span>
                     </div>
+                    {% if data.total_receivables_created > 0 %}
+                    <div class="fin-row" style="color: #92400e;">
+                        <span class="label" style="color: #92400e;">Receivables Created (From Debt)</span>
+                        <span class="value" style="color: #92400e; font-weight: 700;">P {{ "%.2f"|format(data.total_receivables_created) }}</span>
+                    </div>
+                    {% endif %}
                     <div class="fin-row shop" style="padding-left: 24px; font-size: 12px;">
                         <span class="label">↳ Shop's Share{% if (data.mechanic_summary | sum(attribute='shop_only_services_total')) > 0 %} (Hangin){% endif %}</span>
                         <span class="value">P {{ "%.2f"|format(data.total_shop_comm_from_paid) }}</span>
@@ -997,7 +1006,7 @@
                     {% if data.unresolved %}
                     <div class="fin-row" style="background: #fff8f0; border-left: 3px solid #b45309; font-size: 11px; padding: 8px 12px;">
                         <span class="label" style="color: #b45309;">
-                            ⚠ {{ data.unresolved | length }} unresolved transaction{{ 's' if data.unresolved | length > 1 else '' }} excluded.
+                            ⚠ {{ data.unresolved | length }} currently unresolved transaction{{ 's' if data.unresolved | length > 1 else '' }}.
                             See Receivables.
                         </span>
                         <span style="color: #b45309; font-weight: 700;">
@@ -1289,7 +1298,7 @@
     {# ── Deliverables — always starts on a new page ── #}
     {% if data.unresolved %}
     <div class="deliverables-header">
-        <div class="deliverables-title">⚠ Receivables</div>
+        <div class="deliverables-title">⚠ Current Receivables</div>
         <div class="deliverables-subtitle">
             All unresolved transactions across all dates. These are excluded from above daily cash transactions.
         </div>
